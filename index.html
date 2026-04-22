@@ -1,0 +1,793 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0" />
+  <meta name="theme-color" content="#050505" />
+  <meta
+    name="description"
+    content="Meu Rim — Entenda doença renal crônica, lesão renal aguda e calcule a taxa de filtração glomerular de forma simples."
+  />
+  <title>Meu Rim — Tempo também é rim</title>
+
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link
+    href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=Playfair+Display:wght@600;700;800&display=swap"
+    rel="stylesheet"
+  />
+
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+    :root {
+      --bg: #050505;
+      --bg-soft: #0b0b0b;
+      --panel: rgba(17, 17, 17, 0.94);
+      --panel-2: rgba(23, 23, 23, 0.96);
+      --text: #f7f2e8;
+      --text-soft: #cec5b7;
+      --text-muted: #978f82;
+      --gold: #c9a961;
+      --gold-light: #e4ce96;
+      --gold-dark: #8a723f;
+      --gold-soft: rgba(201, 169, 97, 0.08);
+      --border: rgba(255, 255, 255, 0.07);
+      --border-gold: rgba(201, 169, 97, 0.2);
+      --shadow: 0 22px 60px rgba(0, 0, 0, 0.35);
+      --shadow-gold: 0 16px 36px rgba(201, 169, 97, 0.16);
+      --radius-xl: 32px;
+      --radius-lg: 24px;
+      --radius-md: 18px;
+      --radius-sm: 14px;
+      --maxw: 860px;
+      --transition: all 0.3s cubic-bezier(0.22, 1, 0.36, 1);
+      --green: #6fd38a;
+      --yellow: #e8cd63;
+      --orange: #f3ad4f;
+      --red: #ff7a7a;
+    }
+    html { scroll-behavior: smooth; }
+    body {
+      font-family: "Inter", -apple-system, BlinkMacSystemFont, sans-serif;
+      background:
+        radial-gradient(circle at top right, rgba(201, 169, 97, 0.08), transparent 24%),
+        radial-gradient(circle at top left, rgba(201, 169, 97, 0.04), transparent 20%),
+        linear-gradient(180deg, #040404 0%, #080808 42%, #050505 100%);
+      color: var(--text-soft);
+      line-height: 1.65;
+      overflow-x: hidden;
+      -webkit-font-smoothing: antialiased;
+      -moz-osx-font-smoothing: grayscale;
+    }
+    a { text-decoration: none; color: inherit; }
+    header {
+      position: sticky; top: 0; z-index: 100;
+      backdrop-filter: blur(18px);
+      background: rgba(5, 5, 5, 0.74);
+      border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+    }
+    .header-inner {
+      max-width: var(--maxw); margin: 0 auto; padding: 16px 20px;
+      display: flex; align-items: center; justify-content: space-between; gap: 16px;
+    }
+    .brand { display: flex; align-items: center; gap: 12px; }
+    .brand-icon {
+      width: 44px; height: 44px; border-radius: 15px; display: grid; place-items: center;
+      background: linear-gradient(135deg, var(--gold) 0%, var(--gold-dark) 100%);
+      color: #101010; box-shadow: var(--shadow-gold); font-size: 22px; font-weight: 800;
+    }
+    .brand-title {
+      font-family: "Playfair Display", serif;
+      color: var(--text); font-size: 25px; line-height: 1;
+    }
+    .brand-title span { color: var(--gold); }
+    .top-badge {
+      padding: 8px 12px; border-radius: 999px; font-size: 11px; font-weight: 700;
+      letter-spacing: 1.8px; text-transform: uppercase; color: var(--gold-light);
+      border: 1px solid var(--border-gold); background: var(--gold-soft); white-space: nowrap;
+    }
+    .hero-wrap { max-width: var(--maxw); margin: 0 auto; padding: 28px 20px 12px; }
+    .hero {
+      position: relative; overflow: hidden; border-radius: 36px; padding: 36px 24px 30px;
+      background:
+        radial-gradient(circle at 100% 0%, rgba(201, 169, 97, 0.14), transparent 34%),
+        linear-gradient(180deg, rgba(19, 19, 19, 0.96), rgba(10, 10, 10, 0.98));
+      border: 1px solid var(--border); box-shadow: var(--shadow);
+    }
+    .hero::after {
+      content: ""; position: absolute; width: 280px; height: 280px; right: -80px; bottom: -120px;
+      border-radius: 50%; background: radial-gradient(circle, rgba(201, 169, 97, 0.17), transparent 70%);
+      pointer-events: none;
+    }
+    .eyebrow {
+      color: var(--gold); font-size: 12px; text-transform: uppercase; letter-spacing: 2.4px;
+      font-weight: 700; margin-bottom: 14px;
+    }
+    .hero h1 {
+      font-family: "Playfair Display", serif; color: var(--text);
+      font-size: 44px; line-height: 1.03; margin-bottom: 16px; max-width: 11ch;
+    }
+    .hero p { max-width: 58ch; font-size: 16px; color: var(--text-soft); }
+    .hero p strong { color: var(--gold-light); }
+    .hero-quote {
+      margin-top: 18px; padding-left: 14px; border-left: 3px solid var(--gold);
+      color: var(--gold-light); font-style: italic; font-size: 15px;
+    }
+    .hero-actions { margin-top: 24px; display: flex; gap: 12px; flex-wrap: wrap; }
+    .btn-primary, .btn-secondary {
+      display: inline-flex; align-items: center; justify-content: center; gap: 10px;
+      min-height: 52px; padding: 0 18px; border-radius: 999px; font-weight: 800; font-size: 14px;
+      transition: var(--transition);
+    }
+    .btn-primary {
+      background: linear-gradient(135deg, var(--gold) 0%, var(--gold-dark) 100%);
+      color: #111; box-shadow: var(--shadow-gold);
+    }
+    .btn-secondary {
+      color: var(--gold-light); border: 1px solid var(--border-gold);
+      background: rgba(201, 169, 97, 0.04);
+    }
+    .btn-primary:hover, .btn-secondary:hover, .menu a:hover, .card:hover, .list-item:hover,
+    .calc-button:hover, .cta-button:hover { transform: translateY(-2px); }
+    main { max-width: var(--maxw); margin: 0 auto; padding: 24px 20px 60px; }
+    .menu {
+      display: grid; grid-template-columns: repeat(5, 1fr); gap: 12px; margin-bottom: 38px;
+    }
+    .menu a {
+      background: linear-gradient(180deg, var(--panel), var(--panel-2));
+      border: 1px solid var(--border); border-radius: 22px; box-shadow: var(--shadow);
+      padding: 18px 16px; min-height: 118px; display: flex; flex-direction: column;
+      justify-content: center; gap: 10px; transition: var(--transition);
+    }
+    .menu a:hover, .card:hover, .list-item:hover { border-color: var(--border-gold); }
+    .menu-icon {
+      width: 38px; height: 38px; border-radius: 12px; display: grid; place-items: center;
+      background: rgba(201, 169, 97, 0.1); border: 1px solid rgba(201, 169, 97, 0.12);
+      color: var(--gold); font-size: 15px; font-weight: 800;
+    }
+    .menu-text { color: var(--text); font-size: 14px; font-weight: 700; line-height: 1.35; }
+    section { margin-bottom: 44px; scroll-margin-top: 90px; }
+    .section-tag {
+      font-size: 12px; text-transform: uppercase; letter-spacing: 2.2px; color: var(--gold);
+      font-weight: 700; margin-bottom: 10px;
+    }
+    .section-title {
+      font-family: "Playfair Display", serif; color: var(--text);
+      font-size: 32px; line-height: 1.12; margin-bottom: 12px;
+    }
+    .section-line {
+      width: 56px; height: 3px; border-radius: 999px;
+      background: linear-gradient(90deg, var(--gold), transparent); margin-bottom: 20px;
+    }
+    .section-intro { font-size: 15px; color: var(--text-soft); max-width: 60ch; margin-bottom: 18px; }
+    .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+    .card {
+      background: linear-gradient(180deg, rgba(18,18,18,0.96), rgba(12,12,12,0.96));
+      border: 1px solid var(--border); border-radius: var(--radius-lg); box-shadow: var(--shadow);
+      padding: 22px 20px; transition: var(--transition);
+    }
+    .card-label {
+      display: inline-block; padding: 7px 12px; border-radius: 999px; margin-bottom: 14px;
+      background: var(--gold-soft); border: 1px solid var(--border-gold); color: var(--gold-light);
+      font-size: 11px; font-weight: 700; letter-spacing: 1.6px; text-transform: uppercase;
+    }
+    .card h3 {
+      color: var(--text); font-size: 20px; line-height: 1.2; margin-bottom: 10px;
+      font-family: "Playfair Display", serif;
+    }
+    .card p { color: var(--text-soft); font-size: 15px; margin-bottom: 12px; }
+    .card p:last-child { margin-bottom: 0; }
+    .card strong { color: var(--gold-light); }
+    .list { display: grid; gap: 12px; }
+    .list-item {
+      display: flex; align-items: flex-start; gap: 14px; padding: 18px; border-radius: 18px;
+      background: linear-gradient(180deg, rgba(18,18,18,0.96), rgba(12,12,12,0.96));
+      border: 1px solid var(--border); box-shadow: var(--shadow); transition: var(--transition);
+    }
+    .list-item:hover { transform: translateX(4px); }
+    .list-mark {
+      width: 36px; height: 36px; flex-shrink: 0; display: grid; place-items: center; border-radius: 12px;
+      background: rgba(201, 169, 97, 0.1); border: 1px solid rgba(201, 169, 97, 0.12);
+      color: var(--gold); font-size: 15px; font-weight: 800;
+    }
+    .list-text strong { display: block; color: var(--text); font-size: 15px; margin-bottom: 4px; }
+    .list-text span { color: var(--text-soft); font-size: 14px; line-height: 1.6; }
+
+    .calc-box {
+      border-radius: 30px; padding: 28px 22px;
+      background:
+        radial-gradient(circle at top, rgba(201, 169, 97, 0.12), transparent 44%),
+        linear-gradient(180deg, rgba(18,18,18,0.97), rgba(10,10,10,0.98));
+      border: 1px solid var(--border-gold); box-shadow: var(--shadow);
+    }
+    .calc-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin-top: 18px; }
+    .field { display: flex; flex-direction: column; gap: 8px; }
+    .field label {
+      font-size: 12px; font-weight: 700; letter-spacing: 1.5px; text-transform: uppercase;
+      color: var(--gold-light);
+    }
+    .field input, .field select {
+      width: 100%; min-height: 52px; padding: 14px 16px; border-radius: 14px;
+      border: 1.5px solid var(--border); background: rgba(20, 20, 20, 0.96);
+      color: var(--text); font-size: 16px; font-family: inherit; transition: var(--transition);
+      appearance: none;
+    }
+    .field input::placeholder { color: #7e766a; }
+    .field input:focus, .field select:focus {
+      outline: none; border-color: var(--gold); box-shadow: 0 0 0 4px rgba(201, 169, 97, 0.08);
+    }
+    .calc-actions { margin-top: 16px; display: flex; gap: 12px; flex-wrap: wrap; }
+    .calc-button {
+      border: none; min-height: 54px; padding: 0 22px; border-radius: 16px;
+      background: linear-gradient(135deg, var(--gold) 0%, var(--gold-dark) 100%);
+      color: #111; font-size: 15px; font-weight: 800; cursor: pointer; box-shadow: var(--shadow-gold);
+      transition: var(--transition);
+    }
+    .calc-note { margin-top: 14px; font-size: 13px; color: var(--text-muted); line-height: 1.6; }
+    .result {
+      margin-top: 18px; display: none; padding: 20px; border-radius: 20px;
+      background: linear-gradient(180deg, rgba(201,169,97,0.08), rgba(201,169,97,0.03));
+      border: 1px solid var(--border-gold);
+    }
+    .result.show { display: block; }
+    .result-label {
+      font-size: 11px; text-transform: uppercase; letter-spacing: 2px; color: var(--gold-light);
+      font-weight: 700; margin-bottom: 8px;
+    }
+    .result-value {
+      font-family: "Playfair Display", serif; font-size: 34px; color: var(--gold-light);
+      line-height: 1.1; margin-bottom: 10px;
+    }
+    .result-stage {
+      display: inline-flex; align-items: center; gap: 8px; padding: 8px 14px; border-radius: 999px;
+      font-size: 12px; font-weight: 800; letter-spacing: 1px; text-transform: uppercase;
+      margin-bottom: 12px; border: 1px solid rgba(201,169,97,0.18); color: var(--gold-light);
+      background: rgba(201,169,97,0.08);
+    }
+    .result-text { color: var(--text-soft); font-size: 14px; line-height: 1.7; }
+    .egfr-guide {
+      margin-top: 18px; border-radius: 20px; padding: 20px;
+      background: linear-gradient(180deg, rgba(17,17,17,0.96), rgba(10,10,10,0.96));
+      border: 1px solid var(--border);
+    }
+    .egfr-guide h4 {
+      color: var(--gold-light); margin-bottom: 14px; font-size: 18px;
+      font-family: "Playfair Display", serif;
+    }
+    .egfr-guide ul { list-style: none; display: grid; gap: 10px; }
+    .egfr-guide li { display: flex; gap: 10px; font-size: 14px; color: var(--text-soft); }
+    .egfr-guide b { min-width: 72px; display: inline-block; }
+    .green { color: var(--green); } .yellow { color: var(--yellow); } .orange { color: var(--orange); } .red { color: var(--red); }
+
+    .impact {
+      margin: 42px 0; padding: 34px 24px; border-radius: 30px; text-align: center;
+      background:
+        radial-gradient(circle at top, rgba(201, 169, 97, 0.16), transparent 42%),
+        linear-gradient(180deg, rgba(19,19,19,0.96), rgba(10,10,10,0.98));
+      border: 1px solid var(--border-gold); box-shadow: var(--shadow);
+    }
+    .impact-icon {
+      width: 62px; height: 62px; border-radius: 18px; margin: 0 auto 14px; display: grid; place-items: center;
+      background: linear-gradient(135deg, rgba(201,169,97,0.2), rgba(201,169,97,0.08));
+      color: var(--gold-light); font-size: 28px; border: 1px solid var(--border-gold);
+    }
+    .impact h3 {
+      font-family: "Playfair Display", serif; color: var(--gold-light);
+      font-size: 30px; line-height: 1.2; margin-bottom: 8px;
+    }
+    .impact p { color: var(--text-soft); font-size: 15px; max-width: 44ch; margin: 0 auto; }
+
+    .cta {
+      border-radius: 28px; padding: 30px 22px; text-align: center;
+      background: linear-gradient(180deg, rgba(16,16,16,0.96), rgba(8,8,8,0.98));
+      border: 1px solid var(--border-gold); box-shadow: var(--shadow);
+    }
+    .cta h3 {
+      font-family: "Playfair Display", serif; color: var(--text);
+      font-size: 30px; line-height: 1.2; margin-bottom: 10px;
+    }
+    .cta p {
+      color: var(--text-soft); font-size: 15px; margin-bottom: 20px; max-width: 42ch;
+      margin-left: auto; margin-right: auto;
+    }
+    .cta-button {
+      display: inline-flex; align-items: center; justify-content: center; gap: 10px; width: 100%;
+      min-height: 58px; padding: 0 20px; border-radius: 18px;
+      background: linear-gradient(135deg, var(--gold) 0%, var(--gold-dark) 100%);
+      color: #111; font-size: 16px; font-weight: 800; box-shadow: var(--shadow-gold); transition: var(--transition);
+    }
+    footer {
+      border-top: 1px solid rgba(255,255,255,0.04); padding: 34px 20px 42px; text-align: center;
+      color: var(--text-muted); font-size: 13px; line-height: 1.7;
+    }
+    .footer-copy {
+      margin-top: 12px; color: var(--gold); font-size: 11px; letter-spacing: 3px;
+      text-transform: uppercase; font-weight: 700;
+    }
+    .top-btn {
+      position: fixed; right: 22px; bottom: 22px; width: 50px; height: 50px; border: none;
+      border-radius: 50%; display: grid; place-items: center;
+      background: linear-gradient(135deg, var(--gold) 0%, var(--gold-dark) 100%);
+      color: #111; font-size: 20px; font-weight: 800; box-shadow: var(--shadow-gold); cursor: pointer;
+      opacity: 0; visibility: hidden; transition: var(--transition); z-index: 80;
+    }
+    .top-btn.show { opacity: 1; visibility: visible; }
+
+    @media (max-width: 980px) {
+      .menu { grid-template-columns: repeat(3, 1fr); }
+      .grid-2, .calc-grid { grid-template-columns: 1fr; }
+      .hero h1 { font-size: 38px; }
+    }
+    @media (max-width: 640px) {
+      .menu { grid-template-columns: 1fr 1fr; }
+      .hero { padding: 30px 20px 24px; }
+      .hero h1 { font-size: 31px; }
+      .section-title { font-size: 27px; }
+      .top-badge { display: none; }
+    }
+    @media (max-width: 420px) {
+      .menu { grid-template-columns: 1fr; }
+    }
+    @media (prefers-reduced-motion: reduce) {
+      * { transition: none !important; animation: none !important; scroll-behavior: auto !important; }
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <div class="header-inner">
+      <div class="brand">
+        <div class="brand-icon">◈</div>
+        <div class="brand-title">Meu <span>Rim</span></div>
+      </div>
+      <div class="top-badge">Tempo também é rim</div>
+    </div>
+  </header>
+
+  <div class="hero-wrap">
+    <section class="hero">
+      <div class="eyebrow">Informação simples · para leigos</div>
+      <h1>Entenda o rim antes que ele silencie.</h1>
+      <p>
+        Um espaço feito para explicar, de forma clara,
+        <strong>doença renal crônica</strong>,
+        <strong>lesão renal aguda</strong>
+        e ajudar a pessoa a entender quando precisa prestar mais atenção.
+      </p>
+      <div class="hero-quote">
+        “O rim pode sofrer em silêncio. Descobrir cedo muda tudo.”
+      </div>
+
+      <div class="hero-actions">
+        <a href="#conteudo" class="btn-primary">Começar agora</a>
+        <a href="#calculadora" class="btn-secondary">Calcular CKD-EPI</a>
+      </div>
+    </section>
+  </div>
+
+  <main id="conteudo">
+    <nav class="menu" aria-label="Menu principal">
+      <a href="#cronica">
+        <div class="menu-icon">CR</div>
+        <div class="menu-text">Doença renal crônica</div>
+      </a>
+      <a href="#aguda">
+        <div class="menu-icon">AG</div>
+        <div class="menu-text">Lesão renal aguda</div>
+      </a>
+      <a href="#causas">
+        <div class="menu-icon">+</div>
+        <div class="menu-text">Principais causas</div>
+      </a>
+      <a href="#alerta">
+        <div class="menu-icon">!</div>
+        <div class="menu-text">Sinais de alerta</div>
+      </a>
+      <a href="#calculadora">
+        <div class="menu-icon">TFG</div>
+        <div class="menu-text">Calculadora CKD-EPI</div>
+      </a>
+    </nav>
+
+    <section id="cronica">
+      <div class="section-tag">Doença renal crônica</div>
+      <h2 class="section-title">Quando o rim vai perdendo força aos poucos</h2>
+      <div class="section-line"></div>
+
+      <div class="grid-2">
+        <div class="card">
+          <div class="card-label">Explicação simples</div>
+          <h3>É uma perda lenta da função dos rins</h3>
+          <p>
+            A <strong>doença renal crônica</strong> acontece quando os rins vão
+            deixando de funcionar bem de forma lenta e progressiva.
+          </p>
+          <p>
+            Muitas vezes, isso começa sem dor e sem sintomas claros.
+          </p>
+        </div>
+
+        <div class="card">
+          <div class="card-label">Por que importa</div>
+          <h3>O corpo inteiro sente</h3>
+          <p>
+            Os rins ajudam a filtrar o sangue, controlar a pressão, equilibrar água e sais
+            e participar da saúde do coração e de todo o organismo.
+          </p>
+          <p>
+            Quando eles adoecem, não é só o rim que sofre.
+          </p>
+        </div>
+      </div>
+    </section>
+
+    <section id="aguda">
+      <div class="section-tag">Lesão renal aguda</div>
+      <h2 class="section-title">Quando o rim piora rápido</h2>
+      <div class="section-line"></div>
+
+      <div class="grid-2">
+        <div class="card">
+          <div class="card-label">Explicação simples</div>
+          <h3>É uma piora em horas ou dias</h3>
+          <p>
+            A <strong>lesão renal aguda</strong> acontece quando a função dos rins
+            cai rapidamente.
+          </p>
+          <p>
+            Pode surgir durante infecção, desidratação, queda de pressão,
+            obstrução urinária ou uso de certos remédios.
+          </p>
+        </div>
+
+        <div class="card">
+          <div class="card-label">Ponto importante</div>
+          <h3>Agir cedo pode mudar tudo</h3>
+          <p>
+            Em alguns casos, o rim pode se recuperar.
+          </p>
+          <p>
+            Mas, quando a pessoa demora para procurar ajuda,
+            a lesão pode deixar sequelas ou piorar uma doença renal já existente.
+          </p>
+        </div>
+      </div>
+    </section>
+
+    <section id="causas">
+      <div class="section-tag">Principais causas</div>
+      <h2 class="section-title">O que mais agride os rins</h2>
+      <div class="section-line"></div>
+      <p class="section-intro">
+        Algumas causas machucam o rim devagar. Outras derrubam a função renal de repente.
+        O mais importante é reconhecer cedo.
+      </p>
+
+      <div class="list">
+        <div class="list-item">
+          <div class="list-mark">01</div>
+          <div class="list-text">
+            <strong>Pressão alta</strong>
+            <span>Machuca os vasos do rim ao longo do tempo.</span>
+          </div>
+        </div>
+
+        <div class="list-item">
+          <div class="list-mark">02</div>
+          <div class="list-text">
+            <strong>Diabetes</strong>
+            <span>Pode lesar os filtros do rim de forma silenciosa.</span>
+          </div>
+        </div>
+
+        <div class="list-item">
+          <div class="list-mark">03</div>
+          <div class="list-text">
+            <strong>Desidratação importante</strong>
+            <span>Quando falta líquido no corpo, o rim pode sofrer rápido.</span>
+          </div>
+        </div>
+
+        <div class="list-item">
+          <div class="list-mark">04</div>
+          <div class="list-text">
+            <strong>Remédios sem orientação</strong>
+            <span>Principalmente automedicação e alguns anti-inflamatórios.</span>
+          </div>
+        </div>
+
+        <div class="list-item">
+          <div class="list-mark">05</div>
+          <div class="list-text">
+            <strong>Infecções graves</strong>
+            <span>Podem derrubar a função do rim em pouco tempo.</span>
+          </div>
+        </div>
+
+        <div class="list-item">
+          <div class="list-mark">06</div>
+          <div class="list-text">
+            <strong>Obstrução da urina</strong>
+            <span>Pedra, próstata aumentada ou dificuldade para urinar podem prejudicar o rim.</span>
+          </div>
+        </div>
+
+        <div class="list-item">
+          <div class="list-mark">07</div>
+          <div class="list-text">
+            <strong>Doenças do próprio rim</strong>
+            <span>Algumas inflamações e doenças renais atacam diretamente o órgão.</span>
+          </div>
+        </div>
+
+        <div class="list-item">
+          <div class="list-mark">08</div>
+          <div class="list-text">
+            <strong>Histórico familiar</strong>
+            <span>Em algumas pessoas, o risco pode ser maior por causa da genética.</span>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section id="alerta">
+      <div class="section-tag">Sinais de alerta</div>
+      <h2 class="section-title">Quando vale procurar avaliação</h2>
+      <div class="section-line"></div>
+
+      <div class="list">
+        <div class="list-item">
+          <div class="list-mark">!</div>
+          <div class="list-text">
+            <strong>Inchaço no corpo</strong>
+            <span>Principalmente nas pernas, pés ou rosto.</span>
+          </div>
+        </div>
+
+        <div class="list-item">
+          <div class="list-mark">!</div>
+          <div class="list-text">
+            <strong>Urina diferente</strong>
+            <span>Espuma, sangue ou mudança importante no volume urinário.</span>
+          </div>
+        </div>
+
+        <div class="list-item">
+          <div class="list-mark">!</div>
+          <div class="list-text">
+            <strong>Creatinina alterada</strong>
+            <span>Precisa ser levada a sério e bem interpretada.</span>
+          </div>
+        </div>
+
+        <div class="list-item">
+          <div class="list-mark">!</div>
+          <div class="list-text">
+            <strong>Pressão alta difícil de controlar</strong>
+            <span>Rim e pressão andam muito juntos.</span>
+          </div>
+        </div>
+
+        <div class="list-item">
+          <div class="list-mark">!</div>
+          <div class="list-text">
+            <strong>Diabetes ou pressão alta há muitos anos</strong>
+            <span>Mesmo sem sintomas, acompanhamento renal pode ser importante.</span>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section id="calculadora">
+      <div class="section-tag">Calculadora</div>
+      <h2 class="section-title">CKD-EPI 2021 · taxa de filtração glomerular</h2>
+      <div class="section-line"></div>
+
+      <div class="calc-box">
+        <p class="section-intro">
+          Ferramenta educativa para estimar a função renal.
+          Preencha <strong style="color: var(--gold-light);">creatinina</strong>,
+          <strong style="color: var(--gold-light);">idade</strong> e
+          <strong style="color: var(--gold-light);">sexo</strong>.
+        </p>
+
+        <div class="calc-grid">
+          <div class="field">
+            <label for="creatinina">Creatinina (mg/dL)</label>
+            <input type="number" id="creatinina" placeholder="Ex: 1.2" step="0.01" min="0.1" max="20" />
+          </div>
+
+          <div class="field">
+            <label for="idade">Idade (anos)</label>
+            <input type="number" id="idade" placeholder="Ex: 45" min="18" max="120" />
+          </div>
+
+          <div class="field">
+            <label for="sexo">Sexo</label>
+            <select id="sexo">
+              <option value="">Selecione</option>
+              <option value="F">Feminino</option>
+              <option value="M">Masculino</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="calc-actions">
+          <button class="calc-button" onclick="calcularEGFR()">Calcular TFG</button>
+        </div>
+
+        <div id="resultado-egfr" class="result">
+          <div class="result-label">Resultado estimado</div>
+          <div id="resultado-egfr-valor" class="result-value"></div>
+          <div id="resultado-egfr-estagio" class="result-stage"></div>
+          <div id="resultado-egfr-texto" class="result-text"></div>
+        </div>
+
+        <div class="egfr-guide">
+          <h4>Como interpretar a eGFR?</h4>
+          <ul>
+            <li><b class="green">≥ 90</b> <span>Função renal normal ou aumentada</span></li>
+            <li><b class="green">60–89</b> <span>Redução leve</span></li>
+            <li><b class="yellow">45–59</b> <span>Redução moderada · estágio 3A</span></li>
+            <li><b class="orange">30–44</b> <span>Redução moderada-grave · estágio 3B</span></li>
+            <li><b class="red">15–29</b> <span>Redução grave · estágio 4</span></li>
+            <li><b class="red">&lt; 15</b> <span>Falência renal · estágio 5</span></li>
+          </ul>
+        </div>
+
+        <div class="calc-note">
+          Este cálculo é educativo e não substitui avaliação médica. A interpretação correta
+          depende também da urina, albuminúria, contexto clínico e outros exames.
+        </div>
+      </div>
+    </section>
+
+    <section class="impact">
+      <div class="impact-icon">✦</div>
+      <h3>Descobrir cedo muda o caminho da doença.</h3>
+      <p>
+        O rim costuma sofrer em silêncio. Quanto mais cedo você olha, maior a chance de proteger.
+      </p>
+    </section>
+
+    <section id="contato" class="cta">
+      <h3>Falar com a equipe</h3>
+      <p>
+        Tire dúvidas ou agende uma avaliação de forma simples, rápida e direta.
+      </p>
+      <a
+        href="#"
+        class="cta-button"
+        id="whatsapp-btn"
+        target="_blank"
+        rel="noopener noreferrer"
+      >
+        💬 Fale com a equipe
+      </a>
+    </section>
+  </main>
+
+  <footer>
+    Este conteúdo tem finalidade educativa e não substitui consulta médica,
+    diagnóstico ou tratamento.
+    <div class="footer-copy">MEU RIM · CUIDADO RENAL</div>
+  </footer>
+
+  <button class="top-btn" id="topBtn" aria-label="Voltar ao topo">↑</button>
+
+  <script>
+    const WHATSAPP_NUMERO = "5573999052933";
+    const WHATSAPP_MENSAGEM =
+      "Olá! Gostaria de tirar dúvidas ou agendar uma avaliação sobre saúde renal.";
+
+    const whatsappBtn = document.getElementById("whatsapp-btn");
+    whatsappBtn.href = `https://wa.me/${WHATSAPP_NUMERO}?text=${encodeURIComponent(WHATSAPP_MENSAGEM)}`;
+
+    function calcularEGFR() {
+      const creatinina = parseFloat(document.getElementById("creatinina").value);
+      const idade = parseInt(document.getElementById("idade").value);
+      const sexo = document.getElementById("sexo").value;
+
+      if (isNaN(creatinina) || creatinina <= 0) {
+        alert("Informe uma creatinina válida.");
+        return;
+      }
+      if (isNaN(idade) || idade < 18 || idade > 120) {
+        alert("Informe uma idade válida.");
+        return;
+      }
+      if (!sexo) {
+        alert("Selecione o sexo.");
+        return;
+      }
+
+      let kappa, alfa, fatorSexo;
+      if (sexo === "F") {
+        kappa = 0.7;
+        alfa = -0.241;
+        fatorSexo = 1.012;
+      } else {
+        kappa = 0.9;
+        alfa = -0.302;
+        fatorSexo = 1.0;
+      }
+
+      const razao = creatinina / kappa;
+      const minimo = Math.min(razao, 1);
+      const maximo = Math.max(razao, 1);
+
+      const egfr =
+        142 *
+        Math.pow(minimo, alfa) *
+        Math.pow(maximo, -1.200) *
+        Math.pow(0.9938, idade) *
+        fatorSexo;
+
+      const egfrArredondado = Math.round(egfr);
+
+      let estagio = "";
+      let explicacao = "";
+
+      if (egfr >= 90) {
+        estagio = "TFG preservada ou alta";
+        explicacao = "A função renal estimada está preservada. Mesmo assim, proteína na urina e outros sinais podem exigir atenção.";
+      } else if (egfr >= 60) {
+        estagio = "Leve redução";
+        explicacao = "Há leve redução da função renal estimada. Isoladamente, isso não fecha diagnóstico sem contexto clínico.";
+      } else if (egfr >= 45) {
+        estagio = "Redução moderada · estágio 3A";
+        explicacao = "Já existe redução moderada da função renal. Vale avaliação cuidadosa e acompanhamento.";
+      } else if (egfr >= 30) {
+        estagio = "Redução moderada-grave · estágio 3B";
+        explicacao = "A função renal está mais comprometida. Acompanhamento nefrológico passa a ser ainda mais importante.";
+      } else if (egfr >= 15) {
+        estagio = "Redução grave · estágio 4";
+        explicacao = "A função renal está gravemente reduzida. É importante avaliação especializada e seguimento próximo.";
+      } else {
+        estagio = "Falência renal · estágio 5";
+        explicacao = "A função renal está muito reduzida. É um cenário que precisa de avaliação médica urgente.";
+      }
+
+      document.getElementById("resultado-egfr-valor").textContent =
+        `${egfrArredondado} mL/min/1,73m²`;
+      document.getElementById("resultado-egfr-estagio").textContent = estagio;
+      document.getElementById("resultado-egfr-texto").textContent = explicacao;
+
+      const box = document.getElementById("resultado-egfr");
+      box.classList.add("show");
+      box.scrollIntoView({ behavior: "smooth", block: "nearest" });
+    }
+
+    const topBtn = document.getElementById("topBtn");
+    window.addEventListener("scroll", () => {
+      if (window.scrollY > 350) {
+        topBtn.classList.add("show");
+      } else {
+        topBtn.classList.remove("show");
+      }
+    });
+
+    topBtn.addEventListener("click", () => {
+      window.scrollTo({ top: 0, behavior: "smooth" });
+    });
+
+    document.querySelectorAll('a[href^="#"]').forEach((link) => {
+      link.addEventListener("click", function (e) {
+        const target = document.querySelector(this.getAttribute("href"));
+        if (target) {
+          e.preventDefault();
+          target.scrollIntoView({ behavior: "smooth", block: "start" });
+        }
+      });
+    });
+
+    document.querySelectorAll("input, select").forEach((el) => {
+      el.addEventListener("keypress", function (e) {
+        if (e.key === "Enter") {
+          calcularEGFR();
+        }
+      });
+    });
+  </script>
+</body>
+</html>
