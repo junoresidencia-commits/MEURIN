@@ -362,8 +362,15 @@ export default function AgendarClient() {
             <button
               type="button"
               className="btn-gold"
-              disabled={!patientName || !patientEmail}
-              onClick={() => setStep(3)}
+              disabled={!patientName || !patientEmail || !patientEmail.includes("@")}
+              onClick={() => {
+                if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(patientEmail)) {
+                  setError("Informe um e-mail válido — é nele que chega o link da sala.");
+                  return;
+                }
+                setError("");
+                setStep(3);
+              }}
             >
               Ir para pagamento
             </button>

@@ -15,14 +15,23 @@ export function SiteFooter() {
         <Link href="/agendar" className="hover:text-[var(--gold-light)]">
           Agendar
         </Link>
+        <Link href="/minhas-consultas" className="hover:text-[var(--gold-light)]">
+          Minhas consultas
+        </Link>
         <Link href="/medicos/cadastro" className="hover:text-[var(--gold-light)]">
           Cadastrar médico
         </Link>
         <Link href="/educacao" className="hover:text-[var(--gold-light)]">
-          Educação renal
+          Educação
         </Link>
-        <Link href="/#perguntas" className="hover:text-[var(--gold-light)]">
-          Dúvidas
+        <Link href="/amanha" className="hover:text-[var(--gold-light)]">
+          Checklist amanhã
+        </Link>
+        <Link href="/termos" className="hover:text-[var(--gold-light)]">
+          Termos
+        </Link>
+        <Link href="/privacidade" className="hover:text-[var(--gold-light)]">
+          Privacidade
         </Link>
       </div>
     </footer>

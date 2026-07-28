@@ -100,7 +100,7 @@ export default function ConfirmacaoPage() {
         </p>
       </div>
 
-      <div className="mt-8 flex flex-wrap gap-3">
+      <div className="mt-8 flex flex-wrap gap-3 print:hidden">
         <Link href={meetingPath} className="btn-gold">
           Abrir sala da consulta
         </Link>
@@ -114,9 +114,12 @@ export default function ConfirmacaoPage() {
         >
           Mandar link no WhatsApp
         </a>
+        <button type="button" className="btn-ghost" onClick={() => window.print()}>
+          Imprimir / salvar PDF
+        </button>
       </div>
 
-      <div className="mt-10 border-t border-[var(--border)] pt-8">
+      <div className="mt-10 border-t border-[var(--border)] pt-8 print:hidden">
         <h2 className="font-display text-2xl text-[var(--text)]">
           Ajude alguém do interior ou da fila
         </h2>

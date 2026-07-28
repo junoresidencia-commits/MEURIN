@@ -97,3 +97,15 @@ body {
 .panel {
   @apply rounded-[24px] border border-[var(--border)] bg-gradient-to-b from-[rgba(18,18,18,0.96)] to-[rgba(12,12,12,0.96)] p-5 shadow-[var(--shadow)] sm:p-6;
 }
+
+@media print {
+  header,
+  footer,
+  .print\:hidden {
+    display: none !important;
+  }
+  body {
+    background: white !important;
+    color: black !important;
+  }
+}
