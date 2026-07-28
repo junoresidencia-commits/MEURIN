@@ -1,0 +1,99 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --bg: #050505;
+  --bg-soft: #0b0b0b;
+  --panel: rgba(17, 17, 17, 0.94);
+  --text: #f7f2e8;
+  --text-soft: #cec5b7;
+  --text-muted: #978f82;
+  --gold: #c9a961;
+  --gold-light: #e4ce96;
+  --gold-dark: #8a723f;
+  --gold-soft: rgba(201, 169, 97, 0.08);
+  --border: rgba(255, 255, 255, 0.07);
+  --border-gold: rgba(201, 169, 97, 0.2);
+  --shadow: 0 22px 60px rgba(0, 0, 0, 0.35);
+  --shadow-gold: 0 16px 36px rgba(201, 169, 97, 0.16);
+  --green: #6fd38a;
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+body {
+  min-height: 100vh;
+  color: var(--text-soft);
+  background:
+    radial-gradient(circle at top right, rgba(201, 169, 97, 0.08), transparent 24%),
+    radial-gradient(circle at top left, rgba(201, 169, 97, 0.04), transparent 20%),
+    linear-gradient(180deg, #040404 0%, #080808 42%, #050505 100%);
+  -webkit-font-smoothing: antialiased;
+}
+
+.font-display {
+  font-family: var(--font-display), Georgia, serif;
+}
+
+.font-sans-body {
+  font-family: var(--font-body), system-ui, sans-serif;
+}
+
+@keyframes fade-up {
+  from {
+    opacity: 0;
+    transform: translateY(18px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes soft-pulse {
+  0%,
+  100% {
+    opacity: 0.45;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.85;
+    transform: scale(1.04);
+  }
+}
+
+.animate-fade-up {
+  animation: fade-up 0.7s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.animate-fade-up-delay {
+  animation: fade-up 0.85s cubic-bezier(0.22, 1, 0.36, 1) 0.12s both;
+}
+
+.animate-soft-pulse {
+  animation: soft-pulse 5s ease-in-out infinite;
+}
+
+.input-field {
+  @apply w-full min-h-[52px] rounded-[14px] border-[1.5px] border-[var(--border)] bg-[rgba(20,20,20,0.96)] px-4 py-3 text-base text-[var(--text)] outline-none transition;
+}
+
+.input-field:focus {
+  border-color: var(--gold);
+  box-shadow: 0 0 0 4px rgba(201, 169, 97, 0.08);
+}
+
+.btn-gold {
+  @apply inline-flex min-h-[52px] items-center justify-center gap-2 rounded-full bg-gradient-to-br from-[var(--gold)] to-[var(--gold-dark)] px-5 text-sm font-extrabold text-[#111] shadow-[var(--shadow-gold)] transition hover:-translate-y-0.5 disabled:cursor-not-allowed disabled:opacity-50;
+}
+
+.btn-ghost {
+  @apply inline-flex min-h-[52px] items-center justify-center gap-2 rounded-full border border-[var(--border-gold)] bg-[rgba(201,169,97,0.04)] px-5 text-sm font-extrabold text-[var(--gold-light)] transition hover:-translate-y-0.5;
+}
+
+.panel {
+  @apply rounded-[24px] border border-[var(--border)] bg-gradient-to-b from-[rgba(18,18,18,0.96)] to-[rgba(12,12,12,0.96)] p-5 shadow-[var(--shadow)] sm:p-6;
+}
