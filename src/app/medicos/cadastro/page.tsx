@@ -63,8 +63,9 @@ export default function CadastroMedicoPage() {
         Cadastre sua conta
       </h1>
       <p className="mt-3 text-[var(--text-muted)]">
-        Você e seus colegas entram com CRM, definem agenda e recebem o pagamento
-        direto na conta (Pix/conta bancária).
+        Você e até cerca de 20 colegas entram com CRM, definem agenda e recebem
+        na conta. Pacientes do interior, da capital ou com pressa encontram
+        vocês online — e só entram na sala depois de pagar.
       </p>
 
       <form onSubmit={onSubmit} className="panel mt-8 space-y-4">

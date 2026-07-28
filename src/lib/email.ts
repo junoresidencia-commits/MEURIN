@@ -7,24 +7,29 @@ export function buildConfirmationEmail(
   doctor: Doctor,
   meetingUrl: string
 ): { to: string; subject: string; body: string } {
-  const subject = `Consulta confirmada — Meu Rim com ${doctor.name}`;
+  const subject = `Consulta liberada — Meu Rim com ${doctor.name}`;
   const body = [
     `Olá, ${booking.patientName}!`,
     ``,
-    `Seu pagamento foi confirmado e sua consulta de nefrologia está agendada.`,
+    `Pagamento confirmado. Sua consulta de nefrologia online está liberada.`,
     ``,
     `Médico(a): ${doctor.name}`,
     `CRM: ${doctor.crm}`,
     `Data/hora: ${formatSlot(booking.slotStart)}`,
+    booking.patientCity ? `Cidade informada: ${booking.patientCity}` : "",
     `Valor: ${formatBRL(booking.priceCents)}`,
     ``,
-    `Entre na consulta online pelo link abaixo (não precisa de Zoom ou outra plataforma paga):`,
+    `Entre na sala Meu Rim pelo link (não precisa de Zoom ou outro app pago):`,
     meetingUrl,
     ``,
-    `Guarde este e-mail. Você também pode acessar o link pela página de confirmação.`,
+    `No horário, abra o link no celular ou computador com câmera e microfone.`,
+    `Em emergência (dor forte, falta de ar, desmaio), procure o pronto-socorro.`,
     ``,
     `— Equipe Meu Rim`,
-  ].join("\n");
+    `Nefrologia online para quem a distância ou a fila atrapalham.`,
+  ]
+    .filter(Boolean)
+    .join("\n");
 
   return { to: booking.patientEmail, subject, body };
 }

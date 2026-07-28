@@ -1,21 +1,26 @@
-# Meu Rim — Teleconsulta de nefrologia
+# Meu Rim — Nefrologia online para todo o Brasil
 
-Plataforma própria para consultas online de nefrologia: cadastro de médicos, agenda, pagamento para a conta do médico e sala de vídeo na própria aplicação.
+Plataforma própria de teleconsulta de nefrologia para quem a distância, a fila ou a pressa atrapalham — interior, capital ou agenda apertada.
+
+## A ideia
+
+Atendimento presencial ainda deixa muita gente para trás. Em várias cidades não há nefrologista perto. Em outras, a espera é longa. A Meu Rim junta **agenda + pagamento na conta do médico + sala de vídeo própria**, sem depender de Zoom pago.
 
 ## Fluxo do paciente
 
 1. Escolhe o nefrologista  
-2. Vê horários disponíveis  
-3. Informa dados e paga (Pix, cartão ou boleto — demo)  
-4. Recebe e-mail com link da sala  
-5. Entra em `/consulta/[sala]` sem Zoom pago  
+2. Vê horários (os mais próximos primeiro se estiver com pressa)  
+3. Informa cidade, motivo e dados  
+4. Paga (Pix, cartão ou boleto — demo)  
+5. Recebe e-mail + link da sala Meu Rim  
+6. Pode mandar o link no WhatsApp e compartilhar a plataforma  
 
 ## Fluxo do médico
 
-1. Cadastro com CRM, Pix/conta e valor da consulta  
-2. Define dias de atendimento no painel  
-3. Paciente só é liberado após o pagamento  
-4. Valor estimado vai para a conta do médico (demo: 95%; taxa plataforma 5%)  
+1. Cadastro com CRM, Pix/conta e valor  
+2. Define dias de atendimento  
+3. Paciente só libera a sala depois de pagar  
+4. Valor estimado na conta do médico (demo: 95%)  
 
 ## Como rodar
 
@@ -26,18 +31,18 @@ npm run dev
 
 Abra [http://localhost:3000](http://localhost:3000).
 
-### Contas de demonstração
+### Contas demo
 
 - `carlos@meurim.com` / `medico123`  
 - `ana@meurim.com` / `medico123`  
 
-## Produção (próximos passos)
+## Produção
 
-- **Pagamentos reais:** Stripe Connect ou Mercado Pago Split para depósito na conta de cada médico  
-- **E-mail:** Resend / SendGrid no lugar do log simulado  
-- **Banco:** migrar `data/db.json` para Postgres (ex.: Supabase)  
-- **Vídeo:** LiveKit self-hosted ou reforçar o WebRTC atual com TURN  
+- Pagamentos reais: Stripe Connect ou Mercado Pago Split  
+- E-mail: Resend / SendGrid  
+- Banco: Postgres (ex. Supabase) no lugar de `data/db.json`  
+- Vídeo: TURN / LiveKit para redes instáveis do interior  
 
 ## Legado
 
-O conteúdo educativo estático anterior está em `legacy/index.html`.
+Conteúdo educativo estático anterior em `legacy/index.html`. Calculadora CKD-EPI em `/educacao`.

@@ -2,7 +2,9 @@ import { NextResponse } from "next/server";
 import { v4 as uuid } from "uuid";
 import { getDoctorSessionId } from "@/lib/auth";
 import { readDb, updateDb } from "@/lib/store";
-import type { PaymentMethod } from "@/lib/types";
+import type { Booking, PaymentMethod } from "@/lib/types";
+
+const REASONS = new Set(["pressa", "acompanhamento", "segunda_opiniao", "outro"]);
 
 export async function GET() {
   const doctorId = await getDoctorSessionId();
@@ -25,6 +27,8 @@ export async function POST(req: Request) {
     patientName,
     patientEmail,
     patientPhone,
+    patientCity,
+    careReason,
     slotStart,
     slotEnd,
     paymentMethod,
@@ -60,17 +64,21 @@ export async function POST(req: Request) {
     );
   }
 
-  const booking = {
+  const reason = REASONS.has(careReason) ? careReason : "outro";
+
+  const booking: Booking = {
     id: uuid(),
     doctorId,
     patientName: String(patientName),
     patientEmail: String(patientEmail).toLowerCase(),
     patientPhone: String(patientPhone || ""),
+    patientCity: String(patientCity || ""),
+    careReason: reason as Booking["careReason"],
     slotStart: String(slotStart),
     slotEnd: String(slotEnd),
     priceCents: doctor.consultationPriceCents,
     paymentMethod: paymentMethod as PaymentMethod,
-    status: "pending_payment" as const,
+    status: "pending_payment",
     meetingRoomId: uuid(),
     confirmationEmailSent: false,
     createdAt: new Date().toISOString(),
