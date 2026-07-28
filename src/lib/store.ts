@@ -2,7 +2,8 @@ import { promises as fs } from "fs";
 import path from "path";
 import bcrypt from "bcryptjs";
 import { v4 as uuid } from "uuid";
-import type { Database, Doctor, WeeklySlot } from "./types";
+import { getSupabaseAdmin } from "./supabase-admin";
+import type { Database, Doctor, PaymentRecord, SignalingMessage, WeeklySlot } from "./types";
 
 const DATA_DIR = path.join(process.cwd(), "data");
 const DB_PATH = path.join(DATA_DIR, "db.json");
@@ -145,6 +146,11 @@ async function seedDoctors(): Promise<Doctor[]> {
 }
 
 export async function readDb(): Promise<Database> {
+  const supabase = getSupabaseAdmin();
+  if (supabase) {
+    return readSupabaseDb();
+  }
+
   await fs.mkdir(DATA_DIR, { recursive: true });
   try {
     const raw = await fs.readFile(DB_PATH, "utf8");
@@ -171,6 +177,12 @@ export async function readDb(): Promise<Database> {
 }
 
 export async function writeDb(db: Database): Promise<void> {
+  const supabase = getSupabaseAdmin();
+  if (supabase) {
+    await writeSupabaseDb(db);
+    return;
+  }
+
   await fs.mkdir(DATA_DIR, { recursive: true });
   await fs.writeFile(DB_PATH, JSON.stringify(db, null, 2), "utf8");
 }
@@ -182,4 +194,218 @@ export async function updateDb(
   const next = await updater(db);
   await writeDb(next);
   return next;
+}
+
+function fromJsonArray<T>(value: unknown): T[] {
+  return Array.isArray(value) ? (value as T[]) : [];
+}
+
+function mapDoctorRow(row: Record<string, unknown>): Doctor {
+  return {
+    id: String(row.id),
+    name: String(row.name),
+    email: String(row.email),
+    passwordHash: String(row.password_hash),
+    crm: String(row.crm),
+    specialty: String(row.specialty),
+    bio: String(row.bio ?? ""),
+    consultationPriceCents: Number(row.consultation_price_cents),
+    pixKey: row.pix_key ? String(row.pix_key) : undefined,
+    bankAccountHint: row.bank_account_hint ? String(row.bank_account_hint) : undefined,
+    stripeConnectReady: Boolean(row.stripe_connect_ready),
+    weeklyAvailability: fromJsonArray<WeeklySlot>(row.weekly_availability),
+    blockedSlots: fromJsonArray<string>(row.blocked_slots),
+    createdAt: new Date(String(row.created_at)).toISOString(),
+  };
+}
+
+function mapBookingRow(row: Record<string, unknown>) {
+  return {
+    id: String(row.id),
+    doctorId: String(row.doctor_id),
+    patientName: String(row.patient_name),
+    patientEmail: String(row.patient_email),
+    patientPhone: String(row.patient_phone ?? ""),
+    patientCity: String(row.patient_city ?? ""),
+    careReason: String(row.care_reason) as
+      | "pressa"
+      | "acompanhamento"
+      | "segunda_opiniao"
+      | "outro",
+    slotStart: new Date(String(row.slot_start)).toISOString(),
+    slotEnd: new Date(String(row.slot_end)).toISOString(),
+    priceCents: Number(row.price_cents),
+    paymentMethod: String(row.payment_method) as "card" | "pix" | "boleto",
+    status: String(row.status) as
+      | "pending_payment"
+      | "paid"
+      | "confirmed"
+      | "completed"
+      | "cancelled",
+    meetingRoomId: String(row.meeting_room_id),
+    paymentId: row.payment_id ? String(row.payment_id) : undefined,
+    paidAt: row.paid_at ? new Date(String(row.paid_at)).toISOString() : undefined,
+    confirmationEmailSent: Boolean(row.confirmation_email_sent),
+    createdAt: new Date(String(row.created_at)).toISOString(),
+  };
+}
+
+function mapPaymentRow(row: Record<string, unknown>): PaymentRecord {
+  return {
+    id: String(row.id),
+    bookingId: String(row.booking_id),
+    doctorId: String(row.doctor_id),
+    amountCents: Number(row.amount_cents),
+    method: String(row.method) as "card" | "pix" | "boleto",
+    status: String(row.status) as "succeeded" | "failed" | "pending",
+    doctorPayoutCents: Number(row.doctor_payout_cents),
+    platformFeeCents: Number(row.platform_fee_cents),
+    createdAt: new Date(String(row.created_at)).toISOString(),
+  };
+}
+
+function mapSignalRow(row: Record<string, unknown>): SignalingMessage {
+  return {
+    id: String(row.id),
+    roomId: String(row.room_id),
+    from: String(row.from_role) as "doctor" | "patient",
+    type: String(row.type) as "offer" | "answer" | "ice",
+    payload: String(row.payload),
+    createdAt: new Date(String(row.created_at)).toISOString(),
+  };
+}
+
+async function readSupabaseDb(): Promise<Database> {
+  const supabase = getSupabaseAdmin();
+  if (!supabase) {
+    throw new Error("Supabase não configurado.");
+  }
+
+  const [doctorsRes, bookingsRes, paymentsRes, signalingRes] = await Promise.all([
+    supabase.from("doctors").select("*").order("created_at", { ascending: true }),
+    supabase.from("bookings").select("*").order("created_at", { ascending: true }),
+    supabase.from("payments").select("*").order("created_at", { ascending: true }),
+    supabase.from("signaling_messages").select("*").order("created_at", { ascending: true }),
+  ]);
+
+  if (doctorsRes.error) throw doctorsRes.error;
+  if (bookingsRes.error) throw bookingsRes.error;
+  if (paymentsRes.error) throw paymentsRes.error;
+  if (signalingRes.error) throw signalingRes.error;
+
+  const doctors = (doctorsRes.data ?? []).map((row) =>
+    mapDoctorRow(row as unknown as Record<string, unknown>)
+  );
+
+  if (doctors.length === 0) {
+    const seeded: Database = {
+      doctors: await seedDoctors(),
+      bookings: [],
+      payments: [],
+      signaling: [],
+    };
+    await writeSupabaseDb(seeded);
+    return seeded;
+  }
+
+  return {
+    doctors,
+    bookings: (bookingsRes.data ?? []).map((row) =>
+      mapBookingRow(row as unknown as Record<string, unknown>)
+    ),
+    payments: (paymentsRes.data ?? []).map((row) =>
+      mapPaymentRow(row as unknown as Record<string, unknown>)
+    ),
+    signaling: (signalingRes.data ?? []).map((row) =>
+      mapSignalRow(row as unknown as Record<string, unknown>)
+    ),
+  };
+}
+
+async function writeSupabaseDb(db: Database): Promise<void> {
+  const supabase = getSupabaseAdmin();
+  if (!supabase) {
+    throw new Error("Supabase não configurado.");
+  }
+
+  const doctors = db.doctors.map((doctor) => ({
+    id: doctor.id,
+    name: doctor.name,
+    email: doctor.email,
+    password_hash: doctor.passwordHash,
+    crm: doctor.crm,
+    specialty: doctor.specialty,
+    bio: doctor.bio,
+    consultation_price_cents: doctor.consultationPriceCents,
+    pix_key: doctor.pixKey ?? null,
+    bank_account_hint: doctor.bankAccountHint ?? null,
+    stripe_connect_ready: doctor.stripeConnectReady,
+    weekly_availability: doctor.weeklyAvailability,
+    blocked_slots: doctor.blockedSlots,
+    created_at: doctor.createdAt,
+  }));
+
+  const bookings = db.bookings.map((booking) => ({
+    id: booking.id,
+    doctor_id: booking.doctorId,
+    patient_name: booking.patientName,
+    patient_email: booking.patientEmail,
+    patient_phone: booking.patientPhone,
+    patient_city: booking.patientCity,
+    care_reason: booking.careReason,
+    slot_start: booking.slotStart,
+    slot_end: booking.slotEnd,
+    price_cents: booking.priceCents,
+    payment_method: booking.paymentMethod,
+    status: booking.status,
+    meeting_room_id: booking.meetingRoomId,
+    payment_id: booking.paymentId ?? null,
+    paid_at: booking.paidAt ?? null,
+    confirmation_email_sent: booking.confirmationEmailSent,
+    created_at: booking.createdAt,
+  }));
+
+  const payments = db.payments.map((payment) => ({
+    id: payment.id,
+    booking_id: payment.bookingId,
+    doctor_id: payment.doctorId,
+    amount_cents: payment.amountCents,
+    method: payment.method,
+    status: payment.status,
+    doctor_payout_cents: payment.doctorPayoutCents,
+    platform_fee_cents: payment.platformFeeCents,
+    created_at: payment.createdAt,
+  }));
+
+  const signaling = db.signaling.map((message) => ({
+    id: message.id,
+    room_id: message.roomId,
+    from_role: message.from,
+    type: message.type,
+    payload: message.payload,
+    created_at: message.createdAt,
+  }));
+
+  const tables: Array<{
+    name: "doctors" | "bookings" | "payments" | "signaling_messages";
+    rows: Record<string, unknown>[];
+  }> = [
+    { name: "doctors", rows: doctors },
+    { name: "bookings", rows: bookings },
+    { name: "payments", rows: payments },
+    { name: "signaling_messages", rows: signaling },
+  ];
+
+  for (const table of tables) {
+    const { error: deleteError } = await supabase
+      .from(table.name)
+      .delete()
+      .not("id", "is", null);
+    if (deleteError) throw deleteError;
+
+    if (table.rows.length > 0) {
+      const { error: insertError } = await supabase.from(table.name).insert(table.rows);
+      if (insertError) throw insertError;
+    }
+  }
 }

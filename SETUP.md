@@ -28,17 +28,19 @@ Demo: `carlos@meurim.com` / `medico123` (senha igual para os outros `@meurim.com
 
 ## Amanhã — na sua ordem
 
-1. **Vercel** — Importar o repo GitHub → Deploy  
-2. **Domínio** — apontar DNS → `NEXT_PUBLIC_APP_URL=https://seu-dominio`  
-3. **Mercado Pago Split** ou **Stripe Connect** — chaves no Environment Variables  
-4. **Resend** — API key + domínio de e-mail verificado  
-5. **Supabase/Postgres** — trocar `data/db.json` (próximo passo de engenharia)  
+1. **Supabase** — criar projeto e rodar a migration em `supabase/migrations/20260728102000_init_meu_rim.sql`  
+2. **Vercel** — importar o repo GitHub → Deploy  
+3. **Domínio** — apontar DNS → `NEXT_PUBLIC_APP_URL=https://seu-dominio`  
+4. **Mercado Pago Split** ou **Stripe Connect** — chaves no Environment Variables  
+5. **Resend** — API key + domínio de e-mail verificado  
 6. **Médicos reais** — cadastrar CRM/Pix reais; remover demos  
 7. **PJ** — quem fatura a taxa da plataforma  
 
 ## Variáveis (`.env.example`)
 
-Veja o arquivo `.env.example` na raiz. Sem elas o demo funciona; com elas você liga produção.
+Veja o arquivo `.env.example` na raiz. Sem elas o demo funciona; com
+`NEXT_PUBLIC_SUPABASE_URL` + `SUPABASE_SERVICE_ROLE_KEY` preenchidos, o app já
+troca automaticamente o arquivo local pelo Supabase.
 
 ## Contato do fluxo
 

@@ -26,14 +26,27 @@ Abra http://localhost:3000
 - Educação CKD-EPI
 - Termos / privacidade
 
-## Amanhã (só contas reais)
+## Próximo passo recomendado
+
+**Supabase primeiro.** O código já está preparado para trocar
+automaticamente `data/db.json` por Supabase/Postgres quando você preencher:
+
+- `NEXT_PUBLIC_SUPABASE_URL`
+- `SUPABASE_SERVICE_ROLE_KEY`
+
+A migration inicial está em:
+
+```bash
+supabase/migrations/20260728102000_init_meu_rim.sql
+```
+
+## Depois (contas reais)
 
 1. Deploy Vercel  
 2. Domínio + `NEXT_PUBLIC_APP_URL`  
 3. Mercado Pago / Stripe  
 4. Resend (e-mail)  
-5. Postgres (Supabase)  
-6. CRM/Pix reais dos colegas  
+5. CRM/Pix reais dos colegas  
 
 Detalhes em [`SETUP.md`](./SETUP.md) e [`.env.example`](./.env.example).
 
