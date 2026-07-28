@@ -36,6 +36,8 @@ export interface Booking {
   patientName: string;
   patientEmail: string;
   patientPhone: string;
+  patientCity: string;
+  careReason: "pressa" | "acompanhamento" | "segunda_opiniao" | "outro";
   slotStart: string; // ISO
   slotEnd: string;
   priceCents: number;

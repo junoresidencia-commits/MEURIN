@@ -188,6 +188,13 @@ export default function PainelMedicoPage() {
               <div>
                 <p className="font-semibold text-[var(--text)]">{b.patientName}</p>
                 <p className="text-sm text-[var(--text-muted)]">{formatSlotLabel(b.slotStart)}</p>
+                {(b.patientCity || b.careReason) && (
+                  <p className="mt-1 text-sm text-[var(--text-soft)]">
+                    {[b.patientCity, b.careReason === "pressa" ? "com pressa" : b.careReason === "segunda_opiniao" ? "2ª opinião" : b.careReason === "acompanhamento" ? "acompanhamento" : null]
+                      .filter(Boolean)
+                      .join(" · ")}
+                  </p>
+                )}
                 <p className="mt-1 text-xs uppercase tracking-wider text-[var(--gold-light)]">
                   {b.status === "confirmed"
                     ? "Paga e liberada"
