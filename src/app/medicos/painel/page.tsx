@@ -142,7 +142,7 @@ export default function PainelMedicoPage() {
                 type="button"
                 onClick={() => toggleDay(d.id)}
                 className={`rounded-full px-4 py-2 text-sm font-bold ${
-                  on ? "bg-[var(--gold)] text-[#111]" : "border border-[var(--border)]"
+                  on ? "bg-[var(--gold)] text-white" : "border border-[var(--border)]"
                 }`}
               >
                 {d.label}

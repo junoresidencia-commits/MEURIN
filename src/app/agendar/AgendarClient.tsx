@@ -411,7 +411,7 @@ export default function AgendarClient() {
                   onClick={() => setPaymentMethod(id)}
                   className={`rounded-full px-4 py-2 text-sm font-bold transition ${
                     paymentMethod === id
-                      ? "bg-[var(--gold)] text-[#111]"
+                      ? "bg-[var(--gold)] text-white"
                       : "border border-[var(--border)] text-[var(--text-soft)]"
                   }`}
                 >
