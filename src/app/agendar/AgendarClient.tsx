@@ -116,6 +116,13 @@ export default function AgendarClient() {
       const payData = await payRes.json();
       if (!payRes.ok) throw new Error(payData.error || "Pagamento recusado");
 
+      // Pagamento real (Mercado Pago): redireciona para o checkout.
+      if (payData.redirectUrl) {
+        window.location.href = payData.redirectUrl;
+        return;
+      }
+
+      // Pagamento simulado: já confirmado, vai para a confirmação.
       router.push(`/confirmacao/${bookingData.booking.id}`);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Falha inesperada");
