@@ -23,23 +23,67 @@ export default function ConfirmacaoPage() {
 
   useEffect(() => {
     setOrigin(window.location.origin);
-    fetch(`/api/bookings/${params.id}`)
-      .then(async (r) => {
+    let tries = 0;
+    let timer: ReturnType<typeof setTimeout>;
+
+    async function fetchBooking() {
+      try {
+        const r = await fetch(`/api/bookings/${params.id}`);
         const data = await r.json();
         if (!r.ok) throw new Error(data.error || "Erro");
         setBooking(data.booking);
         setDoctorName(data.doctor?.name || "");
-      })
-      .catch((e) => setError(e.message));
+        // Pagamento real confirma pelo webhook — se ainda pendente, repete a busca.
+        if (data.booking?.status !== "confirmed" && tries < 20) {
+          tries += 1;
+          timer = setTimeout(fetchBooking, 3000);
+        }
+      } catch (e) {
+        setError(e instanceof Error ? e.message : "Erro");
+      }
+    }
+
+    fetchBooking();
+    return () => clearTimeout(timer);
   }, [params.id]);
 
   if (error) {
-    return <div className="mx-auto max-w-xl px-5 py-20 text-red-300">{error}</div>;
+    return <div className="mx-auto max-w-xl px-5 py-20 text-[var(--danger)]">{error}</div>;
   }
   if (!booking) {
     return (
       <div className="mx-auto max-w-xl px-5 py-20 text-[var(--text-muted)]">
         Carregando confirmação…
+      </div>
+    );
+  }
+
+  // Pagamento em processamento (Mercado Pago) — ainda não confirmado pelo webhook.
+  if (booking.status !== "confirmed") {
+    return (
+      <div className="mx-auto max-w-xl px-5 py-16">
+        <p className="text-xs font-bold uppercase tracking-[0.22em] text-[var(--warn)]">
+          Pagamento em processamento
+        </p>
+        <h1 className="font-display mt-2 text-3xl font-extrabold text-[var(--text)]">
+          Estamos confirmando seu pagamento
+        </h1>
+        <p className="mt-4 text-[var(--text-soft)]">
+          Assim que o pagamento for aprovado, esta página libera o link da sala
+          automaticamente. Você também receberá por e-mail em{" "}
+          <strong className="text-[var(--text)]">{booking.patientEmail}</strong>.
+        </p>
+        <div className="panel mt-6 flex items-center gap-3">
+          <span className="h-4 w-4 animate-spin rounded-full border-2 border-[var(--gold)] border-t-transparent" />
+          <span className="text-sm text-[var(--text-muted)]">Aguardando confirmação…</span>
+        </div>
+        <button
+          type="button"
+          className="btn-ghost mt-6"
+          onClick={() => window.location.reload()}
+        >
+          Atualizar agora
+        </button>
       </div>
     );
   }
