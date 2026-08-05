@@ -91,7 +91,7 @@ export default function ConfirmacaoPage() {
           <span className="text-[var(--text-muted)]">Valor:</span>{" "}
           <span className="text-[var(--gold)]">{formatBRL(booking.priceCents)}</span>
         </p>
-        <p className="break-all rounded-xl border border-[var(--border)] bg-black/30 p-3 text-[var(--gold-light)]">
+        <p className="break-all rounded-xl border border-[var(--border-gold)] bg-[var(--gold-soft)] p-3 text-[var(--gold)]">
           Link da sala: {meetingAbsolute}
         </p>
         <p className="rounded-xl border border-[var(--border-gold)] bg-[var(--gold-soft)] p-3 text-[var(--gold-light)]">

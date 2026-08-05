@@ -86,7 +86,7 @@ export default function EducacaoPage() {
             type="button"
             onClick={() => setFemale(false)}
             className={`rounded-full px-4 py-2 text-sm font-bold ${
-              !female ? "bg-[var(--gold)] text-[#111]" : "border border-[var(--border)]"
+              !female ? "bg-[var(--gold)] text-white" : "border border-[var(--border)]"
             }`}
           >
             Masculino
@@ -95,7 +95,7 @@ export default function EducacaoPage() {
             type="button"
             onClick={() => setFemale(true)}
             className={`rounded-full px-4 py-2 text-sm font-bold ${
-              female ? "bg-[var(--gold)] text-[#111]" : "border border-[var(--border)]"
+              female ? "bg-[var(--gold)] text-white" : "border border-[var(--border)]"
             }`}
           >
             Feminino
@@ -104,7 +104,7 @@ export default function EducacaoPage() {
             type="button"
             onClick={() => setBlack((v) => !v)}
             className={`rounded-full px-4 py-2 text-sm font-bold ${
-              black ? "bg-[var(--gold)] text-[#111]" : "border border-[var(--border)]"
+              black ? "bg-[var(--gold)] text-white" : "border border-[var(--border)]"
             }`}
           >
             Fator raça (CKD-EPI 2009)
