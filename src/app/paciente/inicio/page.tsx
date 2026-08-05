@@ -30,6 +30,14 @@ type Booking = {
   meetingRoomId: string;
 };
 
+type SharedNote = {
+  id: string;
+  doctorName: string;
+  assessment?: string | null;
+  plan?: string | null;
+  createdAt: string;
+};
+
 function latest(records: HomeRecord[], kind: HomeRecord["kind"]) {
   return records.find((r) => r.kind === kind) || null;
 }
@@ -49,6 +57,7 @@ export default function PacienteInicioPage() {
   const [records, setRecords] = useState<HomeRecord[]>([]);
   const [food, setFood] = useState<FoodLog[]>([]);
   const [bookings, setBookings] = useState<Booking[]>([]);
+  const [notes, setNotes] = useState<SharedNote[]>([]);
   const [loading, setLoading] = useState(true);
 
   const load = useCallback(async () => {
@@ -66,6 +75,13 @@ export default function PacienteInicioPage() {
         const b = await fetch(`/api/bookings/lookup?email=${encodeURIComponent(data.email)}`);
         const bd = await b.json();
         setBookings(bd.bookings || []);
+      } catch {
+        /* ignore */
+      }
+      try {
+        const n = await fetch("/api/patient/notes");
+        const nd = await n.json();
+        setNotes(nd.notes || []);
       } catch {
         /* ignore */
       }
@@ -194,6 +210,23 @@ export default function PacienteInicioPage() {
           </div>
         )}
       </div>
+
+      {notes.length > 0 && (
+        <>
+          <p className="mt-8 text-xs font-bold uppercase tracking-wider text-[var(--gold)]">
+            Orientações do seu médico
+          </p>
+          <div className="mt-3 space-y-3">
+            {notes.slice(0, 3).map((n) => (
+              <div key={n.id} className="panel">
+                <p className="text-xs text-[var(--text-muted)]">{n.doctorName}</p>
+                {n.assessment && <p className="mt-1 text-sm text-[var(--text-soft)]"><b>Avaliação:</b> {n.assessment}</p>}
+                {n.plan && <p className="mt-1 text-sm text-[var(--text-soft)]"><b>Orientações:</b> {n.plan}</p>}
+              </div>
+            ))}
+          </div>
+        </>
+      )}
 
       <p className="mt-8 text-xs font-bold uppercase tracking-wider text-[var(--gold)]">
         Alimentação recente
