@@ -15,10 +15,20 @@ const DAYS = [
   { id: 6, label: "Sáb" },
 ];
 
+type PatientRow = {
+  email: string;
+  name: string;
+  city: string;
+  total: number;
+  lastSlot: string;
+  nextSlot: string | null;
+};
+
 export default function PainelMedicoPage() {
   const router = useRouter();
   const [doctor, setDoctor] = useState<Omit<Doctor, "passwordHash"> | null>(null);
   const [bookings, setBookings] = useState<Booking[]>([]);
+  const [patients, setPatients] = useState<PatientRow[]>([]);
   const [price, setPrice] = useState("350");
   const [bio, setBio] = useState("");
   const [weekly, setWeekly] = useState<WeeklySlot[]>([]);
@@ -29,7 +39,8 @@ export default function PainelMedicoPage() {
     Promise.all([
       fetch("/api/auth").then((r) => r.json()),
       fetch("/api/bookings").then((r) => r.json()),
-    ]).then(([auth, books]) => {
+      fetch("/api/doctor/patients").then((r) => r.json()),
+    ]).then(([auth, books, pats]) => {
       if (!auth.doctor) {
         router.replace("/medicos/login");
         return;
@@ -39,6 +50,7 @@ export default function PainelMedicoPage() {
       setBio(auth.doctor.bio || "");
       setWeekly(auth.doctor.weeklyAvailability || []);
       setBookings(books.bookings || []);
+      setPatients(pats.patients || []);
       setLoading(false);
     });
   }, [router]);
@@ -175,6 +187,41 @@ export default function PainelMedicoPage() {
           Salvar
         </button>
         {message && <p className="mt-3 text-sm text-[var(--green)]">{message}</p>}
+      </section>
+
+      <section className="mt-8">
+        <h2 className="font-display text-2xl text-[var(--text)]">Meus pacientes</h2>
+        <p className="mt-2 text-sm text-[var(--text-muted)]">
+          Pacientes que agendaram com você. Abra o prontuário para ver os dados
+          que eles registraram em casa (pressão, glicemia, peso, alimentação).
+        </p>
+        <div className="mt-4 grid gap-3">
+          {patients.length === 0 && (
+            <p className="text-[var(--text-muted)]">Nenhum paciente ainda.</p>
+          )}
+          {patients.map((p) => (
+            <Link
+              key={p.email}
+              href={`/medicos/paciente/${encodeURIComponent(p.email)}`}
+              className="panel flex items-center justify-between gap-3 transition hover:-translate-y-0.5 hover:border-[var(--border-gold)]"
+            >
+              <div className="flex items-center gap-3">
+                <span className="grid h-11 w-11 place-items-center rounded-2xl bg-[var(--gold-soft)] text-sm font-extrabold text-[var(--gold)]">
+                  {p.name.slice(0, 2).toUpperCase()}
+                </span>
+                <div>
+                  <p className="font-semibold text-[var(--text)]">{p.name}</p>
+                  <p className="text-sm text-[var(--text-muted)]">
+                    {[p.city, `${p.total} consulta${p.total > 1 ? "s" : ""}`]
+                      .filter(Boolean)
+                      .join(" · ")}
+                  </p>
+                </div>
+              </div>
+              <span className="text-xl text-[var(--gold)]">›</span>
+            </Link>
+          ))}
+        </div>
       </section>
 
       <section className="mt-8">
