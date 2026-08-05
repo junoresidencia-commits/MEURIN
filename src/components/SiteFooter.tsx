@@ -1,30 +1,47 @@
+"use client";
+
 import Link from "next/link";
+import { usePathname } from "next/navigation";
 
 export function SiteFooter() {
+  const pathname = usePathname();
+  if (pathname?.startsWith("/paciente")) {
+    return null;
+  }
+
   return (
-    <footer className="border-t border-white/[0.04] px-5 py-10 text-center text-sm text-[var(--text-muted)]">
-      <p className="font-display text-lg text-[var(--gold-light)]">Meu Rim</p>
+    <footer className="mt-4 border-t border-[var(--border)] bg-white px-5 py-10 text-center text-sm text-[var(--text-muted)]">
+      <p className="font-display text-lg font-extrabold text-[var(--gold)]">Meu Rim</p>
       <p className="mx-auto mt-2 max-w-md">
-        Nefrologia online para o interior, a capital e quem tem pressa —
-        pagamento ao médico e sala própria, sem Zoom pago.
+        Cuidado renal que acompanha você, todos os dias — consulta online,
+        acompanhamento e orientações no celular ou computador.
       </p>
       <p className="mt-3 text-xs">
-        Não é pronto-socorro. Em emergência, procure atendimento presencial.
+        Não é serviço de emergência. Em urgência, procure atendimento presencial.
       </p>
-      <div className="mt-5 flex flex-wrap justify-center gap-4">
-        <Link href="/agendar" className="hover:text-[var(--gold-light)]">
+      <div className="mt-5 flex flex-wrap justify-center gap-x-4 gap-y-2">
+        <Link href="/agendar" className="hover:text-[var(--gold)]">
           Agendar
         </Link>
-        <Link href="/medicos/cadastro" className="hover:text-[var(--gold-light)]">
-          Cadastrar médico
+        <Link href="/minhas-consultas" className="hover:text-[var(--gold)]">
+          Sou paciente
         </Link>
-        <Link href="/educacao" className="hover:text-[var(--gold-light)]">
-          Educação renal
+        <Link href="/medicos/login" className="hover:text-[var(--gold)]">
+          Sou profissional
         </Link>
-        <Link href="/#perguntas" className="hover:text-[var(--gold-light)]">
-          Dúvidas
+        <Link href="/educacao" className="hover:text-[var(--gold)]">
+          Educação
+        </Link>
+        <Link href="/termos" className="hover:text-[var(--gold)]">
+          Termos
+        </Link>
+        <Link href="/privacidade" className="hover:text-[var(--gold)]">
+          Privacidade
         </Link>
       </div>
+      <p className="mx-auto mt-5 max-w-md text-xs text-[var(--text-muted)]">
+        Projeto desenvolvido com medidas de segurança e privacidade alinhadas à LGPD.
+      </p>
     </footer>
   );
 }

@@ -13,8 +13,8 @@ export default {
         foreground: "var(--text)",
       },
       fontFamily: {
-        display: ["var(--font-display)", "Georgia", "serif"],
-        sans: ["var(--font-body)", "system-ui", "sans-serif"],
+        display: ["var(--font-display)", "Inter", "system-ui", "sans-serif"],
+        sans: ["var(--font-body)", "Inter", "system-ui", "sans-serif"],
       },
     },
   },

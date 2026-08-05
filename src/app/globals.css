@@ -2,22 +2,35 @@
 @tailwind components;
 @tailwind utilities;
 
+/*
+  Identidade visual oficial Meu Rim: branco + azul-petróleo.
+  Os nomes de tokens legados (--gold*) foram remapeados para a paleta
+  petróleo para que todas as telas existentes reaproveitem o novo tema
+  automaticamente. --gold = cor primária petróleo.
+*/
 :root {
-  --bg: #050505;
-  --bg-soft: #0b0b0b;
-  --panel: rgba(17, 17, 17, 0.94);
-  --text: #f7f2e8;
-  --text-soft: #cec5b7;
-  --text-muted: #978f82;
-  --gold: #c9a961;
-  --gold-light: #e4ce96;
-  --gold-dark: #8a723f;
-  --gold-soft: rgba(201, 169, 97, 0.08);
-  --border: rgba(255, 255, 255, 0.07);
-  --border-gold: rgba(201, 169, 97, 0.2);
-  --shadow: 0 22px 60px rgba(0, 0, 0, 0.35);
-  --shadow-gold: 0 16px 36px rgba(201, 169, 97, 0.16);
-  --green: #6fd38a;
+  --bg: #f7fafb;
+  --bg-soft: #eef9f9;
+  --panel: #ffffff;
+  --text: #0b2f45;
+  --text-soft: #33556a;
+  --text-muted: #6d8190;
+
+  /* Primária petróleo (mapeada sobre os antigos tokens "gold") */
+  --gold: #087b82;
+  --gold-light: #075e70;
+  --gold-dark: #075e70;
+  --gold-soft: #eaf7f8;
+
+  --border: #e7eef1;
+  --border-gold: #cbe6e8;
+  --shadow: 0 12px 34px rgba(14, 49, 68, 0.09);
+  --shadow-gold: 0 12px 26px rgba(8, 123, 130, 0.22);
+
+  --green: #1a9a78;
+  --warn: #e4a32e;
+  --danger: #e86761;
+  --radius: 24px;
 }
 
 html {
@@ -28,18 +41,19 @@ body {
   min-height: 100vh;
   color: var(--text-soft);
   background:
-    radial-gradient(circle at top right, rgba(201, 169, 97, 0.08), transparent 24%),
-    radial-gradient(circle at top left, rgba(201, 169, 97, 0.04), transparent 20%),
-    linear-gradient(180deg, #040404 0%, #080808 42%, #050505 100%);
+    radial-gradient(ellipse 70% 50% at 85% -5%, rgba(8, 123, 130, 0.08), transparent 60%),
+    radial-gradient(ellipse 50% 40% at 0% 100%, rgba(8, 123, 130, 0.05), transparent 55%),
+    var(--bg);
   -webkit-font-smoothing: antialiased;
 }
 
 .font-display {
-  font-family: var(--font-display), Georgia, serif;
+  font-family: var(--font-display), Inter, system-ui, sans-serif;
+  letter-spacing: -0.01em;
 }
 
 .font-sans-body {
-  font-family: var(--font-body), system-ui, sans-serif;
+  font-family: var(--font-body), Inter, system-ui, sans-serif;
 }
 
 @keyframes fade-up {
@@ -78,22 +92,34 @@ body {
 }
 
 .input-field {
-  @apply w-full min-h-[52px] rounded-[14px] border-[1.5px] border-[var(--border)] bg-[rgba(20,20,20,0.96)] px-4 py-3 text-base text-[var(--text)] outline-none transition;
+  @apply w-full min-h-[52px] rounded-[14px] border-[1.5px] border-[var(--border)] bg-white px-4 py-3 text-base text-[var(--text)] outline-none transition placeholder:text-[var(--text-muted)];
 }
 
 .input-field:focus {
   border-color: var(--gold);
-  box-shadow: 0 0 0 4px rgba(201, 169, 97, 0.08);
+  box-shadow: 0 0 0 4px rgba(8, 123, 130, 0.12);
 }
 
 .btn-gold {
-  @apply inline-flex min-h-[52px] items-center justify-center gap-2 rounded-full bg-gradient-to-br from-[var(--gold)] to-[var(--gold-dark)] px-5 text-sm font-extrabold text-[#111] shadow-[var(--shadow-gold)] transition hover:-translate-y-0.5 disabled:cursor-not-allowed disabled:opacity-50;
+  @apply inline-flex min-h-[52px] items-center justify-center gap-2 rounded-full bg-gradient-to-br from-[var(--gold)] to-[var(--gold-dark)] px-5 text-sm font-extrabold text-white shadow-[var(--shadow-gold)] transition hover:-translate-y-0.5 disabled:cursor-not-allowed disabled:opacity-50;
 }
 
 .btn-ghost {
-  @apply inline-flex min-h-[52px] items-center justify-center gap-2 rounded-full border border-[var(--border-gold)] bg-[rgba(201,169,97,0.04)] px-5 text-sm font-extrabold text-[var(--gold-light)] transition hover:-translate-y-0.5;
+  @apply inline-flex min-h-[52px] items-center justify-center gap-2 rounded-full border-[1.5px] border-[var(--border-gold)] bg-white px-5 text-sm font-extrabold text-[var(--gold)] transition hover:-translate-y-0.5 hover:border-[var(--gold)];
 }
 
 .panel {
-  @apply rounded-[24px] border border-[var(--border)] bg-gradient-to-b from-[rgba(18,18,18,0.96)] to-[rgba(12,12,12,0.96)] p-5 shadow-[var(--shadow)] sm:p-6;
+  @apply rounded-[24px] border border-[var(--border)] bg-[var(--panel)] p-5 shadow-[var(--shadow)] sm:p-6;
+}
+
+@media print {
+  header,
+  footer,
+  .print\:hidden {
+    display: none !important;
+  }
+  body {
+    background: white !important;
+    color: black !important;
+  }
 }

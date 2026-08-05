@@ -1,48 +1,55 @@
 # Meu Rim — Nefrologia online para todo o Brasil
 
-Plataforma própria de teleconsulta de nefrologia para quem a distância, a fila ou a pressa atrapalham — interior, capital ou agenda apertada.
+Plataforma de teleconsulta: agenda + pagamento na conta do médico + sala de vídeo própria.
 
-## A ideia
-
-Atendimento presencial ainda deixa muita gente para trás. Em várias cidades não há nefrologista perto. Em outras, a espera é longa. A Meu Rim junta **agenda + pagamento na conta do médico + sala de vídeo própria**, sem depender de Zoom pago.
-
-## Fluxo do paciente
-
-1. Escolhe o nefrologista  
-2. Vê horários (os mais próximos primeiro se estiver com pressa)  
-3. Informa cidade, motivo e dados  
-4. Paga (Pix, cartão ou boleto — demo)  
-5. Recebe e-mail + link da sala Meu Rim  
-6. Pode mandar o link no WhatsApp e compartilhar a plataforma  
-
-## Fluxo do médico
-
-1. Cadastro com CRM, Pix/conta e valor  
-2. Define dias de atendimento  
-3. Paciente só libera a sala depois de pagar  
-4. Valor estimado na conta do médico (demo: 95%)  
-
-## Como rodar
+## Rodar agora
 
 ```bash
 npm install
 npm run dev
 ```
 
-Abra [http://localhost:3000](http://localhost:3000).
+Abra http://localhost:3000
 
-### Contas demo
+- Paciente: `/agendar`
+- Médico demo: `carlos@meurim.com` / `medico123`
+- Checklist do que falta para ir ao ar: **`/amanha`** e `SETUP.md`
 
-- `carlos@meurim.com` / `medico123`  
-- `ana@meurim.com` / `medico123`  
+## O que já funciona (demo)
 
-## Produção
+- Cadastro de médicos, agenda, valor, Pix
+- Agendamento com pressa / cidade / motivo
+- Pagamento simulado → libera consulta
+- E-mail simulado no terminal
+- Sala WebRTC (`/consulta/...`)
+- Minhas consultas por e-mail
+- Educação CKD-EPI
+- Termos / privacidade
 
-- Pagamentos reais: Stripe Connect ou Mercado Pago Split  
-- E-mail: Resend / SendGrid  
-- Banco: Postgres (ex. Supabase) no lugar de `data/db.json`  
-- Vídeo: TURN / LiveKit para redes instáveis do interior  
+## Próximo passo recomendado
+
+**Supabase primeiro.** O código já está preparado para trocar
+automaticamente `data/db.json` por Supabase/Postgres quando você preencher:
+
+- `NEXT_PUBLIC_SUPABASE_URL`
+- `SUPABASE_SERVICE_ROLE_KEY`
+
+A migration inicial está em:
+
+```bash
+supabase/migrations/20260728102000_init_meu_rim.sql
+```
+
+## Depois (contas reais)
+
+1. Deploy Vercel  
+2. Domínio + `NEXT_PUBLIC_APP_URL`  
+3. Mercado Pago / Stripe  
+4. Resend (e-mail)  
+5. CRM/Pix reais dos colegas  
+
+Detalhes em [`SETUP.md`](./SETUP.md) e [`.env.example`](./.env.example).
 
 ## Legado
 
-Conteúdo educativo estático anterior em `legacy/index.html`. Calculadora CKD-EPI em `/educacao`.
+`legacy/index.html` — site educativo estático anterior.
