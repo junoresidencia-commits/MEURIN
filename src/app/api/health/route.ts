@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { readDb } from "@/lib/store";
+import { getSupabaseAdmin } from "@/lib/supabase-admin";
 
 export async function GET() {
   try {
@@ -7,7 +8,7 @@ export async function GET() {
     return NextResponse.json({
       ok: true,
       service: "meu-rim",
-      mode: "demo",
+      mode: getSupabaseAdmin() ? "supabase" : "demo",
       doctors: db.doctors.length,
       bookings: db.bookings.length,
       time: new Date().toISOString(),

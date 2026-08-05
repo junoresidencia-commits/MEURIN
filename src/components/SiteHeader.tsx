@@ -29,6 +29,11 @@ export function SiteHeader() {
   const hideDemo =
     pathname?.startsWith("/consulta") || pathname?.startsWith("/confirmacao");
 
+  // Área do paciente tem cara de app próprio (navegação inferior), sem o header de marketing.
+  if (pathname?.startsWith("/paciente")) {
+    return null;
+  }
+
   return (
     <>
       {!hideDemo && (

@@ -151,7 +151,7 @@ export default function HomePage() {
           </Link>
 
           <Link
-            href="/minhas-consultas"
+            href="/paciente/inicio"
             className="group flex items-center gap-4 rounded-[24px] border border-[var(--border)] bg-white p-5 shadow-[var(--shadow)] transition hover:-translate-y-0.5 hover:border-[var(--border-gold)]"
           >
             <span className="grid h-12 w-12 shrink-0 place-items-center rounded-2xl bg-[var(--gold-soft)] text-[var(--gold)]">

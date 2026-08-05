@@ -1,6 +1,14 @@
+"use client";
+
 import Link from "next/link";
+import { usePathname } from "next/navigation";
 
 export function SiteFooter() {
+  const pathname = usePathname();
+  if (pathname?.startsWith("/paciente")) {
+    return null;
+  }
+
   return (
     <footer className="mt-4 border-t border-[var(--border)] bg-white px-5 py-10 text-center text-sm text-[var(--text-muted)]">
       <p className="font-display text-lg font-extrabold text-[var(--gold)]">Meu Rim</p>
