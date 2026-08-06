@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import type { Booking, Doctor, WeeklySlot } from "@/lib/types";
 import { formatBRL, formatSlotLabel } from "@/lib/scheduling-client";
+import { DoctorSidebar } from "@/components/DoctorSidebar";
 
 const DAYS = [
   { id: 1, label: "Seg" },
@@ -111,16 +112,22 @@ export default function PainelMedicoPage() {
     );
   }
 
+  const todayStr = new Date().toDateString();
+  const agendaHoje = bookings.filter((b) => new Date(b.slotStart).toDateString() === todayStr).length;
+
   return (
-    <div className="mx-auto max-w-4xl px-5 py-12">
+    <div className="flex min-h-screen bg-[var(--bg)]">
+      <DoctorSidebar />
+      <div className="min-w-0 flex-1">
+        <div className="mx-auto max-w-5xl px-5 py-8">
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div>
-          <p className="text-xs font-bold uppercase tracking-[0.22em] text-[var(--gold)]">
-            Painel médico
-          </p>
-          <h1 className="font-display mt-2 text-4xl text-[var(--text)]">{doctor.name}</h1>
+          <p className="text-sm font-semibold text-[var(--gold)]">Painel do médico</p>
+          <h1 className="font-display mt-1 text-3xl font-extrabold text-[var(--text)]">
+            Bem-vindo, {doctor.name} 👋
+          </h1>
           <p className="mt-1 text-sm text-[var(--text-muted)]">
-            {doctor.crm} · {doctor.specialty}
+            {doctor.crm} · {doctor.specialty} — resumo da sua clínica hoje
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
@@ -131,28 +138,32 @@ export default function PainelMedicoPage() {
         </div>
       </div>
 
-      <div className="mt-8 grid gap-4 sm:grid-cols-3">
+      <div className="mt-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        <a href="#pacientes" className="panel transition hover:-translate-y-0.5 hover:border-[var(--border-gold)]">
+          <span className="grid h-10 w-10 place-items-center rounded-xl bg-[var(--gold-soft)] text-[var(--gold)]">P</span>
+          <p className="mt-3 text-xs uppercase tracking-wider text-[var(--text-muted)]">Pacientes</p>
+          <p className="font-display text-3xl text-[var(--text)]">{patients.length}</p>
+        </a>
+        <a href="#agenda" className="panel transition hover:-translate-y-0.5 hover:border-[var(--border-gold)]">
+          <span className="grid h-10 w-10 place-items-center rounded-xl bg-[var(--gold-soft)] text-[var(--gold)]">A</span>
+          <p className="mt-3 text-xs uppercase tracking-wider text-[var(--text-muted)]">Agenda hoje</p>
+          <p className="font-display text-3xl text-[var(--text)]">{agendaHoje}</p>
+        </a>
         <div className="panel">
-          <p className="text-xs uppercase tracking-wider text-[var(--text-muted)]">Consultas</p>
-          <p className="font-display mt-2 text-3xl text-[var(--text)]">{bookings.length}</p>
-        </div>
-        <div className="panel">
-          <p className="text-xs uppercase tracking-wider text-[var(--text-muted)]">
-            Liberadas (pagas)
-          </p>
-          <p className="font-display mt-2 text-3xl text-[var(--green)]">
+          <span className="grid h-10 w-10 place-items-center rounded-xl bg-[#eaf8f2] text-[#1c8c70]">✓</span>
+          <p className="mt-3 text-xs uppercase tracking-wider text-[var(--text-muted)]">Consultas liberadas</p>
+          <p className="font-display text-3xl text-[var(--green)]">
             {bookings.filter((b) => b.status === "confirmed").length}
           </p>
         </div>
         <div className="panel">
-          <p className="text-xs uppercase tracking-wider text-[var(--text-muted)]">
-            Na sua conta (estimado)
-          </p>
-          <p className="font-display mt-2 text-3xl text-[var(--gold)]">{formatBRL(earnings)}</p>
+          <span className="grid h-10 w-10 place-items-center rounded-xl bg-[var(--gold-soft)] text-[var(--gold)]">R$</span>
+          <p className="mt-3 text-xs uppercase tracking-wider text-[var(--text-muted)]">Na sua conta (estimado)</p>
+          <p className="font-display text-3xl text-[var(--gold)]">{formatBRL(earnings)}</p>
         </div>
       </div>
 
-      <section className="panel mt-8">
+      <section id="agenda" className="panel mt-8 scroll-mt-4">
         <h2 className="font-display text-2xl text-[var(--text)]">Agenda semanal</h2>
         <p className="mt-2 text-sm text-[var(--text-muted)]">
           Marque os dias em que você atende. Pacientes só veem esses horários.
@@ -201,7 +212,7 @@ export default function PainelMedicoPage() {
         {message && <p className="mt-3 text-sm text-[var(--green)]">{message}</p>}
       </section>
 
-      <section className="mt-8">
+      <section id="pacientes" className="mt-8 scroll-mt-4">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <h2 className="font-display text-2xl text-[var(--text)]">Meus pacientes</h2>
           <button type="button" className="btn-gold" onClick={() => setShowCreate((v) => !v)}>
@@ -297,6 +308,8 @@ export default function PainelMedicoPage() {
           ))}
         </div>
       </section>
+        </div>
+      </div>
     </div>
   );
 }
