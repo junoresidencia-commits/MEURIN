@@ -344,10 +344,15 @@ export default function ProntuarioPage() {
               <p className="text-xs font-bold uppercase tracking-wider text-[var(--gold)]">
                 Nova evolução / consulta
               </p>
-              <NoteField label="Queixa / motivo" value={form.chiefComplaint} onChange={(v) => setForm((f) => ({ ...f, chiefComplaint: v }))} placeholder="Motivo da consulta / queixa principal" />
-              <NoteField label="História e evolução" value={form.history} onChange={(v) => setForm((f) => ({ ...f, history: v }))} textarea placeholder="Evolução clínica, eventos desde a última consulta, exames..." />
-              <NoteField label="Avaliação" value={form.assessment} onChange={(v) => setForm((f) => ({ ...f, assessment: v }))} textarea placeholder="Hipótese diagnóstica, estágio, problemas ativos..." />
-              <NoteField label="Conduta e plano" value={form.plan} onChange={(v) => setForm((f) => ({ ...f, plan: v }))} textarea placeholder="Medicamentos, exames, orientações, retorno..." />
+              <label className="block">
+                <span className="mb-1.5 block text-xs font-bold uppercase tracking-wider text-[var(--gold)]">Evolução</span>
+                <textarea
+                  className="input-field min-h-[220px]"
+                  value={form.history}
+                  onChange={(e) => setForm((f) => ({ ...f, history: e.target.value }))}
+                  placeholder="Escreva a evolução do jeito que preferir — texto livre."
+                />
+              </label>
 
               <label className="flex items-center gap-2 text-sm text-[var(--text-soft)]">
                 <input type="checkbox" checked={shared} onChange={(e) => setShared(e.target.checked)} className="h-4 w-4 accent-[var(--gold)]" />
@@ -373,7 +378,7 @@ export default function ProntuarioPage() {
                   </span>
                 </div>
                 {n.chiefComplaint && <p className="text-sm text-[var(--text-soft)]"><b>Queixa:</b> {n.chiefComplaint}</p>}
-                {n.history && <p className="text-sm text-[var(--text-soft)]"><b>História:</b> {n.history}</p>}
+                {n.history && <p className="whitespace-pre-wrap text-sm text-[var(--text-soft)]">{n.history}</p>}
                 {n.assessment && <p className="text-sm text-[var(--text-soft)]"><b>Avaliação:</b> {n.assessment}</p>}
                 {n.plan && <p className="text-sm text-[var(--text-soft)]"><b>Conduta:</b> {n.plan}</p>}
               </div>
@@ -634,31 +639,6 @@ function LabChart({ points }: { points: { x: string; y: number }[] }) {
         <circle key={i} cx={xAt(i)} cy={yAt(d.y)} r="3.5" fill="white" stroke="var(--gold)" strokeWidth="2.5" />
       ))}
     </svg>
-  );
-}
-
-function NoteField({
-  label,
-  value,
-  onChange,
-  placeholder,
-  textarea,
-}: {
-  label: string;
-  value: string;
-  onChange: (v: string) => void;
-  placeholder?: string;
-  textarea?: boolean;
-}) {
-  return (
-    <label className="block">
-      <span className="mb-1.5 block text-xs font-bold uppercase tracking-wider text-[var(--gold)]">{label}</span>
-      {textarea ? (
-        <textarea className="input-field min-h-[90px]" value={value} onChange={(e) => onChange(e.target.value)} placeholder={placeholder} />
-      ) : (
-        <input className="input-field" value={value} onChange={(e) => onChange(e.target.value)} placeholder={placeholder} />
-      )}
-    </label>
   );
 }
 

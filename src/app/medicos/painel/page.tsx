@@ -123,9 +123,12 @@ export default function PainelMedicoPage() {
             {doctor.crm} · {doctor.specialty}
           </p>
         </div>
-        <button type="button" className="btn-ghost" onClick={logout}>
-          Sair
-        </button>
+        <div className="flex flex-wrap gap-2">
+          <a href="/admin/login" className="btn-ghost">Administração</a>
+          <button type="button" className="btn-ghost" onClick={logout}>
+            Sair
+          </button>
+        </div>
       </div>
 
       <div className="mt-8 grid gap-4 sm:grid-cols-3">
@@ -318,6 +321,7 @@ function CreatePatient({ onCreated }: { onCreated: () => void }) {
   });
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
+  const [done, setDone] = useState<{ name: string; phone: string; email: string } | null>(null);
 
   function set<K extends keyof typeof form>(k: K, v: string) {
     setForm((f) => ({ ...f, [k]: v }));
@@ -346,12 +350,60 @@ function CreatePatient({ onCreated }: { onCreated: () => void }) {
         );
       }
       if (!res.ok) throw new Error(data.error || "Não foi possível criar.");
-      onCreated();
+      setDone({ name: form.name, phone: form.phone, email: form.email });
     } catch (e) {
       setError(e instanceof Error ? e.message : "Erro inesperado.");
     } finally {
       setSaving(false);
     }
+  }
+
+  function inviteLink() {
+    const digits = done!.phone.replace(/\D/g, "");
+    const withCountry = digits.length >= 12 ? digits : `55${digits}`;
+    const origin = typeof window !== "undefined" ? window.location.origin : "";
+    const msg =
+      `Olá, ${done!.name}! Seu médico criou seu acesso no Meu Rim.\n` +
+      `Acesse ${origin}/paciente/entrar` +
+      (done!.email ? ` e entre com seu e-mail ${done!.email}` : "") +
+      ` para acompanhar sua saúde, registrar pressão/glicemia e ver seus documentos.`;
+    return `https://wa.me/${withCountry}?text=${encodeURIComponent(msg)}`;
+  }
+
+  if (done) {
+    return (
+      <div className="panel mt-4 space-y-3">
+        <p className="text-sm font-semibold text-[var(--green)]">Paciente criado ✅</p>
+        <p className="text-sm text-[var(--text-soft)]">
+          <strong>{done.name}</strong> foi cadastrado. Convide para acessar a área do paciente:
+        </p>
+        <div className="flex flex-wrap gap-2">
+          {done.phone.replace(/\D/g, "").length >= 10 && (
+            <a href={inviteLink()} target="_blank" rel="noopener noreferrer" className="btn-gold">
+              Enviar convite no WhatsApp
+            </a>
+          )}
+          <button
+            type="button"
+            className="btn-ghost"
+            onClick={() => {
+              setDone(null);
+              setForm((f) => ({ ...f, name: "", cpf: "", phone: "", email: "" }));
+            }}
+          >
+            Cadastrar outro
+          </button>
+          <button type="button" className="btn-ghost" onClick={onCreated}>
+            Concluir
+          </button>
+        </div>
+        {!done.phone && (
+          <p className="text-xs text-[var(--text-muted)]">
+            Sem telefone cadastrado — informe o telefone para poder enviar o convite por WhatsApp.
+          </p>
+        )}
+      </div>
+    );
   }
 
   const fields = [

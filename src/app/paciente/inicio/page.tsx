@@ -34,6 +34,7 @@ type Booking = {
 type SharedNote = {
   id: string;
   doctorName: string;
+  history?: string | null;
   assessment?: string | null;
   plan?: string | null;
   createdAt: string;
@@ -292,6 +293,7 @@ export default function PacienteInicioPage() {
             {notes.slice(0, 3).map((n) => (
               <div key={n.id} className="panel">
                 <p className="text-xs text-[var(--text-muted)]">{n.doctorName}</p>
+                {n.history && <p className="mt-1 whitespace-pre-wrap text-sm text-[var(--text-soft)]">{n.history}</p>}
                 {n.assessment && <p className="mt-1 text-sm text-[var(--text-soft)]"><b>Avaliação:</b> {n.assessment}</p>}
                 {n.plan && <p className="mt-1 text-sm text-[var(--text-soft)]"><b>Orientações:</b> {n.plan}</p>}
               </div>
