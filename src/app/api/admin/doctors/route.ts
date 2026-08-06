@@ -84,9 +84,27 @@ export async function PATCH(req: Request) {
   if (!(await isAdmin())) {
     return NextResponse.json({ error: "Não autorizado." }, { status: 401 });
   }
-  const { id, status, adminNote } = await req.json();
-  if (!id || !VALID_STATUS.includes(status)) {
-    return NextResponse.json({ error: "id e status válidos são obrigatórios." }, { status: 400 });
+  const { id, status, adminNote, newPassword } = await req.json();
+  if (!id) {
+    return NextResponse.json({ error: "id é obrigatório." }, { status: 400 });
+  }
+
+  // Redefinição de senha do médico pelo administrador.
+  if (newPassword) {
+    const pass = String(newPassword);
+    if (pass.length < 6) {
+      return NextResponse.json({ error: "A senha deve ter ao menos 6 caracteres." }, { status: 400 });
+    }
+    const passwordHash = await bcrypt.hash(pass, 10);
+    await updateDb((current) => ({
+      ...current,
+      doctors: current.doctors.map((d) => (d.id === id ? { ...d, passwordHash } : d)),
+    }));
+    return NextResponse.json({ ok: true, reset: true });
+  }
+
+  if (!VALID_STATUS.includes(status)) {
+    return NextResponse.json({ error: "status válido é obrigatório." }, { status: 400 });
   }
   await updateDb((current) => ({
     ...current,

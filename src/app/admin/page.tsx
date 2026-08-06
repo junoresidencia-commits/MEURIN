@@ -67,6 +67,18 @@ export default function AdminPage() {
     await load();
   }
 
+  async function resetPassword(id: string, name: string) {
+    const newPassword = window.prompt(`Nova senha para ${name} (mín. 6 caracteres):`);
+    if (!newPassword) return;
+    const res = await fetch("/api/admin/doctors", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ id, newPassword }),
+    });
+    const data = await res.json();
+    window.alert(res.ok ? "Senha redefinida com sucesso." : data.error || "Falha ao redefinir.");
+  }
+
   async function logout() {
     await fetch("/api/admin/session", { method: "DELETE" });
     router.replace("/admin/login");
@@ -163,6 +175,9 @@ export default function AdminPage() {
               {d.status === "suspended" && (
                 <button type="button" className="btn-gold" onClick={() => setStatus(d.id, "approved")}>Reativar acesso</button>
               )}
+              <button type="button" className="btn-ghost" onClick={() => resetPassword(d.id, d.name)}>
+                Redefinir senha
+              </button>
             </div>
           </div>
         ))}
