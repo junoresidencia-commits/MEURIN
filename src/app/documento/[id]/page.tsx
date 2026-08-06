@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useParams } from "next/navigation";
+import { whatsappLink } from "@/lib/contact";
 
 type Doc = {
   id: string;
@@ -49,11 +50,77 @@ export default function DocumentoPage() {
     year: "numeric",
   });
 
+  async function downloadPdf() {
+    if (!doc) return;
+    const { jsPDF } = await import("jspdf");
+    const pdf = new jsPDF({ unit: "pt", format: "a4" });
+    const pageW = pdf.internal.pageSize.getWidth();
+    const margin = 56;
+    const maxW = pageW - margin * 2;
+    let y = margin;
+
+    pdf.setFont("helvetica", "bold");
+    pdf.setFontSize(16);
+    pdf.text("Meu Rim", margin, y);
+    pdf.setFont("helvetica", "normal");
+    pdf.setFontSize(10);
+    pdf.setTextColor(120);
+    pdf.text("Nefrologia online", margin, y + 15);
+    pdf.text(date, pageW - margin, y, { align: "right" });
+    pdf.setTextColor(20);
+    y += 40;
+    pdf.setDrawColor(210);
+    pdf.line(margin, y, pageW - margin, y);
+    y += 34;
+
+    pdf.setFont("helvetica", "bold");
+    pdf.setFontSize(14);
+    pdf.text((doc.title || TYPE_LABEL[doc.type]).toUpperCase(), pageW / 2, y, { align: "center" });
+    y += 30;
+
+    pdf.setFont("helvetica", "normal");
+    pdf.setFontSize(12);
+    const lines = pdf.splitTextToSize(doc.body, maxW) as string[];
+    for (const line of lines) {
+      if (y > 720) {
+        pdf.addPage();
+        y = margin;
+      }
+      pdf.text(line, margin, y);
+      y += 20;
+    }
+
+    y = Math.max(y + 60, 700);
+    pdf.line(margin + 120, y, pageW - margin - 120, y);
+    pdf.setFont("helvetica", "bold");
+    pdf.text(doc.doctorName, pageW / 2, y + 16, { align: "center" });
+    if (doc.doctorCrm) {
+      pdf.setFont("helvetica", "normal");
+      pdf.setTextColor(120);
+      pdf.text(doc.doctorCrm, pageW / 2, y + 32, { align: "center" });
+    }
+
+    pdf.save(`${doc.type}-meu-rim.pdf`);
+  }
+
+  function shareWhatsApp() {
+    const url = typeof window !== "undefined" ? window.location.href : "";
+    const label = TYPE_LABEL[doc!.type];
+    const msg = `${label} — Meu Rim (${doc!.doctorName}).\nAbra o documento: ${url}`;
+    window.open(whatsappLink(msg), "_blank", "noopener,noreferrer");
+  }
+
   return (
     <div className="mx-auto max-w-2xl px-5 py-10">
-      <div className="mb-4 flex justify-end gap-2 print:hidden">
-        <button type="button" className="btn-gold" onClick={() => window.print()}>
-          Imprimir / salvar PDF
+      <div className="mb-4 flex flex-wrap justify-end gap-2 print:hidden">
+        <button type="button" className="btn-gold" onClick={downloadPdf}>
+          Baixar PDF
+        </button>
+        <button type="button" className="btn-ghost" onClick={shareWhatsApp}>
+          Enviar no WhatsApp
+        </button>
+        <button type="button" className="btn-ghost" onClick={() => window.print()}>
+          Imprimir
         </button>
       </div>
 
