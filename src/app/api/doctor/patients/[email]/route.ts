@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { getClinicalNotes, getDocuments, getLabResults, getPatientData } from "@/lib/patient-store";
 import { resolvePatientAccess } from "@/lib/doctor-access";
+import { listUploads } from "@/lib/uploads-store";
 
 export async function GET(
   _req: Request,
@@ -20,6 +21,7 @@ export async function GET(
   const notes = await getClinicalNotes(access.key);
   const documents = await getDocuments(access.key);
   const labs = await getLabResults(access.key);
+  const uploads = await listUploads(access.key);
 
   return NextResponse.json({
     patient: {
@@ -35,5 +37,6 @@ export async function GET(
     notes,
     documents,
     labs,
+    uploads,
   });
 }
