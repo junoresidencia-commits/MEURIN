@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { getDoctorSessionId } from "@/lib/auth";
 import { readDb } from "@/lib/store";
-import { getPatientData } from "@/lib/patient-store";
+import { getClinicalNotes, getPatientData } from "@/lib/patient-store";
 
 export async function GET(
   _req: Request,
@@ -33,6 +33,7 @@ export async function GET(
     .sort((a, b) => b.slotStart.localeCompare(a.slotStart))[0];
 
   const { records, food } = await getPatientData(email);
+  const notes = await getClinicalNotes(email);
 
   const bookings = bookingsWithMe
     .sort((a, b) => b.slotStart.localeCompare(a.slotStart))
@@ -54,5 +55,6 @@ export async function GET(
     bookings,
     records,
     food,
+    notes,
   });
 }

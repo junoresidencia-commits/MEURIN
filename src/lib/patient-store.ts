@@ -35,6 +35,19 @@ export interface FoodLog {
   createdAt: string;
 }
 
+export interface ClinicalNote {
+  id: string;
+  patientEmail: string;
+  doctorId: string;
+  doctorName: string;
+  chiefComplaint?: string | null;
+  history?: string | null;
+  assessment?: string | null;
+  plan?: string | null;
+  sharedWithPatient: boolean;
+  createdAt: string;
+}
+
 export interface PatientData {
   records: HomeRecord[];
   food: FoodLog[];
@@ -43,8 +56,8 @@ export interface PatientData {
 const DATA_DIR = path.join(process.cwd(), "data");
 const FILE = path.join(DATA_DIR, "patient-records.json");
 
-/** True while the Supabase tables are missing, so we stay on the JSON fallback. */
-let supabaseTablesMissing = false;
+/** Tabelas do Supabase ainda não criadas — ficam no fallback local até a migration rodar. */
+const missingTables = new Set<string>();
 
 function isMissingTableError(error: unknown): boolean {
   const e = error as { code?: string; message?: string } | null;
@@ -53,24 +66,30 @@ function isMissingTableError(error: unknown): boolean {
   return Boolean(e.message && /does not exist|could not find the table|schema cache/i.test(e.message));
 }
 
-function supabaseActive() {
-  return Boolean(getSupabaseAdmin()) && !supabaseTablesMissing;
+function supabaseActive(table: string) {
+  return Boolean(getSupabaseAdmin()) && !missingTables.has(table);
 }
 
 /* --------------------------- JSON fallback --------------------------- */
 
-async function readFile(): Promise<PatientData> {
+type FileShape = { records: HomeRecord[]; food: FoodLog[]; notes: ClinicalNote[] };
+
+async function readFile(): Promise<FileShape> {
   await fs.mkdir(DATA_DIR, { recursive: true });
   try {
     const raw = await fs.readFile(FILE, "utf8");
-    const parsed = JSON.parse(raw) as PatientData;
-    return { records: parsed.records ?? [], food: parsed.food ?? [] };
+    const parsed = JSON.parse(raw) as Partial<FileShape>;
+    return {
+      records: parsed.records ?? [],
+      food: parsed.food ?? [],
+      notes: parsed.notes ?? [],
+    };
   } catch {
-    return { records: [], food: [] };
+    return { records: [], food: [], notes: [] };
   }
 }
 
-async function writeFile(data: PatientData): Promise<void> {
+async function writeFile(data: FileShape): Promise<void> {
   await fs.mkdir(DATA_DIR, { recursive: true });
   await fs.writeFile(FILE, JSON.stringify(data, null, 2), "utf8");
 }
@@ -126,7 +145,7 @@ export async function addHomeRecord(input: NewHomeRecord): Promise<HomeRecord> {
     ...input,
   };
 
-  if (supabaseActive()) {
+  if (supabaseActive("home_records")) {
     const supabase = getSupabaseAdmin()!;
     const { error } = await supabase.from("home_records").insert({
       id: record.id,
@@ -148,7 +167,7 @@ export async function addHomeRecord(input: NewHomeRecord): Promise<HomeRecord> {
     });
     if (error) {
       if (isMissingTableError(error)) {
-        supabaseTablesMissing = true;
+        missingTables.add("home_records");
       } else {
         throw error;
       }
@@ -174,7 +193,7 @@ export async function addFoodLog(
     ...input,
   };
 
-  if (supabaseActive()) {
+  if (supabaseActive("home_food_logs")) {
     const supabase = getSupabaseAdmin()!;
     const { error } = await supabase.from("home_food_logs").insert({
       id: log.id,
@@ -188,7 +207,7 @@ export async function addFoodLog(
     });
     if (error) {
       if (isMissingTableError(error)) {
-        supabaseTablesMissing = true;
+        missingTables.add("home_food_logs");
       } else {
         throw error;
       }
@@ -206,7 +225,7 @@ export async function addFoodLog(
 export async function getPatientData(email: string, limit = 60): Promise<PatientData> {
   const normalized = email.toLowerCase().trim();
 
-  if (supabaseActive()) {
+  if (supabaseActive("home_records") && supabaseActive("home_food_logs")) {
     const supabase = getSupabaseAdmin()!;
     const [recordsRes, foodRes] = await Promise.all([
       supabase
@@ -224,11 +243,11 @@ export async function getPatientData(email: string, limit = 60): Promise<Patient
     ]);
 
     if (recordsRes.error && isMissingTableError(recordsRes.error)) {
-      supabaseTablesMissing = true;
+      missingTables.add("home_records");
     } else if (recordsRes.error) {
       throw recordsRes.error;
     } else if (foodRes.error && isMissingTableError(foodRes.error)) {
-      supabaseTablesMissing = true;
+      missingTables.add("home_food_logs");
     } else if (foodRes.error) {
       throw foodRes.error;
     } else {
@@ -253,4 +272,89 @@ export async function getPatientData(email: string, limit = 60): Promise<Patient
 
 export function latestOfKind(records: HomeRecord[], kind: VitalKind): HomeRecord | null {
   return records.find((r) => r.kind === kind) ?? null;
+}
+
+/* --------------------------- Clinical notes (evolução) --------------------------- */
+
+function mapNoteRow(row: Record<string, unknown>): ClinicalNote {
+  return {
+    id: String(row.id),
+    patientEmail: String(row.patient_email),
+    doctorId: String(row.doctor_id),
+    doctorName: String(row.doctor_name),
+    chiefComplaint: (row.chief_complaint as string | null) ?? null,
+    history: (row.history as string | null) ?? null,
+    assessment: (row.assessment as string | null) ?? null,
+    plan: (row.plan as string | null) ?? null,
+    sharedWithPatient: Boolean(row.shared_with_patient),
+    createdAt: new Date(String(row.created_at)).toISOString(),
+  };
+}
+
+export async function addClinicalNote(
+  input: Omit<ClinicalNote, "id" | "createdAt">
+): Promise<ClinicalNote> {
+  const note: ClinicalNote = {
+    id: uuid(),
+    createdAt: new Date().toISOString(),
+    ...input,
+    patientEmail: input.patientEmail.toLowerCase().trim(),
+  };
+
+  if (supabaseActive("clinical_notes")) {
+    const supabase = getSupabaseAdmin()!;
+    const { error } = await supabase.from("clinical_notes").insert({
+      id: note.id,
+      patient_email: note.patientEmail,
+      doctor_id: note.doctorId,
+      doctor_name: note.doctorName,
+      kind: "evolucao",
+      chief_complaint: note.chiefComplaint ?? null,
+      history: note.history ?? null,
+      assessment: note.assessment ?? null,
+      plan: note.plan ?? null,
+      shared_with_patient: note.sharedWithPatient,
+      created_at: note.createdAt,
+    });
+    if (error) {
+      if (isMissingTableError(error)) missingTables.add("clinical_notes");
+      else throw error;
+    } else {
+      return note;
+    }
+  }
+
+  const data = await readFile();
+  data.notes.push(note);
+  await writeFile(data);
+  return note;
+}
+
+export async function getClinicalNotes(
+  email: string,
+  { onlyShared = false }: { onlyShared?: boolean } = {}
+): Promise<ClinicalNote[]> {
+  const normalized = email.toLowerCase().trim();
+
+  if (supabaseActive("clinical_notes")) {
+    const supabase = getSupabaseAdmin()!;
+    let query = supabase
+      .from("clinical_notes")
+      .select("*")
+      .eq("patient_email", normalized)
+      .order("created_at", { ascending: false });
+    if (onlyShared) query = query.eq("shared_with_patient", true);
+    const { data, error } = await query;
+    if (error) {
+      if (isMissingTableError(error)) missingTables.add("clinical_notes");
+      else throw error;
+    } else {
+      return (data ?? []).map((r) => mapNoteRow(r as Record<string, unknown>));
+    }
+  }
+
+  const file = await readFile();
+  return file.notes
+    .filter((n) => n.patientEmail === normalized && (!onlyShared || n.sharedWithPatient))
+    .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
 }

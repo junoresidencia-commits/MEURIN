@@ -396,16 +396,15 @@ async function writeSupabaseDb(db: Database): Promise<void> {
     { name: "signaling_messages", rows: signaling },
   ];
 
+  // Upsert por id em vez de apagar tudo e reinserir: preserva linhas criadas
+  // concorrentemente (ex.: dois agendamentos ao mesmo tempo) em vez de sobrescrever
+  // a tabela inteira com a visão de uma única requisição.
   for (const table of tables) {
-    const { error: deleteError } = await supabase
-      .from(table.name)
-      .delete()
-      .not("id", "is", null);
-    if (deleteError) throw deleteError;
-
     if (table.rows.length > 0) {
-      const { error: insertError } = await supabase.from(table.name).insert(table.rows);
-      if (insertError) throw insertError;
+      const { error } = await supabase.from(table.name).upsert(table.rows, {
+        onConflict: "id",
+      });
+      if (error) throw error;
     }
   }
 }

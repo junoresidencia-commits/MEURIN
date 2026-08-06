@@ -22,6 +22,16 @@ type HomeRecord = {
 type FoodLog = { id: string; food: string; meal?: string | null; quantity?: string | null; loggedAt: string };
 type Booking = { id: string; status: string; slotStart: string; careReason: string; meetingRoomId: string };
 type Patient = { email: string; name: string; city: string; phone: string };
+type Note = {
+  id: string;
+  doctorName: string;
+  chiefComplaint?: string | null;
+  history?: string | null;
+  assessment?: string | null;
+  plan?: string | null;
+  sharedWithPatient: boolean;
+  createdAt: string;
+};
 
 const REASON: Record<string, string> = {
   pressa: "Com pressa",
@@ -32,6 +42,7 @@ const REASON: Record<string, string> = {
 
 const TABS = [
   { id: "resumo", label: "Resumo" },
+  { id: "evolucao", label: "Evolução" },
   { id: "sinais", label: "Sinais em casa" },
   { id: "alimentacao", label: "Alimentação" },
   { id: "consultas", label: "Consultas" },
@@ -56,9 +67,17 @@ export default function ProntuarioPage() {
   const [records, setRecords] = useState<HomeRecord[]>([]);
   const [food, setFood] = useState<FoodLog[]>([]);
   const [bookings, setBookings] = useState<Booking[]>([]);
+  const [notes, setNotes] = useState<Note[]>([]);
   const [tab, setTab] = useState<Tab>("resumo");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+
+  // Formulário de evolução
+  const [form, setForm] = useState({ chiefComplaint: "", history: "", assessment: "", plan: "" });
+  const [shared, setShared] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [saveMsg, setSaveMsg] = useState("");
+  const [saveErr, setSaveErr] = useState("");
 
   const load = useCallback(async () => {
     const res = await fetch(`/api/doctor/patients/${emailParam}`);
@@ -76,8 +95,31 @@ export default function ProntuarioPage() {
     setRecords(data.records || []);
     setFood(data.food || []);
     setBookings(data.bookings || []);
+    setNotes(data.notes || []);
     setLoading(false);
   }, [emailParam, router]);
+
+  async function saveNote() {
+    setSaving(true);
+    setSaveErr("");
+    setSaveMsg("");
+    try {
+      const res = await fetch(`/api/doctor/patients/${emailParam}/notes`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ...form, sharedWithPatient: shared }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Não foi possível salvar.");
+      setForm({ chiefComplaint: "", history: "", assessment: "", plan: "" });
+      setSaveMsg("Evolução salva no prontuário." + (shared ? " Liberada ao paciente." : ""));
+      await load();
+    } catch (e) {
+      setSaveErr(e instanceof Error ? e.message : "Erro inesperado.");
+    } finally {
+      setSaving(false);
+    }
+  }
 
   useEffect(() => {
     load();
@@ -174,6 +216,49 @@ export default function ProntuarioPage() {
           </div>
         )}
 
+        {tab === "evolucao" && (
+          <div className="space-y-4">
+            <div className="panel space-y-3">
+              <p className="text-xs font-bold uppercase tracking-wider text-[var(--gold)]">
+                Nova evolução / consulta
+              </p>
+              <NoteField label="Queixa / motivo" value={form.chiefComplaint} onChange={(v) => setForm((f) => ({ ...f, chiefComplaint: v }))} placeholder="Motivo da consulta / queixa principal" />
+              <NoteField label="História e evolução" value={form.history} onChange={(v) => setForm((f) => ({ ...f, history: v }))} textarea placeholder="Evolução clínica, eventos desde a última consulta, exames..." />
+              <NoteField label="Avaliação" value={form.assessment} onChange={(v) => setForm((f) => ({ ...f, assessment: v }))} textarea placeholder="Hipótese diagnóstica, estágio, problemas ativos..." />
+              <NoteField label="Conduta e plano" value={form.plan} onChange={(v) => setForm((f) => ({ ...f, plan: v }))} textarea placeholder="Medicamentos, exames, orientações, retorno..." />
+
+              <label className="flex items-center gap-2 text-sm text-[var(--text-soft)]">
+                <input type="checkbox" checked={shared} onChange={(e) => setShared(e.target.checked)} className="h-4 w-4 accent-[var(--gold)]" />
+                Liberar um resumo desta evolução para o paciente ver
+              </label>
+
+              {saveErr && <p className="rounded-xl border border-[var(--danger)]/30 bg-[var(--danger)]/10 px-3 py-2 text-sm text-[var(--danger)]">{saveErr}</p>}
+              {saveMsg && <p className="rounded-xl border border-[var(--green)]/30 bg-[var(--green)]/10 px-3 py-2 text-sm text-[var(--green)]">{saveMsg}</p>}
+
+              <button type="button" className="btn-gold w-full" onClick={saveNote} disabled={saving}>
+                {saving ? "Salvando…" : "Salvar evolução"}
+              </button>
+            </div>
+
+            <p className="text-xs font-bold uppercase tracking-wider text-[var(--gold)]">Evoluções anteriores</p>
+            {notes.length === 0 && <p className="text-[var(--text-muted)]">Nenhuma evolução registrada.</p>}
+            {notes.map((n) => (
+              <div key={n.id} className="panel space-y-2">
+                <div className="flex items-center justify-between">
+                  <p className="text-sm font-semibold text-[var(--text)]">{fmt(n.createdAt)} · {n.doctorName}</p>
+                  <span className={`rounded-full px-2.5 py-1 text-[11px] font-bold ${n.sharedWithPatient ? "bg-[#eaf8f2] text-[#1c8c70]" : "bg-[var(--border)] text-[var(--text-muted)]"}`}>
+                    {n.sharedWithPatient ? "Liberada ao paciente" : "Interna"}
+                  </span>
+                </div>
+                {n.chiefComplaint && <p className="text-sm text-[var(--text-soft)]"><b>Queixa:</b> {n.chiefComplaint}</p>}
+                {n.history && <p className="text-sm text-[var(--text-soft)]"><b>História:</b> {n.history}</p>}
+                {n.assessment && <p className="text-sm text-[var(--text-soft)]"><b>Avaliação:</b> {n.assessment}</p>}
+                {n.plan && <p className="text-sm text-[var(--text-soft)]"><b>Conduta:</b> {n.plan}</p>}
+              </div>
+            ))}
+          </div>
+        )}
+
         {tab === "sinais" && (
           <div className="space-y-3">
             {sinais.length === 0 && <p className="text-[var(--text-muted)]">Nenhum sinal registrado em casa.</p>}
@@ -240,6 +325,31 @@ export default function ProntuarioPage() {
         )}
       </div>
     </div>
+  );
+}
+
+function NoteField({
+  label,
+  value,
+  onChange,
+  placeholder,
+  textarea,
+}: {
+  label: string;
+  value: string;
+  onChange: (v: string) => void;
+  placeholder?: string;
+  textarea?: boolean;
+}) {
+  return (
+    <label className="block">
+      <span className="mb-1.5 block text-xs font-bold uppercase tracking-wider text-[var(--gold)]">{label}</span>
+      {textarea ? (
+        <textarea className="input-field min-h-[90px]" value={value} onChange={(e) => onChange(e.target.value)} placeholder={placeholder} />
+      ) : (
+        <input className="input-field" value={value} onChange={(e) => onChange(e.target.value)} placeholder={placeholder} />
+      )}
+    </label>
   );
 }
 
