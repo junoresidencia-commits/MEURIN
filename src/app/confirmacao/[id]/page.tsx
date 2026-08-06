@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useParams } from "next/navigation";
 import { ShareButton } from "@/components/ShareButton";
 import { formatBRL, formatSlotLabel } from "@/lib/scheduling-client";
+import { whatsappLink } from "@/lib/contact";
 import type { Booking } from "@/lib/types";
 
 const REASON_LABEL: Record<Booking["careReason"], string> = {
@@ -150,9 +151,9 @@ export default function ConfirmacaoPage() {
         </Link>
         <a
           className="btn-ghost"
-          href={`https://wa.me/?text=${encodeURIComponent(
+          href={whatsappLink(
             `Consulta Meu Rim confirmada.\n${formatSlotLabel(booking.slotStart)}\nSala: ${meetingAbsolute}`
-          )}`}
+          )}
           target="_blank"
           rel="noopener noreferrer"
         >

@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useParams } from "next/navigation";
+import { whatsappLink } from "@/lib/contact";
 
 type Doc = {
   id: string;
@@ -106,7 +107,7 @@ export default function DocumentoPage() {
     const url = typeof window !== "undefined" ? window.location.href : "";
     const label = TYPE_LABEL[doc!.type];
     const msg = `${label} — Meu Rim (${doc!.doctorName}).\nAbra o documento: ${url}`;
-    window.open(`https://wa.me/?text=${encodeURIComponent(msg)}`, "_blank", "noopener,noreferrer");
+    window.open(whatsappLink(msg), "_blank", "noopener,noreferrer");
   }
 
   return (
