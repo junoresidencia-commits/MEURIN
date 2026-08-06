@@ -30,6 +30,7 @@ export default function PainelMedicoPage() {
   const [bookings, setBookings] = useState<Booking[]>([]);
   const [patients, setPatients] = useState<PatientRow[]>([]);
   const [showCreate, setShowCreate] = useState(false);
+  const [patientFilter, setPatientFilter] = useState("");
   const [price, setPrice] = useState("350");
   const [bio, setBio] = useState("");
   const [weekly, setWeekly] = useState<WeeklySlot[]>([]);
@@ -211,11 +212,26 @@ export default function PainelMedicoPage() {
 
         {showCreate && <CreatePatient onCreated={reloadPatients} />}
 
+        <div className="mt-4">
+          <input
+            className="input-field"
+            placeholder="Buscar paciente por nome ou cidade…"
+            value={patientFilter}
+            onChange={(e) => setPatientFilter(e.target.value)}
+          />
+        </div>
+
         <div className="mt-4 grid gap-3">
           {patients.length === 0 && (
             <p className="text-[var(--text-muted)]">Nenhum paciente ainda.</p>
           )}
-          {patients.map((p) => (
+          {patients
+            .filter((p) => {
+              const q = patientFilter.toLowerCase().trim();
+              if (!q) return true;
+              return `${p.name} ${p.city}`.toLowerCase().includes(q);
+            })
+            .map((p) => (
             <Link
               key={p.key}
               href={`/medicos/paciente/${encodeURIComponent(p.key)}`}

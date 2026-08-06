@@ -72,15 +72,16 @@ export async function resolvePatientAccess(param: string): Promise<PatientAccess
   if (!patient || patient.doctorId !== doctorId) {
     return { allowed: false, key: "", name: "", city: "", phone: "", email: "", isCreated: true, bookings: [] };
   }
-  const email = patient.email || "";
+  const key = clinicalKey(patient);
   return {
     allowed: true,
-    key: clinicalKey(patient),
+    key,
     name: patient.name,
     city: patient.address || "",
     phone: patient.phone || "",
-    email,
+    email: patient.email || "",
     isCreated: true,
-    bookings: email ? bookingsForEmail(email) : [],
+    // Consultas agendadas ficam sob a mesma chave clínica (email ou pid:<id>).
+    bookings: bookingsForEmail(key),
   };
 }
