@@ -39,6 +39,9 @@ export function SiteFooter() {
         <Link href="/privacidade" className="hover:text-[var(--gold)]">
           Privacidade
         </Link>
+        <Link href="/admin/login" className="hover:text-[var(--gold)]">
+          Administração
+        </Link>
       </div>
       <p className="mx-auto mt-5 max-w-md text-xs text-[var(--text-muted)]">
         Projeto desenvolvido com medidas de segurança e privacidade alinhadas à LGPD.
