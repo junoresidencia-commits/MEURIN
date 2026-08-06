@@ -96,6 +96,12 @@ export default function ProntuarioPage() {
   const [labDate, setLabDate] = useState("");
   const [labSaving, setLabSaving] = useState(false);
   const [labErr, setLabErr] = useState("");
+
+  // Agendamento pelo médico
+  const [apptDate, setApptDate] = useState("");
+  const [apptTime, setApptTime] = useState("");
+  const [apptSaving, setApptSaving] = useState(false);
+  const [apptErr, setApptErr] = useState("");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
@@ -134,6 +140,31 @@ export default function ProntuarioPage() {
     setLabs(data.labs || []);
     setLoading(false);
   }, [emailParam, router]);
+
+  async function saveAppointment() {
+    if (!apptDate || !apptTime) {
+      setApptErr("Informe data e horário.");
+      return;
+    }
+    setApptSaving(true);
+    setApptErr("");
+    try {
+      const res = await fetch(`/api/doctor/patients/${emailParam}/appointments`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ slotStart: `${apptDate}T${apptTime}:00`, careReason: "acompanhamento" }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Não foi possível agendar.");
+      setApptDate("");
+      setApptTime("");
+      await load();
+    } catch (e) {
+      setApptErr(e instanceof Error ? e.message : "Erro inesperado.");
+    } finally {
+      setApptSaving(false);
+    }
+  }
 
   async function saveLab() {
     if (!labValue.trim()) {
@@ -516,6 +547,24 @@ export default function ProntuarioPage() {
 
         {tab === "consultas" && (
           <div className="space-y-3">
+            <div className="panel space-y-3">
+              <p className="text-xs font-bold uppercase tracking-wider text-[var(--gold)]">Agendar consulta</p>
+              <div className="grid gap-3 sm:grid-cols-2">
+                <label className="block">
+                  <span className="mb-1 block text-xs font-semibold text-[var(--text-muted)]">Data</span>
+                  <input type="date" className="input-field" value={apptDate} onChange={(e) => setApptDate(e.target.value)} />
+                </label>
+                <label className="block">
+                  <span className="mb-1 block text-xs font-semibold text-[var(--text-muted)]">Horário</span>
+                  <input type="time" className="input-field" value={apptTime} onChange={(e) => setApptTime(e.target.value)} />
+                </label>
+              </div>
+              {apptErr && <p className="text-sm text-[var(--danger)]">{apptErr}</p>}
+              <button type="button" className="btn-gold" onClick={saveAppointment} disabled={apptSaving}>
+                {apptSaving ? "Agendando…" : "Agendar consulta"}
+              </button>
+            </div>
+            {bookings.length === 0 && <p className="text-[var(--text-muted)]">Nenhuma consulta ainda.</p>}
             {bookings.map((b) => (
               <div key={b.id} className="panel flex items-center justify-between gap-3">
                 <div>
