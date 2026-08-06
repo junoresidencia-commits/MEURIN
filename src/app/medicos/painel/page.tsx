@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import type { Booking, Doctor, WeeklySlot } from "@/lib/types";
 import { formatBRL, formatSlotLabel } from "@/lib/scheduling-client";
 import { DoctorSidebar } from "@/components/DoctorSidebar";
+import { DoctorMobileNav } from "@/components/DoctorMobileNav";
 
 const DAYS = [
   { id: 1, label: "Seg" },
@@ -119,7 +120,7 @@ export default function PainelMedicoPage() {
     <div className="flex min-h-screen bg-[var(--bg)]">
       <DoctorSidebar />
       <div className="min-w-0 flex-1">
-        <div className="mx-auto max-w-5xl px-5 py-8">
+        <div className="mx-auto max-w-5xl px-5 pb-28 pt-8 lg:pb-8">
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div>
           <p className="text-sm font-semibold text-[var(--gold)]">Painel do médico</p>
@@ -310,6 +311,7 @@ export default function PainelMedicoPage() {
       </section>
         </div>
       </div>
+      <DoctorMobileNav />
     </div>
   );
 }
