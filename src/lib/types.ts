@@ -13,6 +13,13 @@ export interface WeeklySlot {
   end: string; // "12:00"
 }
 
+export type DoctorStatus =
+  | "pending"
+  | "approved"
+  | "rejected"
+  | "suspended"
+  | "correction";
+
 export interface Doctor {
   id: string;
   name: string;
@@ -28,6 +35,13 @@ export interface Doctor {
   weeklyAvailability: WeeklySlot[];
   blockedSlots: string[]; // ISO datetimes already taken or blocked
   createdAt: string;
+  // Aprovação e dados cadastrais (fluxo de aprovação pelo administrador)
+  status: DoctorStatus;
+  phone?: string;
+  crmState?: string;
+  rqe?: string;
+  clinic?: string;
+  adminNote?: string;
 }
 
 export interface Booking {
@@ -78,4 +92,15 @@ export interface Database {
   signaling: SignalingMessage[];
 }
 
-export type PublicDoctor = Omit<Doctor, "passwordHash" | "pixKey" | "bankAccountHint">;
+export type PublicDoctor = Omit<
+  Doctor,
+  | "passwordHash"
+  | "pixKey"
+  | "bankAccountHint"
+  | "status"
+  | "phone"
+  | "crmState"
+  | "rqe"
+  | "clinic"
+  | "adminNote"
+>;

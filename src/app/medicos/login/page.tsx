@@ -6,8 +6,8 @@ import { useRouter } from "next/navigation";
 
 export default function LoginMedicoPage() {
   const router = useRouter();
-  const [email, setEmail] = useState("carlos@meurim.com");
-  const [password, setPassword] = useState("medico123");
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
 
@@ -32,18 +32,13 @@ export default function LoginMedicoPage() {
   }
 
   return (
-    <div className="mx-auto max-w-md px-5 py-12">
-      <p className="text-xs font-bold uppercase tracking-[0.22em] text-[var(--gold)]">
-        Área do médico
-      </p>
-      <h1 className="font-display mt-2 text-4xl text-[var(--text)]">Entrar</h1>
-      <p className="mt-3 text-sm text-[var(--text-muted)]">
-        Demo: carlos@meurim.com / medico123
-      </p>
+    <div className="mx-auto max-w-md px-5 py-16">
+      <p className="text-sm font-semibold text-[var(--gold)]">Área do médico</p>
+      <h1 className="font-display mt-2 text-3xl font-extrabold text-[var(--text)]">Entrar</h1>
 
       <form onSubmit={onSubmit} className="panel mt-8 space-y-4">
         <label className="block">
-          <span className="mb-2 block text-xs font-bold uppercase tracking-wider text-[var(--gold-light)]">
+          <span className="mb-2 block text-xs font-bold uppercase tracking-wider text-[var(--gold)]">
             E-mail
           </span>
           <input
@@ -51,11 +46,12 @@ export default function LoginMedicoPage() {
             className="input-field"
             value={email}
             onChange={(e) => setEmail(e.target.value)}
+            autoComplete="email"
             required
           />
         </label>
         <label className="block">
-          <span className="mb-2 block text-xs font-bold uppercase tracking-wider text-[var(--gold-light)]">
+          <span className="mb-2 block text-xs font-bold uppercase tracking-wider text-[var(--gold)]">
             Senha
           </span>
           <input
@@ -63,19 +59,29 @@ export default function LoginMedicoPage() {
             className="input-field"
             value={password}
             onChange={(e) => setPassword(e.target.value)}
+            autoComplete="current-password"
             required
           />
         </label>
-        {error && <p className="text-sm text-red-300">{error}</p>}
+        {error && (
+          <p className="rounded-xl border border-[var(--danger)]/30 bg-[var(--danger)]/10 px-3 py-2 text-sm text-[var(--danger)]">
+            {error}
+          </p>
+        )}
         <button type="submit" className="btn-gold w-full" disabled={loading}>
-          {loading ? "Entrando…" : "Acessar painel"}
+          {loading ? "Entrando…" : "Entrar"}
         </button>
-        <p className="text-center text-sm text-[var(--text-muted)]">
-          Novo na plataforma?{" "}
-          <Link href="/medicos/cadastro" className="text-[var(--gold-light)]">
-            Cadastre-se
+        <div className="flex flex-col items-center gap-2 pt-1 text-sm">
+          <Link href="/medicos/recuperar" className="text-[var(--text-muted)] hover:text-[var(--gold)]">
+            Esqueci minha senha
           </Link>
-        </p>
+          <span className="text-[var(--text-muted)]">
+            Ainda não possui cadastro?{" "}
+            <Link href="/medicos/cadastro" className="font-semibold text-[var(--gold)]">
+              Solicitar cadastro
+            </Link>
+          </span>
+        </div>
       </form>
     </div>
   );
