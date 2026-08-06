@@ -12,6 +12,7 @@
     "@supabase/supabase-js": "^2.110.3",
     "bcryptjs": "^3.0.2",
     "date-fns": "^4.4.0",
+    "jspdf": "^4.2.1",
     "next": "^15.5.9",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
