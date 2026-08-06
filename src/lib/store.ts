@@ -34,7 +34,17 @@ const eveningHeavy: WeeklySlot[] = [
 
 type SeedInput = Omit<
   Doctor,
-  "id" | "passwordHash" | "blockedSlots" | "createdAt" | "stripeConnectReady"
+  | "id"
+  | "passwordHash"
+  | "blockedSlots"
+  | "createdAt"
+  | "stripeConnectReady"
+  | "status"
+  | "phone"
+  | "crmState"
+  | "rqe"
+  | "clinic"
+  | "adminNote"
 > & { weeklyAvailability?: WeeklySlot[] };
 
 async function seedDoctors(): Promise<Doctor[]> {
@@ -130,6 +140,7 @@ async function seedDoctors(): Promise<Doctor[]> {
   return roster.map((d) => ({
     id: uuid(),
     passwordHash,
+    status: "approved" as const,
     stripeConnectReady: Boolean(d.pixKey || d.bankAccountHint),
     blockedSlots: [],
     createdAt: now,
@@ -155,8 +166,8 @@ export async function readDb(): Promise<Database> {
   try {
     const raw = await fs.readFile(DB_PATH, "utf8");
     const db = JSON.parse(raw) as Database;
-    // If an old tiny seed exists, expand once for demo richness
-    if (db.doctors.length < 4) {
+    // Médicos de demonstração só quando SEED_DEMO=1 (produção começa vazia).
+    if (process.env.SEED_DEMO === "1" && db.doctors.length < 4) {
       const doctors = await seedDoctors();
       const next = { ...db, doctors };
       await writeDb(next);
@@ -164,7 +175,7 @@ export async function readDb(): Promise<Database> {
     }
     return db;
   } catch {
-    const doctors = await seedDoctors();
+    const doctors = process.env.SEED_DEMO === "1" ? await seedDoctors() : [];
     const db: Database = {
       doctors,
       bookings: [],
@@ -196,6 +207,25 @@ export async function updateDb(
   return next;
 }
 
+/** Remove um médico de verdade (writeDb usa upsert, então a exclusão precisa ser explícita). */
+export async function deleteDoctor(id: string): Promise<void> {
+  const supabase = getSupabaseAdmin();
+  if (supabase) {
+    const { error } = await supabase.from("doctors").delete().eq("id", id);
+    if (error) throw error;
+    return;
+  }
+  await fs.mkdir(DATA_DIR, { recursive: true });
+  try {
+    const raw = await fs.readFile(DB_PATH, "utf8");
+    const db = JSON.parse(raw) as Database;
+    db.doctors = db.doctors.filter((d) => d.id !== id);
+    await fs.writeFile(DB_PATH, JSON.stringify(db, null, 2), "utf8");
+  } catch {
+    /* nada a remover */
+  }
+}
+
 function fromJsonArray<T>(value: unknown): T[] {
   return Array.isArray(value) ? (value as T[]) : [];
 }
@@ -216,6 +246,12 @@ function mapDoctorRow(row: Record<string, unknown>): Doctor {
     weeklyAvailability: fromJsonArray<WeeklySlot>(row.weekly_availability),
     blockedSlots: fromJsonArray<string>(row.blocked_slots),
     createdAt: new Date(String(row.created_at)).toISOString(),
+    status: (row.status ? String(row.status) : "approved") as Doctor["status"],
+    phone: row.phone ? String(row.phone) : undefined,
+    crmState: row.crm_state ? String(row.crm_state) : undefined,
+    rqe: row.rqe ? String(row.rqe) : undefined,
+    clinic: row.clinic ? String(row.clinic) : undefined,
+    adminNote: row.admin_note ? String(row.admin_note) : undefined,
   };
 }
 
@@ -297,7 +333,7 @@ async function readSupabaseDb(): Promise<Database> {
     mapDoctorRow(row as unknown as Record<string, unknown>)
   );
 
-  if (doctors.length === 0) {
+  if (doctors.length === 0 && process.env.SEED_DEMO === "1") {
     const seeded: Database = {
       doctors: await seedDoctors(),
       bookings: [],
@@ -343,6 +379,12 @@ async function writeSupabaseDb(db: Database): Promise<void> {
     weekly_availability: doctor.weeklyAvailability,
     blocked_slots: doctor.blockedSlots,
     created_at: doctor.createdAt,
+    status: doctor.status ?? "approved",
+    phone: doctor.phone ?? null,
+    crm_state: doctor.crmState ?? null,
+    rqe: doctor.rqe ?? null,
+    clinic: doctor.clinic ?? null,
+    admin_note: doctor.adminNote ?? null,
   }));
 
   const bookings = db.bookings.map((booking) => ({
