@@ -123,9 +123,12 @@ export default function PainelMedicoPage() {
             {doctor.crm} · {doctor.specialty}
           </p>
         </div>
-        <button type="button" className="btn-ghost" onClick={logout}>
-          Sair
-        </button>
+        <div className="flex flex-wrap gap-2">
+          <a href="/admin/login" className="btn-ghost">Administração</a>
+          <button type="button" className="btn-ghost" onClick={logout}>
+            Sair
+          </button>
+        </div>
       </div>
 
       <div className="mt-8 grid gap-4 sm:grid-cols-3">
