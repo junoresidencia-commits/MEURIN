@@ -48,6 +48,21 @@ export interface ClinicalNote {
   createdAt: string;
 }
 
+export type DocumentType = "receita" | "exame" | "relatorio";
+
+export interface ClinicalDocument {
+  id: string;
+  patientEmail: string;
+  doctorId: string;
+  doctorName: string;
+  doctorCrm?: string | null;
+  type: DocumentType;
+  title: string;
+  body: string;
+  sharedWithPatient: boolean;
+  createdAt: string;
+}
+
 export interface PatientData {
   records: HomeRecord[];
   food: FoodLog[];
@@ -72,7 +87,12 @@ function supabaseActive(table: string) {
 
 /* --------------------------- JSON fallback --------------------------- */
 
-type FileShape = { records: HomeRecord[]; food: FoodLog[]; notes: ClinicalNote[] };
+type FileShape = {
+  records: HomeRecord[];
+  food: FoodLog[];
+  notes: ClinicalNote[];
+  documents: ClinicalDocument[];
+};
 
 async function readFile(): Promise<FileShape> {
   await fs.mkdir(DATA_DIR, { recursive: true });
@@ -83,9 +103,10 @@ async function readFile(): Promise<FileShape> {
       records: parsed.records ?? [],
       food: parsed.food ?? [],
       notes: parsed.notes ?? [],
+      documents: parsed.documents ?? [],
     };
   } catch {
-    return { records: [], food: [], notes: [] };
+    return { records: [], food: [], notes: [], documents: [] };
   }
 }
 
@@ -357,4 +378,104 @@ export async function getClinicalNotes(
   return file.notes
     .filter((n) => n.patientEmail === normalized && (!onlyShared || n.sharedWithPatient))
     .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+}
+
+/* --------------------------- Documentos (receita / exame / relatório) --------------------------- */
+
+function mapDocumentRow(row: Record<string, unknown>): ClinicalDocument {
+  return {
+    id: String(row.id),
+    patientEmail: String(row.patient_email),
+    doctorId: String(row.doctor_id),
+    doctorName: String(row.doctor_name),
+    doctorCrm: (row.doctor_crm as string | null) ?? null,
+    type: String(row.type) as DocumentType,
+    title: String(row.title),
+    body: String(row.body ?? ""),
+    sharedWithPatient: Boolean(row.shared_with_patient),
+    createdAt: new Date(String(row.created_at)).toISOString(),
+  };
+}
+
+export async function addDocument(
+  input: Omit<ClinicalDocument, "id" | "createdAt">
+): Promise<ClinicalDocument> {
+  const doc: ClinicalDocument = {
+    id: uuid(),
+    createdAt: new Date().toISOString(),
+    ...input,
+    patientEmail: input.patientEmail.toLowerCase().trim(),
+  };
+
+  if (supabaseActive("documents")) {
+    const supabase = getSupabaseAdmin()!;
+    const { error } = await supabase.from("documents").insert({
+      id: doc.id,
+      patient_email: doc.patientEmail,
+      doctor_id: doc.doctorId,
+      doctor_name: doc.doctorName,
+      doctor_crm: doc.doctorCrm ?? null,
+      type: doc.type,
+      title: doc.title,
+      body: doc.body,
+      shared_with_patient: doc.sharedWithPatient,
+      created_at: doc.createdAt,
+    });
+    if (error) {
+      if (isMissingTableError(error)) missingTables.add("documents");
+      else throw error;
+    } else {
+      return doc;
+    }
+  }
+
+  const data = await readFile();
+  data.documents.push(doc);
+  await writeFile(data);
+  return doc;
+}
+
+export async function getDocuments(
+  email: string,
+  { onlyShared = false }: { onlyShared?: boolean } = {}
+): Promise<ClinicalDocument[]> {
+  const normalized = email.toLowerCase().trim();
+
+  if (supabaseActive("documents")) {
+    const supabase = getSupabaseAdmin()!;
+    let query = supabase
+      .from("documents")
+      .select("*")
+      .eq("patient_email", normalized)
+      .order("created_at", { ascending: false });
+    if (onlyShared) query = query.eq("shared_with_patient", true);
+    const { data, error } = await query;
+    if (error) {
+      if (isMissingTableError(error)) missingTables.add("documents");
+      else throw error;
+    } else {
+      return (data ?? []).map((r) => mapDocumentRow(r as Record<string, unknown>));
+    }
+  }
+
+  const file = await readFile();
+  return file.documents
+    .filter((d) => d.patientEmail === normalized && (!onlyShared || d.sharedWithPatient))
+    .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+}
+
+export async function getDocumentById(id: string): Promise<ClinicalDocument | null> {
+  if (supabaseActive("documents")) {
+    const supabase = getSupabaseAdmin()!;
+    const { data, error } = await supabase.from("documents").select("*").eq("id", id).maybeSingle();
+    if (error) {
+      if (isMissingTableError(error)) missingTables.add("documents");
+      else throw error;
+    } else {
+      return data ? mapDocumentRow(data as Record<string, unknown>) : null;
+    }
+  }
+
+  const file = await readFile();
+  return file.documents.find((d) => d.id === id) ?? null;
 }
