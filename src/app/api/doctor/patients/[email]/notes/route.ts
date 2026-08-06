@@ -2,29 +2,26 @@ import { NextResponse } from "next/server";
 import { getDoctorSessionId } from "@/lib/auth";
 import { readDb } from "@/lib/store";
 import { addClinicalNote } from "@/lib/patient-store";
+import { resolvePatientAccess } from "@/lib/doctor-access";
 
 export async function POST(
   req: Request,
   { params }: { params: Promise<{ email: string }> }
 ) {
   const doctorId = await getDoctorSessionId();
-  if (!doctorId) {
+  const { email: rawParam } = await params;
+  const access = await resolvePatientAccess(rawParam);
+  if (!access) {
     return NextResponse.json({ error: "Não autenticado." }, { status: 401 });
   }
-
-  const { email: rawEmail } = await params;
-  const email = decodeURIComponent(rawEmail).toLowerCase().trim();
+  if (!access.allowed) {
+    return NextResponse.json({ error: "Você não tem acesso a este paciente." }, { status: 403 });
+  }
 
   const db = await readDb();
   const doctor = db.doctors.find((d) => d.id === doctorId);
-  const hasAccess = db.bookings.some(
-    (b) => b.doctorId === doctorId && b.patientEmail.toLowerCase() === email
-  );
-  if (!doctor || !hasAccess) {
-    return NextResponse.json(
-      { error: "Você não tem acesso a este paciente." },
-      { status: 403 }
-    );
+  if (!doctor) {
+    return NextResponse.json({ error: "Médico não encontrado." }, { status: 403 });
   }
 
   const body = await req.json();
@@ -34,15 +31,12 @@ export async function POST(
   const plan = String(body.plan || "").trim();
 
   if (!chiefComplaint && !history && !assessment && !plan) {
-    return NextResponse.json(
-      { error: "Escreva ao menos um campo da evolução." },
-      { status: 400 }
-    );
+    return NextResponse.json({ error: "Escreva ao menos um campo da evolução." }, { status: 400 });
   }
 
   const note = await addClinicalNote({
-    patientEmail: email,
-    doctorId,
+    patientEmail: access.key,
+    doctorId: doctor.id,
     doctorName: doctor.name,
     chiefComplaint: chiefComplaint || null,
     history: history || null,
