@@ -92,6 +92,7 @@ type FileShape = {
   food: FoodLog[];
   notes: ClinicalNote[];
   documents: ClinicalDocument[];
+  labs: LabResult[];
 };
 
 async function readFile(): Promise<FileShape> {
@@ -104,9 +105,10 @@ async function readFile(): Promise<FileShape> {
       food: parsed.food ?? [],
       notes: parsed.notes ?? [],
       documents: parsed.documents ?? [],
+      labs: parsed.labs ?? [],
     };
   } catch {
-    return { records: [], food: [], notes: [], documents: [] };
+    return { records: [], food: [], notes: [], documents: [], labs: [] };
   }
 }
 
@@ -462,6 +464,94 @@ export async function getDocuments(
   return file.documents
     .filter((d) => d.patientEmail === normalized && (!onlyShared || d.sharedWithPatient))
     .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+}
+
+/* --------------------------- Exames laboratoriais --------------------------- */
+
+export interface LabResult {
+  id: string;
+  patientEmail: string;
+  doctorId?: string | null;
+  testKey: string;
+  value: number;
+  unit?: string | null;
+  referenceRange?: string | null;
+  origin?: string | null;
+  measuredAt: string;
+  createdAt: string;
+}
+
+function mapLabRow(r: Record<string, unknown>): LabResult {
+  return {
+    id: String(r.id),
+    patientEmail: String(r.patient_email),
+    doctorId: (r.doctor_id as string | null) ?? null,
+    testKey: String(r.test_key),
+    value: Number(r.value),
+    unit: (r.unit as string | null) ?? null,
+    referenceRange: (r.reference_range as string | null) ?? null,
+    origin: (r.origin as string | null) ?? null,
+    measuredAt: new Date(String(r.measured_at)).toISOString(),
+    createdAt: new Date(String(r.created_at)).toISOString(),
+  };
+}
+
+export async function addLabResult(
+  input: Omit<LabResult, "id" | "createdAt">
+): Promise<LabResult> {
+  const row: LabResult = {
+    id: uuid(),
+    createdAt: new Date().toISOString(),
+    ...input,
+    patientEmail: input.patientEmail.toLowerCase().trim(),
+  };
+  if (supabaseActive("lab_results")) {
+    const supabase = getSupabaseAdmin()!;
+    const { error } = await supabase.from("lab_results").insert({
+      id: row.id,
+      patient_email: row.patientEmail,
+      doctor_id: row.doctorId ?? null,
+      test_key: row.testKey,
+      value: row.value,
+      unit: row.unit ?? null,
+      reference_range: row.referenceRange ?? null,
+      origin: row.origin ?? null,
+      measured_at: row.measuredAt,
+      created_at: row.createdAt,
+    });
+    if (error) {
+      if (isMissingTableError(error)) missingTables.add("lab_results");
+      else throw error;
+    } else {
+      return row;
+    }
+  }
+  const data = await readFile();
+  data.labs.push(row);
+  await writeFile(data);
+  return row;
+}
+
+export async function getLabResults(email: string): Promise<LabResult[]> {
+  const normalized = email.toLowerCase().trim();
+  if (supabaseActive("lab_results")) {
+    const supabase = getSupabaseAdmin()!;
+    const { data, error } = await supabase
+      .from("lab_results")
+      .select("*")
+      .eq("patient_email", normalized)
+      .order("measured_at", { ascending: true });
+    if (error) {
+      if (isMissingTableError(error)) missingTables.add("lab_results");
+      else throw error;
+    } else {
+      return (data ?? []).map((r) => mapLabRow(r as Record<string, unknown>));
+    }
+  }
+  const data = await readFile();
+  return data.labs
+    .filter((l) => l.patientEmail === normalized)
+    .sort((a, b) => a.measuredAt.localeCompare(b.measuredAt));
 }
 
 export async function getDocumentById(id: string): Promise<ClinicalDocument | null> {

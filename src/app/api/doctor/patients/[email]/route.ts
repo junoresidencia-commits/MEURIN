@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { getClinicalNotes, getDocuments, getPatientData } from "@/lib/patient-store";
+import { getClinicalNotes, getDocuments, getLabResults, getPatientData } from "@/lib/patient-store";
 import { resolvePatientAccess } from "@/lib/doctor-access";
 
 export async function GET(
@@ -19,6 +19,7 @@ export async function GET(
   const { records, food } = await getPatientData(access.key);
   const notes = await getClinicalNotes(access.key);
   const documents = await getDocuments(access.key);
+  const labs = await getLabResults(access.key);
 
   return NextResponse.json({
     patient: {
@@ -33,5 +34,6 @@ export async function GET(
     food,
     notes,
     documents,
+    labs,
   });
 }

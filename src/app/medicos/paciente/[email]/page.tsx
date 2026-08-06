@@ -4,6 +4,9 @@ import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import { formatSlotLabel } from "@/lib/scheduling-client";
+import { NEPHRO_LABS, labLabel, labUnit } from "@/lib/labs";
+
+type Lab = { id: string; testKey: string; value: number; unit?: string | null; measuredAt: string };
 
 type HomeRecord = {
   id: string;
@@ -50,6 +53,7 @@ const REASON: Record<string, string> = {
 const TABS = [
   { id: "resumo", label: "Resumo" },
   { id: "evolucao", label: "Evolução" },
+  { id: "exames", label: "Exames" },
   { id: "documentos", label: "Documentos" },
   { id: "sinais", label: "Sinais em casa" },
   { id: "alimentacao", label: "Alimentação" },
@@ -83,7 +87,15 @@ export default function ProntuarioPage() {
   const [bookings, setBookings] = useState<Booking[]>([]);
   const [notes, setNotes] = useState<Note[]>([]);
   const [documents, setDocuments] = useState<Doc[]>([]);
+  const [labs, setLabs] = useState<Lab[]>([]);
   const [tab, setTab] = useState<Tab>("resumo");
+
+  // Formulário de exame
+  const [labTest, setLabTest] = useState<string>("creatinina");
+  const [labValue, setLabValue] = useState("");
+  const [labDate, setLabDate] = useState("");
+  const [labSaving, setLabSaving] = useState(false);
+  const [labErr, setLabErr] = useState("");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
@@ -119,8 +131,38 @@ export default function ProntuarioPage() {
     setBookings(data.bookings || []);
     setNotes(data.notes || []);
     setDocuments(data.documents || []);
+    setLabs(data.labs || []);
     setLoading(false);
   }, [emailParam, router]);
+
+  async function saveLab() {
+    if (!labValue.trim()) {
+      setLabErr("Informe o valor.");
+      return;
+    }
+    setLabSaving(true);
+    setLabErr("");
+    try {
+      const res = await fetch(`/api/doctor/patients/${emailParam}/labs`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          testKey: labTest,
+          value: labValue,
+          measuredAt: labDate || undefined,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Não foi possível salvar.");
+      setLabValue("");
+      setLabDate("");
+      await load();
+    } catch (e) {
+      setLabErr(e instanceof Error ? e.message : "Erro inesperado.");
+    } finally {
+      setLabSaving(false);
+    }
+  }
 
   async function saveDocument() {
     setDocSaving(true);
@@ -169,6 +211,7 @@ export default function ProntuarioPage() {
     load();
   }, [load]);
 
+  const labKeys = Array.from(new Set(labs.map((l) => l.testKey)));
   const bp = records.find((r) => r.kind === "bp");
   const glucose = records.find((r) => r.kind === "glucose");
   const weight = records.find((r) => r.kind === "weight");
@@ -303,6 +346,62 @@ export default function ProntuarioPage() {
           </div>
         )}
 
+        {tab === "exames" && (
+          <div className="space-y-4">
+            <div className="panel space-y-3">
+              <p className="text-xs font-bold uppercase tracking-wider text-[var(--gold)]">
+                Adicionar resultado de exame
+              </p>
+              <div className="grid gap-3 sm:grid-cols-3">
+                <label className="block sm:col-span-1">
+                  <span className="mb-1 block text-xs font-semibold text-[var(--text-muted)]">Exame</span>
+                  <select className="input-field" value={labTest} onChange={(e) => setLabTest(e.target.value)}>
+                    {NEPHRO_LABS.map((l) => (
+                      <option key={l.key} value={l.key}>{l.label}</option>
+                    ))}
+                  </select>
+                </label>
+                <label className="block">
+                  <span className="mb-1 block text-xs font-semibold text-[var(--text-muted)]">Valor ({labUnit(labTest)})</span>
+                  <input inputMode="decimal" className="input-field" value={labValue} onChange={(e) => setLabValue(e.target.value)} placeholder="Ex.: 1,8" />
+                </label>
+                <label className="block">
+                  <span className="mb-1 block text-xs font-semibold text-[var(--text-muted)]">Data do exame</span>
+                  <input type="date" className="input-field" value={labDate} onChange={(e) => setLabDate(e.target.value)} />
+                </label>
+              </div>
+              {labErr && <p className="text-sm text-[var(--danger)]">{labErr}</p>}
+              <button type="button" className="btn-gold" onClick={saveLab} disabled={labSaving || !labValue.trim()}>
+                {labSaving ? "Salvando…" : "Adicionar exame"}
+              </button>
+            </div>
+
+            {labKeys.length === 0 && <p className="text-[var(--text-muted)]">Nenhum exame registrado ainda.</p>}
+            {labKeys.map((key) => {
+              const series = labs.filter((l) => l.testKey === key);
+              const last = series[series.length - 1];
+              return (
+                <div key={key} className="panel">
+                  <div className="flex items-center justify-between">
+                    <p className="font-bold text-[var(--text)]">{labLabel(key)}</p>
+                    <p className="text-sm text-[var(--gold)]">
+                      Último: {String(last.value).replace(".", ",")} {labUnit(key)}
+                    </p>
+                  </div>
+                  <LabChart points={series.map((s) => ({ x: s.measuredAt, y: s.value }))} />
+                  <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-xs text-[var(--text-muted)]">
+                    {series.map((s) => (
+                      <span key={s.id}>
+                        {new Date(s.measuredAt).toLocaleDateString("pt-BR")}: <b className="text-[var(--text-soft)]">{String(s.value).replace(".", ",")}</b>
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+
         {tab === "documentos" && (
           <div className="space-y-4">
             <div className="panel space-y-3">
@@ -434,6 +533,30 @@ export default function ProntuarioPage() {
         )}
       </div>
     </div>
+  );
+}
+
+function LabChart({ points }: { points: { x: string; y: number }[] }) {
+  if (points.length === 0) return null;
+  const w = 480;
+  const h = 120;
+  const p = 22;
+  const ys = points.map((d) => d.y);
+  const min = Math.min(...ys);
+  const max = Math.max(...ys);
+  const span = max - min || 1;
+  const n = points.length;
+  const xAt = (i: number) => (n === 1 ? w / 2 : p + (i * (w - 2 * p)) / (n - 1));
+  const yAt = (v: number) => h - p - ((v - min) / span) * (h - 2 * p);
+  const path = points.map((d, i) => `${i ? "L" : "M"}${xAt(i).toFixed(1)} ${yAt(d.y).toFixed(1)}`).join(" ");
+
+  return (
+    <svg viewBox={`0 0 ${w} ${h}`} className="mt-3 h-28 w-full" preserveAspectRatio="none">
+      {n > 1 && <path d={path} fill="none" stroke="var(--gold)" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />}
+      {points.map((d, i) => (
+        <circle key={i} cx={xAt(i)} cy={yAt(d.y)} r="3.5" fill="white" stroke="var(--gold)" strokeWidth="2.5" />
+      ))}
+    </svg>
   );
 }
 
