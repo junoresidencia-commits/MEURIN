@@ -26,24 +26,14 @@ function BrandMark() {
 export function SiteHeader() {
   const pathname = usePathname();
   const [open, setOpen] = useState(false);
-  const hideDemo =
-    pathname?.startsWith("/consulta") || pathname?.startsWith("/confirmacao");
 
-  // Área do paciente tem cara de app próprio (navegação inferior), sem o header de marketing.
-  if (pathname?.startsWith("/paciente")) {
+  // Área do paciente e administração têm cara de app próprio, sem o header de marketing.
+  if (pathname?.startsWith("/paciente") || pathname?.startsWith("/admin")) {
     return null;
   }
 
   return (
     <>
-      {!hideDemo && (
-        <div className="border-b border-[var(--border-gold)] bg-[var(--gold-soft)] px-4 py-2 text-center text-xs font-semibold text-[var(--gold)]">
-          Ambiente de demonstração — pagamentos e e-mails são simulados.{" "}
-          <Link href="/amanha" className="underline underline-offset-2 hover:text-[var(--text)]">
-            Ver o que falta para produção
-          </Link>
-        </div>
-      )}
       <header className="sticky top-0 z-50 border-b border-[var(--border)] bg-white/85 backdrop-blur-xl">
         <div className="mx-auto flex max-w-5xl items-center justify-between gap-4 px-5 py-3.5">
           <Link href="/" className="flex items-center gap-3" onClick={() => setOpen(false)}>

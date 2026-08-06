@@ -55,6 +55,11 @@ export default function AgendarClient() {
   const [cardNumber, setCardNumber] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const [consentDocs, setConsentDocs] = useState<
+    { type: string; title: string; body: string; version: string; sha256: string }[]
+  >([]);
+  const [consentChecked, setConsentChecked] = useState<Record<string, boolean>>({});
+  const [openConsent, setOpenConsent] = useState<string | null>(null);
 
   const doctor = useMemo(
     () => doctors.find((d) => d.id === doctorId) || null,
@@ -82,11 +87,58 @@ export default function AgendarClient() {
       .finally(() => setLoadingSlots(false));
   }, [doctorId]);
 
+  useEffect(() => {
+    if (step !== 3 || consentDocs.length > 0) return;
+    fetch("/api/consent/documents")
+      .then((r) => r.json())
+      .then((data) => setConsentDocs(data.documents || []))
+      .catch(() => {
+        /* segue sem travar caso os termos não carreguem */
+      });
+  }, [step, consentDocs.length]);
+
+  const consentReady =
+    consentDocs.length > 0 && consentDocs.every((d) => consentChecked[d.type]);
+
+  function consentClientInfo() {
+    let sessionId = "";
+    try {
+      sessionId = sessionStorage.getItem("mr_sid") || "";
+      if (!sessionId) {
+        sessionId = crypto?.randomUUID ? crypto.randomUUID() : String(Date.now());
+        sessionStorage.setItem("mr_sid", sessionId);
+      }
+    } catch {
+      /* ignore */
+    }
+    return {
+      language: typeof navigator !== "undefined" ? navigator.language : "",
+      screenResolution: typeof screen !== "undefined" ? `${screen.width}x${screen.height}` : "",
+      sessionId,
+    };
+  }
+
   async function finishPayment() {
     if (!doctor || !slot) return;
+    if (!consentReady) {
+      setError("Aceite os termos para finalizar o agendamento.");
+      return;
+    }
     setLoading(true);
     setError("");
     try {
+      // Registra o consentimento (auditável) antes de prosseguir com o pagamento.
+      const accepted: Record<string, boolean> = {};
+      consentDocs.forEach((d) => (accepted[d.type] = true));
+      await fetch("/api/consent/accept", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          email: patientEmail,
+          accepted,
+          client: consentClientInfo(),
+        }),
+      });
       const bookingRes = await fetch("/api/bookings", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -455,6 +507,42 @@ export default function AgendarClient() {
             pronto-socorro.
           </p>
 
+          {/* Consentimento obrigatório antes de finalizar */}
+          <div className="space-y-2 rounded-2xl border border-[var(--border)] bg-[var(--bg-soft)] p-4">
+            <p className="text-xs font-bold uppercase tracking-wider text-[var(--gold)]">
+              Consentimento
+            </p>
+            {consentDocs.map((d) => (
+              <div key={d.type}>
+                <label className="flex items-start gap-2 text-sm text-[var(--text-soft)]">
+                  <input
+                    type="checkbox"
+                    className="mt-0.5 h-4 w-4 shrink-0 accent-[var(--gold)]"
+                    checked={Boolean(consentChecked[d.type])}
+                    onChange={(e) =>
+                      setConsentChecked((c) => ({ ...c, [d.type]: e.target.checked }))
+                    }
+                  />
+                  <span>
+                    Li e aceito — {d.title}{" "}
+                    <button
+                      type="button"
+                      className="font-semibold text-[var(--gold)] underline-offset-2 hover:underline"
+                      onClick={() => setOpenConsent(openConsent === d.type ? null : d.type)}
+                    >
+                      (ler)
+                    </button>
+                  </span>
+                </label>
+                {openConsent === d.type && (
+                  <div className="mt-2 max-h-48 overflow-y-auto whitespace-pre-wrap rounded-xl border border-[var(--border)] bg-white p-3 text-xs leading-relaxed text-[var(--text-soft)]">
+                    {d.body}
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+
           <div className="flex flex-wrap gap-3">
             <button type="button" className="btn-ghost" onClick={() => setStep(2)}>
               Voltar
@@ -462,7 +550,7 @@ export default function AgendarClient() {
             <button
               type="button"
               className="btn-gold"
-              disabled={loading}
+              disabled={loading || !consentReady}
               onClick={finishPayment}
             >
               {loading ? "Confirmando pagamento…" : "Pagar e liberar consulta"}

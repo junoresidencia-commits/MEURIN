@@ -35,7 +35,8 @@ function toPublic(d: {
 
 export async function GET() {
   const db = await readDb();
-  return NextResponse.json(db.doctors.map(toPublic));
+  const approved = db.doctors.filter((d) => (d.status ?? "approved") === "approved");
+  return NextResponse.json(approved.map(toPublic));
 }
 
 export async function POST(req: Request) {
@@ -50,6 +51,10 @@ export async function POST(req: Request) {
     consultationPriceCents,
     pixKey,
     bankAccountHint,
+    phone,
+    crmState,
+    rqe,
+    clinic,
   } = body;
 
   if (!name || !email || !password || !crm) {
@@ -80,6 +85,12 @@ export async function POST(req: Request) {
     weeklyAvailability: defaultAvailability(),
     blockedSlots: [] as string[],
     createdAt: new Date().toISOString(),
+    // Auto-cadastro entra pendente e só acessa após aprovação do administrador.
+    status: "pending" as const,
+    phone: phone ? String(phone) : undefined,
+    crmState: crmState ? String(crmState) : undefined,
+    rqe: rqe ? String(rqe) : undefined,
+    clinic: clinic ? String(clinic) : undefined,
   };
 
   await updateDb((current) => ({
@@ -87,5 +98,5 @@ export async function POST(req: Request) {
     doctors: [...current.doctors, doctor],
   }));
 
-  return NextResponse.json(toPublic(doctor), { status: 201 });
+  return NextResponse.json({ ok: true, status: "pending" }, { status: 201 });
 }

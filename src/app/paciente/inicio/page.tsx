@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { PatientNav } from "@/components/PatientNav";
+import { ConsentGate } from "@/components/ConsentGate";
 import { formatSlotLabel } from "@/lib/scheduling-client";
 
 type HomeRecord = {
@@ -67,6 +68,7 @@ export default function PacienteInicioPage() {
   const [notes, setNotes] = useState<SharedNote[]>([]);
   const [documents, setDocuments] = useState<SharedDoc[]>([]);
   const [loading, setLoading] = useState(true);
+  const [consentPending, setConsentPending] = useState(false);
 
   const load = useCallback(async () => {
     const res = await fetch("/api/patient/records");
@@ -76,6 +78,21 @@ export default function PacienteInicioPage() {
     }
     const data = await res.json();
     setEmail(data.email || "");
+
+    if (data.email) {
+      try {
+        const cRes = await fetch(`/api/consent/status?email=${encodeURIComponent(data.email)}`);
+        const cData = await cRes.json();
+        if (cData.needsConsent) {
+          setConsentPending(true);
+          setLoading(false);
+          return;
+        }
+        setConsentPending(false);
+      } catch {
+        /* segue mesmo se a checagem falhar */
+      }
+    }
     setRecords(data.records || []);
     setFood(data.food || []);
     if (data.email) {
@@ -131,6 +148,19 @@ export default function PacienteInicioPage() {
           ))}
         </div>
       </div>
+    );
+  }
+
+  if (consentPending) {
+    return (
+      <ConsentGate
+        email={email}
+        onAccepted={() => {
+          setConsentPending(false);
+          setLoading(true);
+          load();
+        }}
+      />
     );
   }
 

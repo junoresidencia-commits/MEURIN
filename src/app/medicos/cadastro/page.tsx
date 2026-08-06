@@ -2,23 +2,25 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
 
 export default function CadastroMedicoPage() {
-  const router = useRouter();
   const [form, setForm] = useState({
     name: "",
     email: "",
     password: "",
+    phone: "",
     crm: "",
+    crmState: "",
+    rqe: "",
     specialty: "Nefrologia",
+    clinic: "",
     bio: "",
     consultationPriceCents: "350",
     pixKey: "",
-    bankAccountHint: "",
   });
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+  const [done, setDone] = useState(false);
 
   function set<K extends keyof typeof form>(key: K, value: string) {
     setForm((f) => ({ ...f, [key]: value }));
@@ -39,14 +41,7 @@ export default function CadastroMedicoPage() {
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Falha no cadastro");
-
-      const login = await fetch("/api/auth", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email: form.email, password: form.password }),
-      });
-      if (!login.ok) throw new Error("Conta criada, mas o login automático falhou.");
-      router.push("/medicos/painel");
+      setDone(true);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Erro");
     } finally {
@@ -54,34 +49,54 @@ export default function CadastroMedicoPage() {
     }
   }
 
+  if (done) {
+    return (
+      <div className="mx-auto max-w-md px-5 py-16">
+        <p className="text-sm font-semibold text-[var(--green)]">Cadastro recebido</p>
+        <h1 className="font-display mt-2 text-3xl font-extrabold text-[var(--text)]">
+          Cadastro recebido com sucesso
+        </h1>
+        <div className="panel mt-8 space-y-4 text-[var(--text-soft)]">
+          <p>
+            Seus dados serão analisados pelo administrador do Meu Rim. Você
+            receberá um aviso após a aprovação.
+          </p>
+          <Link href="/medicos/login" className="btn-gold w-full">
+            Voltar para o login
+          </Link>
+        </div>
+      </div>
+    );
+  }
+
+  const fields = [
+    ["name", "Nome completo", "text", true],
+    ["email", "E-mail", "email", true],
+    ["password", "Senha", "password", true],
+    ["phone", "Telefone", "tel", true],
+    ["crm", "CRM", "text", true],
+    ["crmState", "Estado do CRM (UF)", "text", true],
+    ["rqe", "RQE (se houver)", "text", false],
+    ["specialty", "Especialidade", "text", true],
+    ["clinic", "Clínica / local de atendimento", "text", false],
+    ["pixKey", "Chave Pix (para receber)", "text", false],
+  ] as const;
+
   return (
     <div className="mx-auto max-w-xl px-5 py-12">
-      <p className="text-xs font-bold uppercase tracking-[0.22em] text-[var(--gold)]">
-        Equipe médica
-      </p>
-      <h1 className="font-display mt-2 text-4xl text-[var(--text)]">
-        Cadastre sua conta
+      <p className="text-sm font-semibold text-[var(--gold)]">Equipe médica</p>
+      <h1 className="font-display mt-2 text-3xl font-extrabold text-[var(--text)]">
+        Solicitar cadastro
       </h1>
       <p className="mt-3 text-[var(--text-muted)]">
-        Você e até cerca de 20 colegas entram com CRM, definem agenda e recebem
-        na conta. Pacientes do interior, da capital ou com pressa encontram
-        vocês online — e só entram na sala depois de pagar.
+        Preencha seus dados. O acesso é liberado após a aprovação do administrador
+        do Meu Rim.
       </p>
 
       <form onSubmit={onSubmit} className="panel mt-8 space-y-4">
-        {(
-          [
-            ["name", "Nome completo", "text"],
-            ["email", "E-mail", "email"],
-            ["password", "Senha", "password"],
-            ["crm", "CRM", "text"],
-            ["specialty", "Especialidade", "text"],
-            ["pixKey", "Chave Pix (para receber)", "text"],
-            ["bankAccountHint", "Conta bancária (opcional)", "text"],
-          ] as const
-        ).map(([key, label, type]) => (
+        {fields.map(([key, label, type, required]) => (
           <label key={key} className="block">
-            <span className="mb-2 block text-xs font-bold uppercase tracking-wider text-[var(--gold-light)]">
+            <span className="mb-2 block text-xs font-bold uppercase tracking-wider text-[var(--gold)]">
               {label}
             </span>
             <input
@@ -89,12 +104,12 @@ export default function CadastroMedicoPage() {
               className="input-field"
               value={form[key]}
               onChange={(e) => set(key, e.target.value)}
-              required={!["pixKey", "bankAccountHint"].includes(key)}
+              required={required}
             />
           </label>
         ))}
         <label className="block">
-          <span className="mb-2 block text-xs font-bold uppercase tracking-wider text-[var(--gold-light)]">
+          <span className="mb-2 block text-xs font-bold uppercase tracking-wider text-[var(--gold)]">
             Valor da consulta (R$)
           </span>
           <input
@@ -108,7 +123,7 @@ export default function CadastroMedicoPage() {
           />
         </label>
         <label className="block">
-          <span className="mb-2 block text-xs font-bold uppercase tracking-wider text-[var(--gold-light)]">
+          <span className="mb-2 block text-xs font-bold uppercase tracking-wider text-[var(--gold)]">
             Bio
           </span>
           <textarea
@@ -118,14 +133,18 @@ export default function CadastroMedicoPage() {
           />
         </label>
 
-        {error && <p className="text-sm text-red-300">{error}</p>}
+        {error && (
+          <p className="rounded-xl border border-[var(--danger)]/30 bg-[var(--danger)]/10 px-3 py-2 text-sm text-[var(--danger)]">
+            {error}
+          </p>
+        )}
 
         <button type="submit" className="btn-gold w-full" disabled={loading}>
-          {loading ? "Salvando…" : "Criar conta médica"}
+          {loading ? "Enviando…" : "Enviar solicitação"}
         </button>
         <p className="text-center text-sm text-[var(--text-muted)]">
           Já tem conta?{" "}
-          <Link href="/medicos/login" className="text-[var(--gold-light)]">
+          <Link href="/medicos/login" className="font-semibold text-[var(--gold)]">
             Entrar
           </Link>
         </p>

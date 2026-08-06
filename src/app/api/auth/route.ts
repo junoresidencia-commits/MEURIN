@@ -26,6 +26,20 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "E-mail ou senha inválidos." }, { status: 401 });
   }
 
+  const status = doctor.status ?? "approved";
+  if (status !== "approved") {
+    const messages: Record<string, string> = {
+      pending: "Seu cadastro está aguardando aprovação do administrador do Meu Rim.",
+      correction: "Seu cadastro precisa de correção. Verifique o aviso enviado pelo administrador.",
+      rejected: "Seu cadastro não foi aprovado. Fale com o administrador do Meu Rim.",
+      suspended: "Seu acesso está suspenso. Fale com o administrador do Meu Rim.",
+    };
+    return NextResponse.json(
+      { error: messages[status] || "Acesso indisponível no momento." },
+      { status: 403 }
+    );
+  }
+
   const token = createSessionToken(doctor.id);
   const res = NextResponse.json({
     ok: true,
