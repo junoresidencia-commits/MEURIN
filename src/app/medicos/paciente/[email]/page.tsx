@@ -10,6 +10,7 @@ type Lab = { id: string; testKey: string; value: number; unit?: string | null; m
 type Upload = { id: string; name: string; category?: string | null; examDate?: string | null; signedUrl?: string | null };
 type Lme = { id: string; cid10?: string | null; createdAt: string; medications: { name: string }[] };
 type Med = { name: string; presentation: string; monthlyQty: string };
+type Protocol = { id: string; name: string; cid10?: string | null; medications: Med[] };
 
 type HomeRecord = {
   id: string;
@@ -105,6 +106,7 @@ export default function ProntuarioPage() {
     priorTreatment: false, priorTreatmentDesc: "", incapable: false, responsibleName: "",
   });
   const [meds, setMeds] = useState<Med[]>([{ name: "", presentation: "", monthlyQty: "" }]);
+  const [protocols, setProtocols] = useState<Protocol[]>([]);
   const [lmeSaving, setLmeSaving] = useState(false);
   const [lmeErr, setLmeErr] = useState("");
 
@@ -159,7 +161,28 @@ export default function ProntuarioPage() {
     setUploads(data.uploads || []);
     setLmeList(data.lme || []);
     setLoading(false);
+    try {
+      const pr = await fetch("/api/protocols");
+      if (pr.ok) setProtocols((await pr.json()).protocols || []);
+    } catch {
+      /* ignore */
+    }
   }, [emailParam, router]);
+
+  function applyProtocol(id: string) {
+    const p = protocols.find((x) => x.id === id);
+    if (!p) return;
+    setLmeForm((f) => ({ ...f, cid10: p.cid10 || f.cid10 }));
+    if (p.medications.length > 0) {
+      setMeds(
+        p.medications.map((m) => ({
+          name: m.name || "",
+          presentation: m.presentation || "",
+          monthlyQty: m.monthlyQty || "",
+        }))
+      );
+    }
+  }
 
   async function saveLme() {
     if (!meds.some((m) => m.name.trim())) {
@@ -525,6 +548,20 @@ export default function ProntuarioPage() {
             {/* Formulário LME */}
             <div className="panel space-y-3">
               <p className="text-xs font-bold uppercase tracking-wider text-[var(--gold)]">Nova LME</p>
+
+              {protocols.length > 0 && (
+                <label className="block">
+                  <span className="mb-1 block text-xs font-semibold text-[var(--text-muted)]">
+                    Preencher a partir de um protocolo
+                  </span>
+                  <select className="input-field" defaultValue="" onChange={(e) => applyProtocol(e.target.value)}>
+                    <option value="">Selecione um protocolo…</option>
+                    {protocols.map((p) => (
+                      <option key={p.id} value={p.id}>{p.name}{p.cid10 ? ` (${p.cid10})` : ""}</option>
+                    ))}
+                  </select>
+                </label>
+              )}
 
               <div className="space-y-2">
                 <span className="text-xs font-semibold text-[var(--text-muted)]">Medicamento(s)</span>

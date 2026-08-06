@@ -105,6 +105,7 @@ export default function AdminPage() {
             {showCreate ? "Fechar" : "+ Criar médico"}
           </button>
           <a href="/admin/empresa" className="btn-ghost">Dados da empresa</a>
+          <a href="/admin/protocolos" className="btn-ghost">Protocolos CEAF</a>
           <button type="button" className="btn-ghost" onClick={logout}>Sair</button>
         </div>
       </div>
