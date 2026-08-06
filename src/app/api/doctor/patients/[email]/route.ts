@@ -1,59 +1,34 @@
 import { NextResponse } from "next/server";
-import { getDoctorSessionId } from "@/lib/auth";
-import { readDb } from "@/lib/store";
 import { getClinicalNotes, getDocuments, getPatientData } from "@/lib/patient-store";
+import { resolvePatientAccess } from "@/lib/doctor-access";
 
 export async function GET(
   _req: Request,
   { params }: { params: Promise<{ email: string }> }
 ) {
-  const doctorId = await getDoctorSessionId();
-  if (!doctorId) {
+  const { email: rawParam } = await params;
+  const access = await resolvePatientAccess(rawParam);
+
+  if (!access) {
     return NextResponse.json({ error: "Não autenticado." }, { status: 401 });
   }
-
-  const { email: rawEmail } = await params;
-  const email = decodeURIComponent(rawEmail).toLowerCase().trim();
-
-  const db = await readDb();
-  const bookingsWithMe = db.bookings.filter(
-    (b) => b.doctorId === doctorId && b.patientEmail.toLowerCase() === email
-  );
-
-  // Autorização: o médico só vê o paciente se houver consulta dele com esse médico.
-  if (bookingsWithMe.length === 0) {
-    return NextResponse.json(
-      { error: "Você não tem acesso a este paciente." },
-      { status: 403 }
-    );
+  if (!access.allowed) {
+    return NextResponse.json({ error: "Você não tem acesso a este paciente." }, { status: 403 });
   }
 
-  const latest = bookingsWithMe
-    .slice()
-    .sort((a, b) => b.slotStart.localeCompare(a.slotStart))[0];
-
-  const { records, food } = await getPatientData(email);
-  const notes = await getClinicalNotes(email);
-  const documents = await getDocuments(email);
-
-  const bookings = bookingsWithMe
-    .sort((a, b) => b.slotStart.localeCompare(a.slotStart))
-    .map((b) => ({
-      id: b.id,
-      status: b.status,
-      slotStart: b.slotStart,
-      careReason: b.careReason,
-      meetingRoomId: b.meetingRoomId,
-    }));
+  const { records, food } = await getPatientData(access.key);
+  const notes = await getClinicalNotes(access.key);
+  const documents = await getDocuments(access.key);
 
   return NextResponse.json({
     patient: {
-      email,
-      name: latest.patientName,
-      city: latest.patientCity,
-      phone: latest.patientPhone,
+      email: access.email,
+      name: access.name,
+      city: access.city,
+      phone: access.phone,
+      isCreated: access.isCreated,
     },
-    bookings,
+    bookings: access.bookings,
     records,
     food,
     notes,

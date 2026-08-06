@@ -16,12 +16,12 @@ const DAYS = [
 ];
 
 type PatientRow = {
-  email: string;
+  key: string;
   name: string;
   city: string;
   total: number;
+  isCreated: boolean;
   lastSlot: string;
-  nextSlot: string | null;
 };
 
 export default function PainelMedicoPage() {
@@ -29,6 +29,7 @@ export default function PainelMedicoPage() {
   const [doctor, setDoctor] = useState<Omit<Doctor, "passwordHash"> | null>(null);
   const [bookings, setBookings] = useState<Booking[]>([]);
   const [patients, setPatients] = useState<PatientRow[]>([]);
+  const [showCreate, setShowCreate] = useState(false);
   const [price, setPrice] = useState("350");
   const [bio, setBio] = useState("");
   const [weekly, setWeekly] = useState<WeeklySlot[]>([]);
@@ -92,6 +93,13 @@ export default function PainelMedicoPage() {
   async function logout() {
     await fetch("/api/auth", { method: "DELETE" });
     router.push("/medicos/login");
+  }
+
+  async function reloadPatients() {
+    const res = await fetch("/api/doctor/patients");
+    const data = await res.json();
+    setPatients(data.patients || []);
+    setShowCreate(false);
   }
 
   if (loading || !doctor) {
@@ -190,19 +198,27 @@ export default function PainelMedicoPage() {
       </section>
 
       <section className="mt-8">
-        <h2 className="font-display text-2xl text-[var(--text)]">Meus pacientes</h2>
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <h2 className="font-display text-2xl text-[var(--text)]">Meus pacientes</h2>
+          <button type="button" className="btn-gold" onClick={() => setShowCreate((v) => !v)}>
+            {showCreate ? "Fechar" : "+ Criar paciente"}
+          </button>
+        </div>
         <p className="mt-2 text-sm text-[var(--text-muted)]">
-          Pacientes que agendaram com você. Abra o prontuário para ver os dados
-          que eles registraram em casa (pressão, glicemia, peso, alimentação).
+          Crie o paciente e abra o prontuário para registrar evolução, emitir
+          receitas, pedidos de exame e relatórios.
         </p>
+
+        {showCreate && <CreatePatient onCreated={reloadPatients} />}
+
         <div className="mt-4 grid gap-3">
           {patients.length === 0 && (
             <p className="text-[var(--text-muted)]">Nenhum paciente ainda.</p>
           )}
           {patients.map((p) => (
             <Link
-              key={p.email}
-              href={`/medicos/paciente/${encodeURIComponent(p.email)}`}
+              key={p.key}
+              href={`/medicos/paciente/${encodeURIComponent(p.key)}`}
               className="panel flex items-center justify-between gap-3 transition hover:-translate-y-0.5 hover:border-[var(--border-gold)]"
             >
               <div className="flex items-center gap-3">
@@ -212,7 +228,10 @@ export default function PainelMedicoPage() {
                 <div>
                   <p className="font-semibold text-[var(--text)]">{p.name}</p>
                   <p className="text-sm text-[var(--text-muted)]">
-                    {[p.city, `${p.total} consulta${p.total > 1 ? "s" : ""}`]
+                    {[
+                      p.city,
+                      p.isCreated ? "Cadastrado por você" : `${p.total} consulta${p.total > 1 ? "s" : ""}`,
+                    ]
                       .filter(Boolean)
                       .join(" · ")}
                   </p>
@@ -259,6 +278,108 @@ export default function PainelMedicoPage() {
           ))}
         </div>
       </section>
+    </div>
+  );
+}
+
+function CreatePatient({ onCreated }: { onCreated: () => void }) {
+  const [form, setForm] = useState({
+    name: "",
+    cpf: "",
+    birthdate: "",
+    sex: "",
+    phone: "",
+    email: "",
+    address: "",
+    emergencyContact: "",
+    guardianName: "",
+    guardianPhone: "",
+    insurance: "",
+    allergies: "",
+    diseases: "",
+    medications: "",
+    notes: "",
+  });
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState("");
+
+  function set<K extends keyof typeof form>(k: K, v: string) {
+    setForm((f) => ({ ...f, [k]: v }));
+    setError("");
+  }
+
+  async function submit() {
+    if (!form.name.trim()) {
+      setError("Informe o nome completo.");
+      return;
+    }
+    setSaving(true);
+    setError("");
+    try {
+      const res = await fetch("/api/doctor/patients", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(form),
+      });
+      const data = await res.json();
+      if (res.status === 409) {
+        throw new Error(
+          data.existingIsMine
+            ? "Você já tem um paciente com este CPF."
+            : "Já existe um paciente com este CPF em outro médico. Solicite vínculo."
+        );
+      }
+      if (!res.ok) throw new Error(data.error || "Não foi possível criar.");
+      onCreated();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Erro inesperado.");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  const fields = [
+    ["name", "Nome completo", "text"],
+    ["cpf", "CPF", "text"],
+    ["birthdate", "Data de nascimento", "date"],
+    ["sex", "Sexo", "text"],
+    ["phone", "Telefone", "tel"],
+    ["email", "E-mail", "email"],
+    ["address", "Endereço / cidade", "text"],
+    ["emergencyContact", "Contato de emergência", "text"],
+    ["guardianName", "Responsável legal (se menor)", "text"],
+    ["guardianPhone", "Telefone do responsável", "tel"],
+    ["insurance", "Convênio / particular", "text"],
+  ] as const;
+
+  const longFields = [
+    ["allergies", "Alergias"],
+    ["diseases", "Doenças"],
+    ["medications", "Medicamentos em uso"],
+    ["notes", "Observações"],
+  ] as const;
+
+  return (
+    <div className="panel mt-4 space-y-3">
+      <p className="text-xs font-bold uppercase tracking-wider text-[var(--gold)]">Novo paciente</p>
+      <div className="grid gap-3 sm:grid-cols-2">
+        {fields.map(([k, label, type]) => (
+          <label key={k} className="block">
+            <span className="mb-1 block text-xs font-semibold text-[var(--text-muted)]">{label}</span>
+            <input type={type} className="input-field" value={form[k]} onChange={(e) => set(k, e.target.value)} />
+          </label>
+        ))}
+      </div>
+      {longFields.map(([k, label]) => (
+        <label key={k} className="block">
+          <span className="mb-1 block text-xs font-semibold text-[var(--text-muted)]">{label}</span>
+          <textarea className="input-field min-h-[60px]" value={form[k]} onChange={(e) => set(k, e.target.value)} />
+        </label>
+      ))}
+      {error && <p className="text-sm text-[var(--danger)]">{error}</p>}
+      <button type="button" className="btn-gold" onClick={submit} disabled={saving || !form.name.trim()}>
+        {saving ? "Criando…" : "Criar paciente e abrir prontuário"}
+      </button>
     </div>
   );
 }
