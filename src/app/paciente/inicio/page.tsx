@@ -38,6 +38,13 @@ type SharedNote = {
   createdAt: string;
 };
 
+type SharedDoc = {
+  id: string;
+  type: "receita" | "exame" | "relatorio";
+  title: string;
+  createdAt: string;
+};
+
 function latest(records: HomeRecord[], kind: HomeRecord["kind"]) {
   return records.find((r) => r.kind === kind) || null;
 }
@@ -58,6 +65,7 @@ export default function PacienteInicioPage() {
   const [food, setFood] = useState<FoodLog[]>([]);
   const [bookings, setBookings] = useState<Booking[]>([]);
   const [notes, setNotes] = useState<SharedNote[]>([]);
+  const [documents, setDocuments] = useState<SharedDoc[]>([]);
   const [loading, setLoading] = useState(true);
 
   const load = useCallback(async () => {
@@ -82,6 +90,13 @@ export default function PacienteInicioPage() {
         const n = await fetch("/api/patient/notes");
         const nd = await n.json();
         setNotes(nd.notes || []);
+      } catch {
+        /* ignore */
+      }
+      try {
+        const dres = await fetch("/api/patient/documents");
+        const dd = await dres.json();
+        setDocuments(dd.documents || []);
       } catch {
         /* ignore */
       }
@@ -210,6 +225,33 @@ export default function PacienteInicioPage() {
           </div>
         )}
       </div>
+
+      {documents.length > 0 && (
+        <>
+          <p className="mt-8 text-xs font-bold uppercase tracking-wider text-[var(--gold)]">
+            Documentos do seu médico
+          </p>
+          <div className="mt-3 space-y-3">
+            {documents.slice(0, 5).map((d) => (
+              <a
+                key={d.id}
+                href={`/documento/${d.id}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="panel flex items-center justify-between gap-3"
+              >
+                <div>
+                  <p className="font-semibold text-[var(--text)]">{d.title}</p>
+                  <p className="text-xs text-[var(--text-muted)]">
+                    {d.type === "receita" ? "Receita" : d.type === "exame" ? "Pedido de exame" : "Relatório"}
+                  </p>
+                </div>
+                <span className="text-sm font-semibold text-[var(--gold)]">Abrir PDF →</span>
+              </a>
+            ))}
+          </div>
+        </>
+      )}
 
       {notes.length > 0 && (
         <>
