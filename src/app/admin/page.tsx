@@ -88,10 +88,11 @@ export default function AdminPage() {
           <p className="text-sm font-semibold text-[var(--gold)]">Administração</p>
           <h1 className="font-display text-3xl font-extrabold text-[var(--text)]">Médicos cadastrados</h1>
         </div>
-        <div className="flex gap-2">
+        <div className="flex flex-wrap gap-2">
           <button type="button" className="btn-gold" onClick={() => setShowCreate((v) => !v)}>
             {showCreate ? "Fechar" : "+ Criar médico"}
           </button>
+          <a href="/admin/empresa" className="btn-ghost">Dados da empresa</a>
           <button type="button" className="btn-ghost" onClick={logout}>Sair</button>
         </div>
       </div>

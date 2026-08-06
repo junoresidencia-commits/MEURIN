@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { COMPANY } from "@/lib/company";
 
 export function SiteFooter() {
   const pathname = usePathname();
@@ -41,6 +42,9 @@ export function SiteFooter() {
       </div>
       <p className="mx-auto mt-5 max-w-md text-xs text-[var(--text-muted)]">
         Projeto desenvolvido com medidas de segurança e privacidade alinhadas à LGPD.
+      </p>
+      <p className="mx-auto mt-2 max-w-lg text-[11px] text-[var(--text-muted)]">
+        {COMPANY.controllerLine}
       </p>
     </footer>
   );
