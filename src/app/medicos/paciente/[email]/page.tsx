@@ -7,6 +7,7 @@ import { formatSlotLabel } from "@/lib/scheduling-client";
 import { NEPHRO_LABS, labLabel, labUnit } from "@/lib/labs";
 
 type Lab = { id: string; testKey: string; value: number; unit?: string | null; measuredAt: string };
+type Upload = { id: string; name: string; category?: string | null; examDate?: string | null; signedUrl?: string | null };
 
 type HomeRecord = {
   id: string;
@@ -54,6 +55,7 @@ const TABS = [
   { id: "resumo", label: "Resumo" },
   { id: "evolucao", label: "Evolução" },
   { id: "exames", label: "Exames" },
+  { id: "enviados", label: "Enviados" },
   { id: "documentos", label: "Documentos" },
   { id: "sinais", label: "Sinais em casa" },
   { id: "alimentacao", label: "Alimentação" },
@@ -88,6 +90,7 @@ export default function ProntuarioPage() {
   const [notes, setNotes] = useState<Note[]>([]);
   const [documents, setDocuments] = useState<Doc[]>([]);
   const [labs, setLabs] = useState<Lab[]>([]);
+  const [uploads, setUploads] = useState<Upload[]>([]);
   const [tab, setTab] = useState<Tab>("resumo");
 
   // Formulário de exame
@@ -138,6 +141,7 @@ export default function ProntuarioPage() {
     setNotes(data.notes || []);
     setDocuments(data.documents || []);
     setLabs(data.labs || []);
+    setUploads(data.uploads || []);
     setLoading(false);
   }, [emailParam, router]);
 
@@ -430,6 +434,30 @@ export default function ProntuarioPage() {
                 </div>
               );
             })}
+          </div>
+        )}
+
+        {tab === "enviados" && (
+          <div className="space-y-3">
+            <p className="text-sm text-[var(--text-soft)]">Exames e documentos enviados pelo paciente.</p>
+            {uploads.length === 0 && <p className="text-[var(--text-muted)]">Nenhum arquivo enviado.</p>}
+            {uploads.map((u) => (
+              <div key={u.id} className="panel flex items-center justify-between gap-3">
+                <div className="min-w-0">
+                  <p className="truncate font-semibold text-[var(--text)]">{u.name}</p>
+                  <p className="text-xs text-[var(--text-muted)]">
+                    {[u.category, u.examDate ? new Date(u.examDate).toLocaleDateString("pt-BR") : null]
+                      .filter(Boolean)
+                      .join(" · ")}
+                  </p>
+                </div>
+                {u.signedUrl && (
+                  <a href={u.signedUrl} target="_blank" rel="noopener noreferrer" className="shrink-0 text-sm font-semibold text-[var(--gold)]">
+                    Abrir
+                  </a>
+                )}
+              </div>
+            ))}
           </div>
         )}
 

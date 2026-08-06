@@ -33,10 +33,19 @@ function BookIcon({ className }: IconProps) {
     </svg>
   );
 }
+function FileIcon({ className }: IconProps) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className} aria-hidden="true">
+      <path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8Z" />
+      <path d="M14 3v5h5" />
+    </svg>
+  );
+}
 
 const ITEMS = [
   { href: "/paciente/inicio", label: "Início", icon: HomeIcon },
   { href: "/paciente/registrar", label: "Dados", icon: ActivityIcon },
+  { href: "/paciente/exames", label: "Exames", icon: FileIcon },
   { href: "/paciente/alimentacao", label: "Alimentação", icon: UtensilsIcon },
   { href: "/educacao", label: "Orientações", icon: BookIcon },
 ];
@@ -45,7 +54,7 @@ export function PatientNav() {
   const pathname = usePathname();
   return (
     <nav className="fixed bottom-0 left-1/2 z-40 w-full max-w-[560px] -translate-x-1/2 border-t border-[var(--border)] bg-white/95 px-2 pb-[calc(0.5rem+env(safe-area-inset-bottom))] pt-2 backdrop-blur-xl">
-      <div className="grid grid-cols-4">
+      <div className="grid grid-cols-5">
         {ITEMS.map(({ href, label, icon: Icon }) => {
           const active = pathname === href;
           return (
