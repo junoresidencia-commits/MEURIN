@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { getDoctorSessionId } from "@/lib/auth";
 import { readDb } from "@/lib/store";
-import { createPatient, findByCpf, listPatientsByDoctor } from "@/lib/patients-store";
+import { createPatient, deletePatient, findByCpf, listPatientsByDoctor } from "@/lib/patients-store";
 
 export async function GET() {
   const doctorId = await getDoctorSessionId();
@@ -108,4 +108,26 @@ export async function POST(req: Request) {
   });
 
   return NextResponse.json({ ok: true, id: patient.id }, { status: 201 });
+}
+
+export async function DELETE(req: Request) {
+  const doctorId = await getDoctorSessionId();
+  if (!doctorId) {
+    return NextResponse.json({ error: "Não autenticado." }, { status: 401 });
+  }
+  let body: { id?: unknown };
+  try {
+    body = await req.json();
+  } catch {
+    return NextResponse.json({ error: "Requisição inválida." }, { status: 400 });
+  }
+  const id = String(body.id || "");
+  const ok = await deletePatient(id, doctorId);
+  if (!ok) {
+    return NextResponse.json(
+      { error: "Paciente não encontrado ou sem permissão para excluir." },
+      { status: 404 }
+    );
+  }
+  return NextResponse.json({ ok: true });
 }

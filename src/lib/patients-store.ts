@@ -173,6 +173,25 @@ export async function listPatientsByDoctor(doctorId: string): Promise<Patient[]>
   return list.filter((p) => p.doctorId === doctorId).sort((a, b) => b.createdAt.localeCompare(a.createdAt));
 }
 
+/** Exclui um paciente criado pelo médico. Só remove se pertencer ao próprio médico. */
+export async function deletePatient(id: string, doctorId: string): Promise<boolean> {
+  const patient = await getPatient(id);
+  if (!patient || patient.doctorId !== doctorId) return false;
+  if (active()) {
+    const supabase = getSupabaseAdmin()!;
+    const { error } = await supabase.from("patients").delete().eq("id", id).eq("doctor_id", doctorId);
+    if (error) {
+      if (isMissingTableError(error)) tableMissing = true;
+      else throw error;
+    } else {
+      return true;
+    }
+  }
+  const list = await readFile();
+  await writeFile(list.filter((p) => p.id !== id));
+  return true;
+}
+
 export async function getPatient(id: string): Promise<Patient | null> {
   if (active()) {
     const supabase = getSupabaseAdmin()!;
