@@ -138,15 +138,16 @@ export function ExamReviewModal({
                 </button>
               </div>
               <div className="flex items-center gap-2 pl-7">
+                <label className="text-xs font-semibold text-[var(--text-muted)]">Valor</label>
                 <input
                   inputMode="decimal"
-                  className="input-field min-h-[44px] flex-1 !py-2"
+                  className="input-field min-h-[44px] !w-28 !px-3 !py-2 text-center text-base font-bold text-[var(--text)]"
                   value={r.value}
                   onChange={(e) => update(i, { value: e.target.value })}
-                  placeholder="Valor"
+                  placeholder="0"
                 />
                 <input
-                  className="input-field min-h-[44px] w-28 !py-2 text-center text-sm"
+                  className="input-field min-h-[44px] !w-28 !px-3 !py-2 text-center text-sm text-[var(--text-soft)]"
                   value={r.unit}
                   onChange={(e) => update(i, { unit: e.target.value })}
                   placeholder="unidade"
