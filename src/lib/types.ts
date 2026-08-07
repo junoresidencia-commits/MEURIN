@@ -42,6 +42,8 @@ export interface Doctor {
   rqe?: string;
   clinic?: string;
   adminNote?: string;
+  // Logo do médico (data URL base64) exibida no cabeçalho dos documentos/PDF.
+  logoUrl?: string;
 }
 
 export interface Booking {

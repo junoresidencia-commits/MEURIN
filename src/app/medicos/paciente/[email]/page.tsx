@@ -5,12 +5,12 @@ import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import { formatSlotLabel } from "@/lib/scheduling-client";
 import { NEPHRO_LABS, labLabel, labUnit } from "@/lib/labs";
+import { LmeWizard } from "@/components/LmeWizard";
+import { LogoUploader } from "@/components/LogoUploader";
 
 type Lab = { id: string; testKey: string; value: number; unit?: string | null; measuredAt: string };
 type Upload = { id: string; name: string; category?: string | null; examDate?: string | null; signedUrl?: string | null };
 type Lme = { id: string; cid10?: string | null; createdAt: string; medications: { name: string }[] };
-type Med = { name: string; presentation: string; monthlyQty: string };
-type Protocol = { id: string; name: string; cid10?: string | null; medications: Med[] };
 
 type HomeRecord = {
   id: string;
@@ -98,18 +98,6 @@ export default function ProntuarioPage() {
   const [lmeList, setLmeList] = useState<Lme[]>([]);
   const [tab, setTab] = useState<Tab>("resumo");
 
-  // Formulário LME
-  const [lmeForm, setLmeForm] = useState({
-    cid10: "", diagnosis: "", anamnesis: "", weightKg: "", heightCm: "",
-    motherName: "", patientCpf: "", patientCns: "", race: "",
-    cnes: "", establishmentName: "", doctorCns: "",
-    priorTreatment: false, priorTreatmentDesc: "", incapable: false, responsibleName: "",
-  });
-  const [meds, setMeds] = useState<Med[]>([{ name: "", presentation: "", monthlyQty: "" }]);
-  const [protocols, setProtocols] = useState<Protocol[]>([]);
-  const [lmeSaving, setLmeSaving] = useState(false);
-  const [lmeErr, setLmeErr] = useState("");
-
   // Formulário de exame
   const [labTest, setLabTest] = useState<string>("creatinina");
   const [labValue, setLabValue] = useState("");
@@ -161,56 +149,7 @@ export default function ProntuarioPage() {
     setUploads(data.uploads || []);
     setLmeList(data.lme || []);
     setLoading(false);
-    try {
-      const pr = await fetch("/api/protocols");
-      if (pr.ok) setProtocols((await pr.json()).protocols || []);
-    } catch {
-      /* ignore */
-    }
   }, [emailParam, router]);
-
-  function applyProtocol(id: string) {
-    const p = protocols.find((x) => x.id === id);
-    if (!p) return;
-    setLmeForm((f) => ({ ...f, cid10: p.cid10 || f.cid10 }));
-    if (p.medications.length > 0) {
-      setMeds(
-        p.medications.map((m) => ({
-          name: m.name || "",
-          presentation: m.presentation || "",
-          monthlyQty: m.monthlyQty || "",
-        }))
-      );
-    }
-  }
-
-  async function saveLme() {
-    if (!meds.some((m) => m.name.trim())) {
-      setLmeErr("Informe ao menos um medicamento.");
-      return;
-    }
-    if (!lmeForm.cid10.trim()) {
-      setLmeErr("Informe o CID-10.");
-      return;
-    }
-    setLmeSaving(true);
-    setLmeErr("");
-    try {
-      const res = await fetch(`/api/doctor/patients/${emailParam}/lme`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ ...lmeForm, medications: meds.filter((m) => m.name.trim()) }),
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || "Não foi possível gerar a LME.");
-      await load();
-      if (data.id) window.open(`/lme/${data.id}`, "_blank");
-    } catch (e) {
-      setLmeErr(e instanceof Error ? e.message : "Erro inesperado.");
-    } finally {
-      setLmeSaving(false);
-    }
-  }
 
   async function saveAppointment() {
     if (!apptDate || !apptTime) {
@@ -550,80 +489,8 @@ export default function ProntuarioPage() {
               </p>
             </div>
 
-            {/* Formulário LME */}
-            <div className="panel space-y-3">
-              <p className="text-xs font-bold uppercase tracking-wider text-[var(--gold)]">Nova LME</p>
-
-              {protocols.length > 0 && (
-                <label className="block">
-                  <span className="mb-1 block text-xs font-semibold text-[var(--text-muted)]">
-                    Preencher a partir de um protocolo
-                  </span>
-                  <select className="input-field" defaultValue="" onChange={(e) => applyProtocol(e.target.value)}>
-                    <option value="">Selecione um protocolo…</option>
-                    {protocols.map((p) => (
-                      <option key={p.id} value={p.id}>{p.name}{p.cid10 ? ` (${p.cid10})` : ""}</option>
-                    ))}
-                  </select>
-                </label>
-              )}
-
-              <div className="space-y-2">
-                <span className="text-xs font-semibold text-[var(--text-muted)]">Medicamento(s)</span>
-                {meds.map((m, i) => (
-                  <div key={i} className="grid grid-cols-1 gap-2 sm:grid-cols-3">
-                    <input className="input-field" placeholder="Nome (DCB)" value={m.name} onChange={(e) => setMeds((a) => a.map((x, j) => (j === i ? { ...x, name: e.target.value } : x)))} />
-                    <input className="input-field" placeholder="Apresentação" value={m.presentation} onChange={(e) => setMeds((a) => a.map((x, j) => (j === i ? { ...x, presentation: e.target.value } : x)))} />
-                    <input className="input-field" placeholder="Qtde/mês" value={m.monthlyQty} onChange={(e) => setMeds((a) => a.map((x, j) => (j === i ? { ...x, monthlyQty: e.target.value } : x)))} />
-                  </div>
-                ))}
-                <button type="button" className="text-sm font-semibold text-[var(--gold)]" onClick={() => setMeds((a) => [...a, { name: "", presentation: "", monthlyQty: "" }])}>
-                  + Adicionar medicamento
-                </button>
-              </div>
-
-              <div className="grid gap-2 sm:grid-cols-2">
-                <LmeInput label="CID-10" value={lmeForm.cid10} onChange={(v) => setLmeForm((f) => ({ ...f, cid10: v }))} />
-                <LmeInput label="Raça/cor/etnia" value={lmeForm.race} onChange={(v) => setLmeForm((f) => ({ ...f, race: v }))} />
-                <LmeInput label="Peso (kg)" value={lmeForm.weightKg} onChange={(v) => setLmeForm((f) => ({ ...f, weightKg: v }))} />
-                <LmeInput label="Altura (cm)" value={lmeForm.heightCm} onChange={(v) => setLmeForm((f) => ({ ...f, heightCm: v }))} />
-                <LmeInput label="Nome da mãe" value={lmeForm.motherName} onChange={(v) => setLmeForm((f) => ({ ...f, motherName: v }))} />
-                <LmeInput label="CPF do paciente" value={lmeForm.patientCpf} onChange={(v) => setLmeForm((f) => ({ ...f, patientCpf: v }))} />
-                <LmeInput label="CNS do paciente" value={lmeForm.patientCns} onChange={(v) => setLmeForm((f) => ({ ...f, patientCns: v }))} />
-                <LmeInput label="CNES do estabelecimento" value={lmeForm.cnes} onChange={(v) => setLmeForm((f) => ({ ...f, cnes: v }))} />
-                <LmeInput label="Estabelecimento" value={lmeForm.establishmentName} onChange={(v) => setLmeForm((f) => ({ ...f, establishmentName: v }))} />
-                <LmeInput label="CNS do médico" value={lmeForm.doctorCns} onChange={(v) => setLmeForm((f) => ({ ...f, doctorCns: v }))} />
-              </div>
-
-              <label className="block">
-                <span className="mb-1 block text-xs font-semibold text-[var(--text-muted)]">Diagnóstico</span>
-                <input className="input-field" value={lmeForm.diagnosis} onChange={(e) => setLmeForm((f) => ({ ...f, diagnosis: e.target.value }))} />
-              </label>
-              <label className="block">
-                <span className="mb-1 block text-xs font-semibold text-[var(--text-muted)]">Anamnese</span>
-                <textarea className="input-field min-h-[80px]" value={lmeForm.anamnesis} onChange={(e) => setLmeForm((f) => ({ ...f, anamnesis: e.target.value }))} />
-              </label>
-
-              <label className="flex items-center gap-2 text-sm text-[var(--text-soft)]">
-                <input type="checkbox" className="h-4 w-4 accent-[var(--gold)]" checked={lmeForm.priorTreatment} onChange={(e) => setLmeForm((f) => ({ ...f, priorTreatment: e.target.checked }))} />
-                Tratamento prévio
-              </label>
-              {lmeForm.priorTreatment && (
-                <input className="input-field" placeholder="Relatar tratamento prévio" value={lmeForm.priorTreatmentDesc} onChange={(e) => setLmeForm((f) => ({ ...f, priorTreatmentDesc: e.target.value }))} />
-              )}
-              <label className="flex items-center gap-2 text-sm text-[var(--text-soft)]">
-                <input type="checkbox" className="h-4 w-4 accent-[var(--gold)]" checked={lmeForm.incapable} onChange={(e) => setLmeForm((f) => ({ ...f, incapable: e.target.checked }))} />
-                Paciente incapaz (indicar responsável)
-              </label>
-              {lmeForm.incapable && (
-                <input className="input-field" placeholder="Nome do responsável" value={lmeForm.responsibleName} onChange={(e) => setLmeForm((f) => ({ ...f, responsibleName: e.target.value }))} />
-              )}
-
-              {lmeErr && <p className="text-sm text-[var(--danger)]">{lmeErr}</p>}
-              <button type="button" className="btn-gold w-full" onClick={saveLme} disabled={lmeSaving}>
-                {lmeSaving ? "Gerando…" : "Gerar LME e abrir PDF"}
-              </button>
-            </div>
+            {/* Assistente de LME em 8 etapas */}
+            <LmeWizard emailParam={emailParam} patientName={patient?.name} onCreated={load} />
 
             <p className="text-xs font-bold uppercase tracking-wider text-[var(--gold)]">LMEs geradas</p>
             {lmeList.length === 0 && <p className="text-[var(--text-muted)]">Nenhuma LME ainda.</p>}
@@ -641,6 +508,7 @@ export default function ProntuarioPage() {
 
         {tab === "documentos" && (
           <div className="space-y-4">
+            <LogoUploader />
             <div className="panel space-y-3">
               <p className="text-xs font-bold uppercase tracking-wider text-[var(--gold)]">
                 Emitir documento
@@ -799,15 +667,6 @@ function ChecklistItem({ ok, label }: { ok: boolean; label: string }) {
       </span>
       <span className={ok ? "text-[var(--text)]" : "text-[var(--text-muted)]"}>{label}</span>
     </li>
-  );
-}
-
-function LmeInput({ label, value, onChange }: { label: string; value: string; onChange: (v: string) => void }) {
-  return (
-    <label className="block">
-      <span className="mb-1 block text-xs font-semibold text-[var(--text-muted)]">{label}</span>
-      <input className="input-field" value={value} onChange={(e) => onChange(e.target.value)} />
-    </label>
   );
 }
 
