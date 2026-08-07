@@ -2,7 +2,11 @@ import "server-only";
 import { promises as fs } from "fs";
 import path from "path";
 import { v4 as uuid } from "uuid";
+import bcrypt from "bcryptjs";
 import { getSupabaseAdmin } from "./supabase-admin";
+
+/** Senha inicial padrão do paciente (login por CPF). Trocável depois. */
+export const DEFAULT_PATIENT_PASSWORD = "123456";
 
 export interface Patient {
   id: string;
@@ -22,6 +26,7 @@ export interface Patient {
   diseases?: string | null;
   medications?: string | null;
   notes?: string | null;
+  passwordHash?: string | null;
   status: "active" | "archived";
   createdAt: string;
 }
@@ -75,6 +80,7 @@ function mapRow(r: Record<string, unknown>): Patient {
     diseases: (r.diseases as string | null) ?? null,
     medications: (r.medications as string | null) ?? null,
     notes: (r.notes as string | null) ?? null,
+    passwordHash: (r.password_hash as string | null) ?? null,
     status: (String(r.status || "active") as Patient["status"]),
     createdAt: new Date(String(r.created_at)).toISOString(),
   };
@@ -111,11 +117,13 @@ export async function findByCpf(doctorId: string, cpf: string): Promise<Patient 
 }
 
 export async function createPatient(input: NewPatient): Promise<Patient> {
+  const passwordHash = input.passwordHash || (await bcrypt.hash(DEFAULT_PATIENT_PASSWORD, 10));
   const p: Patient = {
     id: uuid(),
     createdAt: new Date().toISOString(),
     status: input.status || "active",
     ...input,
+    passwordHash,
   };
   if (active()) {
     const supabase = getSupabaseAdmin()!;
@@ -138,6 +146,7 @@ export async function createPatient(input: NewPatient): Promise<Patient> {
       diseases: p.diseases ?? null,
       medications: p.medications ?? null,
       notes: p.notes ?? null,
+      password_hash: p.passwordHash ?? null,
       status: p.status,
       created_at: p.createdAt,
     });
@@ -205,4 +214,67 @@ export async function getPatient(id: string): Promise<Patient | null> {
   }
   const list = await readFile();
   return list.find((p) => p.id === id) ?? null;
+}
+
+/** Busca um paciente por CPF (qualquer médico) — usado no login por CPF. */
+export async function findByCpfAny(cpf: string): Promise<Patient | null> {
+  const norm = normalizeCpf(cpf);
+  if (!norm) return null;
+  if (active()) {
+    const supabase = getSupabaseAdmin()!;
+    const { data, error } = await supabase
+      .from("patients")
+      .select("*")
+      .eq("cpf_normalized", norm)
+      .limit(1);
+    if (error) {
+      if (isMissingTableError(error)) tableMissing = true;
+      else throw error;
+    } else {
+      return data && data[0] ? mapRow(data[0] as Record<string, unknown>) : null;
+    }
+  }
+  const list = await readFile();
+  return list.find((p) => normalizeCpf(p.cpf) === norm) ?? null;
+}
+
+/** Busca um paciente criado pelo médico por e-mail — usado na troca de senha. */
+export async function findByEmailAny(email: string): Promise<Patient | null> {
+  const norm = email.toLowerCase().trim();
+  if (!norm) return null;
+  if (active()) {
+    const supabase = getSupabaseAdmin()!;
+    const { data, error } = await supabase.from("patients").select("*").eq("email", norm).limit(1);
+    if (error) {
+      if (isMissingTableError(error)) tableMissing = true;
+      else throw error;
+    } else {
+      return data && data[0] ? mapRow(data[0] as Record<string, unknown>) : null;
+    }
+  }
+  const list = await readFile();
+  return list.find((p) => (p.email || "").toLowerCase().trim() === norm) ?? null;
+}
+
+/** Confere a senha do paciente (fallback para a senha padrão em cadastros antigos). */
+export async function verifyPatientPassword(patient: Patient, password: string): Promise<boolean> {
+  if (patient.passwordHash) return bcrypt.compare(password, patient.passwordHash);
+  return password === DEFAULT_PATIENT_PASSWORD;
+}
+
+/** Atualiza a senha do paciente. */
+export async function setPatientPassword(id: string, newPassword: string): Promise<void> {
+  const hash = await bcrypt.hash(newPassword, 10);
+  if (active()) {
+    const supabase = getSupabaseAdmin()!;
+    const { error } = await supabase.from("patients").update({ password_hash: hash }).eq("id", id);
+    if (error) {
+      if (isMissingTableError(error)) tableMissing = true;
+      else throw error;
+    } else {
+      return;
+    }
+  }
+  const list = await readFile();
+  await writeFile(list.map((p) => (p.id === id ? { ...p, passwordHash: hash } : p)));
 }
