@@ -108,41 +108,50 @@ export function ExamReviewModal({
             <p className="text-sm text-[var(--text-muted)]">Nenhum exame. Adicione manualmente abaixo.</p>
           )}
           {rows.map((r, i) => (
-            <div key={i} className="flex items-center gap-2 rounded-2xl border border-[var(--border)] p-2">
-              <input
-                type="checkbox"
-                className="h-5 w-5 shrink-0 accent-[var(--gold)]"
-                checked={r.checked}
-                onChange={(e) => update(i, { checked: e.target.checked })}
-              />
-              <select
-                className="input-field min-h-[44px] flex-1 !py-2"
-                value={r.testKey}
-                onChange={(e) => changeKey(i, e.target.value)}
-              >
-                {NEPHRO_LABS.map((l) => (
-                  <option key={l.key} value={l.key}>{l.label}</option>
-                ))}
-              </select>
-              <input
-                inputMode="decimal"
-                className="input-field min-h-[44px] w-20 !py-2 text-center"
-                value={r.value}
-                onChange={(e) => update(i, { value: e.target.value })}
-              />
-              <input
-                className="input-field min-h-[44px] w-24 !py-2 text-center text-xs"
-                value={r.unit}
-                onChange={(e) => update(i, { unit: e.target.value })}
-              />
-              <button
-                type="button"
-                className="shrink-0 px-1 text-lg text-[var(--danger)]"
-                onClick={() => setRows((rs) => rs.filter((_, j) => j !== i))}
-                aria-label="Remover"
-              >
-                ×
-              </button>
+            <div
+              key={i}
+              className={`space-y-2 rounded-2xl border p-3 ${r.checked ? "border-[var(--border-gold)] bg-[var(--gold-soft)]/40" : "border-[var(--border)]"}`}
+            >
+              <div className="flex items-center gap-2">
+                <input
+                  type="checkbox"
+                  className="h-5 w-5 shrink-0 accent-[var(--gold)]"
+                  checked={r.checked}
+                  onChange={(e) => update(i, { checked: e.target.checked })}
+                />
+                <select
+                  className="input-field min-h-[44px] flex-1 !py-2 font-semibold"
+                  value={r.testKey}
+                  onChange={(e) => changeKey(i, e.target.value)}
+                >
+                  {NEPHRO_LABS.map((l) => (
+                    <option key={l.key} value={l.key}>{l.label}</option>
+                  ))}
+                </select>
+                <button
+                  type="button"
+                  className="shrink-0 px-1 text-xl text-[var(--danger)]"
+                  onClick={() => setRows((rs) => rs.filter((_, j) => j !== i))}
+                  aria-label="Remover"
+                >
+                  ×
+                </button>
+              </div>
+              <div className="flex items-center gap-2 pl-7">
+                <input
+                  inputMode="decimal"
+                  className="input-field min-h-[44px] flex-1 !py-2"
+                  value={r.value}
+                  onChange={(e) => update(i, { value: e.target.value })}
+                  placeholder="Valor"
+                />
+                <input
+                  className="input-field min-h-[44px] w-28 !py-2 text-center text-sm"
+                  value={r.unit}
+                  onChange={(e) => update(i, { unit: e.target.value })}
+                  placeholder="unidade"
+                />
+              </div>
             </div>
           ))}
         </div>
