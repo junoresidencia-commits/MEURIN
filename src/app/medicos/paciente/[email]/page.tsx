@@ -6,6 +6,7 @@ import { useParams, useRouter } from "next/navigation";
 import { formatSlotLabel } from "@/lib/scheduling-client";
 import { NEPHRO_LABS, labLabel, labUnit } from "@/lib/labs";
 import { LmeWizard } from "@/components/LmeWizard";
+import { LogoUploader } from "@/components/LogoUploader";
 
 type Lab = { id: string; testKey: string; value: number; unit?: string | null; measuredAt: string };
 type Upload = { id: string; name: string; category?: string | null; examDate?: string | null; signedUrl?: string | null };
@@ -507,6 +508,7 @@ export default function ProntuarioPage() {
 
         {tab === "documentos" && (
           <div className="space-y-4">
+            <LogoUploader />
             <div className="panel space-y-3">
               <p className="text-xs font-bold uppercase tracking-wider text-[var(--gold)]">
                 Emitir documento

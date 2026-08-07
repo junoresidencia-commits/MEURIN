@@ -226,6 +226,34 @@ export async function deleteDoctor(id: string): Promise<void> {
   }
 }
 
+/** Busca um médico pelo id (Supabase direto ou fallback local). */
+export async function getDoctorById(id: string): Promise<Doctor | null> {
+  const supabase = getSupabaseAdmin();
+  if (supabase) {
+    const { data, error } = await supabase.from("doctors").select("*").eq("id", id).maybeSingle();
+    if (error || !data) return null;
+    return mapDoctorRow(data as Record<string, unknown>);
+  }
+  const db = await readDb();
+  return db.doctors.find((d) => d.id === id) ?? null;
+}
+
+/** Define (ou remove, com null) a logo do médico sem reescrever os demais registros. */
+export async function setDoctorLogo(id: string, logoUrl: string | null): Promise<void> {
+  const supabase = getSupabaseAdmin();
+  if (supabase) {
+    const { error } = await supabase.from("doctors").update({ logo_url: logoUrl }).eq("id", id);
+    if (error) throw error;
+    return;
+  }
+  await updateDb((db) => {
+    db.doctors = db.doctors.map((d) =>
+      d.id === id ? { ...d, logoUrl: logoUrl ?? undefined } : d
+    );
+    return db;
+  });
+}
+
 function fromJsonArray<T>(value: unknown): T[] {
   return Array.isArray(value) ? (value as T[]) : [];
 }
@@ -252,6 +280,7 @@ function mapDoctorRow(row: Record<string, unknown>): Doctor {
     rqe: row.rqe ? String(row.rqe) : undefined,
     clinic: row.clinic ? String(row.clinic) : undefined,
     adminNote: row.admin_note ? String(row.admin_note) : undefined,
+    logoUrl: row.logo_url ? String(row.logo_url) : undefined,
   };
 }
 
@@ -385,6 +414,7 @@ async function writeSupabaseDb(db: Database): Promise<void> {
     rqe: doctor.rqe ?? null,
     clinic: doctor.clinic ?? null,
     admin_note: doctor.adminNote ?? null,
+    logo_url: doctor.logoUrl ?? null,
   }));
 
   const bookings = db.bookings.map((booking) => ({

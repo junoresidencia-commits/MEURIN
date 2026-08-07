@@ -11,9 +11,19 @@ type Doc = {
   body: string;
   doctorName: string;
   doctorCrm?: string | null;
+  doctorLogoUrl?: string | null;
   patientEmail: string;
   createdAt: string;
 };
+
+function loadImage(src: string): Promise<HTMLImageElement> {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    img.onload = () => resolve(img);
+    img.onerror = reject;
+    img.src = src;
+  });
+}
 
 const TYPE_LABEL: Record<Doc["type"], string> = {
   receita: "Receita médica",
@@ -59,13 +69,34 @@ export default function DocumentoPage() {
     const maxW = pageW - margin * 2;
     let y = margin;
 
+    let textX = margin;
+    if (doc.doctorLogoUrl) {
+      try {
+        const img = await loadImage(doc.doctorLogoUrl);
+        const maxH = 46;
+        const maxW = 150;
+        const ratio = img.width / img.height || 1;
+        let h = maxH;
+        let w = h * ratio;
+        if (w > maxW) {
+          w = maxW;
+          h = w / ratio;
+        }
+        const fmt = doc.doctorLogoUrl.includes("image/png") ? "PNG" : "JPEG";
+        pdf.addImage(doc.doctorLogoUrl, fmt, margin, y - 6, w, h);
+        textX = margin + w + 12;
+      } catch {
+        /* segue sem logo */
+      }
+    }
+
     pdf.setFont("helvetica", "bold");
     pdf.setFontSize(16);
-    pdf.text("Meu Rim", margin, y);
+    pdf.text("Meu Rim", textX, y);
     pdf.setFont("helvetica", "normal");
     pdf.setFontSize(10);
     pdf.setTextColor(120);
-    pdf.text("Nefrologia online", margin, y + 15);
+    pdf.text("Nefrologia online", textX, y + 15);
     pdf.text(date, pageW - margin, y, { align: "right" });
     pdf.setTextColor(20);
     y += 40;
@@ -128,9 +159,14 @@ export default function DocumentoPage() {
         {/* Cabeçalho */}
         <div className="flex items-center justify-between border-b border-[var(--border)] pb-4">
           <div className="flex items-center gap-3">
-            <span className="grid h-10 w-10 place-items-center rounded-xl bg-[var(--gold)] text-sm font-extrabold text-white">
-              MR
-            </span>
+            {doc.doctorLogoUrl ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img src={doc.doctorLogoUrl} alt="Logo do médico" className="h-12 max-w-[160px] object-contain" />
+            ) : (
+              <span className="grid h-10 w-10 place-items-center rounded-xl bg-[var(--gold)] text-sm font-extrabold text-white">
+                MR
+              </span>
+            )}
             <div>
               <p className="font-display text-lg font-extrabold text-[var(--text)]">Meu Rim</p>
               <p className="text-xs text-[var(--text-muted)]">Nefrologia online</p>

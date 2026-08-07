@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { getDoctorSessionId } from "@/lib/auth";
 import { getPatientEmail } from "@/lib/patient-session";
 import { getDocumentById } from "@/lib/patient-store";
+import { getDoctorById } from "@/lib/store";
 
 export async function GET(
   _req: Request,
@@ -26,5 +27,9 @@ export async function GET(
     return NextResponse.json({ error: "Sem acesso a este documento." }, { status: 403 });
   }
 
-  return NextResponse.json({ document: doc });
+  // Anexa a logo do médico emissor para o cabeçalho do documento/PDF.
+  const doctor = await getDoctorById(doc.doctorId);
+  return NextResponse.json({
+    document: { ...doc, doctorLogoUrl: doctor?.logoUrl ?? null },
+  });
 }
