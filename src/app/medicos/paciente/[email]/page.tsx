@@ -7,6 +7,7 @@ import { formatSlotLabel } from "@/lib/scheduling-client";
 import { NEPHRO_LABS, labLabel, labUnit } from "@/lib/labs";
 import { LmeWizard } from "@/components/LmeWizard";
 import { LogoUploader } from "@/components/LogoUploader";
+import { TemplatePicker } from "@/components/TemplatePicker";
 
 type Lab = { id: string; testKey: string; value: number; unit?: string | null; measuredAt: string };
 type Upload = { id: string; name: string; category?: string | null; examDate?: string | null; signedUrl?: string | null };
@@ -350,6 +351,12 @@ export default function ProntuarioPage() {
               <p className="text-xs font-bold uppercase tracking-wider text-[var(--gold)]">
                 Nova evolução / consulta
               </p>
+              <TemplatePicker
+                type="evolucao"
+                currentText={form.history}
+                onApply={(t) => setForm((f) => ({ ...f, history: t }))}
+                patientName={patient?.name}
+              />
               <label className="block">
                 <span className="mb-1.5 block text-xs font-bold uppercase tracking-wider text-[var(--gold)]">Evolução</span>
                 <textarea
@@ -527,6 +534,12 @@ export default function ProntuarioPage() {
                   </button>
                 ))}
               </div>
+              <TemplatePicker
+                type={docType}
+                currentText={docBody}
+                onApply={setDocBody}
+                patientName={patient?.name}
+              />
               <textarea
                 className="input-field min-h-[140px]"
                 value={docBody}
