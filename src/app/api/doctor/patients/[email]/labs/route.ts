@@ -21,6 +21,41 @@ export async function POST(
   }
 
   const body = await req.json();
+
+  // Lote: { results: [{ testKey, value, unit?, measuredAt?, referenceRange? }], origin? }
+  if (Array.isArray(body.results)) {
+    const defaultAt = body.measuredAt
+      ? new Date(String(body.measuredAt)).toISOString()
+      : new Date().toISOString();
+    const saved = [];
+    const rejected: { testKey: string; reason: string }[] = [];
+    for (const item of body.results) {
+      const key = String(item?.testKey || "");
+      const val = Number(String(item?.value).replace(",", "."));
+      if (!VALID.has(key)) {
+        rejected.push({ testKey: key, reason: "exame inválido" });
+        continue;
+      }
+      if (!Number.isFinite(val)) {
+        rejected.push({ testKey: key, reason: "valor inválido" });
+        continue;
+      }
+      const at = item?.measuredAt ? new Date(String(item.measuredAt)).toISOString() : defaultAt;
+      const lab = await addLabResult({
+        patientEmail: access.key,
+        doctorId: doctorId || null,
+        testKey: key,
+        value: val,
+        unit: item?.unit ? String(item.unit) : labUnit(key),
+        referenceRange: item?.referenceRange ? String(item.referenceRange) : null,
+        origin: item?.origin ? String(item.origin) : body.origin ? String(body.origin) : "importado",
+        measuredAt: at,
+      });
+      saved.push(lab);
+    }
+    return NextResponse.json({ saved, rejected, count: saved.length }, { status: 201 });
+  }
+
   const testKey = String(body.testKey || "");
   if (!VALID.has(testKey)) {
     return NextResponse.json({ error: "Exame inválido." }, { status: 400 });

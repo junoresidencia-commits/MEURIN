@@ -7,6 +7,8 @@ import { formatSlotLabel } from "@/lib/scheduling-client";
 import { NEPHRO_LABS, labLabel, labUnit } from "@/lib/labs";
 import { LmeWizard } from "@/components/LmeWizard";
 import { LogoUploader } from "@/components/LogoUploader";
+import { ExamReviewModal } from "@/components/ExamReviewModal";
+import { parseLabsFromText } from "@/lib/lab-parser";
 
 type Lab = { id: string; testKey: string; value: number; unit?: string | null; measuredAt: string };
 type Upload = { id: string; name: string; category?: string | null; examDate?: string | null; signedUrl?: string | null };
@@ -104,6 +106,16 @@ export default function ProntuarioPage() {
   const [labDate, setLabDate] = useState("");
   const [labSaving, setLabSaving] = useState(false);
   const [labErr, setLabErr] = useState("");
+
+  // Importação inteligente de exames (texto/PDF/imagem) → tela de conferência
+  const [review, setReview] = useState<{
+    labs: { testKey: string; value: number | string; unit?: string }[];
+    date?: string;
+    source?: string;
+  } | null>(null);
+  const [pasteText, setPasteText] = useState("");
+  const [importing, setImporting] = useState(false);
+  const [importMsg, setImportMsg] = useState("");
 
   // Agendamento pelo médico
   const [apptDate, setApptDate] = useState("");
@@ -205,6 +217,45 @@ export default function ProntuarioPage() {
     }
   }
 
+  function analyzePaste() {
+    setImportMsg("");
+    const detected = parseLabsFromText(pasteText);
+    if (detected.labs.length === 0) {
+      setImportMsg("Nenhum exame reconhecido no texto. Tente incluir nome e valor (ex.: Creatinina 1,7).");
+      return;
+    }
+    setReview({ labs: detected.labs, date: detected.date, source: "texto" });
+    setPasteText("");
+  }
+
+  async function importExamFile(file: File) {
+    setImporting(true);
+    setImportMsg("");
+    try {
+      const fd = new FormData();
+      fd.append("file", file);
+      const res = await fetch(`/api/doctor/patients/${emailParam}/exams-extract`, {
+        method: "POST",
+        body: fd,
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Não foi possível ler o arquivo.");
+      if (data.needsAI) {
+        setImportMsg(data.message || "Não foi possível ler automaticamente. Cole os resultados como texto.");
+        return;
+      }
+      if (!data.labs || data.labs.length === 0) {
+        setImportMsg("Nenhum exame reconhecido no arquivo. Você pode colar os resultados como texto.");
+        return;
+      }
+      setReview({ labs: data.labs, date: data.date, source: data.source || "arquivo" });
+    } catch (e) {
+      setImportMsg(e instanceof Error ? e.message : "Erro ao processar o arquivo.");
+    } finally {
+      setImporting(false);
+    }
+  }
+
   async function saveDocument() {
     setDocSaving(true);
     setDocErr("");
@@ -238,9 +289,17 @@ export default function ProntuarioPage() {
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Não foi possível salvar.");
+      // Evolução inteligente: detecta resultados laboratoriais no texto escrito.
+      const evolutionText = [form.chiefComplaint, form.history, form.assessment, form.plan]
+        .filter(Boolean)
+        .join("\n");
+      const detected = parseLabsFromText(evolutionText);
       setForm({ chiefComplaint: "", history: "", assessment: "", plan: "" });
       setSaveMsg("Evolução salva no prontuário." + (shared ? " Liberada ao paciente." : ""));
       await load();
+      if (detected.labs.length > 0) {
+        setReview({ labs: detected.labs, date: detected.date, source: "evolução" });
+      }
     } catch (e) {
       setSaveErr(e instanceof Error ? e.message : "Erro inesperado.");
     } finally {
@@ -394,6 +453,45 @@ export default function ProntuarioPage() {
 
         {tab === "exames" && (
           <div className="space-y-4">
+            <div className="panel space-y-3">
+              <p className="text-xs font-bold uppercase tracking-wider text-[var(--gold)]">
+                Importar exames automaticamente
+              </p>
+              <p className="text-sm text-[var(--text-soft)]">
+                Cole os resultados (do laudo ou do WhatsApp) ou anexe o PDF/foto do exame. O sistema reconhece os exames e abre uma tela de conferência antes de gravar. Os gráficos são atualizados automaticamente.
+              </p>
+              <textarea
+                className="input-field min-h-[90px]"
+                value={pasteText}
+                onChange={(e) => setPasteText(e.target.value)}
+                placeholder={"Ex.:\nExames 05/08/2026: Cr 1,7 / ureia 68 / K 5,0 / Hb 10,5 / Ca 8,7 / P 4,8 / PTH 320 / RAC 540 mg/g"}
+              />
+              <div className="flex flex-wrap gap-2">
+                <button type="button" className="btn-gold" onClick={analyzePaste} disabled={!pasteText.trim()}>
+                  Analisar texto
+                </button>
+                <label className={`btn-ghost cursor-pointer ${importing ? "opacity-60" : ""}`}>
+                  {importing ? "Lendo arquivo…" : "Anexar PDF ou foto"}
+                  <input
+                    type="file"
+                    accept="application/pdf,image/*"
+                    className="hidden"
+                    disabled={importing}
+                    onChange={(e) => {
+                      const f = e.target.files?.[0];
+                      e.target.value = "";
+                      if (f) importExamFile(f);
+                    }}
+                  />
+                </label>
+              </div>
+              {importMsg && (
+                <p className="rounded-xl border border-[var(--border-gold)] bg-[var(--gold-soft)] px-3 py-2 text-sm text-[var(--text-soft)]">
+                  {importMsg}
+                </p>
+              )}
+            </div>
+
             <div className="panel space-y-3">
               <p className="text-xs font-bold uppercase tracking-wider text-[var(--gold)]">
                 Adicionar resultado de exame
@@ -655,6 +753,20 @@ export default function ProntuarioPage() {
           </div>
         )}
       </div>
+
+      {review && (
+        <ExamReviewModal
+          emailParam={emailParam}
+          initialLabs={review.labs}
+          initialDate={review.date}
+          source={review.source}
+          onClose={() => setReview(null)}
+          onSaved={async () => {
+            await load();
+            setTab("exames");
+          }}
+        />
+      )}
     </div>
   );
 }

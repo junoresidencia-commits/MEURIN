@@ -8,8 +8,11 @@ function sign(payload: string): string {
   return createHmac("sha256", SECRET).update(payload).digest("hex");
 }
 
+// Sessão longa: o médico permanece logado até clicar em "Sair".
+export const DOCTOR_SESSION_MAX_AGE = 60 * 60 * 24 * 365;
+
 export function createSessionToken(doctorId: string): string {
-  const exp = Date.now() + 1000 * 60 * 60 * 24 * 7;
+  const exp = Date.now() + 1000 * DOCTOR_SESSION_MAX_AGE;
   const payload = `${doctorId}.${exp}`;
   return `${payload}.${sign(payload)}`;
 }

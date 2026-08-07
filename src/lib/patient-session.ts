@@ -16,8 +16,11 @@ function decodeEmail(encoded: string): string {
   return Buffer.from(encoded, "base64url").toString("utf8");
 }
 
+// Sessão longa: o paciente permanece logado até clicar em "Sair".
+export const PATIENT_SESSION_MAX_AGE = 60 * 60 * 24 * 365;
+
 export function createPatientToken(email: string): string {
-  const exp = Date.now() + 1000 * 60 * 60 * 24 * 30;
+  const exp = Date.now() + 1000 * PATIENT_SESSION_MAX_AGE;
   const payload = `${encodeEmail(email.toLowerCase().trim())}.${exp}`;
   return `${payload}.${sign(payload)}`;
 }
