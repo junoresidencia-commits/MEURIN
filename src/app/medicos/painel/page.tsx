@@ -127,6 +127,18 @@ export default function PainelMedicoPage() {
     else window.alert("Não foi possível excluir o paciente.");
   }
 
+  function remindWhatsApp(b: Booking) {
+    const digits = (b.patientPhone || "").replace(/\D/g, "");
+    const withCountry = digits.length >= 12 ? digits : digits ? `55${digits}` : "";
+    const msg =
+      `Olá, ${b.patientName}! Lembrete da sua consulta no Meu Rim: ${formatSlotLabel(b.slotStart)}.` +
+      (b.status === "pending_payment" ? " Confirme o pagamento para liberar o atendimento." : "");
+    const url = withCountry
+      ? `https://wa.me/${withCountry}?text=${encodeURIComponent(msg)}`
+      : `https://wa.me/?text=${encodeURIComponent(msg)}`;
+    window.open(url, "_blank", "noopener,noreferrer");
+  }
+
   if (loading || !doctor) {
     return (
       <div className="mx-auto max-w-4xl px-5 py-20 text-[var(--text-muted)]">
@@ -154,6 +166,7 @@ export default function PainelMedicoPage() {
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
+          <Link href="/medicos/documentos" className="btn-ghost">Documento avulso</Link>
           <a href="/admin/login" className="btn-ghost">Administração</a>
           <button type="button" className="btn-ghost" onClick={logout}>
             Sair
@@ -343,12 +356,20 @@ export default function PainelMedicoPage() {
                       : b.status}
                 </p>
               </div>
-              <div className="flex items-center gap-2">
+              <div className="flex flex-wrap items-center gap-2">
                 {b.status === "confirmed" && (
                   <Link href={`/consulta/${b.meetingRoomId}`} className="btn-gold">
                     Entrar na sala
                   </Link>
                 )}
+                <button
+                  type="button"
+                  onClick={() => remindWhatsApp(b)}
+                  className="inline-flex items-center gap-1.5 rounded-full border border-[var(--border-gold)] bg-white px-3 py-2 text-sm font-semibold text-[var(--gold)] transition hover:border-[var(--gold)]"
+                  aria-label={`Lembrar ${b.patientName} no WhatsApp`}
+                >
+                  Lembrar no WhatsApp
+                </button>
                 <button
                   type="button"
                   onClick={() => removeBooking(b.id)}
