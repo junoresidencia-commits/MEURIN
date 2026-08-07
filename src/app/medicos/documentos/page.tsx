@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { TemplatePicker } from "@/components/TemplatePicker";
 
 type Doctor = {
   name: string;
@@ -185,6 +186,7 @@ export default function DocumentoAvulsoPage() {
             <span className="mb-1 block text-xs font-semibold text-[var(--text-muted)]">Nome do paciente (opcional)</span>
             <input className="input-field" value={patientName} onChange={(e) => setPatientName(e.target.value)} placeholder="Deixe em branco se não quiser identificar" />
           </label>
+          <TemplatePicker type={type} currentText={body} onApply={setBody} patientName={patientName} />
           <label className="block">
             <span className="mb-1 block text-xs font-semibold text-[var(--text-muted)]">Conteúdo</span>
             <textarea className="input-field min-h-[160px]" value={body} onChange={(e) => setBody(e.target.value)} placeholder={PLACEHOLDER[type]} />
