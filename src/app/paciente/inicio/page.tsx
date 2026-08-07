@@ -174,13 +174,21 @@ export default function PacienteInicioPage() {
           </h1>
           <p className="mt-1 text-sm text-[var(--text-muted)]">Como você está hoje?</p>
         </div>
-        <button
-          type="button"
-          onClick={logout}
-          className="rounded-full border border-[var(--border)] px-3 py-1.5 text-xs font-semibold text-[var(--text-muted)]"
-        >
-          Sair
-        </button>
+        <div className="flex items-center gap-2">
+          <Link
+            href="/paciente/senha"
+            className="rounded-full border border-[var(--border)] px-3 py-1.5 text-xs font-semibold text-[var(--text-muted)]"
+          >
+            Trocar senha
+          </Link>
+          <button
+            type="button"
+            onClick={logout}
+            className="rounded-full border border-[var(--border)] px-3 py-1.5 text-xs font-semibold text-[var(--text-muted)]"
+          >
+            Sair
+          </button>
+        </div>
       </div>
 
       <p className="mt-6 text-xs font-bold uppercase tracking-wider text-[var(--gold)]">

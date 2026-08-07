@@ -1,29 +1,31 @@
 "use client";
 
 import { Suspense, useState } from "react";
+import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 
 function EntrarInner() {
   const router = useRouter();
   const params = useSearchParams();
+  const [mode, setMode] = useState<"cpf" | "email">("cpf");
+  const [cpf, setCpf] = useState(params.get("cpf") || "");
+  const [password, setPassword] = useState("");
   const [email, setEmail] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
-  async function onSubmit(e: React.FormEvent) {
-    e.preventDefault();
+  async function submit(payload: Record<string, string>) {
     setLoading(true);
     setError("");
     try {
       const res = await fetch("/api/patient/session", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email }),
+        body: JSON.stringify(payload),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Não foi possível entrar.");
-      const next = params.get("next") || "/paciente/inicio";
-      router.push(next);
+      router.push(params.get("next") || "/paciente/inicio");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Erro inesperado.");
     } finally {
@@ -38,38 +40,97 @@ function EntrarInner() {
         Acompanhe sua saúde
       </h1>
       <p className="mt-3 text-[var(--text-muted)]">
-        Entre com o e-mail para registrar pressão, glicemia, peso e alimentação, e
-        ver suas consultas. Use o mesmo e-mail dos seus agendamentos.
+        Entre para registrar pressão, glicemia, peso, ver consultas, exames e documentos.
       </p>
 
-      <form onSubmit={onSubmit} className="panel mt-8 space-y-4">
-        <label className="block">
-          <span className="mb-2 block text-xs font-bold uppercase tracking-wider text-[var(--gold)]">
-            E-mail
-          </span>
-          <input
-            type="email"
-            className="input-field"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            placeholder="voce@email.com"
-            autoComplete="email"
-            required
-          />
-        </label>
-        {error && (
-          <p className="rounded-xl border border-[var(--danger)]/30 bg-[var(--danger)]/10 px-3 py-2 text-sm text-[var(--danger)]">
-            {error}
-          </p>
-        )}
-        <button type="submit" className="btn-gold w-full" disabled={loading}>
-          {loading ? "Entrando…" : "Entrar"}
+      <div className="mt-6 flex gap-2">
+        <button
+          type="button"
+          onClick={() => { setMode("cpf"); setError(""); }}
+          className={`flex-1 rounded-full px-4 py-2 text-sm font-bold transition ${mode === "cpf" ? "bg-[var(--gold)] text-white" : "border border-[var(--border)] text-[var(--text-soft)]"}`}
+        >
+          CPF e senha
         </button>
-        <p className="text-center text-xs text-[var(--text-muted)]">
-          Acesso simplificado do ambiente de demonstração. Em produção, login com
-          senha e verificação em duas etapas.
-        </p>
-      </form>
+        <button
+          type="button"
+          onClick={() => { setMode("email"); setError(""); }}
+          className={`flex-1 rounded-full px-4 py-2 text-sm font-bold transition ${mode === "email" ? "bg-[var(--gold)] text-white" : "border border-[var(--border)] text-[var(--text-soft)]"}`}
+        >
+          E-mail
+        </button>
+      </div>
+
+      {mode === "cpf" ? (
+        <form
+          onSubmit={(e) => { e.preventDefault(); submit({ cpf, password }); }}
+          className="panel mt-4 space-y-4"
+        >
+          <label className="block">
+            <span className="mb-2 block text-xs font-bold uppercase tracking-wider text-[var(--gold)]">CPF</span>
+            <input
+              inputMode="numeric"
+              className="input-field"
+              value={cpf}
+              onChange={(e) => setCpf(e.target.value)}
+              placeholder="Somente números"
+              autoComplete="username"
+              required
+            />
+          </label>
+          <label className="block">
+            <span className="mb-2 block text-xs font-bold uppercase tracking-wider text-[var(--gold)]">Senha</span>
+            <input
+              type="password"
+              className="input-field"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              placeholder="Senha inicial: 123456"
+              autoComplete="current-password"
+              required
+            />
+          </label>
+          {error && (
+            <p className="rounded-xl border border-[var(--danger)]/30 bg-[var(--danger)]/10 px-3 py-2 text-sm text-[var(--danger)]">{error}</p>
+          )}
+          <button type="submit" className="btn-gold w-full" disabled={loading}>
+            {loading ? "Entrando…" : "Entrar"}
+          </button>
+          <p className="text-center text-xs text-[var(--text-muted)]">
+            Seu médico criou seu acesso? A senha inicial é <b>123456</b> — você pode trocá-la depois de entrar.
+          </p>
+        </form>
+      ) : (
+        <form
+          onSubmit={(e) => { e.preventDefault(); submit({ email }); }}
+          className="panel mt-4 space-y-4"
+        >
+          <label className="block">
+            <span className="mb-2 block text-xs font-bold uppercase tracking-wider text-[var(--gold)]">E-mail</span>
+            <input
+              type="email"
+              className="input-field"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              placeholder="voce@email.com"
+              autoComplete="email"
+              required
+            />
+          </label>
+          {error && (
+            <p className="rounded-xl border border-[var(--danger)]/30 bg-[var(--danger)]/10 px-3 py-2 text-sm text-[var(--danger)]">{error}</p>
+          )}
+          <button type="submit" className="btn-gold w-full" disabled={loading}>
+            {loading ? "Entrando…" : "Entrar"}
+          </button>
+          <p className="text-center text-xs text-[var(--text-muted)]">
+            Use o mesmo e-mail dos seus agendamentos.
+          </p>
+        </form>
+      )}
+
+      <p className="mt-4 text-center text-xs text-[var(--text-muted)]">
+        <Link href="/agendar" className="font-semibold text-[var(--gold)]">Ainda não tem consulta? Agende aqui</Link>
+      </p>
     </div>
   );
 }

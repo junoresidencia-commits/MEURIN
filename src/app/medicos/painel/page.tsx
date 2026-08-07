@@ -400,7 +400,7 @@ function CreatePatient({ onCreated }: { onCreated: () => void }) {
   });
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
-  const [done, setDone] = useState<{ name: string; phone: string; email: string } | null>(null);
+  const [done, setDone] = useState<{ name: string; phone: string; email: string; cpf: string } | null>(null);
 
   function set<K extends keyof typeof form>(k: K, v: string) {
     setForm((f) => ({ ...f, [k]: v }));
@@ -429,7 +429,7 @@ function CreatePatient({ onCreated }: { onCreated: () => void }) {
         );
       }
       if (!res.ok) throw new Error(data.error || "Não foi possível criar.");
-      setDone({ name: form.name, phone: form.phone, email: form.email });
+      setDone({ name: form.name, phone: form.phone, email: form.email, cpf: form.cpf });
     } catch (e) {
       setError(e instanceof Error ? e.message : "Erro inesperado.");
     } finally {
@@ -441,11 +441,17 @@ function CreatePatient({ onCreated }: { onCreated: () => void }) {
     const digits = done!.phone.replace(/\D/g, "");
     const withCountry = digits.length >= 12 ? digits : `55${digits}`;
     const origin = typeof window !== "undefined" ? window.location.origin : "";
+    const cpfDigits = done!.cpf.replace(/\D/g, "");
+    const login = cpfDigits
+      ? `Entre com seu CPF ${cpfDigits} e a senha 123456 (você pode trocar depois).`
+      : done!.email
+        ? `Entre com seu e-mail ${done!.email}.`
+        : "Peça ao seu médico o CPF de acesso.";
     const msg =
       `Olá, ${done!.name}! Seu médico criou seu acesso no Meu Rim.\n` +
-      `Acesse ${origin}/paciente/entrar` +
-      (done!.email ? ` e entre com seu e-mail ${done!.email}` : "") +
-      ` para acompanhar sua saúde, registrar pressão/glicemia e ver seus documentos.`;
+      `Acesse ${origin}/paciente/entrar\n` +
+      `${login}\n` +
+      `Lá você acompanha sua saúde, registra pressão/glicemia e vê seus documentos.`;
     return `https://wa.me/${withCountry}?text=${encodeURIComponent(msg)}`;
   }
 
@@ -456,6 +462,17 @@ function CreatePatient({ onCreated }: { onCreated: () => void }) {
         <p className="text-sm text-[var(--text-soft)]">
           <strong>{done.name}</strong> foi cadastrado. Convide para acessar a área do paciente:
         </p>
+        {done.cpf.replace(/\D/g, "") ? (
+          <div className="rounded-2xl border border-[var(--border-gold)] bg-[var(--gold-soft)] p-3 text-sm text-[var(--text-soft)]">
+            <p className="font-semibold text-[var(--text)]">Acesso do paciente</p>
+            <p>Login (CPF): <b>{done.cpf.replace(/\D/g, "")}</b></p>
+            <p>Senha inicial: <b>123456</b> — o paciente pode trocar depois de entrar.</p>
+          </div>
+        ) : (
+          <p className="rounded-2xl border border-[var(--border)] bg-[var(--bg-soft)] p-3 text-xs text-[var(--text-muted)]">
+            Sem CPF cadastrado: o paciente poderá entrar pelo e-mail. Informe o CPF para habilitar o login com senha.
+          </p>
+        )}
         <div className="flex flex-wrap gap-2">
           {done.phone.replace(/\D/g, "").length >= 10 && (
             <a href={inviteLink()} target="_blank" rel="noopener noreferrer" className="btn-gold">
