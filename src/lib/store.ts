@@ -254,6 +254,26 @@ export async function setDoctorLogo(id: string, logoUrl: string | null): Promise
   });
 }
 
+/** Remove uma consulta/agendamento (writeDb usa upsert, então a exclusão precisa ser explícita). */
+export async function deleteBooking(id: string): Promise<void> {
+  const supabase = getSupabaseAdmin();
+  if (supabase) {
+    const { error } = await supabase.from("bookings").delete().eq("id", id);
+    if (error) throw error;
+    return;
+  }
+  await fs.mkdir(DATA_DIR, { recursive: true });
+  try {
+    const raw = await fs.readFile(DB_PATH, "utf8");
+    const db = JSON.parse(raw) as Database;
+    db.bookings = db.bookings.filter((b) => b.id !== id);
+    db.payments = db.payments.filter((p) => p.bookingId !== id);
+    await fs.writeFile(DB_PATH, JSON.stringify(db, null, 2), "utf8");
+  } catch {
+    /* nada a remover */
+  }
+}
+
 function fromJsonArray<T>(value: unknown): T[] {
   return Array.isArray(value) ? (value as T[]) : [];
 }

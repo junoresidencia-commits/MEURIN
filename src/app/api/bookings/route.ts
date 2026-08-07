@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { v4 as uuid } from "uuid";
 import { getDoctorSessionId } from "@/lib/auth";
-import { readDb, updateDb } from "@/lib/store";
+import { readDb, updateDb, deleteBooking } from "@/lib/store";
 import type { Booking, PaymentMethod } from "@/lib/types";
 
 const REASONS = new Set(["pressa", "acompanhamento", "segunda_opiniao", "outro"]);
@@ -90,4 +90,25 @@ export async function POST(req: Request) {
   }));
 
   return NextResponse.json({ booking }, { status: 201 });
+}
+
+export async function DELETE(req: Request) {
+  const doctorId = await getDoctorSessionId();
+  if (!doctorId) {
+    return NextResponse.json({ error: "Não autenticado." }, { status: 401 });
+  }
+  let body: { id?: unknown };
+  try {
+    body = await req.json();
+  } catch {
+    return NextResponse.json({ error: "Requisição inválida." }, { status: 400 });
+  }
+  const id = String(body.id || "");
+  const db = await readDb();
+  const booking = db.bookings.find((b) => b.id === id);
+  if (!booking || booking.doctorId !== doctorId) {
+    return NextResponse.json({ error: "Consulta não encontrada." }, { status: 404 });
+  }
+  await deleteBooking(id);
+  return NextResponse.json({ ok: true });
 }

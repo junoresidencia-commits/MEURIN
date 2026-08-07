@@ -105,6 +105,28 @@ export default function PainelMedicoPage() {
     setShowCreate(false);
   }
 
+  async function removeBooking(id: string) {
+    if (!window.confirm("Excluir esta consulta? Esta ação não pode ser desfeita.")) return;
+    const res = await fetch("/api/bookings", {
+      method: "DELETE",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ id }),
+    });
+    if (res.ok) setBookings((bs) => bs.filter((b) => b.id !== id));
+    else window.alert("Não foi possível excluir a consulta.");
+  }
+
+  async function removePatient(key: string, name: string) {
+    if (!window.confirm(`Excluir o paciente ${name}? Esta ação não pode ser desfeita.`)) return;
+    const res = await fetch("/api/doctor/patients", {
+      method: "DELETE",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ id: key }),
+    });
+    if (res.ok) setPatients((ps) => ps.filter((p) => p.key !== key));
+    else window.alert("Não foi possível excluir o paciente.");
+  }
+
   if (loading || !doctor) {
     return (
       <div className="mx-auto max-w-4xl px-5 py-20 text-[var(--text-muted)]">
@@ -247,17 +269,19 @@ export default function PainelMedicoPage() {
               return `${p.name} ${p.city}`.toLowerCase().includes(q);
             })
             .map((p) => (
-            <Link
+            <div
               key={p.key}
-              href={`/medicos/paciente/${encodeURIComponent(p.key)}`}
-              className="panel flex items-center justify-between gap-3 transition hover:-translate-y-0.5 hover:border-[var(--border-gold)]"
+              className="panel flex items-center justify-between gap-2 transition hover:border-[var(--border-gold)]"
             >
-              <div className="flex items-center gap-3">
-                <span className="grid h-11 w-11 place-items-center rounded-2xl bg-[var(--gold-soft)] text-sm font-extrabold text-[var(--gold)]">
+              <Link
+                href={`/medicos/paciente/${encodeURIComponent(p.key)}`}
+                className="flex min-w-0 flex-1 items-center gap-3"
+              >
+                <span className="grid h-11 w-11 shrink-0 place-items-center rounded-2xl bg-[var(--gold-soft)] text-sm font-extrabold text-[var(--gold)]">
                   {p.name.slice(0, 2).toUpperCase()}
                 </span>
-                <div>
-                  <p className="font-semibold text-[var(--text)]">{p.name}</p>
+                <div className="min-w-0">
+                  <p className="truncate font-semibold text-[var(--text)]">{p.name}</p>
                   <p className="text-sm text-[var(--text-muted)]">
                     {[
                       p.city,
@@ -267,9 +291,28 @@ export default function PainelMedicoPage() {
                       .join(" · ")}
                   </p>
                 </div>
+              </Link>
+              <div className="flex shrink-0 items-center gap-1">
+                {p.isCreated && (
+                  <button
+                    type="button"
+                    onClick={() => removePatient(p.key, p.name)}
+                    className="grid h-9 w-9 place-items-center rounded-full text-[var(--text-muted)] transition hover:bg-[var(--danger)]/10 hover:text-[var(--danger)]"
+                    title="Excluir paciente"
+                    aria-label={`Excluir paciente ${p.name}`}
+                  >
+                    <TrashIcon />
+                  </button>
+                )}
+                <Link
+                  href={`/medicos/paciente/${encodeURIComponent(p.key)}`}
+                  className="grid h-9 w-9 place-items-center text-xl text-[var(--gold)]"
+                  aria-label={`Abrir prontuário de ${p.name}`}
+                >
+                  ›
+                </Link>
               </div>
-              <span className="text-xl text-[var(--gold)]">›</span>
-            </Link>
+            </div>
           ))}
         </div>
       </section>
@@ -300,11 +343,21 @@ export default function PainelMedicoPage() {
                       : b.status}
                 </p>
               </div>
-              {b.status === "confirmed" && (
-                <Link href={`/consulta/${b.meetingRoomId}`} className="btn-gold">
-                  Entrar na sala
-                </Link>
-              )}
+              <div className="flex items-center gap-2">
+                {b.status === "confirmed" && (
+                  <Link href={`/consulta/${b.meetingRoomId}`} className="btn-gold">
+                    Entrar na sala
+                  </Link>
+                )}
+                <button
+                  type="button"
+                  onClick={() => removeBooking(b.id)}
+                  className="inline-flex items-center gap-1.5 rounded-full border border-[var(--border)] px-3 py-2 text-sm font-semibold text-[var(--text-muted)] transition hover:border-[var(--danger)] hover:text-[var(--danger)]"
+                  aria-label={`Excluir consulta de ${b.patientName}`}
+                >
+                  <TrashIcon /> Excluir
+                </button>
+              </div>
             </div>
           ))}
         </div>
@@ -313,6 +366,17 @@ export default function PainelMedicoPage() {
       </div>
       <DoctorMobileNav />
     </div>
+  );
+}
+
+function TrashIcon() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="M3 6h18" />
+      <path d="M8 6V4a1 1 0 0 1 1-1h6a1 1 0 0 1 1 1v2" />
+      <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" />
+      <path d="M10 11v6M14 11v6" />
+    </svg>
   );
 }
 
