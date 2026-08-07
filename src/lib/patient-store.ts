@@ -554,6 +554,23 @@ export async function getLabResults(email: string): Promise<LabResult[]> {
     .sort((a, b) => a.measuredAt.localeCompare(b.measuredAt));
 }
 
+/** Remove um resultado de exame (usado ao "atualizar" um exame já existente na mesma data). */
+export async function deleteLabResult(id: string): Promise<void> {
+  if (supabaseActive("lab_results")) {
+    const supabase = getSupabaseAdmin()!;
+    const { error } = await supabase.from("lab_results").delete().eq("id", id);
+    if (error) {
+      if (isMissingTableError(error)) missingTables.add("lab_results");
+      else throw error;
+      return;
+    }
+    return;
+  }
+  const data = await readFile();
+  data.labs = data.labs.filter((l) => l.id !== id);
+  await writeFile(data);
+}
+
 export async function getDocumentById(id: string): Promise<ClinicalDocument | null> {
   if (supabaseActive("documents")) {
     const supabase = getSupabaseAdmin()!;
