@@ -104,6 +104,7 @@ export default function ProntuarioPage() {
   const [labDate, setLabDate] = useState("");
   const [labSaving, setLabSaving] = useState(false);
   const [labErr, setLabErr] = useState("");
+  const [labMsg, setLabMsg] = useState("");
 
   // Agendamento pelo médico
   const [apptDate, setApptDate] = useState("");
@@ -183,6 +184,7 @@ export default function ProntuarioPage() {
     }
     setLabSaving(true);
     setLabErr("");
+    setLabMsg("");
     try {
       const res = await fetch(`/api/doctor/patients/${emailParam}/labs`, {
         method: "POST",
@@ -195,6 +197,11 @@ export default function ProntuarioPage() {
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Não foi possível salvar.");
+      if (data.egfr) {
+        setLabMsg(`TFGe calculada automaticamente (CKD-EPI): ${String(data.egfr.value).replace(".", ",")} mL/min/1,73m² — já adicionada ao gráfico.`);
+      } else if (data.egfrSkipped) {
+        setLabMsg(data.egfrSkipped);
+      }
       setLabValue("");
       setLabDate("");
       await load();
@@ -416,7 +423,17 @@ export default function ProntuarioPage() {
                   <input type="date" className="input-field" value={labDate} onChange={(e) => setLabDate(e.target.value)} />
                 </label>
               </div>
+              <p className="rounded-xl border border-[var(--border-gold)] bg-[var(--gold-soft)] px-3 py-2 text-xs text-[var(--text-soft)]">
+                Ao adicionar <b>Creatinina</b>, o <b>TFGe</b> é calculado automaticamente pela
+                CKD-EPI 2021 (usando idade e sexo do paciente) e lançado no gráfico — você não
+                precisa digitar o TFGe.
+              </p>
               {labErr && <p className="text-sm text-[var(--danger)]">{labErr}</p>}
+              {labMsg && (
+                <p className="rounded-xl border border-[var(--green)]/30 bg-[var(--green)]/10 px-3 py-2 text-sm text-[var(--green)]">
+                  {labMsg}
+                </p>
+              )}
               <button type="button" className="btn-gold" onClick={saveLab} disabled={labSaving || !labValue.trim()}>
                 {labSaving ? "Salvando…" : "Adicionar exame"}
               </button>
