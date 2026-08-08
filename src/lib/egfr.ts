@@ -52,3 +52,30 @@ export function estimateEgfr(
   if (age == null || !normSex) return null;
   return ckdEpi2021(creatinine, age, normSex);
 }
+
+/** CKD-EPI Cistatina C 2021 (sem raça). cistatina em mg/L. */
+export const EGFR_CYS_EQUATION = "CKD-EPI Cistatina C";
+
+export function ckdEpiCystatin2021(cystatin: number, ageYears: number, sex: Sex): number {
+  const ratio = cystatin / 0.8;
+  const egfr =
+    133 *
+    Math.pow(Math.min(ratio, 1), -0.499) *
+    Math.pow(Math.max(ratio, 1), -1.328) *
+    Math.pow(0.996, ageYears) *
+    (sex === "female" ? 0.932 : 1);
+  return Math.round(egfr * 10) / 10;
+}
+
+export function estimateEgfrCystatin(
+  cystatin: number,
+  birthdate?: string | null,
+  sex?: string | null,
+  measuredAt?: string
+): number | null {
+  if (!Number.isFinite(cystatin) || cystatin <= 0) return null;
+  const age = ageFromBirthdate(birthdate, measuredAt ? new Date(measuredAt) : undefined);
+  const normSex = normalizeSex(sex);
+  if (age == null || !normSex) return null;
+  return ckdEpiCystatin2021(cystatin, age, normSex);
+}

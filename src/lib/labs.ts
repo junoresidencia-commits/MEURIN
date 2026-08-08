@@ -4,6 +4,7 @@ export type LabDef = { key: string; label: string; unit: string };
 export const NEPHRO_LABS: LabDef[] = [
   { key: "creatinina", label: "Creatinina", unit: "mg/dL" },
   { key: "tfge", label: "TFGe", unit: "mL/min/1,73m²" },
+  { key: "tfge_cistatina", label: "TFGe (cistatina C)", unit: "mL/min/1,73m²" },
   { key: "ureia", label: "Ureia", unit: "mg/dL" },
   { key: "potassio", label: "Potássio", unit: "mEq/L" },
   { key: "sodio", label: "Sódio", unit: "mEq/L" },
