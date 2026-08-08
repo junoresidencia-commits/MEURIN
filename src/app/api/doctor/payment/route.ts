@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { getDoctorSessionId } from "@/lib/auth";
-import { getDoctorById, setDoctorMpToken } from "@/lib/store";
+import { getDoctorById, setDoctorMpToken, setDoctorPixKey } from "@/lib/store";
 import { getMercadoPagoToken } from "@/lib/payments";
 
 /**
@@ -16,6 +16,8 @@ export async function GET() {
     connected: Boolean(doctor.mpAccessToken?.trim()),
     // Se o médico não conectou a própria conta, os pagamentos caem na conta da plataforma.
     platformFallback: Boolean(getMercadoPagoToken()),
+    // Chave Pix para receber sem Mercado Pago (CNPJ, telefone, e-mail ou aleatória).
+    pixKey: doctor.pixKey ?? null,
   });
 }
 
@@ -23,11 +25,18 @@ export async function PUT(req: Request) {
   const doctorId = await getDoctorSessionId();
   if (!doctorId) return NextResponse.json({ error: "Não autenticado." }, { status: 401 });
 
-  let body: { accessToken?: unknown };
+  let body: { accessToken?: unknown; pixKey?: unknown };
   try {
     body = await req.json();
   } catch {
     return NextResponse.json({ error: "Requisição inválida." }, { status: 400 });
+  }
+
+  // Atualização da chave Pix (recebimento sem Mercado Pago). Vazio = remover.
+  if (body.pixKey !== undefined) {
+    const pix = typeof body.pixKey === "string" ? body.pixKey.trim() : "";
+    await setDoctorPixKey(doctorId, pix || null);
+    return NextResponse.json({ ok: true, pixKey: pix || null });
   }
 
   const token = typeof body.accessToken === "string" ? body.accessToken.trim() : "";

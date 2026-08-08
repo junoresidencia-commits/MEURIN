@@ -247,6 +247,20 @@ export async function getDoctorById(id: string): Promise<Doctor | null> {
   return db.doctors.find((d) => d.id === id) ?? null;
 }
 
+/** Define a chave Pix do médico (CNPJ, telefone, e-mail ou aleatória), sem reescrever os demais. */
+export async function setDoctorPixKey(id: string, pixKey: string | null): Promise<void> {
+  const supabase = getSupabaseAdmin();
+  if (supabase) {
+    const { error } = await supabase.from("doctors").update({ pix_key: pixKey }).eq("id", id);
+    if (error) throw error;
+    return;
+  }
+  await updateDb((db) => {
+    db.doctors = db.doctors.map((d) => (d.id === id ? { ...d, pixKey: pixKey ?? undefined } : d));
+    return db;
+  });
+}
+
 /** Conecta/desconecta a conta Mercado Pago do médico (segredo), sem reescrever os demais. */
 export async function setDoctorMpToken(id: string, token: string | null): Promise<void> {
   const supabase = getSupabaseAdmin();

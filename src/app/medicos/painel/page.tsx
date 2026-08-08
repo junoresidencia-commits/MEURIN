@@ -127,6 +127,21 @@ export default function PainelMedicoPage() {
     else window.alert("Não foi possível excluir o paciente.");
   }
 
+  async function confirmBookingPix(id: string) {
+    if (!window.confirm("Confirmar que você recebeu o Pix desta consulta? Isso libera o atendimento.")) return;
+    const res = await fetch("/api/bookings", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ id, action: "confirm_pix" }),
+    });
+    if (res.ok) {
+      const data = await res.json();
+      setBookings((bs) => bs.map((b) => (b.id === id ? { ...b, status: data.booking?.status || "confirmed" } : b)));
+    } else {
+      window.alert("Não foi possível confirmar.");
+    }
+  }
+
   function remindWhatsApp(b: Booking) {
     const digits = (b.patientPhone || "").replace(/\D/g, "");
     const withCountry = digits.length >= 12 ? digits : digits ? `55${digits}` : "";
@@ -376,6 +391,11 @@ export default function PainelMedicoPage() {
                     Entrar na sala
                   </Link>
                 )}
+                {b.status === "pending_payment" && (
+                  <button type="button" onClick={() => confirmBookingPix(b.id)} className="btn-gold">
+                    Confirmar recebimento (Pix)
+                  </button>
+                )}
                 <button
                   type="button"
                   onClick={() => remindWhatsApp(b)}
@@ -536,6 +556,8 @@ function PaymentSettings() {
   const [connected, setConnected] = useState<boolean | null>(null);
   const [platformFallback, setPlatformFallback] = useState(false);
   const [token, setToken] = useState("");
+  const [pixKey, setPixKey] = useState("");
+  const [pixSaved, setPixSaved] = useState("");
   const [saving, setSaving] = useState(false);
   const [msg, setMsg] = useState("");
   const [err, setErr] = useState("");
@@ -546,9 +568,22 @@ function PaymentSettings() {
       .then((d) => {
         setConnected(Boolean(d.connected));
         setPlatformFallback(Boolean(d.platformFallback));
+        setPixKey(d.pixKey || "");
       })
       .catch(() => setConnected(false));
   }, []);
+
+  async function savePix() {
+    setSaving(true);
+    setPixSaved("");
+    const res = await fetch("/api/doctor/payment", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ pixKey }),
+    });
+    setSaving(false);
+    setPixSaved(res.ok ? "Chave Pix salva." : "Não foi possível salvar a chave Pix.");
+  }
 
   async function save() {
     setSaving(true);
@@ -658,6 +693,26 @@ function PaymentSettings() {
       )}
       {msg && <p className="mt-3 text-sm text-[var(--teal,#0d9488)]">{msg}</p>}
       {err && <p className="mt-3 text-sm text-[var(--danger)]">{err}</p>}
+
+      <div className="mt-5 border-t border-[var(--border)] pt-4">
+        <p className="text-sm font-semibold text-[var(--text)]">Chave Pix (receber sem Mercado Pago)</p>
+        <p className="mt-1 text-sm text-[var(--text-muted)]">
+          Se você não usar Mercado Pago, informe sua chave Pix — pode ser CNPJ, CPF, telefone, e-mail ou aleatória.
+          O paciente paga direto nessa chave e você confirma o recebimento para liberar a consulta/plano.
+        </p>
+        <div className="mt-2 flex flex-wrap gap-2">
+          <input
+            value={pixKey}
+            onChange={(e) => setPixKey(e.target.value)}
+            placeholder="CNPJ, telefone, e-mail ou chave aleatória"
+            className="min-w-0 flex-1 rounded-xl border border-[var(--border)] bg-white px-3 py-2 text-[var(--text)] outline-none focus:border-[var(--teal,#0d9488)]"
+          />
+          <button type="button" onClick={savePix} disabled={saving} className="btn-gold disabled:opacity-50">
+            Salvar chave
+          </button>
+        </div>
+        {pixSaved && <p className="mt-2 text-sm text-[var(--teal,#0d9488)]">{pixSaved}</p>}
+      </div>
     </div>
   );
 }

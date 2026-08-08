@@ -37,7 +37,19 @@ export async function POST(req: Request) {
     }
   }
 
-  // Modo demonstração: confirma na hora (pagamento simulado).
+  // Sem Mercado Pago, mas com chave Pix: paciente paga Pix direto e o MÉDICO confirma
+  // o recebimento (não liberar automaticamente; comprovante não confirma).
+  if (booking.status === "pending_payment" && doctor.pixKey?.trim()) {
+    return NextResponse.json({
+      provider: "pix_direto",
+      pixKey: doctor.pixKey.trim(),
+      doctorName: doctor.name,
+      amountCents: booking.priceCents,
+      bookingId: booking.id,
+    });
+  }
+
+  // Modo demonstração (sem Mercado Pago e sem chave Pix): confirma na hora (simulado).
   const confirmed = await confirmBookingPaid(bookingId);
   if (!confirmed) {
     return NextResponse.json({ error: "Não foi possível confirmar." }, { status: 500 });

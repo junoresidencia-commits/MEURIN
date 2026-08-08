@@ -8,6 +8,7 @@ import {
   listPublicPlans,
 } from "@/lib/plans-store";
 import { effectivePromotionStatus, isPromotionActive } from "@/lib/plans";
+import { isMercadoPagoEnabledFor } from "@/lib/payments";
 
 /** Reúne os médicos com quem o paciente tem relação (consultas, contratações, cadastro). */
 async function relatedDoctorIds(subject: string): Promise<Set<string>> {
@@ -33,6 +34,8 @@ export async function GET(req: Request) {
   const doctors: {
     doctorId: string;
     doctorName: string;
+    mpEnabled: boolean;
+    pixKey: string | null;
     plans: unknown[];
     promotions: { id: string; name: string; discountType: string; discountValue: number; endAt?: string }[];
   }[] = [];
@@ -45,7 +48,14 @@ export async function GET(req: Request) {
       .filter((p) => isPromotionActive(p))
       .map((p) => ({ id: p.id, name: p.name, discountType: p.discountType, discountValue: p.discountValue, endAt: p.endAt, effectiveStatus: effectivePromotionStatus(p) }));
     if (plans.length > 0) {
-      doctors.push({ doctorId, doctorName: doctor.name, plans, promotions });
+      doctors.push({
+        doctorId,
+        doctorName: doctor.name,
+        mpEnabled: isMercadoPagoEnabledFor(doctor),
+        pixKey: doctor.pixKey?.trim() || null,
+        plans,
+        promotions,
+      });
     }
   }
 

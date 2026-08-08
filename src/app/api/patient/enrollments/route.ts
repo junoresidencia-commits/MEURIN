@@ -112,7 +112,14 @@ export async function POST(req: Request) {
         body: `${patientName} informou pagamento por Pix direto do plano "${enrollment.planName}" (R$ ${(pricing.snapshot.finalPriceCents / 100).toFixed(2)}). Verifique sua conta e confirme o recebimento no painel para ativar o plano.`,
       });
     }
-    return NextResponse.json({ enrollmentId: enrollment.id, status: "aguardando_confirmacao", provider: "pix_direto" });
+    return NextResponse.json({
+      enrollmentId: enrollment.id,
+      status: "aguardando_confirmacao",
+      provider: "pix_direto",
+      pixKey: doctor.pixKey?.trim() || null,
+      doctorName: doctor.name,
+      amountCents: pricing.snapshot.finalPriceCents,
+    });
   }
 
   // Pix online / cartão pelo Mercado Pago: confirmação só pelo webhook.

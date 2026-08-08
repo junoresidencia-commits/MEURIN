@@ -94,7 +94,14 @@ export async function POST(req: Request) {
         body: `${offer.patientName} aceitou sua proposta e informou Pix direto (R$ ${(snapshot.finalPriceCents / 100).toFixed(2)}). Confirme o recebimento no painel para ativar.`,
       });
     }
-    return NextResponse.json({ enrollmentId: enrollment.id, status: "aguardando_confirmacao", provider: "pix_direto" });
+    return NextResponse.json({
+      enrollmentId: enrollment.id,
+      status: "aguardando_confirmacao",
+      provider: "pix_direto",
+      pixKey: doctor.pixKey?.trim() || null,
+      doctorName: doctor.name,
+      amountCents: snapshot.finalPriceCents,
+    });
   }
 
   if (isMercadoPagoEnabledFor(doctor) && (method === "pix" || method === "card")) {

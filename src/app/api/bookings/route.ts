@@ -3,6 +3,7 @@ import { v4 as uuid } from "uuid";
 import { getDoctorSessionId } from "@/lib/auth";
 import { readDb, updateDb, deleteBooking } from "@/lib/store";
 import { buildServicePricing } from "@/lib/plan-billing";
+import { confirmBookingPaid } from "@/lib/payments";
 import type { Booking, PaymentMethod } from "@/lib/types";
 
 const REASONS = new Set(["pressa", "acompanhamento", "segunda_opiniao", "outro"]);
@@ -105,6 +106,29 @@ export async function POST(req: Request) {
   }));
 
   return NextResponse.json({ booking }, { status: 201 });
+}
+
+export async function PATCH(req: Request) {
+  const doctorId = await getDoctorSessionId();
+  if (!doctorId) {
+    return NextResponse.json({ error: "Não autenticado." }, { status: 401 });
+  }
+  const body = await req.json().catch(() => ({}));
+  const id = String(body.id || "");
+  const action = String(body.action || "");
+  const db = await readDb();
+  const booking = db.bookings.find((b) => b.id === id);
+  if (!booking || booking.doctorId !== doctorId) {
+    return NextResponse.json({ error: "Consulta não encontrada." }, { status: 404 });
+  }
+  // O médico confirma o recebimento do Pix direto para liberar a consulta.
+  if (action === "confirm_pix") {
+    if (booking.status === "confirmed") return NextResponse.json({ ok: true });
+    const confirmed = await confirmBookingPaid(id);
+    if (!confirmed) return NextResponse.json({ error: "Não foi possível confirmar." }, { status: 500 });
+    return NextResponse.json({ ok: true, booking: confirmed.booking });
+  }
+  return NextResponse.json({ error: "Ação inválida." }, { status: 400 });
 }
 
 export async function DELETE(req: Request) {

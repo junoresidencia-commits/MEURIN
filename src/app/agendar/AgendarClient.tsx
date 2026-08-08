@@ -64,6 +64,7 @@ export default function AgendarClient() {
     appliedLabel: string | null;
   } | null>(null);
   const [couponMsg, setCouponMsg] = useState("");
+  const [pixInfo, setPixInfo] = useState<{ pixKey: string; doctorName: string; amountCents: number } | null>(null);
   const [consentDocs, setConsentDocs] = useState<
     { type: string; title: string; body: string; version: string; sha256: string }[]
   >([]);
@@ -204,6 +205,13 @@ export default function AgendarClient() {
       // Pagamento real (Mercado Pago): redireciona para o checkout.
       if (payData.redirectUrl) {
         window.location.href = payData.redirectUrl;
+        return;
+      }
+
+      // Sem Mercado Pago: Pix direto na chave do médico. Ele confirma o recebimento.
+      if (payData.provider === "pix_direto") {
+        setPixInfo({ pixKey: payData.pixKey, doctorName: payData.doctorName, amountCents: payData.amountCents });
+        setLoading(false);
         return;
       }
 
@@ -616,6 +624,33 @@ export default function AgendarClient() {
               onClick={finishPayment}
             >
               {loading ? "Confirmando pagamento…" : "Pagar e liberar consulta"}
+            </button>
+          </div>
+        </div>
+      )}
+
+      {pixInfo && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={() => setPixInfo(null)}>
+          <div className="w-full max-w-md rounded-3xl bg-white p-6" onClick={(e) => e.stopPropagation()}>
+            <h3 className="font-display text-xl font-bold text-[var(--text)]">Pague por Pix</h3>
+            <p className="mt-1 text-sm text-[var(--text-muted)]">
+              Faça um Pix de <strong>{formatBRL(pixInfo.amountCents)}</strong> para {pixInfo.doctorName} usando a chave abaixo:
+            </p>
+            <div className="mt-3 flex items-center gap-2 rounded-2xl border border-[var(--border)] bg-[var(--gold-soft)] p-3">
+              <code className="flex-1 break-all font-mono text-sm text-[var(--text)]">{pixInfo.pixKey}</code>
+              <button
+                type="button"
+                className="btn-ghost shrink-0"
+                onClick={() => navigator.clipboard?.writeText(pixInfo.pixKey)}
+              >
+                Copiar
+              </button>
+            </div>
+            <p className="mt-3 rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-700">
+              Sua consulta será liberada assim que o médico confirmar o recebimento. O comprovante não confirma o pagamento automaticamente.
+            </p>
+            <button type="button" className="btn-gold mt-4 w-full" onClick={() => router.push("/minhas-consultas")}>
+              Entendi
             </button>
           </div>
         </div>

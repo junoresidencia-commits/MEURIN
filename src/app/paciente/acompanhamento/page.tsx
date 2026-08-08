@@ -9,6 +9,8 @@ import type { PatientOffer, PlanEnrollment, PricingSnapshot } from "@/lib/plans"
 type DoctorPlans = {
   doctorId: string;
   doctorName: string;
+  mpEnabled: boolean;
+  pixKey: string | null;
   plans: {
     id: string;
     name: string;
@@ -29,6 +31,7 @@ type Selection = {
   previousEnrollmentId?: string;
   title: string;
   basePriceCents: number;
+  mpEnabled?: boolean;
 };
 
 const RENEWAL_WINDOW_MS = 15 * 24 * 60 * 60 * 1000;
@@ -206,7 +209,7 @@ export default function AcompanhamentoPage() {
                     <button
                       type="button"
                       className="btn-gold mt-2 w-full"
-                      onClick={() => setSelection({ doctorId: d.doctorId, doctorName: d.doctorName, planId: pl.id, title: pl.name, basePriceCents: pl.priceCents })}
+                      onClick={() => setSelection({ doctorId: d.doctorId, doctorName: d.doctorName, planId: pl.id, title: pl.name, basePriceCents: pl.priceCents, mpEnabled: d.mpEnabled })}
                     >
                       Contratar plano
                     </button>
@@ -228,10 +231,13 @@ export default function AcompanhamentoPage() {
 function Checkout({ selection, onClose, onDone }: { selection: Selection; onClose: () => void; onDone: () => void }) {
   const [coupon, setCoupon] = useState("");
   const [pricing, setPricing] = useState<PricingSnapshot | null>(null);
-  const [method, setMethod] = useState<"pix" | "card" | "pix_direto">("pix");
+  // Se o médico não tem Mercado Pago, o único meio é Pix direto (na chave dele).
+  const onlyPixDireto = selection.mpEnabled === false;
+  const [method, setMethod] = useState<"pix" | "card" | "pix_direto">(onlyPixDireto ? "pix_direto" : "pix");
   const [msg, setMsg] = useState("");
   const [err, setErr] = useState("");
   const [busy, setBusy] = useState(false);
+  const [pixResult, setPixResult] = useState<{ pixKey: string | null; amountCents: number } | null>(null);
   const isOffer = Boolean(selection.offerId);
 
   useEffect(() => {
@@ -276,8 +282,8 @@ function Checkout({ selection, onClose, onDone }: { selection: Selection; onClos
       return;
     }
     if (d.status === "aguardando_confirmacao") {
+      setPixResult({ pixKey: d.pixKey ?? null, amountCents: final });
       setMsg("Pagamento por Pix direto registrado. O plano será ativado após o médico confirmar o recebimento.");
-      setTimeout(onDone, 1800);
       return;
     }
     setMsg("Plano ativado! 🎉");
@@ -323,31 +329,56 @@ function Checkout({ selection, onClose, onDone }: { selection: Selection; onClos
           </div>
         </div>
 
-        <p className="mt-3 text-xs font-semibold text-[var(--text-muted)]">Forma de pagamento</p>
-        <div className="mt-1 grid grid-cols-3 gap-2">
-          {([["pix", "Pix online"], ["card", "Cartão"], ["pix_direto", "Pix direto"]] as const).map(([m, label]) => (
-            <button
-              key={m}
-              type="button"
-              onClick={() => setMethod(m)}
-              className={`rounded-xl border px-2 py-2 text-sm font-semibold transition ${method === m ? "border-[var(--gold)] bg-[var(--gold-soft)] text-[var(--gold)]" : "border-[var(--border)] text-[var(--text-soft)]"}`}
-            >
-              {label}
+        {pixResult ? (
+          <div className="mt-3">
+            <p className="text-sm text-[var(--text-muted)]">
+              Faça um Pix de <strong>{formatBRL(pixResult.amountCents)}</strong> para {selection.doctorName} usando a chave:
+            </p>
+            {pixResult.pixKey ? (
+              <div className="mt-2 flex items-center gap-2 rounded-2xl border border-[var(--border)] bg-[var(--gold-soft)] p-3">
+                <code className="flex-1 break-all font-mono text-sm text-[var(--text)]">{pixResult.pixKey}</code>
+                <button type="button" className="btn-ghost shrink-0" onClick={() => navigator.clipboard?.writeText(pixResult.pixKey || "")}>Copiar</button>
+              </div>
+            ) : (
+              <p className="mt-2 text-sm text-[var(--text-soft)]">O médico enviará a chave Pix para você.</p>
+            )}
+            <p className="mt-2 rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-700">
+              O plano será ativado após o médico confirmar o recebimento.
+            </p>
+            <button type="button" className="btn-gold mt-3 w-full" onClick={onDone}>Entendi</button>
+          </div>
+        ) : (
+          <>
+            <p className="mt-3 text-xs font-semibold text-[var(--text-muted)]">Forma de pagamento</p>
+            <div className={`mt-1 grid gap-2 ${onlyPixDireto ? "grid-cols-1" : "grid-cols-3"}`}>
+              {(onlyPixDireto
+                ? ([["pix_direto", "Pix direto"]] as const)
+                : ([["pix", "Pix online"], ["card", "Cartão"], ["pix_direto", "Pix direto"]] as const)
+              ).map(([m, label]) => (
+                <button
+                  key={m}
+                  type="button"
+                  onClick={() => setMethod(m)}
+                  className={`rounded-xl border px-2 py-2 text-sm font-semibold transition ${method === m ? "border-[var(--gold)] bg-[var(--gold-soft)] text-[var(--gold)]" : "border-[var(--border)] text-[var(--text-soft)]"}`}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+            {method === "pix_direto" && (
+              <p className="mt-2 rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-700">
+                No Pix direto, o plano é ativado somente depois que o médico confirmar o recebimento. O comprovante não confirma o pagamento automaticamente.
+              </p>
+            )}
+
+            {msg && <p className="mt-3 text-sm text-emerald-600">{msg}</p>}
+            {err && <p className="mt-3 text-sm text-[var(--danger)]">{err}</p>}
+
+            <button type="button" className="btn-gold mt-4 w-full" onClick={confirm} disabled={busy}>
+              {busy ? "Processando…" : `Confirmar e pagar ${formatBRL(final)}`}
             </button>
-          ))}
-        </div>
-        {method === "pix_direto" && (
-          <p className="mt-2 rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-700">
-            No Pix direto, o plano é ativado somente depois que o médico confirmar o recebimento. O comprovante não confirma o pagamento automaticamente.
-          </p>
+          </>
         )}
-
-        {msg && <p className="mt-3 text-sm text-emerald-600">{msg}</p>}
-        {err && <p className="mt-3 text-sm text-[var(--danger)]">{err}</p>}
-
-        <button type="button" className="btn-gold mt-4 w-full" onClick={confirm} disabled={busy}>
-          {busy ? "Processando…" : `Confirmar e pagar ${formatBRL(final)}`}
-        </button>
       </div>
     </div>
   );
