@@ -6,6 +6,7 @@ import { useParams, useRouter } from "next/navigation";
 import { formatSlotLabel } from "@/lib/scheduling-client";
 import { NEPHRO_LABS, labLabel, labUnit } from "@/lib/labs";
 import { LmeWizard } from "@/components/LmeWizard";
+import { ClinicalProfileEditor } from "@/components/ClinicalProfileEditor";
 import { ExamReviewModal } from "@/components/ExamReviewModal";
 import { parseLabsFromText } from "@/lib/lab-parser";
 import { LogoUploader } from "@/components/LogoUploader";
@@ -59,6 +60,7 @@ const REASON: Record<string, string> = {
 
 const TABS = [
   { id: "resumo", label: "Resumo" },
+  { id: "perfil", label: "Perfil clínico" },
   { id: "evolucao", label: "Evolução" },
   { id: "exames", label: "Exames" },
   { id: "enviados", label: "Enviados" },
@@ -353,6 +355,8 @@ export default function ProntuarioPage() {
             </ul>
           </div>
         )}
+
+        {tab === "perfil" && <ClinicalProfileEditor emailParam={emailParam} />}
 
         {tab === "evolucao" && (
           <div className="space-y-4">

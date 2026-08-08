@@ -9,6 +9,7 @@ const PATHS: Record<string, string> = {
   file: "M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8ZM14 3v5h5",
   link: "M10 13a5 5 0 0 0 7 0l3-3a5 5 0 0 0-7-7l-1 1M14 11a5 5 0 0 0-7 0l-3 3a5 5 0 0 0 7 7l1-1",
   edit: "M12 20h9M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z",
+  chart: "M3 3v18h18M8 17V9M13 17V5M18 17v-6",
   shield: "M12 3l8 3v6c0 5-3.5 8-8 9-4.5-1-8-4-8-9V6l8-3Z",
 };
 
@@ -26,6 +27,7 @@ const ITEMS: { href: string; label: string; icon: keyof typeof PATHS }[] = [
   { href: "/medicos/painel#agenda", label: "Agenda", icon: "cal" },
   { href: "/medicos/painel#pacientes", label: "Prontuários", icon: "file" },
   { href: "/medicos/documentos", label: "Documento avulso", icon: "edit" },
+  { href: "/medicos/pesquisa", label: "Pesquisa", icon: "chart" },
   { href: "/medicos/links", label: "Links úteis", icon: "link" },
   { href: "/admin/login", label: "Administração", icon: "shield" },
 ];
