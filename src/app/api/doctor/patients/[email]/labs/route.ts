@@ -3,7 +3,7 @@ import { getDoctorSessionId } from "@/lib/auth";
 import { addLabResult, getLabResults, deleteLabResult, type LabResult } from "@/lib/patient-store";
 import { resolvePatientAccess, type PatientAccess } from "@/lib/doctor-access";
 import { NEPHRO_LABS, labUnit } from "@/lib/labs";
-import { estimateEgfr, EGFR_EQUATION, EGFR_VERSION } from "@/lib/egfr";
+import { estimateEgfr, estimateEgfrCystatin, EGFR_EQUATION, EGFR_CYS_EQUATION, EGFR_VERSION } from "@/lib/egfr";
 
 const VALID = new Set(NEPHRO_LABS.map((l) => l.key));
 
@@ -42,6 +42,43 @@ async function autoEgfr(
       version: EGFR_VERSION,
       basedOnTestKey: "creatinina",
       basedOnValue: creatValue,
+      basedOnDate: at,
+      computedAt: new Date().toISOString(),
+    },
+  });
+}
+
+/**
+ * TFGe por cistatina C: ao registrar cistatina, calcula a TFGe (CKD-EPI Cistatina C 2021),
+ * preservando a cistatina de origem, data, equação e versão. Gráfico próprio (tfge_cistatina),
+ * separado da TFGe por creatinina. Substitui apenas a TFGe-cistatina automática da mesma data.
+ */
+async function autoEgfrCystatin(
+  access: PatientAccess,
+  doctorId: string | null,
+  cystatinValue: number,
+  at: string
+): Promise<LabResult | null> {
+  const egfr = estimateEgfrCystatin(cystatinValue, access.birthdate, access.sex, at);
+  if (egfr == null) return null;
+  const labs = await getLabResults(access.key);
+  const stale = labs.filter(
+    (l) => l.testKey === "tfge_cistatina" && dayOf(l.measuredAt) === dayOf(at) && String(l.origin || "").includes("Cistatina")
+  );
+  for (const s of stale) await deleteLabResult(s.id);
+  return addLabResult({
+    patientEmail: access.key,
+    doctorId: doctorId || null,
+    testKey: "tfge_cistatina",
+    value: egfr,
+    unit: labUnit("tfge_cistatina"),
+    origin: `${EGFR_CYS_EQUATION} ${EGFR_VERSION}`,
+    measuredAt: at,
+    meta: {
+      equation: EGFR_CYS_EQUATION,
+      version: EGFR_VERSION,
+      basedOnTestKey: "cistatina_c",
+      basedOnValue: cystatinValue,
       basedOnDate: at,
       computedAt: new Date().toISOString(),
     },
@@ -119,6 +156,10 @@ export async function POST(
         const egfr = await autoEgfr(access, doctorId || null, val, at);
         if (egfr) saved.push(egfr);
       }
+      if (key === "cistatina_c") {
+        const egfrc = await autoEgfrCystatin(access, doctorId || null, val, at);
+        if (egfrc) saved.push(egfrc);
+      }
     }
     return NextResponse.json({ saved, updated, kept, rejected, count: saved.length }, { status: 201 });
   }
@@ -149,6 +190,10 @@ export async function POST(
   if (testKey === "creatinina") {
     egfr = await autoEgfr(access, doctorId || null, value, measuredAt);
     if (!egfr) egfrSkipped = "Cadastre data de nascimento e sexo do paciente para calcular a TFGe automaticamente.";
+  }
+  if (testKey === "cistatina_c") {
+    egfr = await autoEgfrCystatin(access, doctorId || null, value, measuredAt);
+    if (!egfr) egfrSkipped = "Cadastre data de nascimento e sexo do paciente para calcular a TFGe por cistatina.";
   }
 
   return NextResponse.json({ lab, egfr, egfrSkipped }, { status: 201 });
