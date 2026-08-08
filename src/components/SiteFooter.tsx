@@ -24,7 +24,7 @@ export function SiteFooter() {
         <Link href="/agendar" className="hover:text-[var(--gold)]">
           Agendar
         </Link>
-        <Link href="/minhas-consultas" className="hover:text-[var(--gold)]">
+        <Link href="/paciente/entrar" className="hover:text-[var(--gold)]">
           Sou paciente
         </Link>
         <Link href="/medicos/login" className="hover:text-[var(--gold)]">

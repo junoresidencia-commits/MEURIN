@@ -128,8 +128,14 @@ function EntrarInner() {
         </form>
       )}
 
+      <div className="mt-5 rounded-2xl border border-[var(--border-gold)] bg-[var(--gold-soft)] p-4 text-center">
+        <p className="text-sm font-semibold text-[var(--text)]">Ainda não tem conta?</p>
+        <Link href="/paciente/criar" className="btn-gold mt-2 w-full">Criar minha conta</Link>
+        <p className="mt-2 text-xs text-[var(--text-muted)]">Basta nome e CPF. Você completa o resto depois.</p>
+      </div>
+
       <p className="mt-4 text-center text-xs text-[var(--text-muted)]">
-        <Link href="/agendar" className="font-semibold text-[var(--gold)]">Ainda não tem consulta? Agende aqui</Link>
+        <Link href="/agendar" className="font-semibold text-[var(--gold)]">Quer agendar uma consulta? Clique aqui</Link>
       </p>
     </div>
   );

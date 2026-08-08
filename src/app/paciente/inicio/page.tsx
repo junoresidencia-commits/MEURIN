@@ -184,6 +184,12 @@ export default function PacienteInicioPage() {
         </div>
         <div className="flex items-center gap-2">
           <Link
+            href="/paciente/dados"
+            className="rounded-full border border-[var(--border)] px-3 py-1.5 text-xs font-semibold text-[var(--text-muted)]"
+          >
+            Meus dados
+          </Link>
+          <Link
             href="/paciente/senha"
             className="rounded-full border border-[var(--border)] px-3 py-1.5 text-xs font-semibold text-[var(--text-muted)]"
           >

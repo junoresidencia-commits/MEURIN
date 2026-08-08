@@ -57,7 +57,7 @@ export function SiteHeader() {
               Profissional
             </Link>
             <Link
-              href="/minhas-consultas"
+              href="/paciente/entrar"
               className="rounded-full px-3 py-2.5 text-[var(--text-soft)] transition hover:text-[var(--gold)]"
             >
               Paciente
@@ -89,7 +89,7 @@ export function SiteHeader() {
                 Entrar como profissional
               </Link>
               <Link
-                href="/minhas-consultas"
+                href="/paciente/entrar"
                 className="rounded-full px-4 py-3 text-center text-sm font-semibold text-[var(--text-soft)]"
                 onClick={() => setOpen(false)}
               >
