@@ -68,6 +68,7 @@ export default function PacienteInicioPage() {
   const [bookings, setBookings] = useState<Booking[]>([]);
   const [notes, setNotes] = useState<SharedNote[]>([]);
   const [documents, setDocuments] = useState<SharedDoc[]>([]);
+  const [labs, setLabs] = useState<{ testKey: string; value: number; unit?: string | null; measuredAt: string }[]>([]);
   const [loading, setLoading] = useState(true);
   const [consentPending, setConsentPending] = useState(false);
 
@@ -115,6 +116,13 @@ export default function PacienteInicioPage() {
         const dres = await fetch("/api/patient/documents");
         const dd = await dres.json();
         setDocuments(dd.documents || []);
+      } catch {
+        /* ignore */
+      }
+      try {
+        const lr = await fetch("/api/patient/labs");
+        const ld = await lr.json();
+        setLabs(ld.labs || []);
       } catch {
         /* ignore */
       }
@@ -190,6 +198,8 @@ export default function PacienteInicioPage() {
           </button>
         </div>
       </div>
+
+      <KidneyNumbers labs={labs} />
 
       <p className="mt-6 text-xs font-bold uppercase tracking-wider text-[var(--gold)]">
         Resumo do dia
@@ -343,6 +353,64 @@ export default function PacienteInicioPage() {
 
       <PatientNav />
     </div>
+  );
+}
+
+type Lab = { testKey: string; value: number; unit?: string | null; measuredAt: string };
+const KIDNEY_KEYS: { key: string; label: string; edu: string }[] = [
+  { key: "tfge", label: "Taxa de filtração (TFGe)", edu: "tfge" },
+  { key: "creatinina", label: "Creatinina", edu: "creatinina" },
+  { key: "rac", label: "Proteína/albumina na urina (RAC)", edu: "proteina-urina" },
+  { key: "potassio", label: "Potássio", edu: "numeros" },
+];
+function fmtNum(n: number): string {
+  return String(n).replace(".", ",");
+}
+function KidneyNumbers({ labs }: { labs: Lab[] }) {
+  const rows = KIDNEY_KEYS.map(({ key, label, edu }) => {
+    const series = labs.filter((l) => l.testKey === key).sort((a, b) => a.measuredAt.localeCompare(b.measuredAt));
+    const last = series[series.length - 1];
+    const prev = series[series.length - 2];
+    let trend = "";
+    if (last && prev) {
+      if (key === "tfge") trend = last.value > prev.value ? "melhorou" : last.value < prev.value ? "caiu" : "estável";
+      else trend = last.value < prev.value ? "reduziu" : last.value > prev.value ? "subiu" : "estável";
+    }
+    return { key, label, edu, last, prev, trend };
+  }).filter((r) => r.last);
+
+  return (
+    <>
+      <div className="mt-6 flex items-center justify-between">
+        <p className="text-xs font-bold uppercase tracking-wider text-[var(--gold)]">Meu rim hoje</p>
+        <Link href="/paciente/entender" className="text-xs font-semibold text-[var(--gold)]">Entender meu rim →</Link>
+      </div>
+      {rows.length === 0 ? (
+        <div className="mt-3 rounded-[20px] border border-[var(--border-gold)] bg-[var(--gold-soft)] p-4 text-sm text-[var(--text-soft)]">
+          Seus exames de rim aparecerão aqui quando seu médico registrá-los. Enquanto isso,{" "}
+          <Link href="/paciente/entender" className="font-semibold text-[var(--gold)]">entenda como os rins funcionam</Link>.
+        </div>
+      ) : (
+        <div className="mt-3 grid gap-2">
+          {rows.map((r) => (
+            <div key={r.key} className="rounded-[18px] border border-[var(--border)] bg-white p-3 shadow-[var(--shadow)]">
+              <div className="flex items-center justify-between gap-2">
+                <span className="text-sm font-semibold text-[var(--text-soft)]">{r.label}</span>
+                <span className="text-lg font-extrabold text-[var(--text)]">
+                  {fmtNum(r.last!.value)}{r.last!.unit ? <span className="ml-1 text-xs font-semibold text-[var(--text-muted)]">{r.last!.unit}</span> : null}
+                </span>
+              </div>
+              <div className="mt-1 flex items-center justify-between gap-2">
+                <span className="text-xs text-[var(--text-muted)]">
+                  {r.prev ? `anterior: ${fmtNum(r.prev.value)} · ${r.trend}` : new Date(r.last!.measuredAt).toLocaleDateString("pt-BR")}
+                </span>
+                <Link href={`/paciente/entender#${r.edu}`} className="text-xs font-semibold text-[var(--gold)]">O que isso significa?</Link>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </>
   );
 }
 
