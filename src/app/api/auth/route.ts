@@ -11,9 +11,10 @@ export async function GET() {
   const db = await readDb();
   const doctor = db.doctors.find((d) => d.id === doctorId);
   if (!doctor) return NextResponse.json({ doctor: null });
-  const { passwordHash, ...safe } = doctor;
+  const { passwordHash, mpAccessToken, ...safe } = doctor;
   void passwordHash;
-  return NextResponse.json({ doctor: safe });
+  // Nunca devolvemos o token do Mercado Pago ao navegador — só se está conectado.
+  return NextResponse.json({ doctor: { ...safe, mpConnected: Boolean(mpAccessToken?.trim()) } });
 }
 
 export async function POST(req: Request) {

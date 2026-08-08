@@ -18,7 +18,17 @@ type Doctor = {
   pixKey?: string | null;
   status: "pending" | "approved" | "rejected" | "suspended" | "correction";
   adminNote?: string | null;
+  commissionPercent: number;
+  platformPercent: number;
+  payoutStatus: "active" | "pending" | "blocked";
+  mpConnected: boolean;
   createdAt: string;
+};
+
+const PAYOUT_LABEL: Record<Doctor["payoutStatus"], string> = {
+  active: "Ativo",
+  pending: "Pendente",
+  blocked: "Bloqueado",
 };
 
 const TABS = [
@@ -63,6 +73,35 @@ export default function AdminPage() {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ id, status, adminNote }),
+    });
+    await load();
+  }
+
+  async function setCommission(id: string, currentPercent: number) {
+    const input = window.prompt("Percentual de repasse do médico (0–100):", String(currentPercent));
+    if (input === null) return;
+    const pct = Number(input.replace(",", "."));
+    if (!Number.isFinite(pct) || pct < 0 || pct > 100) {
+      window.alert("Informe um número entre 0 e 100.");
+      return;
+    }
+    const res = await fetch("/api/admin/doctors", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ id, commissionPercent: Math.round(pct) }),
+    });
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}));
+      window.alert(data.error || "Não foi possível alterar o percentual.");
+    }
+    await load();
+  }
+
+  async function setPayout(id: string, payoutStatus: "active" | "pending" | "blocked") {
+    await fetch("/api/admin/doctors", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ id, payoutStatus }),
     });
     await load();
   }
@@ -151,6 +190,46 @@ export default function AdminPage() {
                 Aviso ao médico: {d.adminNote}
               </p>
             )}
+
+            <div className="mt-3 rounded-xl border border-[var(--border)] bg-white p-3">
+              <p className="text-xs font-bold uppercase tracking-wider text-[var(--gold)]">Financeiro</p>
+              <div className="mt-2 grid gap-1 text-sm text-[var(--text-soft)] sm:grid-cols-2">
+                <p><span className="text-[var(--text-muted)]">Valor da consulta:</span> {formatBRL(d.consultationPriceCents)}</p>
+                <p><span className="text-[var(--text-muted)]">Repasse do médico:</span> {d.commissionPercent}%</p>
+                <p><span className="text-[var(--text-muted)]">Parte da plataforma:</span> {d.platformPercent}%</p>
+                <p>
+                  <span className="text-[var(--text-muted)]">Mercado Pago:</span>{" "}
+                  {d.mpConnected ? "Conectado" : "Não conectado"}
+                </p>
+                <p>
+                  <span className="text-[var(--text-muted)]">Recebimento:</span>{" "}
+                  <span className={d.payoutStatus === "active" ? "font-semibold text-[var(--green,#0d9488)]" : "font-semibold text-[var(--danger)]"}>
+                    {PAYOUT_LABEL[d.payoutStatus]}
+                  </span>
+                </p>
+              </div>
+              <div className="mt-3 flex flex-wrap gap-2">
+                <button type="button" className="btn-ghost" onClick={() => setCommission(d.id, d.commissionPercent)}>
+                  Alterar percentual
+                </button>
+                {d.payoutStatus !== "active" && (
+                  <button type="button" className="btn-ghost" onClick={() => setPayout(d.id, "active")}>
+                    Aprovar recebimento
+                  </button>
+                )}
+                {d.payoutStatus !== "blocked" && (
+                  <button type="button" className="btn-ghost" onClick={() => setPayout(d.id, "blocked")}>
+                    Bloquear recebimento
+                  </button>
+                )}
+                {d.payoutStatus !== "pending" && (
+                  <button type="button" className="btn-ghost" onClick={() => setPayout(d.id, "pending")}>
+                    Solicitar reconexão
+                  </button>
+                )}
+              </div>
+            </div>
+
             <div className="mt-4 flex flex-wrap gap-2">
               {(d.status === "pending" || d.status === "correction" || d.status === "rejected") && (
                 <button type="button" className="btn-gold" onClick={() => setStatus(d.id, "approved")}>Aprovar médico</button>
