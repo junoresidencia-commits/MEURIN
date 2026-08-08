@@ -69,6 +69,7 @@ export default function PacienteInicioPage() {
   const [notes, setNotes] = useState<SharedNote[]>([]);
   const [documents, setDocuments] = useState<SharedDoc[]>([]);
   const [labs, setLabs] = useState<{ testKey: string; value: number; unit?: string | null; measuredAt: string }[]>([]);
+  const [patientName, setPatientName] = useState("");
   const [loading, setLoading] = useState(true);
   const [consentPending, setConsentPending] = useState(false);
 
@@ -126,6 +127,13 @@ export default function PacienteInicioPage() {
       } catch {
         /* ignore */
       }
+      try {
+        const me = await fetch("/api/patient/me");
+        const md = await me.json();
+        if (md.found && md.patient?.name) setPatientName(md.patient.name);
+      } catch {
+        /* ignore */
+      }
     }
     setLoading(false);
   }, [router]);
@@ -145,7 +153,7 @@ export default function PacienteInicioPage() {
   const nextBooking = bookings
     .filter((b) => new Date(b.slotStart).getTime() > Date.now() - 3_600_000)
     .sort((a, b) => a.slotStart.localeCompare(b.slotStart))[0];
-  const name = email ? email.split("@")[0] : "";
+  const name = patientName || (email.includes("@") ? email.split("@")[0] : "paciente");
 
   if (loading) {
     return (
