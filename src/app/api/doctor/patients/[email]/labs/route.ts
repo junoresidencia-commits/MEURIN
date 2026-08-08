@@ -1,13 +1,51 @@
 import { NextResponse } from "next/server";
 import { getDoctorSessionId } from "@/lib/auth";
-import { addLabResult, getLabResults, deleteLabResult } from "@/lib/patient-store";
-import { resolvePatientAccess } from "@/lib/doctor-access";
+import { addLabResult, getLabResults, deleteLabResult, type LabResult } from "@/lib/patient-store";
+import { resolvePatientAccess, type PatientAccess } from "@/lib/doctor-access";
 import { NEPHRO_LABS, labUnit } from "@/lib/labs";
+import { estimateEgfr, EGFR_EQUATION, EGFR_VERSION } from "@/lib/egfr";
 
 const VALID = new Set(NEPHRO_LABS.map((l) => l.key));
 
 function dayOf(iso: string): string {
   return new Date(iso).toISOString().slice(0, 10);
+}
+
+/**
+ * TFGe histórica: ao registrar creatinina, calcula a TFGe (CKD-EPI 2021) e a grava
+ * preservando a creatinina de origem, a data, a equação e a versão (para recalcular
+ * a base no futuro se a equação mudar). Substitui apenas a TFGe automática da mesma data.
+ */
+async function autoEgfr(
+  access: PatientAccess,
+  doctorId: string | null,
+  creatValue: number,
+  at: string
+): Promise<LabResult | null> {
+  const egfr = estimateEgfr(creatValue, access.birthdate, access.sex, at);
+  if (egfr == null) return null;
+  const labs = await getLabResults(access.key);
+  const stale = labs.filter(
+    (l) => l.testKey === "tfge" && dayOf(l.measuredAt) === dayOf(at) && String(l.origin || "").includes("CKD-EPI")
+  );
+  for (const s of stale) await deleteLabResult(s.id);
+  return addLabResult({
+    patientEmail: access.key,
+    doctorId: doctorId || null,
+    testKey: "tfge",
+    value: egfr,
+    unit: labUnit("tfge"),
+    origin: `${EGFR_EQUATION} ${EGFR_VERSION}`,
+    measuredAt: at,
+    meta: {
+      equation: EGFR_EQUATION,
+      version: EGFR_VERSION,
+      basedOnTestKey: "creatinina",
+      basedOnValue: creatValue,
+      basedOnDate: at,
+      computedAt: new Date().toISOString(),
+    },
+  });
 }
 
 export async function POST(
@@ -76,6 +114,11 @@ export async function POST(
         measuredAt: at,
       });
       saved.push(lab);
+
+      if (key === "creatinina") {
+        const egfr = await autoEgfr(access, doctorId || null, val, at);
+        if (egfr) saved.push(egfr);
+      }
     }
     return NextResponse.json({ saved, updated, kept, rejected, count: saved.length }, { status: 201 });
   }
@@ -101,5 +144,12 @@ export async function POST(
     measuredAt,
   });
 
-  return NextResponse.json({ lab }, { status: 201 });
+  let egfr: LabResult | null = null;
+  let egfrSkipped: string | null = null;
+  if (testKey === "creatinina") {
+    egfr = await autoEgfr(access, doctorId || null, value, measuredAt);
+    if (!egfr) egfrSkipped = "Cadastre data de nascimento e sexo do paciente para calcular a TFGe automaticamente.";
+  }
+
+  return NextResponse.json({ lab, egfr, egfrSkipped }, { status: 201 });
 }

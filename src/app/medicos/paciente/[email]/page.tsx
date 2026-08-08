@@ -7,6 +7,8 @@ import { formatSlotLabel } from "@/lib/scheduling-client";
 import { NEPHRO_LABS, labLabel, labUnit } from "@/lib/labs";
 import { LmeWizard } from "@/components/LmeWizard";
 import { ClinicalProfileEditor } from "@/components/ClinicalProfileEditor";
+import { ClinicalReviewModal } from "@/components/ClinicalReviewModal";
+import { extractClinicalFields, type DetectedField } from "@/lib/clinical-extractor";
 import { ExamReviewModal } from "@/components/ExamReviewModal";
 import { parseLabsFromText } from "@/lib/lab-parser";
 import { LogoUploader } from "@/components/LogoUploader";
@@ -121,6 +123,7 @@ export default function ProntuarioPage() {
   // Formulário de evolução
   const [form, setForm] = useState({ chiefComplaint: "", history: "", assessment: "", plan: "" });
   const [review, setReview] = useState<{ labs: { testKey: string; value: number | string; unit?: string }[]; date?: string } | null>(null);
+  const [clinicalReview, setClinicalReview] = useState<DetectedField[] | null>(null);
   const [shared, setShared] = useState(true);
   const [saving, setSaving] = useState(false);
   const [saveMsg, setSaveMsg] = useState("");
@@ -244,14 +247,18 @@ export default function ProntuarioPage() {
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Não foi possível salvar.");
-      // Leitura automática: detecta exames escritos na evolução (antes de limpar o campo).
+      // Leitura automática: detecta exames E dados clínicos escritos na evolução.
       const evolutionText = [form.chiefComplaint, form.history, form.assessment, form.plan].filter(Boolean).join("\n");
       const detected = parseLabsFromText(evolutionText);
+      const detectedClinical = extractClinicalFields(evolutionText);
       setForm({ chiefComplaint: "", history: "", assessment: "", plan: "" });
       setSaveMsg("Evolução salva no prontuário." + (shared ? " Liberada ao paciente." : ""));
       await load();
       if (detected.labs.length > 0) {
         setReview({ labs: detected.labs, date: detected.date });
+      }
+      if (detectedClinical.length > 0) {
+        setClinicalReview(detectedClinical);
       }
     } catch (e) {
       setSaveErr(e instanceof Error ? e.message : "Erro inesperado.");
@@ -694,6 +701,16 @@ export default function ProntuarioPage() {
             await load();
             setTab("exames");
           }}
+        />
+      )}
+
+      {/* Depois dos exames, confirma os dados clínicos detectados (perfil estruturado). */}
+      {!review && clinicalReview && (
+        <ClinicalReviewModal
+          emailParam={emailParam}
+          detected={clinicalReview}
+          onClose={() => setClinicalReview(null)}
+          onSaved={async () => { await load(); }}
         />
       )}
     </div>

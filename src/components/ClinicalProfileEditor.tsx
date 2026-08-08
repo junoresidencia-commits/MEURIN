@@ -12,18 +12,32 @@ import {
   type ClinicalProfileData,
 } from "@/lib/clinical-fields";
 
+type FieldMeta = { source: string; at: string };
+type HistoryEntry = { field: string; from: unknown; to: unknown; source: string; at: string };
+
 export function ClinicalProfileEditor({ emailParam }: { emailParam: string }) {
   const [data, setData] = useState<ClinicalProfileData>({});
+  const [meta, setMeta] = useState<Record<string, FieldMeta>>({});
+  const [history, setHistory] = useState<HistoryEntry[]>([]);
+  const [showHistory, setShowHistory] = useState(false);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [msg, setMsg] = useState("");
 
+  function load() {
+    return fetch(`/api/doctor/patients/${emailParam}/profile`)
+      .then((r) => (r.ok ? r.json() : { profile: {}, meta: {}, history: [] }))
+      .then((d) => {
+        setData(d.profile || {});
+        setMeta(d.meta || {});
+        setHistory(Array.isArray(d.history) ? d.history : []);
+      })
+      .catch(() => {});
+  }
+
   useEffect(() => {
-    fetch(`/api/doctor/patients/${emailParam}/profile`)
-      .then((r) => (r.ok ? r.json() : { profile: {} }))
-      .then((d) => setData(d.profile || {}))
-      .catch(() => {})
-      .finally(() => setLoading(false));
+    load().finally(() => setLoading(false));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [emailParam]);
 
   function set(key: string, value: unknown) {
@@ -47,6 +61,7 @@ export function ClinicalProfileEditor({ emailParam }: { emailParam: string }) {
         body: JSON.stringify({ data }),
       });
       if (!res.ok) throw new Error();
+      await load();
       setMsg("Perfil clínico salvo.");
     } catch {
       setMsg("Não foi possível salvar.");
@@ -58,6 +73,10 @@ export function ClinicalProfileEditor({ emailParam }: { emailParam: string }) {
   if (loading) return <p className="text-[var(--text-muted)]">Carregando perfil…</p>;
 
   const imc = computeImc(data);
+  const srcOf = (key: string) => {
+    const s = meta[key]?.source;
+    return s ? <span className="ml-1 rounded-full bg-[var(--gold-soft)] px-1.5 py-0.5 text-[10px] font-semibold text-[var(--gold)]">{s}</span> : null;
+  };
 
   return (
     <div className="space-y-4">
@@ -77,7 +96,7 @@ export function ClinicalProfileEditor({ emailParam }: { emailParam: string }) {
               if (f.kind === "number") {
                 return (
                   <label key={f.key} className="block">
-                    <span className="mb-1 block text-xs font-semibold text-[var(--text-muted)]">{f.label}{f.unit ? ` (${f.unit})` : ""}</span>
+                    <span className="mb-1 block text-xs font-semibold text-[var(--text-muted)]">{f.label}{f.unit ? ` (${f.unit})` : ""}{srcOf(f.key)}</span>
                     <input inputMode="decimal" className="input-field" value={String(data[f.key] ?? "")} onChange={(e) => set(f.key, e.target.value)} />
                   </label>
                 );
@@ -86,7 +105,7 @@ export function ClinicalProfileEditor({ emailParam }: { emailParam: string }) {
                 const opts = f.kind === "enumG" ? ESTAGIOS_G.map((v) => ({ value: v, label: v })) : f.kind === "enumA" ? CATEGORIAS_A.map((v) => ({ value: v, label: v })) : ETIOLOGIAS;
                 return (
                   <label key={f.key} className="block">
-                    <span className="mb-1 block text-xs font-semibold text-[var(--text-muted)]">{f.label}</span>
+                    <span className="mb-1 block text-xs font-semibold text-[var(--text-muted)]">{f.label}{srcOf(f.key)}</span>
                     <select className="input-field" value={String(data[f.key] ?? "")} onChange={(e) => set(f.key, e.target.value)}>
                       <option value="">Desconhecido</option>
                       {opts.map((o) => (
@@ -100,7 +119,7 @@ export function ClinicalProfileEditor({ emailParam }: { emailParam: string }) {
                 const arr = Array.isArray(data[f.key]) ? (data[f.key] as string[]) : [];
                 return (
                   <div key={f.key} className="sm:col-span-2">
-                    <span className="mb-1 block text-xs font-semibold text-[var(--text-muted)]">{f.label}</span>
+                    <span className="mb-1 block text-xs font-semibold text-[var(--text-muted)]">{f.label}{srcOf(f.key)}</span>
                     <div className="flex flex-wrap gap-1.5">
                       {ETIOLOGIAS.map((o) => (
                         <button
@@ -120,7 +139,7 @@ export function ClinicalProfileEditor({ emailParam }: { emailParam: string }) {
               const cur = data[f.key] as string | undefined;
               return (
                 <div key={f.key} className="block">
-                  <span className="mb-1 block text-xs font-semibold text-[var(--text-muted)]">{f.label}</span>
+                  <span className="mb-1 block text-xs font-semibold text-[var(--text-muted)]">{f.label}{srcOf(f.key)}</span>
                   <div className="flex gap-1">
                     {TRI_OPTIONS.map((o) => {
                       const selected = (cur ?? "desconhecido") === o.value;
@@ -145,6 +164,27 @@ export function ClinicalProfileEditor({ emailParam }: { emailParam: string }) {
           )}
         </div>
       ))}
+
+      {history.length > 0 && (
+        <div className="panel space-y-2">
+          <button type="button" className="text-sm font-bold text-[var(--gold)]" onClick={() => setShowHistory((v) => !v)}>
+            {showHistory ? "▾" : "▸"} Histórico de alterações ({history.length})
+          </button>
+          {showHistory && (
+            <ul className="space-y-1 text-xs text-[var(--text-soft)]">
+              {[...history].reverse().map((h, i) => {
+                const f = CLINICAL_FIELDS.find((x) => x.key === h.field);
+                return (
+                  <li key={i} className="border-b border-[var(--border)] pb-1">
+                    <b className="text-[var(--text)]">{f?.label || h.field}</b>: {String(h.from ?? "—")} → {String(h.to ?? "—")}
+                    <span className="text-[var(--text-muted)]"> · fonte: {h.source} · {new Date(h.at).toLocaleString("pt-BR")}</span>
+                  </li>
+                );
+              })}
+            </ul>
+          )}
+        </div>
+      )}
 
       {msg && <p className="text-sm text-[var(--green)]">{msg}</p>}
       <button type="button" className="btn-gold" onClick={save} disabled={saving}>
