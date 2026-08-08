@@ -477,6 +477,8 @@ export interface LabResult {
   unit?: string | null;
   referenceRange?: string | null;
   origin?: string | null;
+  /** Metadados (ex.: TFGe calculada: equação, versão, creatinina de origem). */
+  meta?: Record<string, unknown> | null;
   measuredAt: string;
   createdAt: string;
 }
@@ -491,6 +493,7 @@ function mapLabRow(r: Record<string, unknown>): LabResult {
     unit: (r.unit as string | null) ?? null,
     referenceRange: (r.reference_range as string | null) ?? null,
     origin: (r.origin as string | null) ?? null,
+    meta: (r.meta as Record<string, unknown> | null) ?? null,
     measuredAt: new Date(String(r.measured_at)).toISOString(),
     createdAt: new Date(String(r.created_at)).toISOString(),
   };
@@ -516,6 +519,7 @@ export async function addLabResult(
       unit: row.unit ?? null,
       reference_range: row.referenceRange ?? null,
       origin: row.origin ?? null,
+      meta: row.meta ?? null,
       measured_at: row.measuredAt,
       created_at: row.createdAt,
     });

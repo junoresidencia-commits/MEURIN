@@ -53,6 +53,7 @@ export const CLINICAL_FIELDS: FieldDef[] = [
   // Comorbidades
   { key: "has", label: "Hipertensão (HAS)", kind: "tri", group: "Comorbidades" },
   { key: "dm", label: "Diabetes (DM)", kind: "tri", group: "Comorbidades" },
+  { key: "tempo_dm_anos", label: "Tempo de diabetes", kind: "number", group: "Comorbidades", unit: "anos" },
   { key: "ic", label: "Insuficiência cardíaca", kind: "tri", group: "Comorbidades" },
   { key: "dcv", label: "Doença cardiovascular", kind: "tri", group: "Comorbidades" },
   { key: "obesidade", label: "Obesidade", kind: "tri", group: "Comorbidades" },
