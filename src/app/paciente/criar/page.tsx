@@ -43,7 +43,7 @@ export default function CriarContaPacientePage() {
         Preencha pelo menos o nome e o CPF. Você poderá completar ou alterar os dados depois, inclusive na consulta.
       </p>
 
-      <form onSubmit={submit} className="panel mt-6 space-y-4">
+      <form onSubmit={submit} noValidate className="panel mt-6 space-y-4">
         <label className="block">
           <span className="mb-1 block text-xs font-bold uppercase tracking-wider text-[var(--gold)]">Nome completo *</span>
           <input className="input-field" value={form.name} onChange={(e) => set("name", e.target.value)} autoComplete="name" required />
@@ -54,12 +54,12 @@ export default function CriarContaPacientePage() {
         </label>
         <label className="block">
           <span className="mb-1 block text-xs font-bold uppercase tracking-wider text-[var(--gold)]">Senha</span>
-          <input type="password" className="input-field" value={form.password} onChange={(e) => set("password", e.target.value)} placeholder="Crie uma senha (ou deixe em branco para 123456)" autoComplete="new-password" />
+          <input type="password" className="input-field" value={form.password} onChange={(e) => set("password", e.target.value)} placeholder="Qualquer senha que você quiser (ou deixe em branco = 123456)" autoComplete="new-password" />
         </label>
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
           <label className="block">
             <span className="mb-1 block text-xs font-semibold text-[var(--text-muted)]">E-mail (opcional)</span>
-            <input type="email" className="input-field" value={form.email} onChange={(e) => set("email", e.target.value)} autoComplete="email" />
+            <input type="text" inputMode="email" className="input-field" value={form.email} onChange={(e) => set("email", e.target.value)} autoComplete="email" />
           </label>
           <label className="block">
             <span className="mb-1 block text-xs font-semibold text-[var(--text-muted)]">Telefone (opcional)</span>

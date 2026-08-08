@@ -16,8 +16,8 @@ export async function POST(req: Request) {
   const body = await req.json().catch(() => ({}));
   const current = String(body.currentPassword || "");
   const next = String(body.newPassword || "");
-  if (next.length < 4) {
-    return NextResponse.json({ error: "A nova senha deve ter ao menos 4 caracteres." }, { status: 400 });
+  if (!next) {
+    return NextResponse.json({ error: "Informe a nova senha." }, { status: 400 });
   }
 
   // Descobre o cadastro do paciente a partir do "subject" da sessão
