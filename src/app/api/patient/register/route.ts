@@ -23,9 +23,7 @@ export async function POST(req: Request) {
   if (normalizeCpf(cpf).length < 11) {
     return NextResponse.json({ error: "Informe um CPF válido (11 dígitos)." }, { status: 400 });
   }
-  if (password && password.length < 4) {
-    return NextResponse.json({ error: "A senha deve ter ao menos 4 caracteres." }, { status: 400 });
-  }
+  // Senha livre: a pessoa escolhe qualquer senha (ou deixa em branco para 123456).
 
   // Evita cadastro duplicado: se o CPF já existe (ex.: criado pelo médico), oriente a entrar.
   const existing = await findByCpfAny(cpf);
