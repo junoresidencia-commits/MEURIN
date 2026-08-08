@@ -9,10 +9,11 @@ import {
   readDb,
   setDoctorCommission,
   setDoctorPayoutStatus,
+  setDoctorServiceCommission,
   updateDb,
 } from "@/lib/store";
 import { defaultAvailability } from "@/lib/scheduling";
-import { resolveDoctorSharePercent } from "@/lib/types";
+import { resolveDoctorSharePercent, resolveServiceSharePercent } from "@/lib/types";
 
 export async function GET() {
   if (!(await isAdmin())) {
@@ -37,6 +38,10 @@ export async function GET() {
       // Financeiro: percentual (repasse do médico), plataforma e liberação.
       commissionPercent: resolveDoctorSharePercent(d),
       platformPercent: 100 - resolveDoctorSharePercent(d),
+      consultaCommissionPercent: resolveServiceSharePercent(d, "consulta"),
+      planCommissionPercent: resolveServiceSharePercent(d, "plan"),
+      hasConsultaOverride: typeof d.consultaCommissionPercent === "number",
+      hasPlanOverride: typeof d.planCommissionPercent === "number",
       payoutStatus: d.payoutStatus ?? "active",
       mpConnected: Boolean(d.mpAccessToken?.trim()),
       createdAt: d.createdAt,
@@ -125,6 +130,33 @@ export async function PATCH(req: Request) {
       });
     }
     return NextResponse.json({ ok: true, commissionPercent: next, platformPercent: 100 - next });
+  }
+
+  // Percentuais específicos por serviço (consulta avulsa / planos) — SOMENTE o admin.
+  // Enviar null (ou "") para voltar a usar o percentual padrão do médico.
+  for (const [key, service] of [
+    ["consultaCommissionPercent", "consulta"],
+    ["planCommissionPercent", "plan"],
+  ] as const) {
+    if (body[key] !== undefined) {
+      const raw = body[key];
+      const value = raw === null || raw === "" ? null : Number(raw);
+      if (value !== null && (!Number.isFinite(value) || value < 0 || value > 100)) {
+        return NextResponse.json({ error: "Percentual deve estar entre 0 e 100." }, { status: 400 });
+      }
+      const doctor = await getDoctorById(String(id));
+      if (!doctor) return NextResponse.json({ error: "Médico não encontrado." }, { status: 404 });
+      const prev = resolveServiceSharePercent(doctor, service);
+      await setDoctorServiceCommission(String(id), service, value);
+      await logFinancialEvent({
+        doctorId: String(id),
+        kind: "commission",
+        oldValue: `${service}:${prev}`,
+        newValue: `${service}:${value === null ? "padrão" : Math.round(value)}`,
+        changedBy: "admin",
+      });
+      return NextResponse.json({ ok: true });
+    }
   }
 
   // Liberação financeira do recebimento — SOMENTE o administrador.

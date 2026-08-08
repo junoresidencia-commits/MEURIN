@@ -13,6 +13,7 @@ import { ExamReviewModal } from "@/components/ExamReviewModal";
 import { parseLabsFromText } from "@/lib/lab-parser";
 import { LogoUploader } from "@/components/LogoUploader";
 import { TemplatePicker } from "@/components/TemplatePicker";
+import { PLAN_DURATIONS, type DiscountType, type PlanEnrollment } from "@/lib/plans";
 
 type Lab = { id: string; testKey: string; value: number; unit?: string | null; measuredAt: string };
 type Upload = { id: string; name: string; category?: string | null; examDate?: string | null; signedUrl?: string | null };
@@ -34,7 +35,7 @@ type HomeRecord = {
 };
 type FoodLog = { id: string; food: string; meal?: string | null; quantity?: string | null; loggedAt: string };
 type Booking = { id: string; status: string; slotStart: string; careReason: string; meetingRoomId: string };
-type Patient = { email: string; name: string; city: string; phone: string };
+type Patient = { key?: string; email: string; name: string; city: string; phone: string };
 type Note = {
   id: string;
   doctorName: string;
@@ -71,6 +72,7 @@ const TABS = [
   { id: "sinais", label: "Sinais em casa" },
   { id: "alimentacao", label: "Alimentação" },
   { id: "consultas", label: "Consultas" },
+  { id: "planos", label: "Planos" },
 ] as const;
 type Tab = (typeof TABS)[number]["id"];
 
@@ -103,6 +105,7 @@ export default function ProntuarioPage() {
   const [labs, setLabs] = useState<Lab[]>([]);
   const [uploads, setUploads] = useState<Upload[]>([]);
   const [lmeList, setLmeList] = useState<Lme[]>([]);
+  const [enrollments, setEnrollments] = useState<PlanEnrollment[]>([]);
   const [tab, setTab] = useState<Tab>("resumo");
 
   // Formulário de exame
@@ -157,6 +160,7 @@ export default function ProntuarioPage() {
     setLabs(data.labs || []);
     setUploads(data.uploads || []);
     setLmeList(data.lme || []);
+    setEnrollments(data.enrollments || []);
     setLoading(false);
   }, [emailParam, router]);
 
@@ -687,6 +691,10 @@ export default function ProntuarioPage() {
             ))}
           </div>
         )}
+
+        {tab === "planos" && (
+          <PlanoTab patientKey={patient?.key} patientName={patient?.name || ""} enrollments={enrollments} />
+        )}
       </div>
 
       {review && (
@@ -713,6 +721,156 @@ export default function ProntuarioPage() {
           onSaved={async () => { await load(); }}
         />
       )}
+    </div>
+  );
+}
+
+function PlanoTab({
+  patientKey,
+  patientName,
+  enrollments,
+}: {
+  patientKey?: string;
+  patientName: string;
+  enrollments: PlanEnrollment[];
+}) {
+  const [offerType, setOfferType] = useState<"plan" | "consulta">("plan");
+  const [planName, setPlanName] = useState("Plano personalizado");
+  const [description, setDescription] = useState("");
+  const [durationKind, setDurationKind] = useState("6m");
+  const [consultations, setConsultations] = useState("4");
+  const [price, setPrice] = useState("");
+  const [discountType, setDiscountType] = useState<DiscountType | "">("");
+  const [discountValue, setDiscountValue] = useState("");
+  const [validUntil, setValidUntil] = useState("");
+  const [msg, setMsg] = useState("");
+  const [err, setErr] = useState("");
+  const [saving, setSaving] = useState(false);
+
+  const active = enrollments.filter((e) => ["ativo", "suspenso", "aguardando_confirmacao"].includes(e.status));
+
+  async function send() {
+    if (!patientKey) {
+      setErr("Não foi possível identificar o paciente.");
+      return;
+    }
+    setSaving(true);
+    setErr("");
+    setMsg("");
+    const body = {
+      patientKey,
+      patientName,
+      offerType,
+      planName,
+      description,
+      durationKind: offerType === "plan" ? durationKind : undefined,
+      consultations: offerType === "plan" ? Number(consultations) : undefined,
+      originalPriceCents: Math.round(Number(price.replace(",", ".")) * 100),
+      discountType: discountType || undefined,
+      discountValue: discountType ? (discountType === "percent" ? Number(discountValue) : Math.round(Number(discountValue.replace(",", ".")) * 100)) : undefined,
+      validUntil: validUntil || undefined,
+    };
+    const res = await fetch("/api/doctor/offers", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    });
+    setSaving(false);
+    if (res.ok) {
+      setMsg("Proposta enviada ao paciente. Ele poderá aceitar e pagar no app.");
+      setPrice("");
+      setDiscountValue("");
+    } else {
+      setErr((await res.json().catch(() => ({}))).error || "Não foi possível enviar.");
+    }
+  }
+
+  return (
+    <div className="space-y-4">
+      {active.length > 0 && (
+        <div className="panel">
+          <p className="text-xs font-bold uppercase tracking-wider text-[var(--gold)]">Plano de acompanhamento</p>
+          {active.map((e) => (
+            <div key={e.id} className="mt-2">
+              <p className="font-bold text-[var(--text)]">
+                {e.planName} {e.status === "ativo" ? "🟢 ATIVO" : e.status === "aguardando_confirmacao" ? "🟡 aguardando confirmação" : "🟠 suspenso"}
+              </p>
+              <p className="text-sm text-[var(--text-muted)]">
+                Consultas: {e.consultationsUsed}/{e.consultationsTotal}
+                {e.endAt ? ` · válido até ${new Date(e.endAt).toLocaleDateString("pt-BR")}` : ""}
+              </p>
+            </div>
+          ))}
+        </div>
+      )}
+
+      <div className="panel space-y-3">
+        <p className="text-xs font-bold uppercase tracking-wider text-[var(--gold)]">Criar plano para este paciente</p>
+        <div className="grid gap-3 sm:grid-cols-2">
+          <label className="block">
+            <span className="mb-1 block text-xs font-semibold text-[var(--text-muted)]">Tipo</span>
+            <select className="input-field" value={offerType} onChange={(e) => setOfferType(e.target.value as "plan" | "consulta")}>
+              <option value="plan">Plano de acompanhamento</option>
+              <option value="consulta">Condição especial de consulta</option>
+            </select>
+          </label>
+          <label className="block">
+            <span className="mb-1 block text-xs font-semibold text-[var(--text-muted)]">Nome</span>
+            <input className="input-field" value={planName} onChange={(e) => setPlanName(e.target.value)} />
+          </label>
+        </div>
+        {offerType === "plan" && (
+          <div className="grid gap-3 sm:grid-cols-2">
+            <label className="block">
+              <span className="mb-1 block text-xs font-semibold text-[var(--text-muted)]">Duração</span>
+              <select className="input-field" value={durationKind} onChange={(e) => setDurationKind(e.target.value)}>
+                {PLAN_DURATIONS.map((d) => <option key={d.kind} value={d.kind}>{d.label}</option>)}
+              </select>
+            </label>
+            <label className="block">
+              <span className="mb-1 block text-xs font-semibold text-[var(--text-muted)]">Consultas</span>
+              <input type="number" className="input-field" value={consultations} onChange={(e) => setConsultations(e.target.value)} />
+            </label>
+          </div>
+        )}
+        <label className="block">
+          <span className="mb-1 block text-xs font-semibold text-[var(--text-muted)]">Inclui / descrição</span>
+          <textarea className="input-field" rows={2} value={description} onChange={(e) => setDescription(e.target.value)} />
+        </label>
+        <div className="grid gap-3 sm:grid-cols-3">
+          <label className="block">
+            <span className="mb-1 block text-xs font-semibold text-[var(--text-muted)]">Preço normal (R$)</span>
+            <input type="number" className="input-field" value={price} onChange={(e) => setPrice(e.target.value)} />
+          </label>
+          <label className="block">
+            <span className="mb-1 block text-xs font-semibold text-[var(--text-muted)]">Desconto</span>
+            <select className="input-field" value={discountType} onChange={(e) => setDiscountType(e.target.value as DiscountType | "")}>
+              <option value="">Sem desconto</option>
+              <option value="percent">Percentual (%)</option>
+              <option value="fixed">Valor fixo (R$)</option>
+              <option value="promo_price">Preço final (R$)</option>
+            </select>
+          </label>
+          {discountType && (
+            <label className="block">
+              <span className="mb-1 block text-xs font-semibold text-[var(--text-muted)]">{discountType === "percent" ? "%" : "R$"}</span>
+              <input type="number" className="input-field" value={discountValue} onChange={(e) => setDiscountValue(e.target.value)} />
+            </label>
+          )}
+        </div>
+        <label className="block">
+          <span className="mb-1 block text-xs font-semibold text-[var(--text-muted)]">Validade da proposta</span>
+          <input type="date" className="input-field" value={validUntil} onChange={(e) => setValidUntil(e.target.value)} />
+        </label>
+        {msg && <p className="text-sm text-emerald-600">{msg}</p>}
+        {err && <p className="text-sm text-[var(--danger)]">{err}</p>}
+        <button type="button" className="btn-gold" onClick={send} disabled={saving || !price}>
+          {saving ? "Enviando…" : "Enviar proposta"}
+        </button>
+        <p className="text-xs text-[var(--text-muted)]">
+          O paciente recebe a proposta em “Meu acompanhamento” e ativa após o pagamento. O percentual de repasse é definido pela administração.
+        </p>
+      </div>
     </div>
   );
 }

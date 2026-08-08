@@ -275,6 +275,27 @@ export async function setDoctorCommission(id: string, percent: number): Promise<
   });
 }
 
+/** Define o repasse específico por serviço (SOMENTE administrador). null = usar padrão. */
+export async function setDoctorServiceCommission(
+  id: string,
+  service: "consulta" | "plan",
+  percent: number | null
+): Promise<void> {
+  const clamped = percent === null ? null : Math.min(100, Math.max(0, Math.round(percent)));
+  const column = service === "consulta" ? "consulta_commission_percent" : "plan_commission_percent";
+  const field = service === "consulta" ? "consultaCommissionPercent" : "planCommissionPercent";
+  const supabase = getSupabaseAdmin();
+  if (supabase) {
+    const { error } = await supabase.from("doctors").update({ [column]: clamped }).eq("id", id);
+    if (error) throw error;
+    return;
+  }
+  await updateDb((db) => {
+    db.doctors = db.doctors.map((d) => (d.id === id ? { ...d, [field]: clamped ?? undefined } : d));
+    return db;
+  });
+}
+
 /** Define o status de liberação financeira do médico (SOMENTE administrador). */
 export async function setDoctorPayoutStatus(
   id: string,
@@ -426,6 +447,14 @@ function mapDoctorRow(row: Record<string, unknown>): Doctor {
       row.commission_percent === null || row.commission_percent === undefined
         ? undefined
         : Number(row.commission_percent),
+    consultaCommissionPercent:
+      row.consulta_commission_percent === null || row.consulta_commission_percent === undefined
+        ? undefined
+        : Number(row.consulta_commission_percent),
+    planCommissionPercent:
+      row.plan_commission_percent === null || row.plan_commission_percent === undefined
+        ? undefined
+        : Number(row.plan_commission_percent),
     payoutStatus: (row.payout_status ? String(row.payout_status) : "active") as Doctor["payoutStatus"],
   };
 }
@@ -567,6 +596,8 @@ async function writeSupabaseDb(db: Database): Promise<void> {
     logo_url: doctor.logoUrl ?? null,
     mp_access_token: doctor.mpAccessToken ?? null,
     commission_percent: doctor.commissionPercent ?? null,
+    consulta_commission_percent: doctor.consultaCommissionPercent ?? null,
+    plan_commission_percent: doctor.planCommissionPercent ?? null,
     payout_status: doctor.payoutStatus ?? "active",
   }));
 

@@ -50,6 +50,9 @@ export interface Doctor {
   // Percentual de repasse do médico (0–100). Definido SOMENTE pelo administrador.
   // Ex.: 80 => médico recebe 80%, plataforma 20%. Ausente => 100% (repasse total).
   commissionPercent?: number;
+  // Percentuais específicos por serviço (opcionais). Ausentes => usam o padrão acima.
+  consultaCommissionPercent?: number;
+  planCommissionPercent?: number;
   // Liberação financeira do recebimento (definida pelo administrador).
   payoutStatus?: PayoutStatus;
 }
@@ -64,6 +67,29 @@ export function resolveDoctorSharePercent(doctor?: { commissionPercent?: number 
   const raw = doctor?.commissionPercent;
   if (typeof raw !== "number" || Number.isNaN(raw)) return DEFAULT_DOCTOR_SHARE_PERCENT;
   return Math.min(100, Math.max(0, Math.round(raw)));
+}
+
+/**
+ * Repasse do médico para um serviço específico (consulta avulsa ou plano).
+ * Usa o override do serviço quando definido pelo admin; senão, o percentual padrão.
+ */
+export function resolveServiceSharePercent(
+  doctor:
+    | {
+        commissionPercent?: number;
+        consultaCommissionPercent?: number;
+        planCommissionPercent?: number;
+      }
+    | null
+    | undefined,
+  service: "consulta" | "plan"
+): number {
+  const override =
+    service === "consulta" ? doctor?.consultaCommissionPercent : doctor?.planCommissionPercent;
+  if (typeof override === "number" && !Number.isNaN(override)) {
+    return Math.min(100, Math.max(0, Math.round(override)));
+  }
+  return resolveDoctorSharePercent(doctor);
 }
 
 /** Divide o valor bruto entre médico e plataforma conforme o percentual de repasse. */
@@ -151,5 +177,7 @@ export type PublicDoctor = Omit<
   | "adminNote"
   | "mpAccessToken"
   | "commissionPercent"
+  | "consultaCommissionPercent"
+  | "planCommissionPercent"
   | "payoutStatus"
 >;

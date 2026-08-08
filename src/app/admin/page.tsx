@@ -20,6 +20,10 @@ type Doctor = {
   adminNote?: string | null;
   commissionPercent: number;
   platformPercent: number;
+  consultaCommissionPercent: number;
+  planCommissionPercent: number;
+  hasConsultaOverride: boolean;
+  hasPlanOverride: boolean;
   payoutStatus: "active" | "pending" | "blocked";
   mpConnected: boolean;
   createdAt: string;
@@ -97,6 +101,26 @@ export default function AdminPage() {
     await load();
   }
 
+  async function setServiceCommission(id: string, service: "consulta" | "plan", current: number) {
+    const input = window.prompt(
+      `Percentual do médico para ${service === "consulta" ? "CONSULTA avulsa" : "PLANOS"} (0–100). Deixe vazio para usar o padrão:`,
+      String(current)
+    );
+    if (input === null) return;
+    const key = service === "consulta" ? "consultaCommissionPercent" : "planCommissionPercent";
+    const value = input.trim() === "" ? null : Number(input.replace(",", "."));
+    if (value !== null && (!Number.isFinite(value) || value < 0 || value > 100)) {
+      window.alert("Informe um número entre 0 e 100 (ou vazio para padrão).");
+      return;
+    }
+    await fetch("/api/admin/doctors", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ id, [key]: value }),
+    });
+    await load();
+  }
+
   async function setPayout(id: string, payoutStatus: "active" | "pending" | "blocked") {
     await fetch("/api/admin/doctors", {
       method: "PATCH",
@@ -143,6 +167,7 @@ export default function AdminPage() {
           <button type="button" className="btn-gold" onClick={() => setShowCreate((v) => !v)}>
             {showCreate ? "Fechar" : "+ Criar médico"}
           </button>
+          <a href="/admin/planos" className="btn-ghost">Planos</a>
           <a href="/admin/empresa" className="btn-ghost">Dados da empresa</a>
           <a href="/admin/protocolos" className="btn-ghost">Protocolos CEAF</a>
           <button type="button" className="btn-ghost" onClick={logout}>Sair</button>
@@ -195,8 +220,10 @@ export default function AdminPage() {
               <p className="text-xs font-bold uppercase tracking-wider text-[var(--gold)]">Financeiro</p>
               <div className="mt-2 grid gap-1 text-sm text-[var(--text-soft)] sm:grid-cols-2">
                 <p><span className="text-[var(--text-muted)]">Valor da consulta:</span> {formatBRL(d.consultationPriceCents)}</p>
-                <p><span className="text-[var(--text-muted)]">Repasse do médico:</span> {d.commissionPercent}%</p>
+                <p><span className="text-[var(--text-muted)]">Repasse padrão:</span> {d.commissionPercent}%</p>
                 <p><span className="text-[var(--text-muted)]">Parte da plataforma:</span> {d.platformPercent}%</p>
+                <p><span className="text-[var(--text-muted)]">Consulta avulsa:</span> {d.consultaCommissionPercent}%{d.hasConsultaOverride ? "" : " (padrão)"}</p>
+                <p><span className="text-[var(--text-muted)]">Planos:</span> {d.planCommissionPercent}%{d.hasPlanOverride ? "" : " (padrão)"}</p>
                 <p>
                   <span className="text-[var(--text-muted)]">Mercado Pago:</span>{" "}
                   {d.mpConnected ? "Conectado" : "Não conectado"}
@@ -210,7 +237,13 @@ export default function AdminPage() {
               </div>
               <div className="mt-3 flex flex-wrap gap-2">
                 <button type="button" className="btn-ghost" onClick={() => setCommission(d.id, d.commissionPercent)}>
-                  Alterar percentual
+                  Alterar % padrão
+                </button>
+                <button type="button" className="btn-ghost" onClick={() => setServiceCommission(d.id, "consulta", d.consultaCommissionPercent)}>
+                  % consulta
+                </button>
+                <button type="button" className="btn-ghost" onClick={() => setServiceCommission(d.id, "plan", d.planCommissionPercent)}>
+                  % planos
                 </button>
                 {d.payoutStatus !== "active" && (
                   <button type="button" className="btn-ghost" onClick={() => setPayout(d.id, "active")}>

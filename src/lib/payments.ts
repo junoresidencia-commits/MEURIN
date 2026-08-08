@@ -106,6 +106,57 @@ export async function createCheckoutPreference(
   return { redirectUrl, preferenceId: data.id };
 }
 
+/**
+ * Cria a preferência de Checkout Pro para a contratação de um PLANO.
+ * A confirmação ocorre pelo webhook (/api/plans/webhook), nunca pelo retorno do navegador.
+ */
+export async function createPlanPreference(
+  enrollment: { id: string; planName: string; patientName: string; patientKey: string; pricing: { finalPriceCents: number } },
+  doctor: Pick<Doctor, "id" | "name" | "mpAccessToken" | "payoutStatus">
+): Promise<{ redirectUrl: string; preferenceId: string }> {
+  const token = getCollectorToken(doctor);
+  if (!token) throw new Error("Mercado Pago não configurado.");
+  const origin = appOrigin();
+  const payerEmail = enrollment.patientKey.includes("@") ? enrollment.patientKey : undefined;
+  const body = {
+    items: [
+      {
+        id: enrollment.id,
+        title: `Plano ${enrollment.planName} — ${doctor.name}`,
+        description: "Plano de acompanhamento — Meu Rim",
+        quantity: 1,
+        currency_id: "BRL",
+        unit_price: Math.round(enrollment.pricing.finalPriceCents) / 100,
+      },
+    ],
+    payer: { name: enrollment.patientName, ...(payerEmail ? { email: payerEmail } : {}) },
+    external_reference: enrollment.id,
+    back_urls: {
+      success: `${origin}/paciente/acompanhamento`,
+      pending: `${origin}/paciente/acompanhamento`,
+      failure: `${origin}/paciente/acompanhamento`,
+    },
+    auto_return: "approved",
+    notification_url: `${origin}/api/plans/webhook?doctor=${doctor.id}`,
+    metadata: { enrollment_id: enrollment.id, doctor_id: doctor.id, kind: "plan" },
+    statement_descriptor: "MEU RIM",
+  };
+  const res = await fetch(`${MP_API}/checkout/preferences`, {
+    method: "POST",
+    headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+  if (!res.ok) {
+    const detail = await res.text();
+    throw new Error(`Falha ao criar preferência Mercado Pago: ${res.status} ${detail}`);
+  }
+  const data = (await res.json()) as { id: string; init_point?: string; sandbox_init_point?: string };
+  const isTest = token.startsWith("TEST-");
+  const redirectUrl = (isTest ? data.sandbox_init_point : data.init_point) || data.init_point;
+  if (!redirectUrl) throw new Error("Preferência sem URL de pagamento.");
+  return { redirectUrl, preferenceId: data.id };
+}
+
 type MpPayment = {
   id: number;
   status: string;
