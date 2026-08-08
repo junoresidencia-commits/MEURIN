@@ -47,6 +47,33 @@ export interface Doctor {
   // Token do Mercado Pago do próprio médico: quando presente, o pagamento da
   // consulta é cobrado na conta dele (segredo — nunca enviado ao navegador).
   mpAccessToken?: string;
+  // Percentual de repasse do médico (0–100). Definido SOMENTE pelo administrador.
+  // Ex.: 80 => médico recebe 80%, plataforma 20%. Ausente => 100% (repasse total).
+  commissionPercent?: number;
+  // Liberação financeira do recebimento (definida pelo administrador).
+  payoutStatus?: PayoutStatus;
+}
+
+export type PayoutStatus = "active" | "pending" | "blocked";
+
+/** Repasse padrão do médico quando o administrador ainda não configurou (100% = sem retenção). */
+export const DEFAULT_DOCTOR_SHARE_PERCENT = 100;
+
+/** Normaliza o percentual de repasse do médico para um inteiro em [0, 100]. */
+export function resolveDoctorSharePercent(doctor?: { commissionPercent?: number } | null): number {
+  const raw = doctor?.commissionPercent;
+  if (typeof raw !== "number" || Number.isNaN(raw)) return DEFAULT_DOCTOR_SHARE_PERCENT;
+  return Math.min(100, Math.max(0, Math.round(raw)));
+}
+
+/** Divide o valor bruto entre médico e plataforma conforme o percentual de repasse. */
+export function computeSplit(
+  priceCents: number,
+  doctorSharePercent: number
+): { doctorPayoutCents: number; platformFeeCents: number } {
+  const share = Math.min(100, Math.max(0, Math.round(doctorSharePercent)));
+  const doctorPayoutCents = Math.round((priceCents * share) / 100);
+  return { doctorPayoutCents, platformFeeCents: priceCents - doctorPayoutCents };
 }
 
 export interface Booking {
@@ -78,6 +105,20 @@ export interface PaymentRecord {
   status: "succeeded" | "failed" | "pending";
   doctorPayoutCents: number;
   platformFeeCents: number;
+  // Snapshot do percentual de repasse aplicado neste pagamento (histórico imutável).
+  doctorSharePercent?: number;
+  createdAt: string;
+}
+
+/** Evento no histórico financeiro do médico (mudança de preço, percentual ou liberação). */
+export interface FinancialEvent {
+  id: string;
+  doctorId: string;
+  kind: "price" | "commission" | "payout_status";
+  oldValue: string | null;
+  newValue: string;
+  changedBy: "admin" | "medico";
+  note?: string;
   createdAt: string;
 }
 
@@ -109,4 +150,6 @@ export type PublicDoctor = Omit<
   | "clinic"
   | "adminNote"
   | "mpAccessToken"
+  | "commissionPercent"
+  | "payoutStatus"
 >;

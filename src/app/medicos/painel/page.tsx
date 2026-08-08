@@ -330,8 +330,13 @@ export default function PainelMedicoPage() {
         </div>
       </section>
 
-      <section id="recebimentos" className="mt-8 scroll-mt-4">
-        <h2 className="font-display text-2xl text-[var(--text)]">Recebimentos</h2>
+      <section id="financeiro" className="mt-8 scroll-mt-4">
+        <h2 className="font-display text-2xl text-[var(--text)]">Financeiro</h2>
+        <p className="mt-1 text-sm text-[var(--text-muted)]">
+          Você define o valor da sua consulta. O percentual de repasse é definido pela administração.
+        </p>
+        <FinanceCard />
+        <p className="mt-6 text-sm font-semibold text-[var(--text)]">Recebimentos</p>
         <p className="mt-1 text-sm text-[var(--text-muted)]">
           Conecte a sua conta Mercado Pago para receber o valor das suas consultas diretamente nela.
         </p>
@@ -406,6 +411,123 @@ function TrashIcon() {
       <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" />
       <path d="M10 11v6M14 11v6" />
     </svg>
+  );
+}
+
+function FinanceCard() {
+  const [data, setData] = useState<{
+    consultationPriceCents: number;
+    commissionPercent: number;
+    platformPercent: number;
+    payoutStatus: "active" | "pending" | "blocked";
+  } | null>(null);
+  const [editing, setEditing] = useState(false);
+  const [price, setPrice] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [msg, setMsg] = useState("");
+
+  const load = () => {
+    fetch("/api/doctor/finance")
+      .then((r) => r.json())
+      .then((d) => {
+        if (d && typeof d.consultationPriceCents === "number") {
+          setData(d);
+          setPrice(String(d.consultationPriceCents / 100));
+        }
+      })
+      .catch(() => {});
+  };
+  useEffect(load, []);
+
+  async function savePrice() {
+    setSaving(true);
+    setMsg("");
+    const cents = Math.round(Number(price.replace(",", ".")) * 100);
+    const res = await fetch("/api/availability", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ consultationPriceCents: cents }),
+    });
+    setSaving(false);
+    if (res.ok) {
+      setEditing(false);
+      setMsg("Valor da consulta salvo.");
+      load();
+    } else {
+      setMsg("Não foi possível salvar o valor.");
+    }
+  }
+
+  if (!data) return <div className="panel mt-4 text-[var(--text-muted)]">Carregando…</div>;
+
+  const payoutLabel: Record<string, string> = {
+    active: "Ativo",
+    pending: "Pendente",
+    blocked: "Bloqueado",
+  };
+
+  return (
+    <div className="panel mt-4 grid gap-4 sm:grid-cols-3">
+      <div>
+        <p className="text-xs font-semibold uppercase tracking-wider text-[var(--text-muted)]">
+          Valor da consulta
+        </p>
+        {editing ? (
+          <div className="mt-1 flex items-center gap-2">
+            <span className="text-[var(--text-muted)]">R$</span>
+            <input
+              type="number"
+              min={0}
+              step="1"
+              value={price}
+              onChange={(e) => setPrice(e.target.value)}
+              className="w-28 rounded-xl border border-[var(--border)] bg-white px-3 py-1.5 text-[var(--text)] outline-none focus:border-[var(--teal,#0d9488)]"
+            />
+            <button type="button" onClick={savePrice} disabled={saving} className="btn-gold px-3 py-1.5 text-sm disabled:opacity-50">
+              {saving ? "…" : "Salvar valor"}
+            </button>
+          </div>
+        ) : (
+          <div className="mt-1 flex items-center gap-3">
+            <span className="text-2xl font-bold text-[var(--text)]">
+              {formatBRL(data.consultationPriceCents)}
+            </span>
+            <button
+              type="button"
+              onClick={() => setEditing(true)}
+              className="rounded-full border border-[var(--border)] px-3 py-1 text-xs font-semibold text-[var(--text-soft)] transition hover:border-[var(--teal,#0d9488)]"
+            >
+              Editar
+            </button>
+          </div>
+        )}
+        {msg && <p className="mt-1 text-xs text-[var(--teal,#0d9488)]">{msg}</p>}
+      </div>
+      <div>
+        <p className="text-xs font-semibold uppercase tracking-wider text-[var(--text-muted)]">
+          Repasse contratado
+        </p>
+        <p className="mt-1 text-2xl font-bold text-[var(--text)]">{data.commissionPercent}%</p>
+        <p className="text-xs text-[var(--text-muted)]">
+          Plataforma: {data.platformPercent}% · definido pela administração
+        </p>
+      </div>
+      <div>
+        <p className="text-xs font-semibold uppercase tracking-wider text-[var(--text-muted)]">
+          Recebimento
+        </p>
+        <p
+          className={`mt-1 text-2xl font-bold ${
+            data.payoutStatus === "active" ? "text-[var(--teal,#0d9488)]" : "text-[var(--danger)]"
+          }`}
+        >
+          {payoutLabel[data.payoutStatus] ?? data.payoutStatus}
+        </p>
+        {data.payoutStatus !== "active" && (
+          <p className="text-xs text-[var(--text-muted)]">Fale com a administração para liberar.</p>
+        )}
+      </div>
+    </div>
   );
 }
 

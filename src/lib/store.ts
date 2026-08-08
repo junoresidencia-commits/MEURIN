@@ -3,10 +3,18 @@ import path from "path";
 import bcrypt from "bcryptjs";
 import { v4 as uuid } from "uuid";
 import { getSupabaseAdmin } from "./supabase-admin";
-import type { Database, Doctor, PaymentRecord, SignalingMessage, WeeklySlot } from "./types";
+import type {
+  Database,
+  Doctor,
+  FinancialEvent,
+  PaymentRecord,
+  SignalingMessage,
+  WeeklySlot,
+} from "./types";
 
 const DATA_DIR = path.join(process.cwd(), "data");
 const DB_PATH = path.join(DATA_DIR, "db.json");
+const FINANCE_LOG_PATH = path.join(DATA_DIR, "financial-events.json");
 
 const defaultWeekly: WeeklySlot[] = [
   { dayOfWeek: 1, start: "08:00", end: "12:00" },
@@ -252,6 +260,104 @@ export async function setDoctorMpToken(id: string, token: string | null): Promis
   });
 }
 
+/** Define o percentual de repasse do médico (SOMENTE administrador), sem reescrever os demais. */
+export async function setDoctorCommission(id: string, percent: number): Promise<void> {
+  const clamped = Math.min(100, Math.max(0, Math.round(percent)));
+  const supabase = getSupabaseAdmin();
+  if (supabase) {
+    const { error } = await supabase.from("doctors").update({ commission_percent: clamped }).eq("id", id);
+    if (error) throw error;
+    return;
+  }
+  await updateDb((db) => {
+    db.doctors = db.doctors.map((d) => (d.id === id ? { ...d, commissionPercent: clamped } : d));
+    return db;
+  });
+}
+
+/** Define o status de liberação financeira do médico (SOMENTE administrador). */
+export async function setDoctorPayoutStatus(
+  id: string,
+  status: "active" | "pending" | "blocked"
+): Promise<void> {
+  const supabase = getSupabaseAdmin();
+  if (supabase) {
+    const { error } = await supabase.from("doctors").update({ payout_status: status }).eq("id", id);
+    if (error) throw error;
+    return;
+  }
+  await updateDb((db) => {
+    db.doctors = db.doctors.map((d) => (d.id === id ? { ...d, payoutStatus: status } : d));
+    return db;
+  });
+}
+
+/** Registra um evento no histórico financeiro do médico (imutável). */
+export async function logFinancialEvent(
+  input: Omit<FinancialEvent, "id" | "createdAt">
+): Promise<void> {
+  const event: FinancialEvent = {
+    ...input,
+    id: uuid(),
+    createdAt: new Date().toISOString(),
+  };
+  const supabase = getSupabaseAdmin();
+  if (supabase) {
+    const { error } = await supabase.from("doctor_financial_events").insert({
+      id: event.id,
+      doctor_id: event.doctorId,
+      kind: event.kind,
+      old_value: event.oldValue,
+      new_value: event.newValue,
+      changed_by: event.changedBy,
+      note: event.note ?? null,
+      created_at: event.createdAt,
+    });
+    if (error) throw error;
+    return;
+  }
+  await fs.mkdir(DATA_DIR, { recursive: true });
+  let list: FinancialEvent[] = [];
+  try {
+    list = JSON.parse(await fs.readFile(FINANCE_LOG_PATH, "utf8")) as FinancialEvent[];
+  } catch {
+    list = [];
+  }
+  list.push(event);
+  await fs.writeFile(FINANCE_LOG_PATH, JSON.stringify(list, null, 2), "utf8");
+}
+
+/** Lista o histórico financeiro de um médico (mais recente primeiro). */
+export async function listFinancialEvents(doctorId: string): Promise<FinancialEvent[]> {
+  const supabase = getSupabaseAdmin();
+  if (supabase) {
+    const { data, error } = await supabase
+      .from("doctor_financial_events")
+      .select("*")
+      .eq("doctor_id", doctorId)
+      .order("created_at", { ascending: false });
+    if (error) throw error;
+    return (data ?? []).map((row) => ({
+      id: String(row.id),
+      doctorId: String(row.doctor_id),
+      kind: String(row.kind) as FinancialEvent["kind"],
+      oldValue: row.old_value === null ? null : String(row.old_value),
+      newValue: String(row.new_value),
+      changedBy: String(row.changed_by) as FinancialEvent["changedBy"],
+      note: row.note ? String(row.note) : undefined,
+      createdAt: new Date(String(row.created_at)).toISOString(),
+    }));
+  }
+  try {
+    const list = JSON.parse(await fs.readFile(FINANCE_LOG_PATH, "utf8")) as FinancialEvent[];
+    return list
+      .filter((e) => e.doctorId === doctorId)
+      .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+  } catch {
+    return [];
+  }
+}
+
 /** Define (ou remove, com null) a logo do médico sem reescrever os demais registros. */
 export async function setDoctorLogo(id: string, logoUrl: string | null): Promise<void> {
   const supabase = getSupabaseAdmin();
@@ -316,6 +422,11 @@ function mapDoctorRow(row: Record<string, unknown>): Doctor {
     adminNote: row.admin_note ? String(row.admin_note) : undefined,
     logoUrl: row.logo_url ? String(row.logo_url) : undefined,
     mpAccessToken: row.mp_access_token ? String(row.mp_access_token) : undefined,
+    commissionPercent:
+      row.commission_percent === null || row.commission_percent === undefined
+        ? undefined
+        : Number(row.commission_percent),
+    payoutStatus: (row.payout_status ? String(row.payout_status) : "active") as Doctor["payoutStatus"],
   };
 }
 
@@ -360,6 +471,10 @@ function mapPaymentRow(row: Record<string, unknown>): PaymentRecord {
     status: String(row.status) as "succeeded" | "failed" | "pending",
     doctorPayoutCents: Number(row.doctor_payout_cents),
     platformFeeCents: Number(row.platform_fee_cents),
+    doctorSharePercent:
+      row.doctor_share_percent === null || row.doctor_share_percent === undefined
+        ? undefined
+        : Number(row.doctor_share_percent),
     createdAt: new Date(String(row.created_at)).toISOString(),
   };
 }
@@ -451,6 +566,8 @@ async function writeSupabaseDb(db: Database): Promise<void> {
     admin_note: doctor.adminNote ?? null,
     logo_url: doctor.logoUrl ?? null,
     mp_access_token: doctor.mpAccessToken ?? null,
+    commission_percent: doctor.commissionPercent ?? null,
+    payout_status: doctor.payoutStatus ?? "active",
   }));
 
   const bookings = db.bookings.map((booking) => ({
@@ -482,6 +599,7 @@ async function writeSupabaseDb(db: Database): Promise<void> {
     status: payment.status,
     doctor_payout_cents: payment.doctorPayoutCents,
     platform_fee_cents: payment.platformFeeCents,
+    doctor_share_percent: payment.doctorSharePercent ?? null,
     created_at: payment.createdAt,
   }));
 

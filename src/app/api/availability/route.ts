@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { getDoctorSessionId } from "@/lib/auth";
 import { generateSlotsForDoctor } from "@/lib/scheduling";
-import { readDb, updateDb } from "@/lib/store";
+import { logFinancialEvent, readDb, updateDb } from "@/lib/store";
 import type { WeeklySlot } from "@/lib/types";
 
 export async function GET(req: Request) {
@@ -46,21 +46,41 @@ export async function PUT(req: Request) {
   const weeklyAvailability = body.weeklyAvailability as WeeklySlot[] | undefined;
   const consultationPriceCents = body.consultationPriceCents as number | undefined;
   const bio = body.bio as string | undefined;
+  // Segurança: o médico NÃO pode alterar o próprio percentual de repasse nem a
+  // liberação financeira — mesmo enviando esses campos diretamente na API, eles
+  // são ignorados aqui. Só o administrador altera (via /api/admin/doctors).
 
-  await updateDb((db) => ({
-    ...db,
-    doctors: db.doctors.map((d) =>
+  const db = await readDb();
+  const before = db.doctors.find((d) => d.id === doctorId);
+  const newPrice =
+    typeof consultationPriceCents === "number" && Number.isFinite(consultationPriceCents)
+      ? Math.max(0, Math.round(consultationPriceCents))
+      : undefined;
+
+  await updateDb((current) => ({
+    ...current,
+    doctors: current.doctors.map((d) =>
       d.id === doctorId
         ? {
             ...d,
             weeklyAvailability: weeklyAvailability ?? d.weeklyAvailability,
-            consultationPriceCents:
-              consultationPriceCents ?? d.consultationPriceCents,
+            consultationPriceCents: newPrice ?? d.consultationPriceCents,
             bio: bio ?? d.bio,
           }
         : d
     ),
   }));
+
+  // Histórico do preço (o médico controla o próprio valor da consulta).
+  if (before && newPrice !== undefined && newPrice !== before.consultationPriceCents) {
+    await logFinancialEvent({
+      doctorId,
+      kind: "price",
+      oldValue: String(before.consultationPriceCents),
+      newValue: String(newPrice),
+      changedBy: "medico",
+    });
+  }
 
   return NextResponse.json({ ok: true });
 }

@@ -2,8 +2,17 @@ import { NextResponse } from "next/server";
 import bcrypt from "bcryptjs";
 import { v4 as uuid } from "uuid";
 import { isAdmin } from "@/lib/admin-session";
-import { deleteDoctor, readDb, updateDb } from "@/lib/store";
+import {
+  deleteDoctor,
+  getDoctorById,
+  logFinancialEvent,
+  readDb,
+  setDoctorCommission,
+  setDoctorPayoutStatus,
+  updateDb,
+} from "@/lib/store";
 import { defaultAvailability } from "@/lib/scheduling";
+import { resolveDoctorSharePercent } from "@/lib/types";
 
 export async function GET() {
   if (!(await isAdmin())) {
@@ -25,6 +34,11 @@ export async function GET() {
       pixKey: d.pixKey ?? null,
       status: d.status ?? "approved",
       adminNote: d.adminNote ?? null,
+      // Financeiro: percentual (repasse do médico), plataforma e liberação.
+      commissionPercent: resolveDoctorSharePercent(d),
+      platformPercent: 100 - resolveDoctorSharePercent(d),
+      payoutStatus: d.payoutStatus ?? "active",
+      mpConnected: Boolean(d.mpAccessToken?.trim()),
       createdAt: d.createdAt,
     }))
     .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
@@ -84,9 +98,55 @@ export async function PATCH(req: Request) {
   if (!(await isAdmin())) {
     return NextResponse.json({ error: "Não autorizado." }, { status: 401 });
   }
-  const { id, status, adminNote, newPassword } = await req.json();
+  const body = await req.json();
+  const { id, status, adminNote, newPassword, commissionPercent, payoutStatus } = body;
   if (!id) {
     return NextResponse.json({ error: "id é obrigatório." }, { status: 400 });
+  }
+
+  // Percentual de repasse do médico — SOMENTE o administrador pode alterar.
+  if (commissionPercent !== undefined) {
+    const pct = Number(commissionPercent);
+    if (!Number.isFinite(pct) || pct < 0 || pct > 100) {
+      return NextResponse.json({ error: "Percentual deve estar entre 0 e 100." }, { status: 400 });
+    }
+    const doctor = await getDoctorById(String(id));
+    if (!doctor) return NextResponse.json({ error: "Médico não encontrado." }, { status: 404 });
+    const prev = resolveDoctorSharePercent(doctor);
+    const next = Math.round(pct);
+    await setDoctorCommission(String(id), next);
+    if (next !== prev) {
+      await logFinancialEvent({
+        doctorId: String(id),
+        kind: "commission",
+        oldValue: String(prev),
+        newValue: String(next),
+        changedBy: "admin",
+      });
+    }
+    return NextResponse.json({ ok: true, commissionPercent: next, platformPercent: 100 - next });
+  }
+
+  // Liberação financeira do recebimento — SOMENTE o administrador.
+  if (payoutStatus !== undefined) {
+    const valid = ["active", "pending", "blocked"];
+    if (!valid.includes(String(payoutStatus))) {
+      return NextResponse.json({ error: "Status de recebimento inválido." }, { status: 400 });
+    }
+    const doctor = await getDoctorById(String(id));
+    if (!doctor) return NextResponse.json({ error: "Médico não encontrado." }, { status: 404 });
+    const prev = doctor.payoutStatus ?? "active";
+    await setDoctorPayoutStatus(String(id), payoutStatus as "active" | "pending" | "blocked");
+    if (prev !== payoutStatus) {
+      await logFinancialEvent({
+        doctorId: String(id),
+        kind: "payout_status",
+        oldValue: prev,
+        newValue: String(payoutStatus),
+        changedBy: "admin",
+      });
+    }
+    return NextResponse.json({ ok: true, payoutStatus });
   }
 
   // Redefinição de senha do médico pelo administrador.

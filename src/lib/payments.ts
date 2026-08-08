@@ -3,6 +3,7 @@ import "server-only";
 import { v4 as uuid } from "uuid";
 import { updateDb } from "./store";
 import { buildConfirmationEmail, sendEmail } from "./email";
+import { computeSplit, resolveDoctorSharePercent } from "./types";
 import type { Booking, Doctor } from "./types";
 
 const MP_API = "https://api.mercadopago.com";
@@ -12,10 +13,17 @@ export function getMercadoPagoToken(): string | null {
   return process.env.MERCADOPAGO_ACCESS_TOKEN || null;
 }
 
-/** Token que deve receber o pagamento desta consulta: o do médico, se conectado; senão o da plataforma. */
-export function getCollectorToken(doctor?: { mpAccessToken?: string } | null): string | null {
+/**
+ * Token que deve receber o pagamento desta consulta: o do médico, se conectado E
+ * com recebimento liberado pelo administrador; senão, o da plataforma.
+ */
+export function getCollectorToken(
+  doctor?: { mpAccessToken?: string; payoutStatus?: string } | null
+): string | null {
   const own = doctor?.mpAccessToken?.trim();
-  return own || getMercadoPagoToken();
+  const released = (doctor?.payoutStatus ?? "active") === "active";
+  if (own && released) return own;
+  return getMercadoPagoToken();
 }
 
 export function isMercadoPagoEnabled(): boolean {
@@ -141,11 +149,13 @@ export async function confirmBookingPaid(
     const doctor = db.doctors.find((d) => d.id === booking.doctorId);
     if (!doctor) return db;
 
-    // Se o médico recebeu na própria conta, o valor integral é dele (sem taxa retida
-    // pela plataforma). Só há repasse/desconto quando a cobrança foi na conta da plataforma.
-    const collectedByDoctor = Boolean(doctor.mpAccessToken?.trim());
-    const platformFeeCents = collectedByDoctor ? 0 : Math.round(booking.priceCents * 0.05);
-    const doctorPayoutCents = booking.priceCents - platformFeeCents;
+    // Snapshot imutável: usa o percentual de repasse VIGENTE (definido pelo admin) no
+    // momento do pagamento. Alterações futuras de preço/percentual não afetam este registro.
+    const doctorSharePercent = resolveDoctorSharePercent(doctor);
+    const { doctorPayoutCents, platformFeeCents } = computeSplit(
+      booking.priceCents,
+      doctorSharePercent
+    );
     const paymentId = uuid();
     const paidAt = new Date().toISOString();
 
@@ -174,6 +184,7 @@ export async function confirmBookingPaid(
           status: "succeeded" as const,
           doctorPayoutCents,
           platformFeeCents,
+          doctorSharePercent,
           createdAt: paidAt,
         },
       ],
