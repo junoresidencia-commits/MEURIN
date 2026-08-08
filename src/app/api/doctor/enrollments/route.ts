@@ -6,13 +6,13 @@ import {
   logPlansAudit,
   updateEnrollment,
 } from "@/lib/plans-store";
-import { activateEnrollment } from "@/lib/plan-billing";
+import { activateEnrollment, processEnrollmentLifecycle } from "@/lib/plan-billing";
 import type { EnrollmentStatus, PlanEnrollment } from "@/lib/plans";
 
 export async function GET() {
   const doctorId = await getDoctorSessionId();
   if (!doctorId) return NextResponse.json({ error: "Não autenticado." }, { status: 401 });
-  const enrollments = await listEnrollmentsByDoctor(doctorId);
+  const enrollments = await processEnrollmentLifecycle(await listEnrollmentsByDoctor(doctorId));
   return NextResponse.json({ enrollments });
 }
 

@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { isAdmin } from "@/lib/admin-session";
 import { listAllEnrollments } from "@/lib/plans-store";
 import { getDoctorById } from "@/lib/store";
+import { processEnrollmentLifecycle } from "@/lib/plan-billing";
 
 /** Visão global das contratações de plano (administrador), com filtros. */
 export async function GET(req: Request) {
@@ -14,7 +15,7 @@ export async function GET(req: Request) {
   const fMethod = sp.get("method");
   const fPatient = sp.get("patient");
 
-  let enrollments = await listAllEnrollments();
+  let enrollments = await processEnrollmentLifecycle(await listAllEnrollments());
   if (fDoctor) enrollments = enrollments.filter((e) => e.doctorId === fDoctor);
   if (fStatus) enrollments = enrollments.filter((e) => e.status === fStatus);
   if (fMethod) enrollments = enrollments.filter((e) => e.paymentMethod === fMethod);

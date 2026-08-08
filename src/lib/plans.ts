@@ -158,6 +158,7 @@ export interface PlanEnrollment {
   paymentMethod: PlanPaymentMethod;
   paymentId?: string;
   paidAt?: string;
+  renewalNotifiedAt?: string;
   createdAt: string;
   updatedAt: string;
 }

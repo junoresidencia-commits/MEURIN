@@ -244,6 +244,7 @@ function mapEnrollment(r: Record<string, unknown>): PlanEnrollment {
     paymentMethod: String(r.payment_method) as PlanEnrollment["paymentMethod"],
     paymentId: r.payment_id ? String(r.payment_id) : undefined,
     paidAt: r.paid_at ? new Date(String(r.paid_at)).toISOString() : undefined,
+    renewalNotifiedAt: r.renewal_notified_at ? new Date(String(r.renewal_notified_at)).toISOString() : undefined,
     createdAt: new Date(String(r.created_at)).toISOString(),
     updatedAt: new Date(String(r.updated_at)).toISOString(),
   };
@@ -271,6 +272,7 @@ function enrollmentToRow(e: PlanEnrollment) {
     payment_method: e.paymentMethod,
     payment_id: e.paymentId ?? null,
     paid_at: e.paidAt ?? null,
+    renewal_notified_at: e.renewalNotifiedAt ?? null,
     created_at: e.createdAt,
     updated_at: e.updatedAt,
   };

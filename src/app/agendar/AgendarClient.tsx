@@ -55,6 +55,15 @@ export default function AgendarClient() {
   const [cardNumber, setCardNumber] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  // Preço da consulta com promoção/cupom (recalculado no backend).
+  const [couponCode, setCouponCode] = useState("");
+  const [consultaPricing, setConsultaPricing] = useState<{
+    originalPriceCents: number;
+    discountAmountCents: number;
+    finalPriceCents: number;
+    appliedLabel: string | null;
+  } | null>(null);
+  const [couponMsg, setCouponMsg] = useState("");
   const [consentDocs, setConsentDocs] = useState<
     { type: string; title: string; body: string; version: string; sha256: string }[]
   >([]);
@@ -118,6 +127,29 @@ export default function AgendarClient() {
     };
   }
 
+  async function previewConsulta(code: string) {
+    if (!doctorId) return;
+    setCouponMsg("");
+    const res = await fetch("/api/consulta/price", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ doctorId, email: patientEmail, couponCode: code || undefined }),
+    });
+    const data = await res.json();
+    if (res.ok) {
+      setConsultaPricing(data.pricing);
+      if (code) setCouponMsg("Cupom aplicado.");
+    } else if (code) {
+      setCouponMsg(data.error || "Cupom inválido.");
+    }
+  }
+
+  // Aplica a promoção vigente automaticamente ao chegar no resumo/pagamento.
+  useEffect(() => {
+    if (step === 3 && doctorId) previewConsulta(couponCode);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [step, doctorId]);
+
   async function finishPayment() {
     if (!doctor || !slot) return;
     if (!consentReady) {
@@ -152,6 +184,7 @@ export default function AgendarClient() {
           slotStart: slot.start,
           slotEnd: slot.end,
           paymentMethod,
+          couponCode: couponCode || undefined,
         }),
       });
       const bookingData = await bookingRes.json();
@@ -446,10 +479,39 @@ export default function AgendarClient() {
             {patientCity && (
               <p className="mt-1 text-[var(--text-muted)]">Paciente em {patientCity}</p>
             )}
-            <p className="mt-2 text-[var(--gold-light)]">
-              Total: {formatBRL(doctor.consultationPriceCents)} — vai para a conta
-              do médico
+            {consultaPricing && consultaPricing.discountAmountCents > 0 ? (
+              <div className="mt-2 space-y-0.5">
+                <p className="text-sm text-[var(--text-muted)]">
+                  De <span className="line-through">{formatBRL(consultaPricing.originalPriceCents)}</span>
+                  {consultaPricing.appliedLabel ? ` · ${consultaPricing.appliedLabel}` : ""}
+                </p>
+                <p className="text-[var(--gold-light)]">
+                  Total: {formatBRL(consultaPricing.finalPriceCents)} — vai para a conta do médico
+                </p>
+              </div>
+            ) : (
+              <p className="mt-2 text-[var(--gold-light)]">
+                Total: {formatBRL(consultaPricing?.finalPriceCents ?? doctor.consultationPriceCents)} — vai para a conta do médico
+              </p>
+            )}
+          </div>
+
+          <div>
+            <p className="mb-2 text-xs font-bold uppercase tracking-wider text-[var(--gold-light)]">
+              Cupom de desconto
             </p>
+            <div className="flex gap-2">
+              <input
+                value={couponCode}
+                onChange={(e) => setCouponCode(e.target.value.toUpperCase())}
+                placeholder="Tem um cupom?"
+                className="input-field flex-1 uppercase"
+              />
+              <button type="button" className="btn-ghost" onClick={() => previewConsulta(couponCode)}>
+                Aplicar
+              </button>
+            </div>
+            {couponMsg && <p className="mt-1 text-sm text-[var(--text-soft)]">{couponMsg}</p>}
           </div>
 
           <div>

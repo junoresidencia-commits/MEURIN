@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { v4 as uuid } from "uuid";
 import { getDoctorSessionId } from "@/lib/auth";
 import { readDb, updateDb, deleteBooking } from "@/lib/store";
+import { buildServicePricing } from "@/lib/plan-billing";
 import type { Booking, PaymentMethod } from "@/lib/types";
 
 const REASONS = new Set(["pressa", "acompanhamento", "segunda_opiniao", "outro"]);
@@ -66,22 +67,36 @@ export async function POST(req: Request) {
 
   const reason = REASONS.has(careReason) ? careReason : "outro";
 
+  // Preço/desconto recalculados no backend: aplica promoção vigente da consulta
+  // e/ou cupom informado. Nunca confiar em valor vindo do frontend.
+  const email = String(patientEmail).toLowerCase();
+  const pricing = await buildServicePricing({
+    doctorId,
+    serviceType: "consulta",
+    couponCode: body.couponCode ? String(body.couponCode) : undefined,
+    patientKey: email || "anon",
+  });
+  if (!pricing.ok || !pricing.snapshot) {
+    return NextResponse.json({ error: pricing.error || "Não foi possível calcular o preço." }, { status: 400 });
+  }
+
   const booking: Booking = {
     id: uuid(),
     doctorId,
     patientName: String(patientName),
-    patientEmail: String(patientEmail).toLowerCase(),
+    patientEmail: email,
     patientPhone: String(patientPhone || ""),
     patientCity: String(patientCity || ""),
     careReason: reason as Booking["careReason"],
     slotStart: String(slotStart),
     slotEnd: String(slotEnd),
-    priceCents: doctor.consultationPriceCents,
+    priceCents: pricing.snapshot.finalPriceCents,
     paymentMethod: paymentMethod as PaymentMethod,
     status: "pending_payment",
     meetingRoomId: uuid(),
     confirmationEmailSent: false,
     createdAt: new Date().toISOString(),
+    pricing: pricing.snapshot,
   };
 
   await updateDb((current) => ({

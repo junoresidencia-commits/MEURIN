@@ -172,6 +172,63 @@ function pushStatus(enrollment: PlanEnrollment, status: PlanEnrollment["status"]
   return [...enrollment.statusHistory, { status, at: new Date().toISOString(), by }];
 }
 
+const RENEWAL_WINDOW_MS = 15 * 24 * 60 * 60 * 1000;
+
+/**
+ * Processa o ciclo de vida de contratações ATIVAS (executado nas listagens, já que
+ * não há cron): expira automaticamente as vencidas e envia aviso de renovação uma
+ * única vez quando faltam ≤15 dias. Retorna a lista já atualizada.
+ */
+export async function processEnrollmentLifecycle(
+  enrollments: PlanEnrollment[]
+): Promise<PlanEnrollment[]> {
+  const now = Date.now();
+  const out: PlanEnrollment[] = [];
+  for (const e of enrollments) {
+    if (e.status !== "ativo" || !e.endAt) {
+      out.push(e);
+      continue;
+    }
+    const end = new Date(e.endAt).getTime();
+
+    if (end < now) {
+      const updated = await updateEnrollment(e.id, {
+        status: "expirado",
+        statusHistory: pushStatus(e, "expirado", "sistema"),
+      });
+      await logPlansAudit({ actor: "sistema", doctorId: e.doctorId, action: "enrollment.expire", entity: "plan_enrollment", entityId: e.id });
+      out.push(updated ?? { ...e, status: "expirado" });
+      continue;
+    }
+
+    if (end - now <= RENEWAL_WINDOW_MS && !e.renewalNotifiedAt) {
+      const when = new Date(e.endAt).toLocaleDateString("pt-BR");
+      const doctor = await getDoctorById(e.doctorId);
+      if (e.patientKey.includes("@")) {
+        await sendEmail({
+          to: e.patientKey,
+          subject: "Seu plano de acompanhamento está próximo do fim",
+          body: `Seu plano "${e.planName}" termina em ${when}. Você pode renovar pelo app em Meu acompanhamento.`,
+        });
+      }
+      if (doctor?.email) {
+        await sendEmail({
+          to: doctor.email,
+          subject: `Plano de ${e.patientName} próximo do término`,
+          body: `O plano de acompanhamento de ${e.patientName} ("${e.planName}") termina em ${when}.`,
+        });
+      }
+      const updated = await updateEnrollment(e.id, { renewalNotifiedAt: new Date().toISOString() });
+      await logPlansAudit({ actor: "sistema", doctorId: e.doctorId, action: "enrollment.renewal_notice", entity: "plan_enrollment", entityId: e.id, detail: { endAt: e.endAt } });
+      out.push(updated ?? { ...e, renewalNotifiedAt: new Date().toISOString() });
+      continue;
+    }
+
+    out.push(e);
+  }
+  return out;
+}
+
 /**
  * Ativa a contratação após confirmação de pagamento. Idempotente: se já estiver
  * ativa, não faz nada. Consome o cupom (uma vez), define período e notifica.

@@ -120,6 +120,8 @@ export interface Booking {
   paidAt?: string;
   confirmationEmailSent: boolean;
   createdAt: string;
+  // Snapshot financeiro da consulta quando há promoção/cupom (imutável).
+  pricing?: import("./plans").PricingSnapshot;
 }
 
 export interface PaymentRecord {

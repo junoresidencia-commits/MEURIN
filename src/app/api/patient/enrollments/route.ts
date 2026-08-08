@@ -9,7 +9,7 @@ import {
   logPlansAudit,
   updateEnrollment,
 } from "@/lib/plans-store";
-import { activateEnrollment, buildServicePricing } from "@/lib/plan-billing";
+import { activateEnrollment, buildServicePricing, processEnrollmentLifecycle } from "@/lib/plan-billing";
 import { createPlanPreference, isMercadoPagoEnabledFor } from "@/lib/payments";
 import type { PlanPaymentMethod } from "@/lib/plans";
 
@@ -30,7 +30,7 @@ async function resolvePatientName(subject: string): Promise<string> {
 export async function GET() {
   const subject = await getPatientEmail();
   if (!subject) return NextResponse.json({ error: "Não autenticado." }, { status: 401 });
-  const enrollments = await listEnrollmentsByPatient(subject);
+  const enrollments = await processEnrollmentLifecycle(await listEnrollmentsByPatient(subject));
   // Anexa o nome do médico para exibição.
   const withDoctor = await Promise.all(
     enrollments.map(async (e) => {

@@ -26,9 +26,12 @@ type Selection = {
   doctorName: string;
   planId?: string;
   offerId?: string;
+  previousEnrollmentId?: string;
   title: string;
   basePriceCents: number;
 };
+
+const RENEWAL_WINDOW_MS = 15 * 24 * 60 * 60 * 1000;
 
 const STATUS_LABEL: Record<string, string> = {
   ativo: "🟢 Ativo",
@@ -73,7 +76,12 @@ export default function AcompanhamentoPage() {
     return <div className="mx-auto max-w-[560px] px-4 py-20 text-center text-[var(--text-muted)]">Carregando…</div>;
   }
 
-  const active = enrollments.filter((e) => ["ativo", "suspenso", "concluido", "aguardando_confirmacao"].includes(e.status));
+  const active = enrollments.filter((e) =>
+    ["ativo", "suspenso", "concluido", "aguardando_confirmacao", "expirado"].includes(e.status)
+  );
+  function nearExpiry(e: PlanEnrollment) {
+    return e.status === "ativo" && e.endAt ? new Date(e.endAt).getTime() - Date.now() <= RENEWAL_WINDOW_MS : false;
+  }
 
   return (
     <div className="mx-auto min-h-screen max-w-[560px] px-4 pb-28 pt-6">
@@ -140,7 +148,32 @@ export default function AcompanhamentoPage() {
                     Aguardando o médico confirmar o recebimento do Pix.
                   </p>
                 )}
+                {(e.status === "expirado" || nearExpiry(e)) && (
+                  <p className="mt-2 rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-700">
+                    {e.status === "expirado"
+                      ? "Seu plano terminou."
+                      : `Seu plano termina em ${e.endAt ? new Date(e.endAt).toLocaleDateString("pt-BR") : "breve"}.`}
+                  </p>
+                )}
                 <div className="mt-3 flex flex-wrap gap-2">
+                  {(e.status === "expirado" || nearExpiry(e)) && e.planId && (
+                    <button
+                      type="button"
+                      className="btn-gold text-sm"
+                      onClick={() =>
+                        setSelection({
+                          doctorId: e.doctorId,
+                          doctorName: e.doctorName || "",
+                          planId: e.planId,
+                          previousEnrollmentId: e.id,
+                          title: e.planName,
+                          basePriceCents: e.pricing.originalPriceCents,
+                        })
+                      }
+                    >
+                      Renovar
+                    </button>
+                  )}
                   <a href="/paciente/exames" className="btn-ghost text-sm">Ver exames</a>
                   <a href="/paciente/inicio" className="btn-ghost text-sm">Meu rim hoje</a>
                 </div>
@@ -230,7 +263,7 @@ function Checkout({ selection, onClose, onDone }: { selection: Selection; onClos
     const url = isOffer ? "/api/patient/offers" : "/api/patient/enrollments";
     const body = isOffer
       ? { offerId: selection.offerId, method }
-      : { doctorId: selection.doctorId, planId: selection.planId, couponCode: coupon || undefined, method };
+      : { doctorId: selection.doctorId, planId: selection.planId, couponCode: coupon || undefined, method, previousEnrollmentId: selection.previousEnrollmentId };
     const res = await fetch(url, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
     const d = await res.json();
     setBusy(false);

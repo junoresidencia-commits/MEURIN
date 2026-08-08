@@ -4,6 +4,7 @@ import bcrypt from "bcryptjs";
 import { v4 as uuid } from "uuid";
 import { getSupabaseAdmin } from "./supabase-admin";
 import type {
+  Booking,
   Database,
   Doctor,
   FinancialEvent,
@@ -484,6 +485,7 @@ function mapBookingRow(row: Record<string, unknown>) {
       | "cancelled",
     meetingRoomId: String(row.meeting_room_id),
     paymentId: row.payment_id ? String(row.payment_id) : undefined,
+    pricing: (row.pricing as Booking["pricing"]) ?? undefined,
     paidAt: row.paid_at ? new Date(String(row.paid_at)).toISOString() : undefined,
     confirmationEmailSent: Boolean(row.confirmation_email_sent),
     createdAt: new Date(String(row.created_at)).toISOString(),
@@ -616,6 +618,7 @@ async function writeSupabaseDb(db: Database): Promise<void> {
     status: booking.status,
     meeting_room_id: booking.meetingRoomId,
     payment_id: booking.paymentId ?? null,
+    pricing: booking.pricing ?? null,
     paid_at: booking.paidAt ?? null,
     confirmation_email_sent: booking.confirmationEmailSent,
     created_at: booking.createdAt,

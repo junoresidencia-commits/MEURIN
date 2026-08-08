@@ -3,8 +3,9 @@ import "server-only";
 import { v4 as uuid } from "uuid";
 import { updateDb } from "./store";
 import { buildConfirmationEmail, sendEmail } from "./email";
-import { computeSplit, resolveDoctorSharePercent } from "./types";
+import { computeSplit, resolveServiceSharePercent } from "./types";
 import type { Booking, Doctor } from "./types";
+import { redeemCoupon, logPlansAudit } from "./plans-store";
 
 const MP_API = "https://api.mercadopago.com";
 
@@ -187,6 +188,8 @@ export async function confirmBookingPaid(
 ): Promise<{ booking: Booking; meetingUrl: string } | null> {
   let meetingUrl = "";
   let emailToSend: { to: string; subject: string; body: string } | null = null;
+  // Cupom só é consumido quando a consulta é REALMENTE confirmada (uma vez).
+  let couponToRedeem: { couponId: string; doctorId: string; patientKey: string; bookingId: string } | null = null;
 
   const result = await updateDb((db) => {
     const booking = db.bookings.find((b) => b.id === bookingId);
@@ -200,9 +203,19 @@ export async function confirmBookingPaid(
     const doctor = db.doctors.find((d) => d.id === booking.doctorId);
     if (!doctor) return db;
 
-    // Snapshot imutável: usa o percentual de repasse VIGENTE (definido pelo admin) no
-    // momento do pagamento. Alterações futuras de preço/percentual não afetam este registro.
-    const doctorSharePercent = resolveDoctorSharePercent(doctor);
+    if (booking.pricing?.couponId) {
+      couponToRedeem = {
+        couponId: booking.pricing.couponId,
+        doctorId: doctor.id,
+        patientKey: booking.patientEmail,
+        bookingId: booking.id,
+      };
+    }
+
+    // Snapshot imutável: se a consulta já tem snapshot (promoção/cupom), usa-o;
+    // senão, aplica o repasse VIGENTE da consulta (definido pelo admin).
+    const doctorSharePercent =
+      booking.pricing?.doctorPercent ?? resolveServiceSharePercent(doctor, "consulta");
     const { doctorPayoutCents, platformFeeCents } = computeSplit(
       booking.priceCents,
       doctorSharePercent
@@ -249,6 +262,20 @@ export async function confirmBookingPaid(
 
   const booking = result.bookings.find((b) => b.id === bookingId);
   if (!booking) return null;
+
+  // Consome o cupom da consulta (uma vez) e registra na auditoria.
+  if (couponToRedeem) {
+    const c = couponToRedeem as { couponId: string; doctorId: string; patientKey: string; bookingId: string };
+    await redeemCoupon(c.couponId, c.doctorId, c.patientKey, c.bookingId);
+    await logPlansAudit({
+      actor: "sistema",
+      doctorId: c.doctorId,
+      action: "coupon.redeem",
+      entity: "booking",
+      entityId: c.bookingId,
+      detail: { couponId: c.couponId },
+    });
+  }
 
   if (emailToSend) {
     await sendEmail(emailToSend);
