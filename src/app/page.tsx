@@ -129,27 +129,9 @@ export default function HomePage() {
         </div>
       </section>
 
-      {/* Entradas de perfil */}
+      {/* Entradas de perfil — as portas do Meu Rim */}
       <section className="mx-auto max-w-5xl px-5 pb-2">
-        <div className="grid gap-4 sm:grid-cols-2">
-          <Link
-            href="/medicos/login"
-            className="group flex items-center gap-4 rounded-[24px] border border-[var(--border)] bg-white p-5 shadow-[var(--shadow)] transition hover:-translate-y-0.5 hover:border-[var(--border-gold)]"
-          >
-            <span className="grid h-12 w-12 shrink-0 place-items-center rounded-2xl bg-[var(--gold-soft)] text-[var(--gold)]">
-              <StethoscopeIcon className="h-6 w-6" />
-            </span>
-            <span className="flex-1">
-              <span className="block text-base font-bold text-[var(--text)]">
-                Profissional de saúde
-              </span>
-              <span className="mt-1 block text-sm text-[var(--text-muted)]">
-                Acesse e gerencie seus pacientes, consultas, exames e relatórios.
-              </span>
-            </span>
-            <ArrowIcon className="h-8 w-8 shrink-0 text-[var(--gold)] transition group-hover:translate-x-0.5" />
-          </Link>
-
+        <div className="grid gap-4 sm:grid-cols-3">
           <Link
             href="/paciente/entrar"
             className="group flex items-center gap-4 rounded-[24px] border border-[var(--border)] bg-white p-5 shadow-[var(--shadow)] transition hover:-translate-y-0.5 hover:border-[var(--border-gold)]"
@@ -159,10 +141,46 @@ export default function HomePage() {
             </span>
             <span className="flex-1">
               <span className="block text-base font-bold text-[var(--text)]">
-                Paciente
+                Sou paciente
               </span>
               <span className="mt-1 block text-sm text-[var(--text-muted)]">
-                Acompanhe suas consultas, receba o link da sala e leia orientações.
+                Entre ou crie sua conta (nome e CPF) para acompanhar sua saúde.
+              </span>
+            </span>
+            <ArrowIcon className="h-8 w-8 shrink-0 text-[var(--gold)] transition group-hover:translate-x-0.5" />
+          </Link>
+
+          <Link
+            href="/medicos/login"
+            className="group flex items-center gap-4 rounded-[24px] border border-[var(--border)] bg-white p-5 shadow-[var(--shadow)] transition hover:-translate-y-0.5 hover:border-[var(--border-gold)]"
+          >
+            <span className="grid h-12 w-12 shrink-0 place-items-center rounded-2xl bg-[var(--gold-soft)] text-[var(--gold)]">
+              <StethoscopeIcon className="h-6 w-6" />
+            </span>
+            <span className="flex-1">
+              <span className="block text-base font-bold text-[var(--text)]">
+                Área do médico
+              </span>
+              <span className="mt-1 block text-sm text-[var(--text-muted)]">
+                Entre para gerenciar pacientes, consultas, exames e documentos.
+              </span>
+            </span>
+            <ArrowIcon className="h-8 w-8 shrink-0 text-[var(--gold)] transition group-hover:translate-x-0.5" />
+          </Link>
+
+          <Link
+            href="/educacao"
+            className="group flex items-center gap-4 rounded-[24px] border border-[var(--border)] bg-white p-5 shadow-[var(--shadow)] transition hover:-translate-y-0.5 hover:border-[var(--border-gold)]"
+          >
+            <span className="grid h-12 w-12 shrink-0 place-items-center rounded-2xl bg-[var(--gold-soft)] text-[var(--gold)]">
+              <BookIcon className="h-6 w-6" />
+            </span>
+            <span className="flex-1">
+              <span className="block text-base font-bold text-[var(--text)]">
+                Dúvida renal
+              </span>
+              <span className="mt-1 block text-sm text-[var(--text-muted)]">
+                Entenda seus rins, exames e cuidados — em linguagem simples.
               </span>
             </span>
             <ArrowIcon className="h-8 w-8 shrink-0 text-[var(--gold)] transition group-hover:translate-x-0.5" />
