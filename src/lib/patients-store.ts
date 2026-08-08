@@ -216,6 +216,43 @@ export async function getPatient(id: string): Promise<Patient | null> {
   return list.find((p) => p.id === id) ?? null;
 }
 
+/** Atualiza dados cadastrais do paciente (usado na edição "Meus dados"). */
+export async function updatePatient(
+  id: string,
+  patch: Partial<Pick<Patient, "name" | "phone" | "email" | "birthdate" | "sex" | "address">>
+): Promise<Patient | null> {
+  const current = await getPatient(id);
+  if (!current) return null;
+  const updated: Patient = {
+    ...current,
+    ...patch,
+    email: patch.email !== undefined ? (patch.email ? patch.email.toLowerCase().trim() : null) : current.email,
+  };
+  if (active()) {
+    const supabase = getSupabaseAdmin()!;
+    const { error } = await supabase
+      .from("patients")
+      .update({
+        name: updated.name,
+        phone: updated.phone ?? null,
+        email: updated.email ?? null,
+        birthdate: updated.birthdate || null,
+        sex: updated.sex ?? null,
+        address: updated.address ?? null,
+      })
+      .eq("id", id);
+    if (error) {
+      if (isMissingTableError(error)) tableMissing = true;
+      else throw error;
+    } else {
+      return updated;
+    }
+  }
+  const list = await readFile();
+  await writeFile(list.map((p) => (p.id === id ? updated : p)));
+  return updated;
+}
+
 /** Busca um paciente por CPF (qualquer médico) — usado no login por CPF. */
 export async function findByCpfAny(cpf: string): Promise<Patient | null> {
   const norm = normalizeCpf(cpf);

@@ -8,8 +8,13 @@ const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 export async function POST(req: Request) {
   const body = await req.json();
   const sessionEmail = await getPatientEmail();
-  const email = String(body.email || sessionEmail || "").toLowerCase().trim();
-  if (!EMAIL_RE.test(email)) {
+  // Identidade = sessão do paciente (pode ser e-mail OU "pid:<id>" para conta por CPF).
+  // No fluxo de agendamento (sem sessão), exige e-mail válido informado.
+  const email = String(sessionEmail || body.email || "").toLowerCase().trim();
+  if (!email) {
+    return NextResponse.json({ error: "Identificação do paciente ausente." }, { status: 400 });
+  }
+  if (!sessionEmail && !EMAIL_RE.test(email)) {
     return NextResponse.json({ error: "E-mail inválido." }, { status: 400 });
   }
 
