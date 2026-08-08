@@ -167,6 +167,7 @@ export default function PainelMedicoPage() {
         </div>
         <div className="flex flex-wrap gap-2">
           <Link href="/medicos/documentos" className="btn-ghost">Documento avulso</Link>
+          <Link href="/medicos/planos" className="btn-ghost">Planos e promoções</Link>
           <a href="/admin/login" className="btn-ghost">Administração</a>
           <button type="button" className="btn-ghost" onClick={logout}>
             Sair

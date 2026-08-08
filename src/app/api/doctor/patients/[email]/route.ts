@@ -3,6 +3,7 @@ import { getClinicalNotes, getDocuments, getLabResults, getPatientData } from "@
 import { resolvePatientAccess } from "@/lib/doctor-access";
 import { listUploads } from "@/lib/uploads-store";
 import { listLme } from "@/lib/lme-store";
+import { listEnrollmentsByPatient } from "@/lib/plans-store";
 
 export async function GET(
   _req: Request,
@@ -24,9 +25,11 @@ export async function GET(
   const labs = await getLabResults(access.key);
   const uploads = await listUploads(access.key);
   const lme = await listLme(access.key);
+  const enrollments = await listEnrollmentsByPatient(access.key);
 
   return NextResponse.json({
     patient: {
+      key: access.key,
       email: access.email,
       name: access.name,
       city: access.city,
@@ -41,5 +44,6 @@ export async function GET(
     labs,
     uploads,
     lme,
+    enrollments,
   });
 }
