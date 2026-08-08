@@ -3,7 +3,7 @@ import { readDb } from "@/lib/store";
 import {
   confirmBookingPaid,
   createCheckoutPreference,
-  isMercadoPagoEnabled,
+  isMercadoPagoEnabledFor,
 } from "@/lib/payments";
 import { buildConfirmationEmail } from "@/lib/email";
 
@@ -25,9 +25,9 @@ export async function POST(req: Request) {
 
   // Pagamento real (Mercado Pago): cria a preferência e devolve a URL de checkout.
   // A confirmação acontece só pelo webhook (não confiamos no retorno do navegador).
-  if (isMercadoPagoEnabled() && booking.status === "pending_payment") {
+  if (isMercadoPagoEnabledFor(doctor) && booking.status === "pending_payment") {
     try {
-      const { redirectUrl } = await createCheckoutPreference(booking, doctor.name);
+      const { redirectUrl } = await createCheckoutPreference(booking, doctor);
       return NextResponse.json({ provider: "mercadopago", redirectUrl });
     } catch (error) {
       return NextResponse.json(

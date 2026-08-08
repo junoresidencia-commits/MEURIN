@@ -44,6 +44,9 @@ export interface Doctor {
   adminNote?: string;
   // Logo do médico (data URL base64) exibida no cabeçalho dos documentos/PDF.
   logoUrl?: string;
+  // Token do Mercado Pago do próprio médico: quando presente, o pagamento da
+  // consulta é cobrado na conta dele (segredo — nunca enviado ao navegador).
+  mpAccessToken?: string;
 }
 
 export interface Booking {
@@ -105,4 +108,5 @@ export type PublicDoctor = Omit<
   | "rqe"
   | "clinic"
   | "adminNote"
+  | "mpAccessToken"
 >;

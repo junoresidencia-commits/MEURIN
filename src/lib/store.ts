@@ -238,6 +238,20 @@ export async function getDoctorById(id: string): Promise<Doctor | null> {
   return db.doctors.find((d) => d.id === id) ?? null;
 }
 
+/** Conecta/desconecta a conta Mercado Pago do médico (segredo), sem reescrever os demais. */
+export async function setDoctorMpToken(id: string, token: string | null): Promise<void> {
+  const supabase = getSupabaseAdmin();
+  if (supabase) {
+    const { error } = await supabase.from("doctors").update({ mp_access_token: token }).eq("id", id);
+    if (error) throw error;
+    return;
+  }
+  await updateDb((db) => {
+    db.doctors = db.doctors.map((d) => (d.id === id ? { ...d, mpAccessToken: token ?? undefined } : d));
+    return db;
+  });
+}
+
 /** Define (ou remove, com null) a logo do médico sem reescrever os demais registros. */
 export async function setDoctorLogo(id: string, logoUrl: string | null): Promise<void> {
   const supabase = getSupabaseAdmin();
@@ -301,6 +315,7 @@ function mapDoctorRow(row: Record<string, unknown>): Doctor {
     clinic: row.clinic ? String(row.clinic) : undefined,
     adminNote: row.admin_note ? String(row.admin_note) : undefined,
     logoUrl: row.logo_url ? String(row.logo_url) : undefined,
+    mpAccessToken: row.mp_access_token ? String(row.mp_access_token) : undefined,
   };
 }
 
@@ -435,6 +450,7 @@ async function writeSupabaseDb(db: Database): Promise<void> {
     clinic: doctor.clinic ?? null,
     admin_note: doctor.adminNote ?? null,
     logo_url: doctor.logoUrl ?? null,
+    mp_access_token: doctor.mpAccessToken ?? null,
   }));
 
   const bookings = db.bookings.map((booking) => ({

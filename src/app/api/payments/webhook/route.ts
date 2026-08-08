@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
-import { confirmBookingPaid, fetchMercadoPagoPayment } from "@/lib/payments";
+import { confirmBookingPaid, fetchMercadoPagoPayment, getCollectorToken } from "@/lib/payments";
+import { getDoctorById } from "@/lib/store";
 
 /**
  * Webhook do Mercado Pago. Não confiamos no retorno do navegador: a consulta
@@ -20,9 +21,14 @@ export async function POST(req: Request) {
     /* corpo vazio — usa os parâmetros da querystring */
   }
 
+  // O ?doctor= (definido ao criar a preferência) indica em qual conta cobrar/consultar.
+  const doctorId = url.searchParams.get("doctor") || "";
+  const doctor = doctorId ? await getDoctorById(doctorId) : null;
+  const token = getCollectorToken(doctor);
+
   // Só tratamos notificações de pagamento.
   if (paymentId && (type.includes("payment") || type === "")) {
-    const payment = await fetchMercadoPagoPayment(String(paymentId));
+    const payment = await fetchMercadoPagoPayment(String(paymentId), token);
     if (payment && payment.status === "approved" && payment.external_reference) {
       await confirmBookingPaid(payment.external_reference);
     }

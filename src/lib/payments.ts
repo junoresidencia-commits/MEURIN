@@ -3,16 +3,28 @@ import "server-only";
 import { v4 as uuid } from "uuid";
 import { updateDb } from "./store";
 import { buildConfirmationEmail, sendEmail } from "./email";
-import type { Booking } from "./types";
+import type { Booking, Doctor } from "./types";
 
 const MP_API = "https://api.mercadopago.com";
 
+/** Token da plataforma (conta do dono), usado como fallback. */
 export function getMercadoPagoToken(): string | null {
   return process.env.MERCADOPAGO_ACCESS_TOKEN || null;
 }
 
+/** Token que deve receber o pagamento desta consulta: o do médico, se conectado; senão o da plataforma. */
+export function getCollectorToken(doctor?: { mpAccessToken?: string } | null): string | null {
+  const own = doctor?.mpAccessToken?.trim();
+  return own || getMercadoPagoToken();
+}
+
 export function isMercadoPagoEnabled(): boolean {
   return Boolean(getMercadoPagoToken());
+}
+
+/** Há como cobrar de verdade esta consulta? (conta do médico OU da plataforma) */
+export function isMercadoPagoEnabledFor(doctor?: { mpAccessToken?: string } | null): boolean {
+  return Boolean(getCollectorToken(doctor));
 }
 
 export function appOrigin(): string {
@@ -28,10 +40,11 @@ export function appOrigin(): string {
  */
 export async function createCheckoutPreference(
   booking: Booking,
-  doctorName: string
+  doctor: Pick<Doctor, "id" | "name" | "mpAccessToken">
 ): Promise<{ redirectUrl: string; preferenceId: string }> {
-  const token = getMercadoPagoToken();
+  const token = getCollectorToken(doctor);
   if (!token) throw new Error("Mercado Pago não configurado.");
+  const doctorName = doctor.name;
 
   const origin = appOrigin();
   const body = {
@@ -53,8 +66,9 @@ export async function createCheckoutPreference(
       failure: `${origin}/confirmacao/${booking.id}`,
     },
     auto_return: "approved",
-    notification_url: `${origin}/api/payments/webhook`,
-    metadata: { booking_id: booking.id },
+    // O ?doctor= diz ao webhook qual conta (token) usar para confirmar o pagamento.
+    notification_url: `${origin}/api/payments/webhook?doctor=${doctor.id}`,
+    metadata: { booking_id: booking.id, doctor_id: doctor.id },
     statement_descriptor: "MEU RIM",
   };
 
@@ -92,11 +106,14 @@ type MpPayment = {
   payment_method_id?: string;
 };
 
-export async function fetchMercadoPagoPayment(paymentId: string): Promise<MpPayment | null> {
-  const token = getMercadoPagoToken();
-  if (!token) return null;
+export async function fetchMercadoPagoPayment(
+  paymentId: string,
+  token?: string | null
+): Promise<MpPayment | null> {
+  const useToken = token || getMercadoPagoToken();
+  if (!useToken) return null;
   const res = await fetch(`${MP_API}/v1/payments/${paymentId}`, {
-    headers: { Authorization: `Bearer ${token}` },
+    headers: { Authorization: `Bearer ${useToken}` },
   });
   if (!res.ok) return null;
   return (await res.json()) as MpPayment;
@@ -124,7 +141,10 @@ export async function confirmBookingPaid(
     const doctor = db.doctors.find((d) => d.id === booking.doctorId);
     if (!doctor) return db;
 
-    const platformFeeCents = Math.round(booking.priceCents * 0.05);
+    // Se o médico recebeu na própria conta, o valor integral é dele (sem taxa retida
+    // pela plataforma). Só há repasse/desconto quando a cobrança foi na conta da plataforma.
+    const collectedByDoctor = Boolean(doctor.mpAccessToken?.trim());
+    const platformFeeCents = collectedByDoctor ? 0 : Math.round(booking.priceCents * 0.05);
     const doctorPayoutCents = booking.priceCents - platformFeeCents;
     const paymentId = uuid();
     const paidAt = new Date().toISOString();
