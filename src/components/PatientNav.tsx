@@ -47,7 +47,7 @@ const ITEMS = [
   { href: "/paciente/registrar", label: "Dados", icon: ActivityIcon },
   { href: "/paciente/exames", label: "Exames", icon: FileIcon },
   { href: "/paciente/alimentacao", label: "Alimentação", icon: UtensilsIcon },
-  { href: "/educacao", label: "Orientações", icon: BookIcon },
+  { href: "/paciente/entender", label: "Entender", icon: BookIcon },
 ];
 
 export function PatientNav() {
