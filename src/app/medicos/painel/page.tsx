@@ -280,6 +280,10 @@ export default function PainelMedicoPage() {
         <p className="mt-2 text-sm text-[var(--text-muted)]">
           Marque os dias em que você atende. Pacientes só veem esses horários.
         </p>
+        <p className="mt-2 rounded-xl border border-[var(--border-gold)] bg-[var(--gold-soft)] px-3 py-2 text-sm text-[var(--text-soft)]">
+          Quer atender em <strong>clínicas diferentes por dia</strong> (ex.: Clínica Mãe na segunda de manhã) ou por teleconsulta?{" "}
+          <Link href="/medicos/agenda/configurar" className="font-semibold text-[var(--gold)] underline">Abrir a Agenda por local/horário</Link>.
+        </p>
         <div className="mt-4 flex flex-wrap gap-2">
           {DAYS.map((d) => {
             const on = weekly.some((w) => w.dayOfWeek === d.id);
