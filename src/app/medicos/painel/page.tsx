@@ -39,7 +39,11 @@ export default function PainelMedicoPage() {
   const [message, setMessage] = useState("");
   const [loading, setLoading] = useState(true);
   const [notifyWa, setNotifyWa] = useState("");
-  const [useWaNotif, setUseWaNotif] = useState(false);
+  const [patientWa, setPatientWa] = useState("");
+  const [allowPatientWa, setAllowPatientWa] = useState(false);
+  const [notifNew, setNotifNew] = useState(true);
+  const [notifPay, setNotifPay] = useState(true);
+  const [notifResched, setNotifResched] = useState(true);
 
   useEffect(() => {
     Promise.all([
@@ -56,7 +60,11 @@ export default function PainelMedicoPage() {
       setBio(auth.doctor.bio || "");
       setWeekly(auth.doctor.weeklyAvailability || []);
       setNotifyWa(auth.doctor.notifyWhatsapp || "");
-      setUseWaNotif(Boolean(auth.doctor.useWhatsappNotifications));
+      setPatientWa(auth.doctor.patientContactWhatsapp || "");
+      setAllowPatientWa(Boolean(auth.doctor.allowPatientContact));
+      setNotifNew(auth.doctor.notifyNewBookings !== false);
+      setNotifPay(auth.doctor.notifyPayments !== false);
+      setNotifResched(auth.doctor.notifyReschedules !== false);
       setBookings(books.bookings || []);
       setPatients(pats.patients || []);
       setLoading(false);
@@ -92,7 +100,11 @@ export default function PainelMedicoPage() {
         consultationPriceCents: Math.round(Number(price) * 100),
         bio,
         notifyWhatsapp: notifyWa,
-        useWhatsappNotifications: useWaNotif,
+        patientContactWhatsapp: patientWa,
+        allowPatientContact: allowPatientWa,
+        notifyNewBookings: notifNew,
+        notifyPayments: notifPay,
+        notifyReschedules: notifResched,
       }),
     });
     if (res.ok) setMessage("Agenda e valor salvos.");
@@ -306,22 +318,52 @@ export default function PainelMedicoPage() {
             onChange={(e) => setBio(e.target.value)}
           />
         </label>
-        <label className="mt-4 block">
-          <span className="mb-2 block text-xs font-bold uppercase tracking-wider text-[var(--gold-light)]">
-            WhatsApp para receber avisos de consultas
-          </span>
-          <input
-            className="input-field"
-            inputMode="tel"
-            value={notifyWa}
-            onChange={(e) => setNotifyWa(e.target.value)}
-            placeholder="(DDD) número — pode ser diferente do telefone público"
-          />
-        </label>
-        <label className="mt-3 flex items-center gap-2 text-sm text-[var(--text-soft)]">
-          <input type="checkbox" checked={useWaNotif} onChange={(e) => setUseWaNotif(e.target.checked)} />
-          Disponibilizar este WhatsApp para o paciente falar comigo
-        </label>
+        <div className="mt-5 rounded-2xl border border-[var(--border)] bg-[var(--bg-soft,#f8fafc)] p-4">
+          <p className="text-xs font-bold uppercase tracking-wider text-[var(--gold)]">WhatsApp e comunicação</p>
+          <p className="mt-1 text-xs text-[var(--text-muted)]">
+            Você escolhe os números. O número de <strong>notificações é só seu</strong> — nunca é mostrado ao paciente.
+          </p>
+          <label className="mt-3 block">
+            <span className="mb-1 block text-xs font-semibold text-[var(--text-muted)]">
+              Número para receber notificações (privado — só você vê)
+            </span>
+            <input
+              className="input-field"
+              inputMode="tel"
+              value={notifyWa}
+              onChange={(e) => setNotifyWa(e.target.value)}
+              placeholder="Seu WhatsApp pessoal/profissional"
+            />
+          </label>
+          <label className="mt-3 block">
+            <span className="mb-1 block text-xs font-semibold text-[var(--text-muted)]">
+              Número para contato dos pacientes (pode ser secretária/clínica)
+            </span>
+            <input
+              className="input-field"
+              inputMode="tel"
+              value={patientWa}
+              onChange={(e) => setPatientWa(e.target.value)}
+              placeholder="Número que o paciente pode usar"
+            />
+          </label>
+          <label className="mt-3 flex items-center gap-2 text-sm text-[var(--text-soft)]">
+            <input type="checkbox" checked={allowPatientWa} onChange={(e) => setAllowPatientWa(e.target.checked)} />
+            Permitir que pacientes falem sobre a consulta pelo WhatsApp (usa o número de contato acima)
+          </label>
+          <p className="mt-3 text-xs font-semibold text-[var(--text-muted)]">Quero receber notificações de:</p>
+          <div className="mt-1 flex flex-col gap-1.5">
+            <label className="flex items-center gap-2 text-sm text-[var(--text-soft)]">
+              <input type="checkbox" checked={notifNew} onChange={(e) => setNotifNew(e.target.checked)} /> Novas consultas
+            </label>
+            <label className="flex items-center gap-2 text-sm text-[var(--text-soft)]">
+              <input type="checkbox" checked={notifPay} onChange={(e) => setNotifPay(e.target.checked)} /> Pagamentos
+            </label>
+            <label className="flex items-center gap-2 text-sm text-[var(--text-soft)]">
+              <input type="checkbox" checked={notifResched} onChange={(e) => setNotifResched(e.target.checked)} /> Remarcações e cancelamentos
+            </label>
+          </div>
+        </div>
         <button type="button" className="btn-gold mt-5" onClick={saveProfile}>
           Salvar
         </button>

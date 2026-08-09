@@ -434,6 +434,11 @@ function mapDoctorRow(row: Record<string, unknown>): Doctor {
     mpAccessToken: row.mp_access_token ? String(row.mp_access_token) : undefined,
     notifyWhatsapp: row.notify_whatsapp ? String(row.notify_whatsapp) : undefined,
     useWhatsappNotifications: Boolean(row.use_whatsapp_notifications),
+    patientContactWhatsapp: row.patient_contact_whatsapp ? String(row.patient_contact_whatsapp) : undefined,
+    allowPatientContact: Boolean(row.allow_patient_contact),
+    notifyNewBookings: row.notify_new_bookings === undefined || row.notify_new_bookings === null ? true : Boolean(row.notify_new_bookings),
+    notifyPayments: row.notify_payments === undefined || row.notify_payments === null ? true : Boolean(row.notify_payments),
+    notifyReschedules: row.notify_reschedules === undefined || row.notify_reschedules === null ? true : Boolean(row.notify_reschedules),
     commissionPercent:
       row.commission_percent === null || row.commission_percent === undefined
         ? undefined
@@ -589,6 +594,11 @@ async function writeSupabaseDb(db: Database): Promise<void> {
     payout_status: doctor.payoutStatus ?? "active",
     notify_whatsapp: doctor.notifyWhatsapp ?? null,
     use_whatsapp_notifications: doctor.useWhatsappNotifications ?? false,
+    patient_contact_whatsapp: doctor.patientContactWhatsapp ?? null,
+    allow_patient_contact: doctor.allowPatientContact ?? false,
+    notify_new_bookings: doctor.notifyNewBookings ?? true,
+    notify_payments: doctor.notifyPayments ?? true,
+    notify_reschedules: doctor.notifyReschedules ?? true,
   }));
 
   const bookings = db.bookings.map((booking) => ({

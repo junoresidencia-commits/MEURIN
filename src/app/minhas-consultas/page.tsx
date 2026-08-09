@@ -139,12 +139,12 @@ export default function MinhasConsultasPage() {
                 )}
                 {b.doctorWhatsapp && (
                   <a
-                    href={`https://wa.me/${(b.doctorWhatsapp || "").replace(/\D/g, "").replace(/^(?!55)/, "55")}?text=${encodeURIComponent(`Olá, aqui é ${b.patientName}, sobre minha consulta no Meu Rim.`)}`}
+                    href={`https://wa.me/${(b.doctorWhatsapp || "").replace(/\D/g, "").replace(/^(?!55)/, "55")}?text=${encodeURIComponent(`Olá! Sou ${b.patientName}. Estou entrando em contato sobre minha consulta com ${b.doctorName}, marcada para ${fmt(b.slotStart)}.`)}`}
                     target="_blank"
                     rel="noopener noreferrer"
                     className="btn-ghost"
                   >
-                    Falar com o médico
+                    Falar sobre esta consulta
                   </a>
                 )}
                 <Link

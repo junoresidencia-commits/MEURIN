@@ -49,6 +49,13 @@ export async function PUT(req: Request) {
   const notifyWhatsapp = body.notifyWhatsapp !== undefined ? String(body.notifyWhatsapp || "").trim() : undefined;
   const useWhatsappNotifications =
     body.useWhatsappNotifications !== undefined ? Boolean(body.useWhatsappNotifications) : undefined;
+  const patientContactWhatsapp =
+    body.patientContactWhatsapp !== undefined ? String(body.patientContactWhatsapp || "").trim() : undefined;
+  const allowPatientContact =
+    body.allowPatientContact !== undefined ? Boolean(body.allowPatientContact) : undefined;
+  const notifyNewBookings = body.notifyNewBookings !== undefined ? Boolean(body.notifyNewBookings) : undefined;
+  const notifyPayments = body.notifyPayments !== undefined ? Boolean(body.notifyPayments) : undefined;
+  const notifyReschedules = body.notifyReschedules !== undefined ? Boolean(body.notifyReschedules) : undefined;
   // Segurança: o médico NÃO pode alterar o próprio percentual de repasse nem a
   // liberação financeira — mesmo enviando esses campos diretamente na API, eles
   // são ignorados aqui. Só o administrador altera (via /api/admin/doctors).
@@ -72,6 +79,13 @@ export async function PUT(req: Request) {
             notifyWhatsapp: notifyWhatsapp !== undefined ? notifyWhatsapp || undefined : d.notifyWhatsapp,
             useWhatsappNotifications:
               useWhatsappNotifications !== undefined ? useWhatsappNotifications : d.useWhatsappNotifications,
+            patientContactWhatsapp:
+              patientContactWhatsapp !== undefined ? patientContactWhatsapp || undefined : d.patientContactWhatsapp,
+            allowPatientContact:
+              allowPatientContact !== undefined ? allowPatientContact : d.allowPatientContact,
+            notifyNewBookings: notifyNewBookings !== undefined ? notifyNewBookings : d.notifyNewBookings,
+            notifyPayments: notifyPayments !== undefined ? notifyPayments : d.notifyPayments,
+            notifyReschedules: notifyReschedules !== undefined ? notifyReschedules : d.notifyReschedules,
           }
         : d
     ),

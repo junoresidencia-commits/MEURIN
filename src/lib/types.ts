@@ -44,9 +44,17 @@ export interface Doctor {
   adminNote?: string;
   // Logo do médico (data URL base64) exibida no cabeçalho dos documentos/PDF.
   logoUrl?: string;
-  // WhatsApp para receber avisos de consultas (pode diferir do telefone público).
+  // WhatsApp e comunicação (privacidade):
+  // - notifyWhatsapp: número INTERNO do médico p/ receber avisos (NUNCA exposto ao paciente).
+  // - patientContactWhatsapp: número para o paciente falar (pode ser secretária/clínica).
+  // - allowPatientContact: habilita o paciente a abrir conversa (usando o número acima).
   notifyWhatsapp?: string;
-  useWhatsappNotifications?: boolean;
+  useWhatsappNotifications?: boolean; // legado (mantido por compatibilidade)
+  patientContactWhatsapp?: string;
+  allowPatientContact?: boolean;
+  notifyNewBookings?: boolean;
+  notifyPayments?: boolean;
+  notifyReschedules?: boolean;
   // Token do Mercado Pago do próprio médico: quando presente, o pagamento da
   // consulta é cobrado na conta dele (segredo — nunca enviado ao navegador).
   mpAccessToken?: string;

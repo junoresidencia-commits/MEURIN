@@ -14,8 +14,9 @@ export async function GET(req: Request) {
     .slice(0, 10)
     .map((b) => {
       const doctor = db.doctors.find((d) => d.id === b.doctorId);
-      // WhatsApp para "falar com o médico" só quando o médico disponibiliza.
-      const doctorWhatsapp = doctor?.useWhatsappNotifications ? doctor?.notifyWhatsapp || null : null;
+      // Privacidade: o número INTERNO de notificações NUNCA é exposto. Só o número de
+      // contato dos pacientes (que pode ser secretária/clínica), e apenas se habilitado.
+      const doctorWhatsapp = doctor?.allowPatientContact ? doctor?.patientContactWhatsapp || null : null;
       return {
         id: b.id,
         status: b.status,
