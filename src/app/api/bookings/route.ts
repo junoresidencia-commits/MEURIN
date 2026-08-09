@@ -4,7 +4,9 @@ import { getDoctorSessionId } from "@/lib/auth";
 import { readDb, updateDb, updateBooking, deleteBooking } from "@/lib/store";
 import { appOrigin } from "@/lib/payments";
 import { buildConfirmationEmail, sendEmail } from "@/lib/email";
-import type { Booking, ConsultationEvent, PaymentMethod } from "@/lib/types";
+import { generateAvailableSlots } from "@/lib/scheduling";
+import { activeHoldStarts, releaseHold } from "@/lib/holds-store";
+import type { Booking, ConsultationEvent, Modality, PaymentMethod } from "@/lib/types";
 
 const REASONS = new Set(["pressa", "acompanhamento", "segunda_opiniao", "outro"]);
 
@@ -62,15 +64,33 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "Médico não encontrado." }, { status: 404 });
   }
 
+  const iso = new Date(String(slotStart)).toISOString();
+  const holder = body.holder ? String(body.holder).slice(0, 80) : "";
+
   const conflict = db.bookings.some(
     (b) =>
       b.doctorId === doctorId &&
-      b.slotStart === slotStart &&
+      new Date(b.slotStart).toISOString() === iso &&
       ["pending_payment", "paid", "confirmed"].includes(b.status)
   );
   if (conflict) {
     return NextResponse.json(
-      { error: "Este horário acabou de ser reservado. Escolha outro." },
+      { error: "Este horário acabou de ficar indisponível. Escolha outro." },
+      { status: 409 }
+    );
+  }
+
+  // Reverificação no backend: o horário precisa existir na agenda real do médico e
+  // não estar reservado por outra pessoa (anti dupla marcação). Também define o
+  // valor autoritativo por local/modalidade.
+  const held = await activeHoldStarts(doctorId, holder); // exclui a própria reserva
+  const requestedModality = (body.modality === "presencial" || body.modality === "teleconsulta") ? (body.modality as Modality) : undefined;
+  const requestedLocation = body.locationId ? String(body.locationId) : undefined;
+  const slots = generateAvailableSlots(doctor, { modality: requestedModality, locationId: requestedLocation, excludeStarts: held });
+  const slot = slots.find((s) => s.start === iso);
+  if (!slot) {
+    return NextResponse.json(
+      { error: "Este horário não está mais disponível. Escolha outro." },
       { status: 409 }
     );
   }
@@ -85,21 +105,27 @@ export async function POST(req: Request) {
     patientPhone: String(patientPhone || ""),
     patientCity: String(patientCity || ""),
     careReason: reason as Booking["careReason"],
-    slotStart: String(slotStart),
-    slotEnd: String(slotEnd),
-    priceCents: doctor.consultationPriceCents,
+    slotStart: slot.start,
+    slotEnd: slot.end,
+    priceCents: slot.priceCents, // valor por local/modalidade
     paymentMethod: paymentMethod as PaymentMethod,
     status: "pending_payment",
     meetingRoomId: uuid(),
     confirmationEmailSent: false,
     createdAt: new Date().toISOString(),
-    events: [ev("paciente", "solicitada", "Paciente solicitou a consulta.")],
+    modality: slot.modality,
+    locationId: slot.locationId,
+    locationName: slot.locationName,
+    events: [ev("paciente", "solicitada", `Paciente solicitou a consulta (${slot.modality === "presencial" ? `presencial — ${slot.locationName ?? "clínica"}` : "teleconsulta"}).`)],
   };
 
   await updateDb((current) => ({
     ...current,
     bookings: [...current.bookings, booking],
   }));
+
+  // Libera a reserva temporária deste paciente (a consulta agora ocupa o horário).
+  if (holder) await releaseHold(doctorId, iso, holder);
 
   return NextResponse.json({ booking }, { status: 201 });
 }
