@@ -306,7 +306,7 @@ export default function ConsultaPage() {
         </div>
       </div>
 
-      {role === "doctor" && joined && (
+      {isDoctorLoggedIn && (
         <section className="mt-8 rounded-[24px] border border-[var(--border)] bg-white p-5">
           <div className="flex flex-wrap items-center justify-between gap-2">
             <h2 className="font-display text-xl text-[var(--text)]">Evolução da consulta</h2>
@@ -314,11 +314,6 @@ export default function ConsultaPage() {
               Abrir prontuário completo
             </a>
           </div>
-          {!isDoctorLoggedIn && (
-            <p className="mt-2 rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-700">
-              Para salvar no prontuário, entre como médico em <a href="/medicos/login" className="font-semibold underline">/medicos/login</a> (nesta aba ou em outra) e recarregue.
-            </p>
-          )}
           <div className="mt-4 grid gap-3">
             <label className="block">
               <span className="mb-1 block text-xs font-bold uppercase tracking-wider text-[var(--gold)]">Queixa principal</span>
