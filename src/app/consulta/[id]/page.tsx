@@ -1,13 +1,15 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { useParams } from "next/navigation";
+import { useParams, useRouter } from "next/navigation";
 import { formatSlotLabel } from "@/lib/scheduling-client";
+import { toFriendlyMessage } from "@/lib/user-errors";
 
 type Role = "doctor" | "patient";
 
 export default function ConsultaPage() {
   const params = useParams<{ id: string }>();
+  const router = useRouter();
   const roomId = params.id;
   const localVideo = useRef<HTMLVideoElement>(null);
   const remoteVideo = useRef<HTMLVideoElement>(null);
@@ -27,6 +29,22 @@ export default function ConsultaPage() {
   const [muted, setMuted] = useState(false);
   const [camOff, setCamOff] = useState(false);
   const [copied, setCopied] = useState(false);
+  // Médico logado? (habilita salvar a evolução direto da sala)
+  const [isDoctorLoggedIn, setIsDoctorLoggedIn] = useState(false);
+  // Prontuário/evolução escrito na sala
+  const [note, setNote] = useState({ chiefComplaint: "", history: "", assessment: "", plan: "" });
+  const [shareNote, setShareNote] = useState(true);
+  const [savingNote, setSavingNote] = useState(false);
+  const [noteMsg, setNoteMsg] = useState("");
+  const [noteErr, setNoteErr] = useState("");
+
+  // Detecta médico logado para sugerir o papel e liberar a evolução.
+  useEffect(() => {
+    fetch("/api/auth")
+      .then((r) => r.json())
+      .then((d) => setIsDoctorLoggedIn(Boolean(d?.doctor)))
+      .catch(() => {});
+  }, []);
 
   useEffect(() => {
     fetch(`/api/rooms/${roomId}`)
@@ -167,6 +185,41 @@ export default function ConsultaPage() {
     setTimeout(() => setCopied(false), 2000);
   }
 
+  function leave() {
+    // Encerra câmera/microfone e a conexão, e sai da sala.
+    try {
+      streamRef.current?.getTracks().forEach((t) => t.stop());
+      pcRef.current?.close();
+    } catch {
+      /* ignore */
+    }
+    pcRef.current = null;
+    streamRef.current = null;
+    setJoined(false);
+    router.push(roleRef.current === "doctor" ? "/medicos/painel" : "/");
+  }
+
+  async function saveNote() {
+    setSavingNote(true);
+    setNoteErr("");
+    setNoteMsg("");
+    try {
+      const res = await fetch(`/api/rooms/${roomId}/note`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ...note, sharedWithPatient: shareNote }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error || "Não foi possível salvar a evolução.");
+      setNoteMsg("Evolução salva no prontuário.");
+      setNote({ chiefComplaint: "", history: "", assessment: "", plan: "" });
+    } catch (e) {
+      setNoteErr(toFriendlyMessage(e, "Não foi possível salvar a evolução."));
+    } finally {
+      setSavingNote(false);
+    }
+  }
+
   if (error) {
     return (
       <div className="mx-auto max-w-2xl px-5 py-20">
@@ -204,6 +257,13 @@ export default function ConsultaPage() {
             </button>
             <button type="button" className="btn-ghost !min-h-[42px] !text-xs" onClick={toggleCam}>
               {camOff ? "Ligar câmera" : "Desligar câmera"}
+            </button>
+            <button
+              type="button"
+              className="!min-h-[42px] rounded-full border border-[var(--danger)] px-4 !text-xs font-bold text-[var(--danger)] transition hover:bg-[var(--danger)] hover:text-white"
+              onClick={leave}
+            >
+              Sair da consulta
             </button>
           </>
         )}
@@ -245,6 +305,58 @@ export default function ConsultaPage() {
           </span>
         </div>
       </div>
+
+      {role === "doctor" && joined && (
+        <section className="mt-8 rounded-[24px] border border-[var(--border)] bg-white p-5">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <h2 className="font-display text-xl text-[var(--text)]">Evolução da consulta</h2>
+            <a href="/medicos/painel#pacientes" target="_blank" rel="noopener noreferrer" className="text-sm font-semibold text-[var(--gold)]">
+              Abrir prontuário completo
+            </a>
+          </div>
+          {!isDoctorLoggedIn && (
+            <p className="mt-2 rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-700">
+              Para salvar no prontuário, entre como médico em <a href="/medicos/login" className="font-semibold underline">/medicos/login</a> (nesta aba ou em outra) e recarregue.
+            </p>
+          )}
+          <div className="mt-4 grid gap-3">
+            <label className="block">
+              <span className="mb-1 block text-xs font-bold uppercase tracking-wider text-[var(--gold)]">Queixa principal</span>
+              <textarea className="input-field" rows={2} value={note.chiefComplaint} onChange={(e) => setNote({ ...note, chiefComplaint: e.target.value })} />
+            </label>
+            <label className="block">
+              <span className="mb-1 block text-xs font-bold uppercase tracking-wider text-[var(--gold)]">História / evolução</span>
+              <textarea className="input-field" rows={4} value={note.history} onChange={(e) => setNote({ ...note, history: e.target.value })} placeholder="Ex.: DRC G3b A3, Cr 1,8, K 4,8… conduta e orientações" />
+            </label>
+            <div className="grid gap-3 sm:grid-cols-2">
+              <label className="block">
+                <span className="mb-1 block text-xs font-bold uppercase tracking-wider text-[var(--gold)]">Avaliação</span>
+                <textarea className="input-field" rows={3} value={note.assessment} onChange={(e) => setNote({ ...note, assessment: e.target.value })} />
+              </label>
+              <label className="block">
+                <span className="mb-1 block text-xs font-bold uppercase tracking-wider text-[var(--gold)]">Conduta / plano</span>
+                <textarea className="input-field" rows={3} value={note.plan} onChange={(e) => setNote({ ...note, plan: e.target.value })} />
+              </label>
+            </div>
+            <label className="flex items-center gap-2 text-sm text-[var(--text-soft)]">
+              <input type="checkbox" checked={shareNote} onChange={(e) => setShareNote(e.target.checked)} />
+              Compartilhar esta evolução com o paciente
+            </label>
+            {noteMsg && <p className="text-sm font-semibold text-[var(--teal,#0d9488)]">{noteMsg}</p>}
+            {noteErr && <p className="text-sm text-[var(--danger)]">{noteErr}</p>}
+            <div>
+              <button
+                type="button"
+                className="btn-gold disabled:opacity-50"
+                onClick={saveNote}
+                disabled={savingNote || (!note.chiefComplaint && !note.history && !note.assessment && !note.plan)}
+              >
+                {savingNote ? "Salvando…" : "Salvar evolução no prontuário"}
+              </button>
+            </div>
+          </div>
+        </section>
+      )}
 
       <p className="mt-6 text-xs text-[var(--text-muted)]">
         Dica: abra o link em dois aparelhos (ou duas abas: paciente e médico) para
