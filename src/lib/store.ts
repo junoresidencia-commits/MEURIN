@@ -4,6 +4,7 @@ import bcrypt from "bcryptjs";
 import { v4 as uuid } from "uuid";
 import { getSupabaseAdmin } from "./supabase-admin";
 import type {
+  Booking,
   Database,
   Doctor,
   FinancialEvent,
@@ -374,6 +375,15 @@ export async function setDoctorLogo(id: string, logoUrl: string | null): Promise
   });
 }
 
+/** Atualiza campos de uma consulta (confirmação, proposta, remarcação, timeline). */
+export async function updateBooking(id: string, patch: Partial<Booking>): Promise<Booking | null> {
+  const result = await updateDb((db) => {
+    db.bookings = db.bookings.map((b) => (b.id === id ? { ...b, ...patch } : b));
+    return db;
+  });
+  return result.bookings.find((b) => b.id === id) ?? null;
+}
+
 /** Remove uma consulta/agendamento (writeDb usa upsert, então a exclusão precisa ser explícita). */
 export async function deleteBooking(id: string): Promise<void> {
   const supabase = getSupabaseAdmin();
@@ -422,6 +432,8 @@ function mapDoctorRow(row: Record<string, unknown>): Doctor {
     adminNote: row.admin_note ? String(row.admin_note) : undefined,
     logoUrl: row.logo_url ? String(row.logo_url) : undefined,
     mpAccessToken: row.mp_access_token ? String(row.mp_access_token) : undefined,
+    notifyWhatsapp: row.notify_whatsapp ? String(row.notify_whatsapp) : undefined,
+    useWhatsappNotifications: Boolean(row.use_whatsapp_notifications),
     commissionPercent:
       row.commission_percent === null || row.commission_percent === undefined
         ? undefined
@@ -455,6 +467,13 @@ function mapBookingRow(row: Record<string, unknown>) {
       | "cancelled",
     meetingRoomId: String(row.meeting_room_id),
     paymentId: row.payment_id ? String(row.payment_id) : undefined,
+    stage: row.stage ? (String(row.stage) as Booking["stage"]) : undefined,
+    events: Array.isArray(row.events) ? (row.events as Booking["events"]) : [],
+    proposedSlotStart: row.proposed_slot_start ? new Date(String(row.proposed_slot_start)).toISOString() : undefined,
+    proposedSlotEnd: row.proposed_slot_end ? new Date(String(row.proposed_slot_end)).toISOString() : undefined,
+    proposalMessage: row.proposal_message ? String(row.proposal_message) : undefined,
+    proposalBy: row.proposal_by ? String(row.proposal_by) : undefined,
+    notRealizedReason: row.not_realized_reason ? String(row.not_realized_reason) : undefined,
     paidAt: row.paid_at ? new Date(String(row.paid_at)).toISOString() : undefined,
     confirmationEmailSent: Boolean(row.confirmation_email_sent),
     createdAt: new Date(String(row.created_at)).toISOString(),
@@ -568,6 +587,8 @@ async function writeSupabaseDb(db: Database): Promise<void> {
     mp_access_token: doctor.mpAccessToken ?? null,
     commission_percent: doctor.commissionPercent ?? null,
     payout_status: doctor.payoutStatus ?? "active",
+    notify_whatsapp: doctor.notifyWhatsapp ?? null,
+    use_whatsapp_notifications: doctor.useWhatsappNotifications ?? false,
   }));
 
   const bookings = db.bookings.map((booking) => ({
@@ -585,6 +606,13 @@ async function writeSupabaseDb(db: Database): Promise<void> {
     status: booking.status,
     meeting_room_id: booking.meetingRoomId,
     payment_id: booking.paymentId ?? null,
+    stage: booking.stage ?? null,
+    events: booking.events ?? [],
+    proposed_slot_start: booking.proposedSlotStart ?? null,
+    proposed_slot_end: booking.proposedSlotEnd ?? null,
+    proposal_message: booking.proposalMessage ?? null,
+    proposal_by: booking.proposalBy ?? null,
+    not_realized_reason: booking.notRealizedReason ?? null,
     paid_at: booking.paidAt ?? null,
     confirmation_email_sent: booking.confirmationEmailSent,
     created_at: booking.createdAt,

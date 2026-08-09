@@ -44,6 +44,9 @@ export interface Doctor {
   adminNote?: string;
   // Logo do médico (data URL base64) exibida no cabeçalho dos documentos/PDF.
   logoUrl?: string;
+  // WhatsApp para receber avisos de consultas (pode diferir do telefone público).
+  notifyWhatsapp?: string;
+  useWhatsappNotifications?: boolean;
   // Token do Mercado Pago do próprio médico: quando presente, o pagamento da
   // consulta é cobrado na conta dele (segredo — nunca enviado ao navegador).
   mpAccessToken?: string;
@@ -94,6 +97,31 @@ export interface Booking {
   paidAt?: string;
   confirmationEmailSent: boolean;
   createdAt: string;
+  // Fluxo de confirmação/remarcação (separado do pagamento). Ausente = fluxo antigo.
+  stage?: ConsultationStage;
+  events?: ConsultationEvent[]; // linha do tempo (registro oficial)
+  // Proposta de novo horário feita pelo médico (aguardando resposta do paciente).
+  proposedSlotStart?: string;
+  proposedSlotEnd?: string;
+  proposalMessage?: string;
+  proposalBy?: string;
+  notRealizedReason?: string;
+}
+
+export type ConsultationStage =
+  | "aguardando_confirmacao" // paciente solicitou/pagou; aguarda o médico
+  | "confirmada"
+  | "proposto_novo_horario"
+  | "remarcada"
+  | "realizada"
+  | "nao_realizada"
+  | "cancelada";
+
+export interface ConsultationEvent {
+  at: string;
+  actor: "paciente" | "medico" | "sistema";
+  type: string; // ex.: 'solicitada','pagamento','confirmada','proposta','remarcada','cancelada','nao_realizada'
+  detail?: string;
 }
 
 export interface PaymentRecord {

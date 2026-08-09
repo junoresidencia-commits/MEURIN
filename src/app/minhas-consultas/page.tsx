@@ -7,12 +7,30 @@ import { formatSlotLabel } from "@/lib/scheduling-client";
 type Row = {
   id: string;
   status: string;
+  stage?: string | null;
   slotStart: string;
   doctorName: string;
+  doctorWhatsapp?: string | null;
   meetingRoomId: string;
   patientName: string;
   patientCity?: string;
+  proposedSlotStart?: string | null;
+  proposalMessage?: string | null;
 };
+
+const STATUS_LABEL: Record<string, string> = {
+  pending_payment: "Aguardando pagamento",
+  paid: "Aguardando confirmação do médico",
+  confirmed: "Confirmada",
+  completed: "Realizada",
+  cancelled: "Cancelada",
+};
+function labelFor(b: Row): string {
+  if (b.stage === "proposto_novo_horario") return "Médico propôs um novo horário";
+  if (b.stage === "nao_realizada") return "Não realizada";
+  if (b.stage === "remarcada") return "Remarcada";
+  return STATUS_LABEL[b.status] || b.status;
+}
 
 export default function MinhasConsultasPage() {
   const [email, setEmail] = useState("");
@@ -35,6 +53,27 @@ export default function MinhasConsultasPage() {
     } finally {
       setLoading(false);
     }
+  }
+
+  async function respondProposal(id: string, action: "accept" | "decline") {
+    const res = await fetch(`/api/bookings/${id}/proposal`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action }),
+    });
+    if (!res.ok) {
+      const d = await res.json().catch(() => ({}));
+      window.alert(d.error || "Não foi possível responder agora.");
+      return;
+    }
+    // Recarrega a lista para refletir o novo status.
+    const r = await fetch(`/api/bookings/lookup?email=${encodeURIComponent(email)}`);
+    const data = await r.json();
+    setRows(data.bookings || []);
+  }
+
+  function fmt(iso: string) {
+    return new Date(iso).toLocaleString("pt-BR", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" });
   }
 
   return (
@@ -76,19 +115,45 @@ export default function MinhasConsultasPage() {
               <p className="font-semibold text-[var(--text)]">{b.doctorName}</p>
               <p className="text-sm text-[var(--text-muted)]">{formatSlotLabel(b.slotStart)}</p>
               <p className="mt-1 text-xs uppercase tracking-wider text-[var(--gold-light)]">
-                {b.status === "confirmed" ? "Liberada" : b.status}
+                {labelFor(b)}
               </p>
-              {b.status === "confirmed" && (
-                <Link href={`/consulta/${b.meetingRoomId}`} className="btn-gold mt-4 inline-flex">
-                  Abrir sala
-                </Link>
+
+              {b.stage === "proposto_novo_horario" && b.proposedSlotStart && (
+                <div className="mt-3 rounded-xl border border-[var(--border-gold)] bg-[var(--gold-soft)] p-3">
+                  <p className="text-sm text-[var(--text)]">
+                    {b.doctorName} propôs um novo horário: <strong>{fmt(b.proposedSlotStart)}</strong>
+                  </p>
+                  {b.proposalMessage && <p className="mt-1 text-sm text-[var(--text-soft)]">“{b.proposalMessage}”</p>}
+                  <div className="mt-3 flex flex-wrap gap-2">
+                    <button type="button" className="btn-gold" onClick={() => respondProposal(b.id, "accept")}>Aceitar novo horário</button>
+                    <button type="button" className="btn-ghost" onClick={() => respondProposal(b.id, "decline")}>Não posso neste horário</button>
+                  </div>
+                </div>
               )}
-              <Link
-                href={`/confirmacao/${b.id}`}
-                className="ml-2 text-sm text-[var(--gold-light)] underline-offset-2 hover:underline"
-              >
-                Ver confirmação
-              </Link>
+
+              <div className="mt-4 flex flex-wrap items-center gap-2">
+                {b.status === "confirmed" && (
+                  <Link href={`/consulta/${b.meetingRoomId}`} className="btn-gold inline-flex">
+                    Abrir sala
+                  </Link>
+                )}
+                {b.doctorWhatsapp && (
+                  <a
+                    href={`https://wa.me/${(b.doctorWhatsapp || "").replace(/\D/g, "").replace(/^(?!55)/, "55")}?text=${encodeURIComponent(`Olá, aqui é ${b.patientName}, sobre minha consulta no Meu Rim.`)}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="btn-ghost"
+                  >
+                    Falar com o médico
+                  </a>
+                )}
+                <Link
+                  href={`/confirmacao/${b.id}`}
+                  className="text-sm text-[var(--gold-light)] underline-offset-2 hover:underline"
+                >
+                  Ver detalhes
+                </Link>
+              </div>
             </div>
           ))}
         </div>

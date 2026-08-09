@@ -272,9 +272,18 @@ export default function PacienteInicioPage() {
                 Abrir sala da consulta
               </Link>
             ) : (
-              <p className="mt-2 text-xs uppercase tracking-wider text-[var(--warn)]">
-                {nextBooking.status}
-              </p>
+              <>
+                <p className="mt-2 text-xs uppercase tracking-wider text-[var(--warn)]">
+                  {nextBooking.status === "paid"
+                    ? "Aguardando confirmação do médico"
+                    : nextBooking.status === "pending_payment"
+                      ? "Aguardando pagamento"
+                      : nextBooking.status}
+                </p>
+                <Link href="/minhas-consultas" className="mt-2 inline-block text-sm font-semibold text-[var(--gold)]">
+                  Ver detalhes / responder
+                </Link>
+              </>
             )}
           </div>
         ) : (

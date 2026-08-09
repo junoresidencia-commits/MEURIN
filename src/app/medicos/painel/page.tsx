@@ -38,6 +38,8 @@ export default function PainelMedicoPage() {
   const [weekly, setWeekly] = useState<WeeklySlot[]>([]);
   const [message, setMessage] = useState("");
   const [loading, setLoading] = useState(true);
+  const [notifyWa, setNotifyWa] = useState("");
+  const [useWaNotif, setUseWaNotif] = useState(false);
 
   useEffect(() => {
     Promise.all([
@@ -53,6 +55,8 @@ export default function PainelMedicoPage() {
       setPrice(String(auth.doctor.consultationPriceCents / 100));
       setBio(auth.doctor.bio || "");
       setWeekly(auth.doctor.weeklyAvailability || []);
+      setNotifyWa(auth.doctor.notifyWhatsapp || "");
+      setUseWaNotif(Boolean(auth.doctor.useWhatsappNotifications));
       setBookings(books.bookings || []);
       setPatients(pats.patients || []);
       setLoading(false);
@@ -87,10 +91,70 @@ export default function PainelMedicoPage() {
         weeklyAvailability: weekly,
         consultationPriceCents: Math.round(Number(price) * 100),
         bio,
+        notifyWhatsapp: notifyWa,
+        useWhatsappNotifications: useWaNotif,
       }),
     });
     if (res.ok) setMessage("Agenda e valor salvos.");
     else setMessage("Não foi possível salvar.");
+  }
+
+  async function reloadBookings() {
+    const res = await fetch("/api/bookings");
+    const data = await res.json();
+    setBookings(data.bookings || []);
+  }
+
+  async function bookingAction(id: string, action: string, extra: Record<string, unknown> = {}) {
+    const res = await fetch("/api/bookings", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ id, action, ...extra }),
+    });
+    if (!res.ok) {
+      const d = await res.json().catch(() => ({}));
+      window.alert(d.error || "Não foi possível concluir a ação.");
+      return false;
+    }
+    await reloadBookings();
+    return true;
+  }
+
+  async function proposeTime(b: Booking) {
+    const date = window.prompt("Nova data (AAAA-MM-DD):");
+    if (!date) return;
+    const time = window.prompt("Novo horário (HH:MM):", "09:00");
+    if (!time) return;
+    const msg = window.prompt("Mensagem ao paciente (opcional):") || "";
+    const start = new Date(`${date}T${time}:00`);
+    if (Number.isNaN(start.getTime())) return window.alert("Data/horário inválidos.");
+    const end = new Date(start.getTime() + 30 * 60 * 1000);
+    await bookingAction(b.id, "propose", { slotStart: start.toISOString(), slotEnd: end.toISOString(), message: msg });
+  }
+
+  async function rescheduleConsulta(b: Booking) {
+    const date = window.prompt("Remarcar — nova data (AAAA-MM-DD): (o pagamento é preservado, sem nova cobrança)");
+    if (!date) return;
+    const time = window.prompt("Novo horário (HH:MM):", "09:00");
+    if (!time) return;
+    const start = new Date(`${date}T${time}:00`);
+    if (Number.isNaN(start.getTime())) return window.alert("Data/horário inválidos.");
+    const end = new Date(start.getTime() + 30 * 60 * 1000);
+    await bookingAction(b.id, "reschedule", { slotStart: start.toISOString(), slotEnd: end.toISOString() });
+  }
+
+  async function notRealized(b: Booking) {
+    const reason = window.prompt("Motivo (médico indisponível / paciente indisponível / problema técnico / problema de conexão / remarcação / outro):", "remarcação");
+    if (reason === null) return;
+    await bookingAction(b.id, "not_realized", { reason });
+  }
+
+  function talkWhatsApp(b: Booking) {
+    const digits = (b.patientPhone || "").replace(/\D/g, "");
+    const withCountry = digits.length >= 12 ? digits : digits ? `55${digits}` : "";
+    const msg = `Olá, ${b.patientName}. Aqui é ${doctor?.name || "seu médico"}, do Meu Rim, sobre sua consulta de ${formatSlotLabel(b.slotStart)}.`;
+    const url = withCountry ? `https://wa.me/${withCountry}?text=${encodeURIComponent(msg)}` : `https://wa.me/?text=${encodeURIComponent(msg)}`;
+    window.open(url, "_blank", "noopener,noreferrer");
   }
 
   async function logout() {
@@ -242,6 +306,22 @@ export default function PainelMedicoPage() {
             onChange={(e) => setBio(e.target.value)}
           />
         </label>
+        <label className="mt-4 block">
+          <span className="mb-2 block text-xs font-bold uppercase tracking-wider text-[var(--gold-light)]">
+            WhatsApp para receber avisos de consultas
+          </span>
+          <input
+            className="input-field"
+            inputMode="tel"
+            value={notifyWa}
+            onChange={(e) => setNotifyWa(e.target.value)}
+            placeholder="(DDD) número — pode ser diferente do telefone público"
+          />
+        </label>
+        <label className="mt-3 flex items-center gap-2 text-sm text-[var(--text-soft)]">
+          <input type="checkbox" checked={useWaNotif} onChange={(e) => setUseWaNotif(e.target.checked)} />
+          Disponibilizar este WhatsApp para o paciente falar comigo
+        </label>
         <button type="button" className="btn-gold mt-5" onClick={saveProfile}>
           Salvar
         </button>
@@ -343,6 +423,45 @@ export default function PainelMedicoPage() {
         <PaymentSettings />
       </section>
 
+      {(() => {
+        const pending = bookings.filter((b) => b.status === "paid" || b.stage === "proposto_novo_horario");
+        if (pending.length === 0) return null;
+        return (
+          <section className="mt-8">
+            <h2 className="font-display text-2xl text-[var(--text)]">
+              Consultas aguardando sua resposta
+              <span className="ml-2 rounded-full bg-[var(--danger)] px-2 py-0.5 text-sm font-bold text-white align-middle">{pending.length}</span>
+            </h2>
+            <div className="mt-4 grid gap-3">
+              {pending.map((b) => (
+                <div key={b.id} className="panel border-[var(--border-gold)]">
+                  <div className="flex flex-wrap items-start justify-between gap-2">
+                    <div>
+                      <p className="font-bold text-[var(--text)]">{b.patientName}</p>
+                      <p className="text-sm text-[var(--text-muted)]">{formatSlotLabel(b.slotStart)} · {new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(b.priceCents / 100)}</p>
+                      <p className="text-xs text-[var(--text-soft)]">
+                        {b.patientPhone ? `WhatsApp: ${b.patientPhone} · ` : ""}Pagamento: pago · solicitada em {new Date(b.createdAt).toLocaleDateString("pt-BR")}
+                      </p>
+                      {b.stage === "proposto_novo_horario" && (
+                        <p className="mt-1 text-xs font-semibold text-amber-700">Você propôs {b.proposedSlotStart ? formatSlotLabel(b.proposedSlotStart) : "novo horário"} — aguardando resposta do paciente.</p>
+                      )}
+                    </div>
+                  </div>
+                  <div className="mt-3 flex flex-wrap gap-2">
+                    {b.stage !== "proposto_novo_horario" && (
+                      <button type="button" className="btn-gold" onClick={() => bookingAction(b.id, "confirm")}>Confirmar consulta</button>
+                    )}
+                    <button type="button" className="btn-ghost" onClick={() => proposeTime(b)}>Propor outro horário</button>
+                    <button type="button" className="btn-ghost" onClick={() => talkWhatsApp(b)}>Falar com o paciente</button>
+                    <button type="button" className="btn-ghost" onClick={() => { if (window.confirm("Recusar esta solicitação?")) bookingAction(b.id, "cancel"); }}>Recusar</button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </section>
+        );
+      })()}
+
       <section className="mt-8">
         <h2 className="font-display text-2xl text-[var(--text)]">Próximas consultas</h2>
         <div className="mt-4 grid gap-3">
@@ -362,11 +481,17 @@ export default function PainelMedicoPage() {
                   </p>
                 )}
                 <p className="mt-1 text-xs uppercase tracking-wider text-[var(--gold-light)]">
-                  {b.status === "confirmed"
-                    ? "Paga e liberada"
-                    : b.status === "pending_payment"
-                      ? "Aguardando pagamento"
-                      : b.status}
+                  {b.stage === "nao_realizada"
+                    ? "Não realizada"
+                    : b.status === "confirmed"
+                      ? "Confirmada"
+                      : b.status === "paid"
+                        ? "Aguardando sua confirmação"
+                        : b.status === "pending_payment"
+                          ? "Aguardando pagamento"
+                          : b.status === "cancelled"
+                            ? "Cancelada"
+                            : b.status}
                 </p>
               </div>
               <div className="flex flex-wrap items-center gap-2">
@@ -374,6 +499,15 @@ export default function PainelMedicoPage() {
                   <Link href={`/consulta/${b.meetingRoomId}`} className="btn-gold">
                     Entrar na sala
                   </Link>
+                )}
+                {b.status === "confirmed" && (
+                  <>
+                    <button type="button" className="btn-ghost" onClick={() => rescheduleConsulta(b)}>Remarcar (sem nova cobrança)</button>
+                    <button type="button" className="btn-ghost" onClick={() => notRealized(b)}>Não realizada</button>
+                  </>
+                )}
+                {b.stage === "nao_realizada" && (
+                  <button type="button" className="btn-gold" onClick={() => rescheduleConsulta(b)}>Remarcar sem nova cobrança</button>
                 )}
                 <button
                   type="button"

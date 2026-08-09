@@ -46,6 +46,9 @@ export async function PUT(req: Request) {
   const weeklyAvailability = body.weeklyAvailability as WeeklySlot[] | undefined;
   const consultationPriceCents = body.consultationPriceCents as number | undefined;
   const bio = body.bio as string | undefined;
+  const notifyWhatsapp = body.notifyWhatsapp !== undefined ? String(body.notifyWhatsapp || "").trim() : undefined;
+  const useWhatsappNotifications =
+    body.useWhatsappNotifications !== undefined ? Boolean(body.useWhatsappNotifications) : undefined;
   // Segurança: o médico NÃO pode alterar o próprio percentual de repasse nem a
   // liberação financeira — mesmo enviando esses campos diretamente na API, eles
   // são ignorados aqui. Só o administrador altera (via /api/admin/doctors).
@@ -66,6 +69,9 @@ export async function PUT(req: Request) {
             weeklyAvailability: weeklyAvailability ?? d.weeklyAvailability,
             consultationPriceCents: newPrice ?? d.consultationPriceCents,
             bio: bio ?? d.bio,
+            notifyWhatsapp: notifyWhatsapp !== undefined ? notifyWhatsapp || undefined : d.notifyWhatsapp,
+            useWhatsappNotifications:
+              useWhatsappNotifications !== undefined ? useWhatsappNotifications : d.useWhatsappNotifications,
           }
         : d
     ),
