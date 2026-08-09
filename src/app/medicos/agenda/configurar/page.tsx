@@ -26,6 +26,15 @@ export default function AgendaMedicoPage() {
   const [locations, setLocations] = useState<DoctorLocation[]>([]);
   const [periods, setPeriods] = useState<Period[]>([]);
   const [msg, setMsg] = useState("");
+  const [showLocForm, setShowLocForm] = useState(false);
+  const activeLocations = locations.filter((l) => l.active);
+
+  function abrirCadastroLocal() {
+    setShowLocForm(true);
+    if (typeof document !== "undefined") {
+      document.getElementById("locais")?.scrollIntoView({ behavior: "smooth", block: "start" });
+    }
+  }
 
   async function loadAll() {
     const [auth, locs] = await Promise.all([
@@ -99,12 +108,16 @@ export default function AgendaMedicoPage() {
             Configure onde e quando você atende. O paciente só verá os horários realmente disponíveis.
           </p>
 
-          <LocationsCard locations={locations} onChange={setLocations} />
+          <LocationsCard locations={locations} onChange={setLocations} show={showLocForm} setShow={setShowLocForm} />
 
           <section className="mt-8">
             <h2 className="font-display text-2xl text-[var(--text)]">Configurar semana</h2>
             <p className="mt-1 text-sm text-[var(--text-muted)]">
               Adicione períodos por dia — presencial (em um local) ou teleconsulta — com duração, intervalo e valor.
+            </p>
+            <p className="mt-2 rounded-lg bg-[var(--teal-50,#f0fdfa)] px-3 py-2 text-sm text-[var(--text-muted)]">
+              <strong className="text-[var(--text)]">Repete toda semana automaticamente.</strong> Você configura uma vez:
+              um período em <em>Segunda</em>, por exemplo, vale para <strong>todas as segundas-feiras</strong> — não precisa refazer semana a semana.
             </p>
             <div className="mt-4 grid gap-4">
               {DAYS.map((d) => {
@@ -130,12 +143,22 @@ export default function AgendaMedicoPage() {
                             {p.modality === "presencial" && (
                               <label className="block">
                                 <span className="mb-1 block text-xs font-semibold text-[var(--text-muted)]">Local</span>
-                                <select className="input-field" value={p.locationId || ""} onChange={(e) => updatePeriod(p.id, { locationId: e.target.value || undefined })}>
-                                  <option value="">Selecione</option>
-                                  {locations.filter((l) => l.active).map((l) => (
-                                    <option key={l.id} value={l.id}>{l.name} — {l.city}</option>
-                                  ))}
-                                </select>
+                                {activeLocations.length === 0 ? (
+                                  <div className="rounded-xl border border-dashed border-[var(--border)] p-2 text-sm text-[var(--text-muted)]">
+                                    Nenhum local cadastrado ainda.
+                                    <button type="button" className="ml-1 font-semibold text-[var(--teal,#0d9488)] underline" onClick={abrirCadastroLocal}>
+                                      Cadastrar local
+                                    </button>
+                                    {" "}ou use <button type="button" className="font-semibold text-[var(--teal,#0d9488)] underline" onClick={() => updatePeriod(p.id, { modality: "teleconsulta", locationId: undefined })}>teleconsulta</button>.
+                                  </div>
+                                ) : (
+                                  <select className="input-field" value={p.locationId || ""} onChange={(e) => updatePeriod(p.id, { locationId: e.target.value || undefined })}>
+                                    <option value="">Selecione</option>
+                                    {activeLocations.map((l) => (
+                                      <option key={l.id} value={l.id}>{l.name} — {l.city}</option>
+                                    ))}
+                                  </select>
+                                )}
                               </label>
                             )}
                           </div>
@@ -191,9 +214,8 @@ export default function AgendaMedicoPage() {
   );
 }
 
-function LocationsCard({ locations, onChange }: { locations: DoctorLocation[]; onChange: (l: DoctorLocation[]) => void }) {
+function LocationsCard({ locations, onChange, show, setShow }: { locations: DoctorLocation[]; onChange: (l: DoctorLocation[]) => void; show: boolean; setShow: (v: boolean) => void }) {
   const [form, setForm] = useState({ name: "", city: "", address: "", phone: "", type: "clinica" });
-  const [show, setShow] = useState(false);
 
   async function reload() {
     const r = await fetch("/api/doctor/locations").then((x) => x.json());
@@ -217,11 +239,14 @@ function LocationsCard({ locations, onChange }: { locations: DoctorLocation[]; o
   }
 
   return (
-    <section className="mt-6">
+    <section id="locais" className="mt-6 scroll-mt-4">
       <div className="flex items-center justify-between">
         <h2 className="font-display text-2xl text-[var(--text)]">Locais de atendimento</h2>
-        <button type="button" className="btn-gold" onClick={() => setShow((v) => !v)}>+ Adicionar local</button>
+        <button type="button" className="btn-gold" onClick={() => setShow(!show)}>+ Adicionar local</button>
       </div>
+      <p className="mt-1 text-sm text-[var(--text-muted)]">
+        Cadastre aqui suas clínicas/consultórios. Depois eles aparecem no campo <strong>Local</strong> dos períodos presenciais. (Teleconsulta não precisa de local.)
+      </p>
       {show && (
         <div className="panel mt-3 grid gap-3 sm:grid-cols-2">
           <label className="block"><span className="mb-1 block text-xs font-semibold text-[var(--text-muted)]">Nome do local</span><input className="input-field" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} placeholder="Clínica Mãe" /></label>
