@@ -115,6 +115,18 @@ export default function AgendaCalendarioPage() {
     await loadAll();
   }
 
+  async function deleteBooking(id: string) {
+    if (!window.confirm("Excluir esta consulta? O horário volta a ficar livre.")) return;
+    await fetch("/api/bookings", { method: "DELETE", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id }) });
+    await loadAll();
+  }
+  function remindWhatsApp(b: Booking) {
+    const digits = (b.patientPhone || "").replace(/\D/g, "");
+    const to = digits.length >= 12 ? digits : digits ? `55${digits}` : "";
+    const msg = `Olá, ${b.patientName}! Lembrete da sua consulta no Meu Rim: ${format(new Date(b.slotStart), "d/MM 'às' HH:mm")}${b.modality === "teleconsulta" ? " (teleconsulta)" : b.locationName ? ` — ${b.locationName}` : ""}.`;
+    window.open(to ? `https://wa.me/${to}?text=${encodeURIComponent(msg)}` : `https://wa.me/?text=${encodeURIComponent(msg)}`, "_blank", "noopener,noreferrer");
+  }
+
   const pending = useMemo(() => bookings.filter((b) => b.status === "paid" || b.stage === "proposto_novo_horario"), [bookings]);
   const nextConfirmed = useMemo(() => {
     const now = Date.now();
@@ -201,9 +213,15 @@ export default function AgendaCalendarioPage() {
                       const m = statusMeta(b);
                       if (!m) return null;
                       return (
-                        <div key={b.id} className={`rounded-xl border px-3 py-2 text-sm ${m.cls}`}>
-                          <span className="font-bold">{format(new Date(b.slotStart), "HH:mm")}</span> · {b.patientName}
-                          <span className="ml-2 text-xs">· {m.label}{b.locationName ? ` · ${b.locationName}` : ""}</span>
+                        <div key={b.id} className={`flex flex-wrap items-center justify-between gap-2 rounded-xl border px-3 py-2 text-sm ${m.cls}`}>
+                          <span>
+                            <span className="font-bold">{format(new Date(b.slotStart), "HH:mm")}</span> · {b.patientName}
+                            <span className="ml-2 text-xs">· {m.label}{b.locationName ? ` · ${b.locationName}` : ""}</span>
+                          </span>
+                          <span className="flex gap-2">
+                            <button type="button" className="text-xs font-semibold underline" onClick={() => remindWhatsApp(b)}>Lembrar</button>
+                            <button type="button" className="text-xs font-semibold underline" onClick={() => deleteBooking(b.id)}>Excluir</button>
+                          </span>
                         </div>
                       );
                     })}
@@ -237,7 +255,10 @@ export default function AgendaCalendarioPage() {
                   <div className="mt-2">
                     <p className="font-bold text-[var(--text)]">{nextConfirmed.patientName}</p>
                     <p className="text-sm text-[var(--text-muted)]">{format(new Date(nextConfirmed.slotStart), "d/MM 'às' HH:mm")} · {nextConfirmed.modality === "teleconsulta" ? "Teleconsulta" : nextConfirmed.locationName || "Presencial"}</p>
-                    <Link href={`/consulta/${nextConfirmed.meetingRoomId}`} className="btn-gold mt-3 inline-flex">Iniciar atendimento</Link>
+                    <div className="mt-3 flex flex-wrap gap-2">
+                      <Link href={`/consulta/${nextConfirmed.meetingRoomId}`} className="btn-gold">Iniciar atendimento</Link>
+                      <button type="button" className="btn-ghost" onClick={() => remindWhatsApp(nextConfirmed)}>Lembrar no WhatsApp</button>
+                    </div>
                   </div>
                 ) : (
                   <p className="mt-2 text-sm text-[var(--text-muted)]">Nenhuma consulta confirmada por enquanto.</p>
@@ -278,6 +299,8 @@ export default function AgendaCalendarioPage() {
               </div>
             </aside>
           </div>
+
+          <NewAppointment onCreated={loadAll} />
         </div>
       </div>
       <DoctorMobileNav />
@@ -359,6 +382,96 @@ function MonthView({ bookings, onPickDay }: { bookings: Booking[]; onPickDay: (d
         })}
       </div>
     </div>
+  );
+}
+
+function NewAppointment({ onCreated }: { onCreated: () => void }) {
+  const [doctorId, setDoctorId] = useState("");
+  const [locations, setLocations] = useState<{ id: string; name: string; city: string }[]>([]);
+  const [modality, setModality] = useState<"presencial" | "teleconsulta">("teleconsulta");
+  const [locationId, setLocationId] = useState("");
+  const [slots, setSlots] = useState<{ start: string; label: string; priceCents: number }[]>([]);
+  const [name, setName] = useState("");
+  const [email, setEmail] = useState("");
+  const [phone, setPhone] = useState("");
+  const [chosen, setChosen] = useState("");
+  const [msg, setMsg] = useState("");
+  const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    fetch("/api/auth").then((r) => r.json()).then((d) => setDoctorId(d?.doctor?.id || ""));
+    fetch("/api/doctor/locations").then((r) => r.json()).then((d) => setLocations((d.locations || []).filter((l: { active: boolean }) => l.active)));
+  }, []);
+
+  useEffect(() => {
+    if (!doctorId) return;
+    if (modality === "presencial" && !locationId) { setSlots([]); return; }
+    const qs = new URLSearchParams({ doctorId, modality });
+    if (modality === "presencial") qs.set("locationId", locationId);
+    fetch(`/api/availability?${qs.toString()}`).then((r) => r.json()).then((d) => setSlots(d.slots || []));
+  }, [doctorId, modality, locationId]);
+
+  async function submit() {
+    setSaving(true);
+    setMsg("");
+    const res = await fetch("/api/doctor/appointments", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ patientName: name, patientEmail: email, patientPhone: phone, modality, locationId: modality === "presencial" ? locationId : undefined, slotStart: chosen }),
+    });
+    const d = await res.json().catch(() => ({}));
+    setSaving(false);
+    if (res.ok) {
+      setMsg("Consulta agendada e confirmada.");
+      setName(""); setEmail(""); setPhone(""); setChosen("");
+      onCreated();
+    } else {
+      setMsg(d.error || "Não foi possível agendar.");
+    }
+  }
+
+  return (
+    <section className="mt-8">
+      <h2 className="font-display text-2xl text-[var(--text)]">Agendar nova consulta</h2>
+      <p className="mt-1 text-sm text-[var(--text-muted)]">Marque diretamente para um paciente — já entra confirmada e ocupa o horário.</p>
+      <div className="panel mt-3 space-y-3">
+        <div className="grid gap-3 sm:grid-cols-3">
+          <label className="block"><span className="mb-1 block text-xs font-semibold text-[var(--text-muted)]">Paciente</span><input className="input-field" value={name} onChange={(e) => setName(e.target.value)} /></label>
+          <label className="block"><span className="mb-1 block text-xs font-semibold text-[var(--text-muted)]">E-mail (opcional)</span><input className="input-field" value={email} onChange={(e) => setEmail(e.target.value)} /></label>
+          <label className="block"><span className="mb-1 block text-xs font-semibold text-[var(--text-muted)]">WhatsApp (opcional)</span><input className="input-field" value={phone} onChange={(e) => setPhone(e.target.value)} /></label>
+        </div>
+        <div className="flex flex-wrap gap-2">
+          {(["teleconsulta", "presencial"] as const).map((m) => (
+            <button key={m} type="button" onClick={() => { setModality(m); setLocationId(""); setChosen(""); }} className={`rounded-full px-4 py-2 text-sm font-bold transition ${modality === m ? "bg-[var(--gold)] text-white" : "border border-[var(--border)] text-[var(--text-soft)]"}`}>
+              {m === "teleconsulta" ? "Teleconsulta" : "Presencial"}
+            </button>
+          ))}
+          {modality === "presencial" && (
+            <select className="input-field w-auto" value={locationId} onChange={(e) => { setLocationId(e.target.value); setChosen(""); }}>
+              <option value="">Escolha o local</option>
+              {locations.map((l) => <option key={l.id} value={l.id}>{l.name} — {l.city}</option>)}
+            </select>
+          )}
+        </div>
+        {slots.length > 0 && (
+          <div>
+            <p className="mb-1 text-xs font-semibold text-[var(--text-muted)]">Horários disponíveis</p>
+            <div className="grid max-h-[220px] gap-2 overflow-y-auto sm:grid-cols-3">
+              {slots.slice(0, 30).map((s) => (
+                <button key={s.start} type="button" onClick={() => setChosen(s.start)} className={`rounded-xl border px-3 py-2 text-left text-sm transition ${chosen === s.start ? "border-[var(--gold)] bg-[var(--gold-soft)] text-[var(--gold)]" : "border-[var(--border)] text-[var(--text-soft)]"}`}>
+                  {s.label}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+        {modality === "presencial" && !locationId && <p className="text-sm text-[var(--text-muted)]">Escolha o local para ver os horários.</p>}
+        {msg && <p className="text-sm font-semibold text-[var(--teal,#0d9488)]">{msg}</p>}
+        <button type="button" className="btn-gold disabled:opacity-50" onClick={submit} disabled={saving || !name || !chosen}>
+          {saving ? "Agendando…" : "Agendar consulta"}
+        </button>
+      </div>
+    </section>
   );
 }
 

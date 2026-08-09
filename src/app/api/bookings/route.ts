@@ -6,6 +6,7 @@ import { appOrigin } from "@/lib/payments";
 import { buildConfirmationEmail, sendEmail } from "@/lib/email";
 import { generateAvailableSlots } from "@/lib/scheduling";
 import { activeHoldStarts, releaseHold } from "@/lib/holds-store";
+import { processReminders } from "@/lib/reminders";
 import type { Booking, ConsultationEvent, Modality, PaymentMethod } from "@/lib/types";
 
 const REASONS = new Set(["pressa", "acompanhamento", "segunda_opiniao", "outro"]);
@@ -27,7 +28,9 @@ export async function GET() {
     const mine = db.bookings
       .filter((b) => b.doctorId === doctorId)
       .sort((a, b) => a.slotStart.localeCompare(b.slotStart));
-    return NextResponse.json({ bookings: mine });
+    // Dispara lembretes 24h/2h pendentes (best-effort ao abrir a agenda).
+    const processed = await processReminders(mine);
+    return NextResponse.json({ bookings: processed });
   }
 
   return NextResponse.json({ bookings: [] });
