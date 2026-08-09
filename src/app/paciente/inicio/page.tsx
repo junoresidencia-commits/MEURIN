@@ -5,6 +5,8 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { PatientNav } from "@/components/PatientNav";
 import { ConsentGate } from "@/components/ConsentGate";
+import { NotificationBell } from "@/components/NotificationBell";
+import { EnableNotifications } from "@/components/EnableNotifications";
 import { formatSlotLabel } from "@/lib/scheduling-client";
 
 type HomeRecord = {
@@ -183,6 +185,7 @@ export default function PacienteInicioPage() {
 
   return (
     <div className="mx-auto max-w-[560px] px-5 pb-28 pt-8">
+      <EnableNotifications />
       <div className="flex items-start justify-between">
         <div>
           <h1 className="font-display text-2xl font-extrabold capitalize text-[var(--text)]">
@@ -191,6 +194,7 @@ export default function PacienteInicioPage() {
           <p className="mt-1 text-sm text-[var(--text-muted)]">Como você está hoje?</p>
         </div>
         <div className="flex items-center gap-2">
+          <NotificationBell />
           <Link
             href="/paciente/dados"
             className="rounded-full border border-[var(--border)] px-3 py-1.5 text-xs font-semibold text-[var(--text-muted)]"

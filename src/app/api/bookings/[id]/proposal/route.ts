@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { readDb, updateBooking } from "@/lib/store";
 import { appOrigin } from "@/lib/payments";
 import { buildConfirmationEmail, sendEmail } from "@/lib/email";
+import { sendNotification, links, fmtDateTime, firstName } from "@/lib/notify";
 import type { ConsultationEvent } from "@/lib/types";
 
 function ev(actor: ConsultationEvent["actor"], type: string, detail?: string): ConsultationEvent {
@@ -46,6 +47,17 @@ export async function POST(req: Request, context: { params: Promise<{ id: string
     if (doctor?.email) {
       await sendEmail({ to: doctor.email, subject: "Paciente aceitou o novo horário", body: `${booking.patientName} aceitou o novo horário (${toLabel}).` });
     }
+    await sendNotification({
+      userId: booking.doctorId,
+      role: "medico",
+      type: "proposta_aceita",
+      title: "Novo horário aceito",
+      body: `${firstName(booking.patientName)} aceitou o horário de ${fmtDateTime(booking.proposedSlotStart, doctor?.tz)}.`,
+      targetUrl: links.doctorConsulta(booking.id),
+      tag: `booking-${booking.id}`,
+      relatedType: "booking",
+      relatedId: booking.id,
+    });
     return NextResponse.json({ ok: true, booking: updated });
   }
 
@@ -61,6 +73,17 @@ export async function POST(req: Request, context: { params: Promise<{ id: string
     if (doctor?.email) {
       await sendEmail({ to: doctor.email, subject: "Paciente recusou o novo horário", body: `${booking.patientName} não pôde no horário proposto. Combine outro horário ou proponha novamente.` });
     }
+    await sendNotification({
+      userId: booking.doctorId,
+      role: "medico",
+      type: "proposta_recusada",
+      title: "Paciente recusou o horário",
+      body: `${firstName(booking.patientName)} não pôde no horário proposto. Toque para propor outro.`,
+      targetUrl: links.doctorConsulta(booking.id),
+      tag: `booking-${booking.id}`,
+      relatedType: "booking",
+      relatedId: booking.id,
+    });
     return NextResponse.json({ ok: true, booking: updated });
   }
 

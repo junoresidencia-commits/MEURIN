@@ -3,6 +3,7 @@ import "server-only";
 import { v4 as uuid } from "uuid";
 import { updateDb } from "./store";
 import { sendEmail } from "./email";
+import { sendNotification, patientKey, links, fmtDateTime, firstName } from "./notify";
 import { computeSplit, resolveDoctorSharePercent } from "./types";
 import type { Booking, Doctor } from "./types";
 
@@ -217,6 +218,36 @@ export async function confirmBookingPaid(
 
   for (const email of emailsToSend) {
     await sendEmail(email);
+  }
+
+  // Notificações (push + central): médico recebe "nova consulta", paciente "recebemos".
+  try {
+    const doctor = result.doctors.find((d) => d.id === booking.doctorId);
+    const quando = fmtDateTime(booking.slotStart, doctor?.tz);
+    await sendNotification({
+      userId: booking.doctorId,
+      role: "medico",
+      type: "nova_consulta",
+      title: "Nova consulta agendada",
+      body: `${firstName(booking.patientName)} agendou uma consulta para ${quando}. Toque para confirmar.`,
+      targetUrl: links.doctorConsulta(booking.id),
+      tag: `booking-${booking.id}`,
+      relatedType: "booking",
+      relatedId: booking.id,
+    });
+    await sendNotification({
+      userId: patientKey(booking.patientEmail),
+      role: "paciente",
+      type: "solicitacao_recebida",
+      title: "Recebemos sua solicitação",
+      body: `Estamos aguardando a confirmação do médico para ${quando}. Avisaremos aqui.`,
+      targetUrl: links.patientConsulta(booking.id),
+      tag: `booking-${booking.id}`,
+      relatedType: "booking",
+      relatedId: booking.id,
+    });
+  } catch {
+    // notificação não deve quebrar o pagamento
   }
 
   return { booking, meetingUrl };

@@ -443,6 +443,11 @@ function mapDoctorRow(row: Record<string, unknown>): Doctor {
     notifyNewBookings: row.notify_new_bookings === undefined || row.notify_new_bookings === null ? true : Boolean(row.notify_new_bookings),
     notifyPayments: row.notify_payments === undefined || row.notify_payments === null ? true : Boolean(row.notify_payments),
     notifyReschedules: row.notify_reschedules === undefined || row.notify_reschedules === null ? true : Boolean(row.notify_reschedules),
+    notifyPush: row.notify_push === undefined || row.notify_push === null ? true : Boolean(row.notify_push),
+    notifyReminder24: row.notify_reminder_24 === undefined || row.notify_reminder_24 === null ? true : Boolean(row.notify_reminder_24),
+    notifyReminder2: row.notify_reminder_2 === undefined || row.notify_reminder_2 === null ? true : Boolean(row.notify_reminder_2),
+    calendarEventMode: (row.calendar_event_mode as "meurim" | "patient") ?? "meurim",
+    tz: (row.tz as string) ?? "America/Bahia",
     commissionPercent:
       row.commission_percent === null || row.commission_percent === undefined
         ? undefined
@@ -610,6 +615,11 @@ async function writeSupabaseDb(db: Database): Promise<void> {
     notify_new_bookings: doctor.notifyNewBookings ?? true,
     notify_payments: doctor.notifyPayments ?? true,
     notify_reschedules: doctor.notifyReschedules ?? true,
+    notify_push: doctor.notifyPush ?? true,
+    notify_reminder_24: doctor.notifyReminder24 ?? true,
+    notify_reminder_2: doctor.notifyReminder2 ?? true,
+    calendar_event_mode: doctor.calendarEventMode ?? "meurim",
+    tz: doctor.tz ?? "America/Bahia",
   }));
 
   const bookings = db.bookings.map((booking) => ({

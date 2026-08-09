@@ -7,6 +7,7 @@ import { buildConfirmationEmail, sendEmail } from "@/lib/email";
 import { generateAvailableSlots } from "@/lib/scheduling";
 import { activeHoldStarts, releaseHold } from "@/lib/holds-store";
 import { processReminders } from "@/lib/reminders";
+import { sendNotification, patientKey, links, fmtDateTime } from "@/lib/notify";
 import type { Booking, ConsultationEvent, Modality, PaymentMethod } from "@/lib/types";
 
 const REASONS = new Set(["pressa", "acompanhamento", "segunda_opiniao", "outro"]);
@@ -163,6 +164,19 @@ export async function PATCH(req: Request) {
       const meetingUrl = `${appOrigin()}/consulta/${booking.meetingRoomId}`;
       await sendEmail(buildConfirmationEmail(updated, doctor, meetingUrl));
     }
+    const quando = fmtDateTime(booking.slotStart, doctor.tz);
+    const online = booking.modality === "teleconsulta";
+    await sendNotification({
+      userId: patientKey(booking.patientEmail),
+      role: "paciente",
+      type: "consulta_confirmada",
+      title: "Consulta confirmada",
+      body: online ? `Sua teleconsulta está confirmada para ${quando}.` : `Sua consulta está confirmada para ${quando}.`,
+      targetUrl: links.patientConsulta(booking.id),
+      tag: `booking-${booking.id}`,
+      relatedType: "booking",
+      relatedId: booking.id,
+    });
     return NextResponse.json({ ok: true, booking: updated });
   }
 
@@ -186,6 +200,17 @@ export async function PATCH(req: Request) {
         body: `${doctor.name} propôs um novo horário para sua consulta. Acesse o Meu Rim para aceitar ou recusar.${msg ? `\n\nMensagem: ${msg}` : ""}`,
       });
     }
+    await sendNotification({
+      userId: patientKey(booking.patientEmail),
+      role: "paciente",
+      type: "novo_horario_proposto",
+      title: "Novo horário proposto",
+      body: `Toque para aceitar ou recusar o novo horário: ${fmtDateTime(String(body.slotStart), doctor.tz)}.`,
+      targetUrl: links.patientConsulta(booking.id),
+      tag: `booking-${booking.id}`,
+      relatedType: "booking",
+      relatedId: booking.id,
+    });
     return NextResponse.json({ ok: true, booking: updated });
   }
 
@@ -207,6 +232,9 @@ export async function PATCH(req: Request) {
       proposalMessage: undefined,
       proposalBy: undefined,
       notRealizedReason: undefined,
+      // Cancela lembretes antigos e permite recriar para o novo horário.
+      reminder24Sent: false,
+      reminder2Sent: false,
       events: [...events, ev("medico", "remarcada", `Consulta remarcada de ${fromLabel} para ${toLabel}.${wasPaid ? " Pagamento preservado (sem nova cobrança)." : ""}`)],
     });
     if (booking.patientEmail?.includes("@")) {
@@ -216,6 +244,17 @@ export async function PATCH(req: Request) {
         body: `Sua consulta foi remarcada para ${toLabel}.${wasPaid ? " O pagamento anterior continua válido — não há nova cobrança." : ""}`,
       });
     }
+    await sendNotification({
+      userId: patientKey(booking.patientEmail),
+      role: "paciente",
+      type: "consulta_remarcada",
+      title: "Consulta remarcada",
+      body: `Sua consulta foi remarcada para ${fmtDateTime(String(body.slotStart), doctor.tz)}.`,
+      targetUrl: links.patientConsulta(booking.id),
+      tag: `booking-${booking.id}`,
+      relatedType: "booking",
+      relatedId: booking.id,
+    });
     return NextResponse.json({ ok: true, booking: updated });
   }
 
@@ -233,7 +272,20 @@ export async function PATCH(req: Request) {
     const updated = await updateBooking(id, {
       status: "cancelled",
       stage: "cancelada",
+      reminder24Sent: true,
+      reminder2Sent: true, // impede lembretes de uma consulta cancelada
       events: [...events, ev("medico", "cancelada", "Consulta cancelada pelo médico.")],
+    });
+    await sendNotification({
+      userId: patientKey(booking.patientEmail),
+      role: "paciente",
+      type: "consulta_cancelada",
+      title: "Consulta cancelada",
+      body: `Sua consulta de ${fmtDateTime(booking.slotStart, doctor.tz)} foi cancelada. Toque para reagendar.`,
+      targetUrl: links.patientConsulta(booking.id),
+      tag: `booking-${booking.id}`,
+      relatedType: "booking",
+      relatedId: booking.id,
     });
     return NextResponse.json({ ok: true, booking: updated });
   }

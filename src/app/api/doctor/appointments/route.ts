@@ -4,6 +4,7 @@ import { getDoctorSessionId } from "@/lib/auth";
 import { readDb, updateDb } from "@/lib/store";
 import { generateAvailableSlots } from "@/lib/scheduling";
 import { activeHoldStarts } from "@/lib/holds-store";
+import { sendNotification, patientKey, links, fmtDateTime } from "@/lib/notify";
 import type { Booking, Modality } from "@/lib/types";
 
 /**
@@ -64,5 +65,19 @@ export async function POST(req: Request) {
     ],
   };
   await updateDb((cur) => ({ ...cur, bookings: [...cur.bookings, booking] }));
+
+  if (booking.patientEmail) {
+    await sendNotification({
+      userId: patientKey(booking.patientEmail),
+      role: "paciente",
+      type: "consulta_agendada",
+      title: "Consulta agendada",
+      body: `${doctor.name} agendou sua consulta para ${fmtDateTime(booking.slotStart, doctor.tz)}.`,
+      targetUrl: links.patientConsulta(booking.id),
+      tag: `booking-${booking.id}`,
+      relatedType: "booking",
+      relatedId: booking.id,
+    });
+  }
   return NextResponse.json({ ok: true, booking }, { status: 201 });
 }

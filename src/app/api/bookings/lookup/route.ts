@@ -23,6 +23,8 @@ export async function GET(req: Request) {
         stage: b.stage ?? null,
         slotStart: b.slotStart,
         slotEnd: b.slotEnd,
+        modality: b.modality ?? null,
+        locationName: b.locationName ?? null,
         doctorName: doctor?.name || "Médico",
         doctorWhatsapp,
         meetingRoomId: b.meetingRoomId,

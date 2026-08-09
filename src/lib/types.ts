@@ -102,9 +102,59 @@ export interface Doctor {
   commissionPercent?: number;
   // Liberação financeira do recebimento (definida pelo administrador).
   payoutStatus?: PayoutStatus;
+  // Notificações no celular (push) + lembretes + calendário + fuso.
+  notifyPush?: boolean;
+  notifyReminder24?: boolean;
+  notifyReminder2?: boolean;
+  // Título do evento no calendário do médico. Padrão: "meurim" (não expõe o nome do paciente).
+  calendarEventMode?: CalendarEventMode;
+  tz?: string; // fuso horário do médico. Padrão America/Bahia.
 }
 
 export type PayoutStatus = "active" | "pending" | "blocked";
+
+export type CalendarEventMode = "meurim" | "patient";
+
+/** Papel do destinatário/dono do dispositivo de push. */
+export type NotifyRole = "medico" | "paciente";
+
+/** Dispositivo/assinatura de push de um usuário (pode ter vários). */
+export interface PushDevice {
+  id: string;
+  userId: string; // id do médico ou chave do paciente
+  role: NotifyRole;
+  platform: "web" | "ios" | "android";
+  endpoint: string;
+  subscription: PushSubscriptionJSONish;
+  deviceName?: string;
+  enabled: boolean;
+  createdAt: string;
+  updatedAt: string;
+  lastUsedAt?: string;
+}
+
+/** Formato serializável de um PushSubscription (o que o navegador envia). */
+export interface PushSubscriptionJSONish {
+  endpoint: string;
+  expirationTime?: number | null;
+  keys: { p256dh: string; auth: string };
+}
+
+/** Notificação in-app (central de notificações) + histórico do que foi enviado. */
+export interface AppNotification {
+  id: string;
+  userId: string;
+  role: NotifyRole;
+  type: string;
+  title: string;
+  message?: string;
+  targetUrl?: string;
+  relatedEntityType?: string;
+  relatedEntityId?: string;
+  readAt?: string | null;
+  sentAt?: string | null;
+  createdAt: string;
+}
 
 /** Repasse padrão do médico quando o administrador ainda não configurou (100% = sem retenção). */
 export const DEFAULT_DOCTOR_SHARE_PERCENT = 100;

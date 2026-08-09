@@ -7,6 +7,8 @@ import type { Booking, Doctor, WeeklySlot } from "@/lib/types";
 import { formatBRL, formatSlotLabel } from "@/lib/scheduling-client";
 import { DoctorSidebar } from "@/components/DoctorSidebar";
 import { DoctorMobileNav } from "@/components/DoctorMobileNav";
+import { NotificationBell } from "@/components/NotificationBell";
+import { EnableNotifications } from "@/components/EnableNotifications";
 
 const DAYS = [
   { id: 1, label: "Seg" },
@@ -241,7 +243,8 @@ export default function PainelMedicoPage() {
             {doctor.crm} · {doctor.specialty} — resumo da sua clínica hoje
           </p>
         </div>
-        <div className="flex flex-wrap gap-2">
+        <div className="flex flex-wrap items-center gap-2">
+          <NotificationBell />
           <Link href="/medicos/documentos" className="btn-ghost">Documento avulso</Link>
           <a href="/admin/login" className="btn-ghost">Administração</a>
           <button type="button" className="btn-ghost" onClick={logout}>
@@ -249,6 +252,7 @@ export default function PainelMedicoPage() {
           </button>
         </div>
       </div>
+      <EnableNotifications />
 
       <div className="mt-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <a href="#pacientes" className="panel transition hover:-translate-y-0.5 hover:border-[var(--border-gold)]">
