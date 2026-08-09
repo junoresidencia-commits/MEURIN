@@ -4,6 +4,17 @@ import { useEffect, useMemo, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import type { Booking, PaymentMethod, PublicDoctor } from "@/lib/types";
 import { formatBRL } from "@/lib/scheduling-client";
+import { toFriendlyMessage } from "@/lib/user-errors";
+
+type PixData = {
+  favorecido: string;
+  holderDoc: string | null;
+  bank: string | null;
+  pixKey: string;
+  amountCents: number;
+  copiaECola: string;
+  qrDataUrl: string | null;
+};
 
 type Slot = { start: string; end: string; label: string };
 
@@ -55,6 +66,13 @@ export default function AgendarClient() {
   const [cardNumber, setCardNumber] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  // PIX direto para o médico (sem Mercado Pago): mostra a chave e recebe comprovante.
+  const [directPix, setDirectPix] = useState(false);
+  const [pixData, setPixData] = useState<PixData | null>(null);
+  const [pixBookingId, setPixBookingId] = useState("");
+  const [proofMsg, setProofMsg] = useState("");
+  const [proofSending, setProofSending] = useState(false);
+  const [copied, setCopied] = useState("");
   const [consentDocs, setConsentDocs] = useState<
     { type: string; title: string; body: string; version: string; sha256: string }[]
   >([]);
@@ -163,10 +181,22 @@ export default function AgendarClient() {
         body: JSON.stringify({
           bookingId: bookingData.booking.id,
           cardLast4: cardNumber.slice(-4),
+          mode: directPix ? "pix_direto" : undefined,
         }),
       });
       const payData = await payRes.json();
       if (!payRes.ok) throw new Error(payData.error || "Pagamento recusado");
+
+      // PIX direto: busca os dados do favorecido e mostra chave/QR + envio de comprovante.
+      if (payData.provider === "pix_direto") {
+        const pixRes = await fetch(`/api/bookings/${bookingData.booking.id}/pix`);
+        const pix = await pixRes.json();
+        if (!pixRes.ok) throw new Error(pix.error || "Não foi possível carregar os dados do PIX.");
+        setPixData(pix);
+        setPixBookingId(bookingData.booking.id);
+        setLoading(false);
+        return;
+      }
 
       // Pagamento real (Mercado Pago): redireciona para o checkout.
       if (payData.redirectUrl) {
@@ -177,10 +207,33 @@ export default function AgendarClient() {
       // Pagamento simulado: já confirmado, vai para a confirmação.
       router.push(`/confirmacao/${bookingData.booking.id}`);
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Falha inesperada");
+      setError(toFriendlyMessage(e, "Não foi possível concluir o pagamento. Tente novamente."));
     } finally {
       setLoading(false);
     }
+  }
+
+  async function sendProof(file: File) {
+    setProofSending(true);
+    setProofMsg("");
+    try {
+      const fd = new FormData();
+      fd.append("file", file);
+      const res = await fetch(`/api/bookings/${pixBookingId}/proof`, { method: "POST", body: fd });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error || "Não foi possível enviar o comprovante.");
+      setProofMsg("Comprovante enviado. Aguardando confirmação do médico.");
+    } catch (e) {
+      setProofMsg(toFriendlyMessage(e, "Não foi possível enviar o comprovante."));
+    } finally {
+      setProofSending(false);
+    }
+  }
+
+  function copy(text: string, which: string) {
+    navigator.clipboard?.writeText(text);
+    setCopied(which);
+    setTimeout(() => setCopied(""), 1500);
   }
 
   return (
@@ -467,9 +520,9 @@ export default function AgendarClient() {
                 <button
                   key={id}
                   type="button"
-                  onClick={() => setPaymentMethod(id)}
+                  onClick={() => { setPaymentMethod(id); setDirectPix(false); }}
                   className={`rounded-full px-4 py-2 text-sm font-bold transition ${
-                    paymentMethod === id
+                    !directPix && paymentMethod === id
                       ? "bg-[var(--gold)] text-white"
                       : "border border-[var(--border)] text-[var(--text-soft)]"
                   }`}
@@ -477,7 +530,25 @@ export default function AgendarClient() {
                   {label}
                 </button>
               ))}
+              {doctor.pixAccept && (
+                <button
+                  type="button"
+                  onClick={() => { setDirectPix(true); setPaymentMethod("pix"); }}
+                  className={`rounded-full px-4 py-2 text-sm font-bold transition ${
+                    directPix
+                      ? "bg-[var(--gold)] text-white"
+                      : "border border-[var(--border)] text-[var(--text-soft)]"
+                  }`}
+                >
+                  PIX direto
+                </button>
+              )}
             </div>
+            {directPix && (
+              <p className="mt-2 rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-700">
+                Você pagará por PIX direto na chave do médico e enviará o comprovante. A consulta é liberada quando o médico confirmar o recebimento.
+              </p>
+            )}
           </div>
 
           {paymentMethod === "card" && (
@@ -553,7 +624,52 @@ export default function AgendarClient() {
               disabled={loading || !consentReady}
               onClick={finishPayment}
             >
-              {loading ? "Confirmando pagamento…" : "Pagar e liberar consulta"}
+              {loading ? "Confirmando pagamento…" : directPix ? "Gerar PIX e enviar comprovante" : "Pagar e liberar consulta"}
+            </button>
+          </div>
+        </div>
+      )}
+
+      {pixData && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center overflow-y-auto bg-black/40 p-4" onClick={() => setPixData(null)}>
+          <div className="my-8 w-full max-w-md rounded-3xl bg-white p-6" onClick={(e) => e.stopPropagation()}>
+            <h3 className="font-display text-xl font-bold text-[var(--text)]">Pague via PIX</h3>
+            <div className="mt-3 space-y-1 rounded-2xl border border-[var(--border)] p-3 text-sm">
+              <p><span className="text-[var(--text-muted)]">Favorecido:</span> {pixData.favorecido}</p>
+              {pixData.holderDoc && <p><span className="text-[var(--text-muted)]">CPF/CNPJ:</span> {pixData.holderDoc}</p>}
+              {pixData.bank && <p><span className="text-[var(--text-muted)]">Banco:</span> {pixData.bank}</p>}
+              <p className="flex items-center justify-between gap-2">
+                <span><span className="text-[var(--text-muted)]">Chave PIX:</span> <span className="break-all font-mono">{pixData.pixKey}</span></span>
+                <button type="button" className="btn-ghost shrink-0" onClick={() => copy(pixData.pixKey, "key")}>
+                  {copied === "key" ? "Copiado!" : "Copiar chave"}
+                </button>
+              </p>
+              <p className="text-base font-bold text-[var(--text)]">Valor: {formatBRL(pixData.amountCents)}</p>
+            </div>
+
+            {pixData.qrDataUrl && (
+              /* eslint-disable-next-line @next/next/no-img-element */
+              <img src={pixData.qrDataUrl} alt="QR Code PIX" className="mx-auto mt-3 h-52 w-52" />
+            )}
+            <button type="button" className="btn-ghost mt-2 w-full" onClick={() => copy(pixData.copiaECola, "code")}>
+              {copied === "code" ? "Código copiado!" : "Copiar código PIX (copia e cola)"}
+            </button>
+
+            <div className="mt-4 border-t border-[var(--border)] pt-4">
+              <p className="text-sm font-semibold text-[var(--text)]">Enviar comprovante</p>
+              <p className="text-xs text-[var(--text-muted)]">Foto ou PDF. A consulta é liberada quando o médico confirmar.</p>
+              <input
+                type="file"
+                accept="image/jpeg,image/png,image/webp,application/pdf"
+                className="mt-2 block w-full text-sm"
+                disabled={proofSending}
+                onChange={(e) => { const f = e.target.files?.[0]; if (f) sendProof(f); }}
+              />
+              {proofMsg && <p className="mt-2 text-sm font-semibold text-[var(--teal,#0d9488)]">{proofMsg}</p>}
+            </div>
+
+            <button type="button" className="btn-gold mt-4 w-full" onClick={() => router.push(`/confirmacao/${pixBookingId}`)}>
+              Concluir
             </button>
           </div>
         </div>

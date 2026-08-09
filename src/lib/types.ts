@@ -52,7 +52,17 @@ export interface Doctor {
   commissionPercent?: number;
   // Liberação financeira do recebimento (definida pelo administrador).
   payoutStatus?: PayoutStatus;
+  // PIX próprio do médico (recebimento direto, sem Mercado Pago). Coexiste com o MP.
+  // A chave/titular só são expostos ao paciente no momento de pagar aquele médico.
+  pixAccept?: boolean; // "Aceitar pagamentos por PIX direto"
+  pixKeyType?: PixKeyType;
+  pixHolderName?: string; // nome do titular / favorecido
+  pixHolderDoc?: string; // CPF/CNPJ do titular
+  pixBank?: string; // nome do banco (Nubank, Itaú, Inter, ...)
+  pixBusinessName?: string; // nome empresarial/fantasia (quando CNPJ)
 }
+
+export type PixKeyType = "cpf" | "cnpj" | "telefone" | "email" | "aleatoria";
 
 export type PayoutStatus = "active" | "pending" | "blocked";
 
@@ -94,6 +104,12 @@ export interface Booking {
   paidAt?: string;
   confirmationEmailSent: boolean;
   createdAt: string;
+  // Comprovante de PIX direto enviado pelo paciente (confirmação é sempre manual do médico).
+  proofStatus?: "enviado" | "recusado"; // ausente = nenhum comprovante ainda
+  proofPath?: string; // caminho no storage/local do arquivo
+  proofMime?: string;
+  proofUploadedAt?: string;
+  proofNote?: string; // motivo, quando o médico recusa
 }
 
 export interface PaymentRecord {
@@ -152,4 +168,10 @@ export type PublicDoctor = Omit<
   | "mpAccessToken"
   | "commissionPercent"
   | "payoutStatus"
+  // Dados sensíveis do PIX não vão na lista pública; só `pixAccept` (booleano) fica visível.
+  | "pixKeyType"
+  | "pixHolderName"
+  | "pixHolderDoc"
+  | "pixBank"
+  | "pixBusinessName"
 >;

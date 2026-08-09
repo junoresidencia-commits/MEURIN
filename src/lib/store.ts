@@ -4,6 +4,7 @@ import bcrypt from "bcryptjs";
 import { v4 as uuid } from "uuid";
 import { getSupabaseAdmin } from "./supabase-admin";
 import type {
+  Booking,
   Database,
   Doctor,
   FinancialEvent,
@@ -275,6 +276,64 @@ export async function setDoctorCommission(id: string, percent: number): Promise<
   });
 }
 
+/** Salva o perfil de PIX próprio do médico (recebimento direto). */
+export async function setDoctorPixProfile(
+  id: string,
+  profile: {
+    pixAccept: boolean;
+    pixKey?: string | null;
+    pixKeyType?: string | null;
+    pixHolderName?: string | null;
+    pixHolderDoc?: string | null;
+    pixBank?: string | null;
+    pixBusinessName?: string | null;
+  }
+): Promise<void> {
+  const supabase = getSupabaseAdmin();
+  if (supabase) {
+    const { error } = await supabase
+      .from("doctors")
+      .update({
+        pix_accept: profile.pixAccept,
+        pix_key: profile.pixKey ?? null,
+        pix_key_type: profile.pixKeyType ?? null,
+        pix_holder_name: profile.pixHolderName ?? null,
+        pix_holder_doc: profile.pixHolderDoc ?? null,
+        pix_bank: profile.pixBank ?? null,
+        pix_business_name: profile.pixBusinessName ?? null,
+      })
+      .eq("id", id);
+    if (error) throw error;
+    return;
+  }
+  await updateDb((db) => {
+    db.doctors = db.doctors.map((d) =>
+      d.id === id
+        ? {
+            ...d,
+            pixAccept: profile.pixAccept,
+            pixKey: profile.pixKey ?? undefined,
+            pixKeyType: (profile.pixKeyType as Doctor["pixKeyType"]) ?? undefined,
+            pixHolderName: profile.pixHolderName ?? undefined,
+            pixHolderDoc: profile.pixHolderDoc ?? undefined,
+            pixBank: profile.pixBank ?? undefined,
+            pixBusinessName: profile.pixBusinessName ?? undefined,
+          }
+        : d
+    );
+    return db;
+  });
+}
+
+/** Atualiza campos de uma consulta (ex.: comprovante) sem reescrever as demais. */
+export async function updateBooking(id: string, patch: Partial<Booking>): Promise<Booking | null> {
+  const result = await updateDb((db) => {
+    db.bookings = db.bookings.map((b) => (b.id === id ? { ...b, ...patch } : b));
+    return db;
+  });
+  return result.bookings.find((b) => b.id === id) ?? null;
+}
+
 /** Define o status de liberação financeira do médico (SOMENTE administrador). */
 export async function setDoctorPayoutStatus(
   id: string,
@@ -422,6 +481,12 @@ function mapDoctorRow(row: Record<string, unknown>): Doctor {
     adminNote: row.admin_note ? String(row.admin_note) : undefined,
     logoUrl: row.logo_url ? String(row.logo_url) : undefined,
     mpAccessToken: row.mp_access_token ? String(row.mp_access_token) : undefined,
+    pixAccept: Boolean(row.pix_accept),
+    pixKeyType: row.pix_key_type ? (String(row.pix_key_type) as Doctor["pixKeyType"]) : undefined,
+    pixHolderName: row.pix_holder_name ? String(row.pix_holder_name) : undefined,
+    pixHolderDoc: row.pix_holder_doc ? String(row.pix_holder_doc) : undefined,
+    pixBank: row.pix_bank ? String(row.pix_bank) : undefined,
+    pixBusinessName: row.pix_business_name ? String(row.pix_business_name) : undefined,
     commissionPercent:
       row.commission_percent === null || row.commission_percent === undefined
         ? undefined
@@ -455,6 +520,11 @@ function mapBookingRow(row: Record<string, unknown>) {
       | "cancelled",
     meetingRoomId: String(row.meeting_room_id),
     paymentId: row.payment_id ? String(row.payment_id) : undefined,
+    proofStatus: row.proof_status ? (String(row.proof_status) as "enviado" | "recusado") : undefined,
+    proofPath: row.proof_path ? String(row.proof_path) : undefined,
+    proofMime: row.proof_mime ? String(row.proof_mime) : undefined,
+    proofUploadedAt: row.proof_uploaded_at ? new Date(String(row.proof_uploaded_at)).toISOString() : undefined,
+    proofNote: row.proof_note ? String(row.proof_note) : undefined,
     paidAt: row.paid_at ? new Date(String(row.paid_at)).toISOString() : undefined,
     confirmationEmailSent: Boolean(row.confirmation_email_sent),
     createdAt: new Date(String(row.created_at)).toISOString(),
@@ -568,6 +638,12 @@ async function writeSupabaseDb(db: Database): Promise<void> {
     mp_access_token: doctor.mpAccessToken ?? null,
     commission_percent: doctor.commissionPercent ?? null,
     payout_status: doctor.payoutStatus ?? "active",
+    pix_accept: doctor.pixAccept ?? false,
+    pix_key_type: doctor.pixKeyType ?? null,
+    pix_holder_name: doctor.pixHolderName ?? null,
+    pix_holder_doc: doctor.pixHolderDoc ?? null,
+    pix_bank: doctor.pixBank ?? null,
+    pix_business_name: doctor.pixBusinessName ?? null,
   }));
 
   const bookings = db.bookings.map((booking) => ({
@@ -585,6 +661,11 @@ async function writeSupabaseDb(db: Database): Promise<void> {
     status: booking.status,
     meeting_room_id: booking.meetingRoomId,
     payment_id: booking.paymentId ?? null,
+    proof_status: booking.proofStatus ?? null,
+    proof_path: booking.proofPath ?? null,
+    proof_mime: booking.proofMime ?? null,
+    proof_uploaded_at: booking.proofUploadedAt ?? null,
+    proof_note: booking.proofNote ?? null,
     paid_at: booking.paidAt ?? null,
     confirmation_email_sent: booking.confirmationEmailSent,
     created_at: booking.createdAt,

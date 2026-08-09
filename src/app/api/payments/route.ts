@@ -8,7 +8,7 @@ import {
 import { buildConfirmationEmail } from "@/lib/email";
 
 export async function POST(req: Request) {
-  const { bookingId } = await req.json();
+  const { bookingId, mode } = await req.json();
   if (!bookingId) {
     return NextResponse.json({ error: "bookingId obrigatório" }, { status: 400 });
   }
@@ -21,6 +21,15 @@ export async function POST(req: Request) {
   const doctor = db.doctors.find((d) => d.id === booking.doctorId);
   if (!doctor) {
     return NextResponse.json({ error: "Médico não encontrado" }, { status: 404 });
+  }
+
+  // PIX direto: o paciente escolheu pagar direto ao médico. NÃO confirma aqui —
+  // o paciente envia o comprovante e o médico confirma manualmente. (Coexiste com o MP.)
+  if (mode === "pix_direto") {
+    if (!doctor.pixAccept || !doctor.pixKey?.trim()) {
+      return NextResponse.json({ error: "Este médico não recebe por PIX direto." }, { status: 400 });
+    }
+    return NextResponse.json({ provider: "pix_direto", bookingId });
   }
 
   // Pagamento real (Mercado Pago): cria a preferência e devolve a URL de checkout.
