@@ -2,10 +2,33 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import type { Booking, PaymentMethod, PublicDoctor } from "@/lib/types";
+import type { Booking, Modality, PaymentMethod, PublicDoctor } from "@/lib/types";
 import { formatBRL } from "@/lib/scheduling-client";
 
-type Slot = { start: string; end: string; label: string };
+type Slot = {
+  start: string;
+  end: string;
+  label: string;
+  modality?: Modality;
+  locationId?: string;
+  locationName?: string;
+  priceCents?: number;
+};
+type Loc = { id: string; name: string; city: string; address?: string };
+
+function holderToken(): string {
+  if (typeof window === "undefined") return "anon";
+  try {
+    let t = sessionStorage.getItem("mr_holder");
+    if (!t) {
+      t = (crypto.randomUUID?.() || String(Date.now()));
+      sessionStorage.setItem("mr_holder", t);
+    }
+    return t;
+  } catch {
+    return "anon";
+  }
+}
 
 const STEPS = ["Médico", "Horário", "Seus dados", "Pagamento"] as const;
 
@@ -42,6 +65,9 @@ export default function AgendarClient() {
   const [doctorId, setDoctorId] = useState("");
   const [slots, setSlots] = useState<Slot[]>([]);
   const [slot, setSlot] = useState<Slot | null>(null);
+  const [modality, setModality] = useState<Modality | "">("");
+  const [locations, setLocations] = useState<Loc[]>([]);
+  const [locationId, setLocationId] = useState("");
   const [loadingDoctors, setLoadingDoctors] = useState(true);
   const [loadingSlots, setLoadingSlots] = useState(false);
   const [patientName, setPatientName] = useState("");
@@ -77,15 +103,60 @@ export default function AgendarClient() {
       .finally(() => setLoadingDoctors(false));
   }, []);
 
+  // Carrega locais/modalidades disponíveis do médico ao escolhê-lo.
   useEffect(() => {
     if (!doctorId) return;
-    setLoadingSlots(true);
+    setSlot(null);
     fetch(`/api/availability?doctorId=${doctorId}`)
+      .then((r) => r.json())
+      .then((data) => setLocations(data.locations || []))
+      .catch(() => {});
+  }, [doctorId]);
+
+  // Carrega os horários REAIS conforme modalidade/clínica escolhidas.
+  useEffect(() => {
+    if (!doctorId || !modality) {
+      setSlots([]);
+      return;
+    }
+    if (modality === "presencial" && !locationId) {
+      setSlots([]);
+      return;
+    }
+    setLoadingSlots(true);
+    const qs = new URLSearchParams({ doctorId, modality });
+    if (modality === "presencial") qs.set("locationId", locationId);
+    fetch(`/api/availability?${qs.toString()}`)
       .then((r) => r.json())
       .then((data) => setSlots(data.slots || []))
       .catch(() => setError("Erro ao carregar horários."))
       .finally(() => setLoadingSlots(false));
-  }, [doctorId]);
+  }, [doctorId, modality, locationId]);
+
+  async function chooseSlot(s: Slot): Promise<boolean> {
+    setError("");
+    try {
+      const res = await fetch("/api/holds", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ doctorId, slotStart: s.start, holder: holderToken() }),
+      });
+      if (!res.ok) {
+        setSlot(null);
+        setError("Este horário acabou de ficar indisponível. Escolha outro.");
+        const qs = new URLSearchParams({ doctorId, modality: modality || "teleconsulta" });
+        if (modality === "presencial") qs.set("locationId", locationId);
+        const data = await fetch(`/api/availability?${qs.toString()}`).then((r) => r.json());
+        setSlots(data.slots || []);
+        return false;
+      }
+      setSlot(s);
+      return true;
+    } catch {
+      setSlot(s); // rede instável: segue; o backend revalida ao finalizar
+      return true;
+    }
+  }
 
   useEffect(() => {
     if (step !== 3 || consentDocs.length > 0) return;
@@ -152,6 +223,9 @@ export default function AgendarClient() {
           slotStart: slot.start,
           slotEnd: slot.end,
           paymentMethod,
+          modality: slot.modality,
+          locationId: slot.locationId,
+          holder: holderToken(),
         }),
       });
       const bookingData = await bookingRes.json();
@@ -274,6 +348,50 @@ export default function AgendarClient() {
             )}
           </p>
 
+          {/* Passo A: como deseja ser atendido? */}
+          <p className="mt-6 text-xs font-bold uppercase tracking-wider text-[var(--gold)]">Como deseja ser atendido?</p>
+          <div className="mt-2 flex flex-wrap gap-2">
+            {([["teleconsulta", "Teleconsulta (online)"], ["presencial", "Presencial"]] as const).map(([m, label]) => (
+              <button
+                key={m}
+                type="button"
+                onClick={() => { setModality(m); setLocationId(""); setSlot(null); }}
+                className={`rounded-full px-4 py-2 text-sm font-bold transition ${
+                  modality === m ? "bg-[var(--gold)] text-white" : "border border-[var(--border)] text-[var(--text-soft)]"
+                }`}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+
+          {/* Passo B: se presencial, escolher clínica */}
+          {modality === "presencial" && (
+            <div className="mt-4">
+              <p className="text-xs font-bold uppercase tracking-wider text-[var(--gold)]">Onde deseja consultar?</p>
+              {locations.length === 0 ? (
+                <p className="mt-2 text-sm text-[var(--text-muted)]">Este médico não tem locais presenciais ativos. Tente teleconsulta.</p>
+              ) : (
+                <div className="mt-2 flex flex-wrap gap-2">
+                  {locations.map((l) => (
+                    <button
+                      key={l.id}
+                      type="button"
+                      onClick={() => { setLocationId(l.id); setSlot(null); }}
+                      className={`rounded-2xl border px-4 py-2 text-left text-sm transition ${
+                        locationId === l.id ? "border-[var(--gold)] bg-[var(--gold-soft)] text-[var(--gold)]" : "border-[var(--border)] text-[var(--text-soft)]"
+                      }`}
+                    >
+                      <span className="font-semibold">{l.name}</span> · {l.city}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+
+          {!modality && <p className="mt-4 text-sm text-[var(--text-muted)]">Escolha a modalidade para ver os horários.</p>}
+
           {loadingSlots && (
             <p className="mt-4 text-[var(--text-muted)]">Buscando agenda…</p>
           )}
@@ -288,13 +406,11 @@ export default function AgendarClient() {
                   <button
                     key={s.start}
                     type="button"
-                    onClick={() => {
-                      setSlot(s);
-                      setStep(2);
-                    }}
+                    onClick={() => chooseSlot(s).then((ok) => ok && setStep(2))}
                     className="rounded-2xl border border-[var(--border-gold)] bg-[var(--gold-soft)] px-4 py-3 text-left text-sm text-[var(--gold-light)] transition hover:-translate-y-0.5"
                   >
                     {s.label}
+                    {typeof s.priceCents === "number" && <span className="ml-1 font-semibold">· {formatBRL(s.priceCents)}</span>}
                   </button>
                 ))}
               </div>
@@ -311,22 +427,20 @@ export default function AgendarClient() {
                   <button
                     key={s.start}
                     type="button"
-                    onClick={() => {
-                      setSlot(s);
-                      setStep(2);
-                    }}
+                    onClick={() => chooseSlot(s).then((ok) => ok && setStep(2))}
                     className="rounded-2xl border border-[var(--border)] px-4 py-3 text-left text-sm text-[var(--text-soft)] transition hover:border-[var(--border-gold)]"
                   >
                     {s.label}
+                    {typeof s.priceCents === "number" && <span className="ml-1 font-semibold text-[var(--gold-light)]">· {formatBRL(s.priceCents)}</span>}
                   </button>
                 ))}
               </div>
             </>
           )}
 
-          {!loadingSlots && slots.length === 0 && (
+          {!loadingSlots && slots.length === 0 && modality && (modality !== "presencial" || locationId) && (
             <p className="mt-4 text-[var(--text-muted)]">
-              Sem horários nos próximos dias neste médico. Escolha outro colega.
+              Sem horários nos próximos dias para esta opção. Tente outra modalidade/clínica ou outro médico.
             </p>
           )}
           <button type="button" className="btn-ghost mt-6" onClick={() => setStep(0)}>
@@ -443,11 +557,13 @@ export default function AgendarClient() {
             <p className="text-[var(--text)]">
               <strong>{doctor.name}</strong> · {slot.label}
             </p>
-            {patientCity && (
-              <p className="mt-1 text-[var(--text-muted)]">Paciente em {patientCity}</p>
-            )}
+            <p className="mt-1 text-[var(--text-muted)]">
+              {slot.modality === "presencial"
+                ? `Presencial${slot.locationName ? ` — ${slot.locationName}` : ""}`
+                : "Teleconsulta (online)"}
+            </p>
             <p className="mt-2 text-[var(--gold-light)]">
-              Total: {formatBRL(doctor.consultationPriceCents)} — vai para a conta
+              Total: {formatBRL(slot.priceCents ?? doctor.consultationPriceCents)} — vai para a conta
               do médico
             </p>
           </div>
