@@ -157,6 +157,9 @@ export interface Booking {
   proposalMessage?: string;
   proposalBy?: string;
   notRealizedReason?: string;
+  // Lembretes já enviados (evita reenviar). 24h e 2h antes da consulta.
+  reminder24Sent?: boolean;
+  reminder2Sent?: boolean;
 }
 
 export type ConsultationStage =
