@@ -1,4 +1,4 @@
-import { addDays, addMinutes, format, getDay, setHours, setMinutes } from "date-fns";
+import { addDays, addMinutes, format, getDay, setHours, setMilliseconds, setMinutes, setSeconds } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import type { AvailabilityPeriod, Doctor, Modality, WeeklySlot } from "./types";
 
@@ -94,7 +94,9 @@ export function generateAvailableSlots(
 
 function parseTimeOnDate(date: Date, hhmm: string): Date {
   const [h, m] = hhmm.split(":").map(Number);
-  return setMinutes(setHours(date, h), m);
+  // Zera segundos/milissegundos: o ISO do horário precisa ser ESTÁVEL entre requisições
+  // para casar exatamente reserva (hold) e agendamento (booking).
+  return setMilliseconds(setSeconds(setMinutes(setHours(date, h), m), 0), 0);
 }
 
 export function generateSlotsForDoctor(
