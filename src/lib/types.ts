@@ -13,6 +13,42 @@ export interface WeeklySlot {
   end: string; // "12:00"
 }
 
+export type Modality = "presencial" | "teleconsulta";
+
+/** Local de atendimento do médico (clínica/consultório/hospital). */
+export interface DoctorLocation {
+  id: string;
+  name: string;
+  city: string;
+  address?: string;
+  phone?: string;
+  type: "clinica" | "consultorio" | "hospital" | "outro";
+  active: boolean;
+}
+
+/** Período de disponibilidade por dia, com local/modalidade, duração, intervalo e valor. */
+export interface AvailabilityPeriod {
+  id: string;
+  dayOfWeek: number; // 0=Dom … 6=Sáb
+  start: string; // "08:00"
+  end: string; // "12:00"
+  modality: Modality;
+  locationId?: string; // obrigatório quando presencial
+  durationMin: number; // ex.: 30
+  intervalMin: number; // ex.: 10
+  priceCents?: number; // valor específico do período/local (senão usa consultationPriceCents)
+}
+
+/** Reserva temporária de horário (anti dupla marcação), com expiração. */
+export interface AppointmentHold {
+  id: string;
+  doctorId: string;
+  slotStart: string; // ISO
+  holder: string; // sessão/e-mail do paciente
+  expiresAt: string; // ISO
+  createdAt: string;
+}
+
 export type DoctorStatus =
   | "pending"
   | "approved"
@@ -33,6 +69,9 @@ export interface Doctor {
   bankAccountHint?: string;
   stripeConnectReady: boolean;
   weeklyAvailability: WeeklySlot[];
+  // Agenda avançada (locais + períodos por modalidade). Quando vazia, usa weeklyAvailability.
+  locations?: DoctorLocation[];
+  availabilityPeriods?: AvailabilityPeriod[];
   blockedSlots: string[]; // ISO datetimes already taken or blocked
   createdAt: string;
   // Aprovação e dados cadastrais (fluxo de aprovação pelo administrador)
@@ -105,6 +144,10 @@ export interface Booking {
   paidAt?: string;
   confirmationEmailSent: boolean;
   createdAt: string;
+  // Modalidade e local (presencial) da consulta.
+  modality?: Modality;
+  locationId?: string;
+  locationName?: string;
   // Fluxo de confirmação/remarcação (separado do pagamento). Ausente = fluxo antigo.
   stage?: ConsultationStage;
   events?: ConsultationEvent[]; // linha do tempo (registro oficial)
@@ -114,6 +157,9 @@ export interface Booking {
   proposalMessage?: string;
   proposalBy?: string;
   notRealizedReason?: string;
+  // Lembretes já enviados (evita reenviar). 24h e 2h antes da consulta.
+  reminder24Sent?: boolean;
+  reminder2Sent?: boolean;
 }
 
 export type ConsultationStage =

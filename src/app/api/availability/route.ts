@@ -1,12 +1,15 @@
 import { NextResponse } from "next/server";
 import { getDoctorSessionId } from "@/lib/auth";
-import { generateSlotsForDoctor } from "@/lib/scheduling";
+import { generateSlotsForDoctor, generateAvailableSlots } from "@/lib/scheduling";
 import { logFinancialEvent, readDb, updateDb } from "@/lib/store";
-import type { WeeklySlot } from "@/lib/types";
+import { activeHoldStarts } from "@/lib/holds-store";
+import type { AvailabilityPeriod, Modality, WeeklySlot } from "@/lib/types";
 
 export async function GET(req: Request) {
   const { searchParams } = new URL(req.url);
   const doctorId = searchParams.get("doctorId");
+  const modality = (searchParams.get("modality") || undefined) as Modality | undefined;
+  const locationId = searchParams.get("locationId") || undefined;
   if (!doctorId) {
     return NextResponse.json({ error: "doctorId obrigatório" }, { status: 400 });
   }
@@ -16,24 +19,27 @@ export async function GET(req: Request) {
     return NextResponse.json({ error: "Médico não encontrado" }, { status: 404 });
   }
 
-  const bookedStarts = new Set(
-    db.bookings
-      .filter(
-        (b) =>
-          b.doctorId === doctorId &&
-          ["pending_payment", "paid", "confirmed"].includes(b.status)
-      )
-      .map((b) => b.slotStart)
-  );
+  // Horários ocupados (consultas ativas) + reservados temporariamente (holds).
+  const bookedStarts = db.bookings
+    .filter((b) => b.doctorId === doctorId && ["pending_payment", "paid", "confirmed"].includes(b.status))
+    .map((b) => new Date(b.slotStart).toISOString());
+  const held = await activeHoldStarts(doctorId);
+  const excludeStarts = new Set<string>([...bookedStarts, ...held]);
 
-  const doctorWithBooked = {
-    ...doctor,
-    blockedSlots: [...doctor.blockedSlots, ...bookedStarts],
-  };
+  const slots = generateAvailableSlots(doctor, { modality, locationId, excludeStarts });
+  const locations = (doctor.locations || []).filter((l) => l.active);
+
+  // Primeira disponibilidade (mais próxima) por modalidade/local.
+  const firstAvailability = slots.slice(0, 6);
 
   return NextResponse.json({
-    slots: generateSlotsForDoctor(doctorWithBooked),
+    slots, // slots reais com modalidade/local/valor
+    locations,
+    firstAvailability,
+    hasAdvancedAgenda: Boolean(doctor.availabilityPeriods && doctor.availabilityPeriods.length > 0),
+    // Compatibilidade com telas antigas:
     weeklyAvailability: doctor.weeklyAvailability,
+    legacySlots: generateSlotsForDoctor({ ...doctor, blockedSlots: [...doctor.blockedSlots, ...excludeStarts] }),
   });
 }
 
@@ -56,6 +62,36 @@ export async function PUT(req: Request) {
   const notifyNewBookings = body.notifyNewBookings !== undefined ? Boolean(body.notifyNewBookings) : undefined;
   const notifyPayments = body.notifyPayments !== undefined ? Boolean(body.notifyPayments) : undefined;
   const notifyReschedules = body.notifyReschedules !== undefined ? Boolean(body.notifyReschedules) : undefined;
+
+  // Períodos avançados de agenda (local/modalidade/duração/intervalo/valor).
+  let availabilityPeriods: AvailabilityPeriod[] | undefined;
+  if (Array.isArray(body.availabilityPeriods)) {
+    const isTime = (v: unknown) => typeof v === "string" && /^\d{2}:\d{2}$/.test(v);
+    availabilityPeriods = (body.availabilityPeriods as unknown[])
+      .map((raw): AvailabilityPeriod | null => {
+        const p = raw as Record<string, unknown>;
+        const dow = Number(p.dayOfWeek);
+        const modality = p.modality === "presencial" ? "presencial" : "teleconsulta";
+        if (!Number.isInteger(dow) || dow < 0 || dow > 6) return null;
+        if (!isTime(p.start) || !isTime(p.end)) return null;
+        if (modality === "presencial" && !p.locationId) return null;
+        return {
+          id: p.id ? String(p.id) : crypto.randomUUID(),
+          dayOfWeek: dow,
+          start: String(p.start),
+          end: String(p.end),
+          modality,
+          locationId: modality === "presencial" ? String(p.locationId) : undefined,
+          durationMin: Math.max(5, Math.round(Number(p.durationMin) || 30)),
+          intervalMin: Math.max(0, Math.round(Number(p.intervalMin) || 0)),
+          priceCents:
+            p.priceCents === undefined || p.priceCents === null || p.priceCents === ""
+              ? undefined
+              : Math.max(0, Math.round(Number(p.priceCents))),
+        };
+      })
+      .filter((p): p is AvailabilityPeriod => p !== null);
+  }
   // Segurança: o médico NÃO pode alterar o próprio percentual de repasse nem a
   // liberação financeira — mesmo enviando esses campos diretamente na API, eles
   // são ignorados aqui. Só o administrador altera (via /api/admin/doctors).
@@ -86,6 +122,7 @@ export async function PUT(req: Request) {
             notifyNewBookings: notifyNewBookings !== undefined ? notifyNewBookings : d.notifyNewBookings,
             notifyPayments: notifyPayments !== undefined ? notifyPayments : d.notifyPayments,
             notifyReschedules: notifyReschedules !== undefined ? notifyReschedules : d.notifyReschedules,
+            availabilityPeriods: availabilityPeriods !== undefined ? availabilityPeriods : d.availabilityPeriods,
           }
         : d
     ),
