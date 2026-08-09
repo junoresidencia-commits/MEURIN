@@ -62,6 +62,11 @@ export async function PUT(req: Request) {
   const notifyNewBookings = body.notifyNewBookings !== undefined ? Boolean(body.notifyNewBookings) : undefined;
   const notifyPayments = body.notifyPayments !== undefined ? Boolean(body.notifyPayments) : undefined;
   const notifyReschedules = body.notifyReschedules !== undefined ? Boolean(body.notifyReschedules) : undefined;
+  const notifyPush = body.notifyPush !== undefined ? Boolean(body.notifyPush) : undefined;
+  const notifyReminder24 = body.notifyReminder24 !== undefined ? Boolean(body.notifyReminder24) : undefined;
+  const notifyReminder2 = body.notifyReminder2 !== undefined ? Boolean(body.notifyReminder2) : undefined;
+  const calendarEventMode = body.calendarEventMode === "patient" || body.calendarEventMode === "meurim" ? body.calendarEventMode : undefined;
+  const tz = body.tz !== undefined ? String(body.tz || "").trim() || undefined : undefined;
 
   // Períodos avançados de agenda (local/modalidade/duração/intervalo/valor).
   let availabilityPeriods: AvailabilityPeriod[] | undefined;
@@ -122,6 +127,11 @@ export async function PUT(req: Request) {
             notifyNewBookings: notifyNewBookings !== undefined ? notifyNewBookings : d.notifyNewBookings,
             notifyPayments: notifyPayments !== undefined ? notifyPayments : d.notifyPayments,
             notifyReschedules: notifyReschedules !== undefined ? notifyReschedules : d.notifyReschedules,
+            notifyPush: notifyPush !== undefined ? notifyPush : d.notifyPush,
+            notifyReminder24: notifyReminder24 !== undefined ? notifyReminder24 : d.notifyReminder24,
+            notifyReminder2: notifyReminder2 !== undefined ? notifyReminder2 : d.notifyReminder2,
+            calendarEventMode: calendarEventMode !== undefined ? calendarEventMode : d.calendarEventMode,
+            tz: tz !== undefined ? tz : d.tz,
             availabilityPeriods: availabilityPeriods !== undefined ? availabilityPeriods : d.availabilityPeriods,
           }
         : d

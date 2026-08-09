@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { toFriendlyMessage } from "@/lib/user-errors";
+import { disablePush, enablePush, isSubscribed, pushSupported } from "@/lib/push-client";
 
 export default function MeusDadosPage() {
   const router = useRouter();
@@ -105,6 +106,64 @@ export default function MeusDadosPage() {
           <button type="submit" className="btn-gold w-full" disabled={saving}>{saving ? "Salvando…" : "Salvar meus dados"}</button>
         </form>
       )}
+
+      <PatientNotificationsCard />
     </div>
+  );
+}
+
+function PatientNotificationsCard() {
+  const [supported, setSupported] = useState(true);
+  const [subscribed, setSubscribed] = useState(false);
+  const [msg, setMsg] = useState("");
+
+  useEffect(() => {
+    setSupported(pushSupported());
+    isSubscribed().then(setSubscribed);
+  }, []);
+
+  async function ativar() {
+    setMsg("");
+    const r = await enablePush();
+    if (r.ok) {
+      setSubscribed(true);
+      setMsg("Lembretes ativados neste aparelho.");
+    } else if (r.reason === "denied") {
+      setMsg("Permissão negada. Ative nas configurações do navegador.");
+    } else if (r.reason === "not_configured") {
+      setMsg("As notificações ainda não foram configuradas no servidor.");
+    } else if (r.reason === "unsupported") {
+      setSupported(false);
+    } else {
+      setMsg("Não foi possível ativar agora.");
+    }
+  }
+  async function desativar() {
+    await disablePush();
+    setSubscribed(false);
+    setMsg("Lembretes desativados neste aparelho.");
+  }
+
+  return (
+    <section className="panel mt-6">
+      <h2 className="font-display text-xl text-[var(--text)]">Lembretes e avisos</h2>
+      <p className="mt-1 text-sm text-[var(--text-muted)]">
+        Receba avisos das suas consultas e lembretes 24h e 2h antes. Sem dados de saúde nas notificações.
+      </p>
+      {!supported ? (
+        <p className="mt-3 rounded-xl bg-[var(--bg-soft)] px-3 py-2 text-sm text-[var(--text-muted)]">
+          Para receber no iPhone, toque em Compartilhar → “Adicionar à Tela de Início” e abra o Meu Rim por lá.
+        </p>
+      ) : (
+        <div className="mt-3">
+          {subscribed ? (
+            <button type="button" className="btn-ghost" onClick={desativar}>Desativar lembretes neste aparelho</button>
+          ) : (
+            <button type="button" className="btn-gold" onClick={ativar}>Ativar lembretes</button>
+          )}
+        </div>
+      )}
+      {msg && <p className="mt-2 text-sm font-semibold text-[var(--gold)]">{msg}</p>}
+    </section>
   );
 }

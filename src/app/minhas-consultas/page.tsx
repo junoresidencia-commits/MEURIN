@@ -3,12 +3,16 @@
 import { useState } from "react";
 import Link from "next/link";
 import { formatSlotLabel } from "@/lib/scheduling-client";
+import { AddToCalendar } from "@/components/AddToCalendar";
 
 type Row = {
   id: string;
   status: string;
   stage?: string | null;
   slotStart: string;
+  slotEnd?: string;
+  modality?: string | null;
+  locationName?: string | null;
   doctorName: string;
   doctorWhatsapp?: string | null;
   meetingRoomId: string;
@@ -136,6 +140,15 @@ export default function MinhasConsultasPage() {
                   <Link href={`/consulta/${b.meetingRoomId}`} className="btn-gold inline-flex">
                     Abrir sala
                   </Link>
+                )}
+                {(b.status === "confirmed" || b.status === "paid") && (
+                  <AddToCalendar
+                    bookingId={b.id}
+                    slotStart={b.slotStart}
+                    slotEnd={b.slotEnd}
+                    modality={b.modality}
+                    locationName={b.locationName}
+                  />
                 )}
                 {b.doctorWhatsapp && (
                   <a

@@ -1,7 +1,8 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { Inter } from "next/font/google";
 import { SiteFooter } from "@/components/SiteFooter";
 import { SiteHeader } from "@/components/SiteHeader";
+import { PwaBootstrap } from "@/components/PwaBootstrap";
 import "./globals.css";
 
 const display = Inter({
@@ -47,6 +48,27 @@ export const metadata: Metadata = {
     "consulta renal online",
     "Meu Rim",
   ],
+  applicationName: "Meu Rim",
+  manifest: "/manifest.webmanifest",
+  appleWebApp: {
+    capable: true,
+    statusBarStyle: "default",
+    title: "Meu Rim",
+  },
+  icons: {
+    icon: [
+      { url: "/icons/favicon-32.png", sizes: "32x32", type: "image/png" },
+      { url: "/icons/icon-192.png", sizes: "192x192", type: "image/png" },
+    ],
+    apple: [{ url: "/icons/apple-touch-icon.png", sizes: "180x180", type: "image/png" }],
+  },
+};
+
+export const viewport: Viewport = {
+  themeColor: "#087b82",
+  width: "device-width",
+  initialScale: 1,
+  viewportFit: "cover",
 };
 
 export default function RootLayout({
@@ -57,6 +79,7 @@ export default function RootLayout({
   return (
     <html lang="pt-BR">
       <body className={`${display.variable} ${body.variable} font-sans-body antialiased`}>
+        <PwaBootstrap />
         <SiteHeader />
         <main>{children}</main>
         <SiteFooter />

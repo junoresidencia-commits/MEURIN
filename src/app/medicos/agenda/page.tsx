@@ -7,6 +7,7 @@ import { addDays, addWeeks, format, getDay, isSameDay, startOfWeek } from "date-
 import { ptBR } from "date-fns/locale";
 import { DoctorSidebar } from "@/components/DoctorSidebar";
 import { DoctorMobileNav } from "@/components/DoctorMobileNav";
+import { NotificationBell } from "@/components/NotificationBell";
 import type { AvailabilityPeriod, Booking, Modality } from "@/lib/types";
 
 type View = "dia" | "semana" | "mes";
@@ -147,7 +148,8 @@ export default function AgendaCalendarioPage() {
               <h1 className="font-display text-3xl font-extrabold text-[var(--text)]">Agenda</h1>
               <p className="text-[var(--text-muted)]">Gerencie seus horários e consultas</p>
             </div>
-            <div className="flex flex-wrap gap-2">
+            <div className="flex flex-wrap items-center gap-2">
+              <NotificationBell />
               <button type="button" className="btn-ghost" onClick={blockSlot}>+ Bloquear horário</button>
               <Link href="/medicos/agenda/configurar" className="btn-gold">Configurar agenda</Link>
             </div>

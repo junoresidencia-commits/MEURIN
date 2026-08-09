@@ -11,6 +11,7 @@ const PATHS: Record<string, string> = {
   edit: "M12 20h9M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z",
   chart: "M3 3v18h18M8 17V9M13 17V5M18 17v-6",
   shield: "M12 3l8 3v6c0 5-3.5 8-8 9-4.5-1-8-4-8-9V6l8-3Z",
+  gear: "M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6Zm7.4-3a7.4 7.4 0 0 0-.1-1l2-1.6-2-3.4-2.4 1a7.3 7.3 0 0 0-1.7-1l-.3-2.5H9.9l-.4 2.5a7.3 7.3 0 0 0-1.7 1l-2.4-1-2 3.4 2 1.6a7.4 7.4 0 0 0 0 2l-2 1.6 2 3.4 2.4-1a7.3 7.3 0 0 0 1.7 1l.4 2.5h4.2l.3-2.5a7.3 7.3 0 0 0 1.7-1l2.4 1 2-3.4-2-1.6c.1-.3.1-.7.1-1Z",
 };
 
 function Icon({ name, className }: { name: keyof typeof PATHS; className?: string }) {
@@ -30,6 +31,7 @@ const ITEMS: { href: string; label: string; icon: keyof typeof PATHS }[] = [
   { href: "/medicos/documentos", label: "Documento avulso", icon: "edit" },
   { href: "/medicos/pesquisa", label: "Pesquisa", icon: "chart" },
   { href: "/medicos/links", label: "Links úteis", icon: "link" },
+  { href: "/medicos/configuracoes", label: "Configurações", icon: "gear" },
   { href: "/admin/login", label: "Administração", icon: "shield" },
 ];
 
