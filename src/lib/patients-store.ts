@@ -38,8 +38,11 @@ let tableMissing = false;
 function isMissingTableError(error: unknown): boolean {
   const e = error as { code?: string; message?: string } | null;
   if (!e) return false;
-  if (e.code === "42P01" || e.code === "PGRST205" || e.code === "PGRST204") return true;
-  return Boolean(e.message && /does not exist|could not find the table|schema cache/i.test(e.message));
+  // Apenas TABELA ausente aciona o fallback local. Coluna ausente (PGRST204/42703)
+  // é erro real (migração incompleta) — não deve cair no fallback (que, na Vercel,
+  // tentaria escrever em disco somente-leitura e quebraria o cadastro).
+  if (e.code === "42P01" || e.code === "PGRST205") return true;
+  return Boolean(e.message && /relation .* does not exist|could not find the table/i.test(e.message));
 }
 function active() {
   return Boolean(getSupabaseAdmin()) && !tableMissing;

@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { postJson, toFriendlyMessage } from "@/lib/user-errors";
 
 export default function AdminLoginPage() {
   const router = useRouter();
@@ -15,16 +16,10 @@ export default function AdminLoginPage() {
     setLoading(true);
     setError("");
     try {
-      const res = await fetch("/api/admin/session", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email, password }),
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || "Não foi possível entrar.");
+      await postJson("/api/admin/session", { email, password }, "E-mail ou senha inválidos.");
       router.push("/admin");
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Erro inesperado.");
+      setError(toFriendlyMessage(err, "Não foi possível entrar. Tente novamente."));
     } finally {
       setLoading(false);
     }

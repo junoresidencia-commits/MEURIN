@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { toFriendlyMessage } from "@/lib/user-errors";
 
 export default function MeusDadosPage() {
   const router = useRouter();
@@ -47,11 +48,11 @@ export default function MeusDadosPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ name: form.name, phone: form.phone, birthdate: form.birthdate, sex: form.sex }),
       });
-      const data = await res.json();
+      const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(data.error || "Não foi possível salvar.");
       setMsg("Dados atualizados.");
     } catch (e) {
-      setErr(e instanceof Error ? e.message : "Erro inesperado.");
+      setErr(toFriendlyMessage(e, "Não foi possível salvar seus dados."));
     } finally {
       setSaving(false);
     }

@@ -1,5 +1,7 @@
 "use client";
 
+import { useEffect } from "react";
+
 export default function Error({
   error,
   reset,
@@ -7,6 +9,11 @@ export default function Error({
   error: Error & { digest?: string };
   reset: () => void;
 }) {
+  // O erro técnico vai só para o console (depuração). O usuário nunca vê a mensagem crua.
+  useEffect(() => {
+    console.error("Erro de renderização:", error);
+  }, [error]);
+
   return (
     <div className="mx-auto max-w-lg px-5 py-20 text-center">
       <p className="text-xs font-bold uppercase tracking-[0.22em] text-[var(--gold)]">
@@ -16,7 +23,7 @@ export default function Error({
         Não conseguimos abrir esta página
       </h1>
       <p className="mt-3 text-sm text-[var(--text-muted)]">
-        {error.message || "Erro inesperado. Tente de novo."}
+        Tivemos um problema temporário. Tente novamente — se continuar, feche e abra o aplicativo.
       </p>
       <button type="button" className="btn-gold mt-8" onClick={reset}>
         Tentar novamente
