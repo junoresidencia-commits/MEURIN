@@ -59,32 +59,35 @@ export default function ConfirmacaoPage() {
     );
   }
 
-  // Pagamento em processamento (Mercado Pago) — ainda não confirmado pelo webhook.
+  // Após o pagamento, a consulta aguarda a confirmação do médico (não libera sozinha).
   if (booking.status !== "confirmed") {
+    const awaitingDoctor = booking.status === "paid";
     return (
       <div className="mx-auto max-w-xl px-5 py-16">
         <p className="text-xs font-bold uppercase tracking-[0.22em] text-[var(--warn)]">
-          Pagamento em processamento
+          {awaitingDoctor ? "Pagamento confirmado" : "Pagamento em processamento"}
         </p>
         <h1 className="font-display mt-2 text-3xl font-extrabold text-[var(--text)]">
-          Estamos confirmando seu pagamento
+          {awaitingDoctor ? "Aguardando a confirmação do médico" : "Estamos confirmando seu pagamento"}
         </h1>
         <p className="mt-4 text-[var(--text-soft)]">
-          Assim que o pagamento for aprovado, esta página libera o link da sala
-          automaticamente. Você também receberá por e-mail em{" "}
+          {awaitingDoctor
+            ? "Recebemos o seu pagamento. O médico vai confirmar o horário (ou propor outro). Assim que confirmar, o link da sala é liberado aqui e enviado para "
+            : "Assim que o pagamento for aprovado, o médico será avisado para confirmar. Você também receberá por e-mail em "}
           <strong className="text-[var(--text)]">{booking.patientEmail}</strong>.
         </p>
         <div className="panel mt-6 flex items-center gap-3">
           <span className="h-4 w-4 animate-spin rounded-full border-2 border-[var(--gold)] border-t-transparent" />
-          <span className="text-sm text-[var(--text-muted)]">Aguardando confirmação…</span>
+          <span className="text-sm text-[var(--text-muted)]">
+            {awaitingDoctor ? "Aguardando o médico confirmar…" : "Aguardando confirmação do pagamento…"}
+          </span>
         </div>
-        <button
-          type="button"
-          className="btn-ghost mt-6"
-          onClick={() => window.location.reload()}
-        >
-          Atualizar agora
-        </button>
+        <div className="mt-6 flex flex-wrap gap-2">
+          <button type="button" className="btn-ghost" onClick={() => window.location.reload()}>
+            Atualizar agora
+          </button>
+          <Link href="/minhas-consultas" className="btn-ghost">Minhas consultas</Link>
+        </div>
       </div>
     );
   }

@@ -11,11 +11,13 @@ export async function GET(
   if (!booking) {
     return NextResponse.json({ error: "Sala não encontrada" }, { status: 404 });
   }
-  if (!["paid", "confirmed", "completed"].includes(booking.status)) {
-    return NextResponse.json(
-      { error: "Consulta liberada somente após o pagamento." },
-      { status: 403 }
-    );
+  // A sala abre só após o médico CONFIRMAR (pagamento sozinho não libera).
+  if (!["confirmed", "completed"].includes(booking.status)) {
+    const msg =
+      booking.status === "paid"
+        ? "Pagamento recebido. A sala abre quando o médico confirmar a consulta."
+        : "Consulta liberada somente após o pagamento e a confirmação do médico.";
+    return NextResponse.json({ error: msg }, { status: 403 });
   }
   const doctor = db.doctors.find((d) => d.id === booking.doctorId);
   return NextResponse.json({

@@ -1,10 +1,21 @@
 import { NextResponse } from "next/server";
 import { v4 as uuid } from "uuid";
 import { getDoctorSessionId } from "@/lib/auth";
-import { readDb, updateDb, deleteBooking } from "@/lib/store";
-import type { Booking, PaymentMethod } from "@/lib/types";
+import { readDb, updateDb, updateBooking, deleteBooking } from "@/lib/store";
+import { appOrigin } from "@/lib/payments";
+import { buildConfirmationEmail, sendEmail } from "@/lib/email";
+import type { Booking, ConsultationEvent, PaymentMethod } from "@/lib/types";
 
 const REASONS = new Set(["pressa", "acompanhamento", "segunda_opiniao", "outro"]);
+
+function ev(actor: ConsultationEvent["actor"], type: string, detail?: string): ConsultationEvent {
+  return { at: new Date().toISOString(), actor, type, detail };
+}
+function isFutureIso(v: unknown): v is string {
+  if (typeof v !== "string") return false;
+  const t = new Date(v).getTime();
+  return !Number.isNaN(t);
+}
 
 export async function GET() {
   const doctorId = await getDoctorSessionId();
@@ -82,6 +93,7 @@ export async function POST(req: Request) {
     meetingRoomId: uuid(),
     confirmationEmailSent: false,
     createdAt: new Date().toISOString(),
+    events: [ev("paciente", "solicitada", "Paciente solicitou a consulta.")],
   };
 
   await updateDb((current) => ({
@@ -90,6 +102,114 @@ export async function POST(req: Request) {
   }));
 
   return NextResponse.json({ booking }, { status: 201 });
+}
+
+// Ações do MÉDICO sobre a consulta (dono da consulta, autenticado).
+export async function PATCH(req: Request) {
+  const doctorId = await getDoctorSessionId();
+  if (!doctorId) return NextResponse.json({ error: "Não autenticado." }, { status: 401 });
+  const body = await req.json().catch(() => ({}));
+  const id = String(body.id || "");
+  const action = String(body.action || "");
+  const db = await readDb();
+  const booking = db.bookings.find((b) => b.id === id);
+  const doctor = db.doctors.find((d) => d.id === doctorId);
+  if (!booking || booking.doctorId !== doctorId || !doctor) {
+    return NextResponse.json({ error: "Consulta não encontrada." }, { status: 404 });
+  }
+  const events = booking.events ?? [];
+
+  if (action === "confirm") {
+    const updated = await updateBooking(id, {
+      status: "confirmed",
+      stage: "confirmada",
+      confirmationEmailSent: true,
+      proposedSlotStart: undefined,
+      proposedSlotEnd: undefined,
+      proposalMessage: undefined,
+      proposalBy: undefined,
+      events: [...events, ev("medico", "confirmada", "Consulta confirmada pelo médico.")],
+    });
+    if (booking.patientEmail?.includes("@") && updated) {
+      const meetingUrl = `${appOrigin()}/consulta/${booking.meetingRoomId}`;
+      await sendEmail(buildConfirmationEmail(updated, doctor, meetingUrl));
+    }
+    return NextResponse.json({ ok: true, booking: updated });
+  }
+
+  if (action === "propose") {
+    if (!isFutureIso(body.slotStart) || !isFutureIso(body.slotEnd)) {
+      return NextResponse.json({ error: "Informe a nova data e horário." }, { status: 400 });
+    }
+    const msg = typeof body.message === "string" ? body.message.trim() : "";
+    const updated = await updateBooking(id, {
+      stage: "proposto_novo_horario",
+      proposedSlotStart: String(body.slotStart),
+      proposedSlotEnd: String(body.slotEnd),
+      proposalMessage: msg || undefined,
+      proposalBy: "medico",
+      events: [...events, ev("medico", "proposta", `Médico propôs novo horário: ${new Date(String(body.slotStart)).toLocaleString("pt-BR")}.`)],
+    });
+    if (booking.patientEmail?.includes("@")) {
+      await sendEmail({
+        to: booking.patientEmail,
+        subject: "Proposta de novo horário — Meu Rim",
+        body: `${doctor.name} propôs um novo horário para sua consulta. Acesse o Meu Rim para aceitar ou recusar.${msg ? `\n\nMensagem: ${msg}` : ""}`,
+      });
+    }
+    return NextResponse.json({ ok: true, booking: updated });
+  }
+
+  if (action === "reschedule") {
+    // Remarcação SEM nova cobrança: mantém pagamento/paymentId; só muda o horário.
+    if (!isFutureIso(body.slotStart) || !isFutureIso(body.slotEnd)) {
+      return NextResponse.json({ error: "Informe a nova data e horário." }, { status: 400 });
+    }
+    const fromLabel = new Date(booking.slotStart).toLocaleString("pt-BR");
+    const toLabel = new Date(String(body.slotStart)).toLocaleString("pt-BR");
+    const wasPaid = ["paid", "confirmed", "completed"].includes(booking.status);
+    const updated = await updateBooking(id, {
+      slotStart: String(body.slotStart),
+      slotEnd: String(body.slotEnd),
+      // status/paymentId preservados — nenhuma nova cobrança.
+      stage: booking.status === "confirmed" ? "confirmada" : "remarcada",
+      proposedSlotStart: undefined,
+      proposedSlotEnd: undefined,
+      proposalMessage: undefined,
+      proposalBy: undefined,
+      notRealizedReason: undefined,
+      events: [...events, ev("medico", "remarcada", `Consulta remarcada de ${fromLabel} para ${toLabel}.${wasPaid ? " Pagamento preservado (sem nova cobrança)." : ""}`)],
+    });
+    if (booking.patientEmail?.includes("@")) {
+      await sendEmail({
+        to: booking.patientEmail,
+        subject: "Consulta remarcada — Meu Rim",
+        body: `Sua consulta foi remarcada para ${toLabel}.${wasPaid ? " O pagamento anterior continua válido — não há nova cobrança." : ""}`,
+      });
+    }
+    return NextResponse.json({ ok: true, booking: updated });
+  }
+
+  if (action === "not_realized") {
+    const reason = typeof body.reason === "string" ? body.reason.trim() : "outro";
+    const updated = await updateBooking(id, {
+      stage: "nao_realizada",
+      notRealizedReason: reason,
+      events: [...events, ev("medico", "nao_realizada", `Consulta não realizada (${reason}).`)],
+    });
+    return NextResponse.json({ ok: true, booking: updated });
+  }
+
+  if (action === "cancel") {
+    const updated = await updateBooking(id, {
+      status: "cancelled",
+      stage: "cancelada",
+      events: [...events, ev("medico", "cancelada", "Consulta cancelada pelo médico.")],
+    });
+    return NextResponse.json({ ok: true, booking: updated });
+  }
+
+  return NextResponse.json({ error: "Ação inválida." }, { status: 400 });
 }
 
 export async function DELETE(req: Request) {

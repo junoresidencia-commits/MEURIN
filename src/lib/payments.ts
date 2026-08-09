@@ -2,7 +2,7 @@ import "server-only";
 
 import { v4 as uuid } from "uuid";
 import { updateDb } from "./store";
-import { buildConfirmationEmail, sendEmail } from "./email";
+import { sendEmail } from "./email";
 import { computeSplit, resolveDoctorSharePercent } from "./types";
 import type { Booking, Doctor } from "./types";
 
@@ -135,13 +135,13 @@ export async function confirmBookingPaid(
   bookingId: string
 ): Promise<{ booking: Booking; meetingUrl: string } | null> {
   let meetingUrl = "";
-  let emailToSend: { to: string; subject: string; body: string } | null = null;
+  const emailsToSend: { to: string; subject: string; body: string }[] = [];
 
   const result = await updateDb((db) => {
     const booking = db.bookings.find((b) => b.id === bookingId);
     if (!booking) return db;
     if (booking.status === "confirmed" || booking.status === "paid") {
-      // Já confirmado — apenas recompõe a URL da sala, sem duplicar pagamento/e-mail.
+      // Já processado — apenas recompõe a URL da sala, sem duplicar pagamento/e-mail.
       meetingUrl = `${appOrigin()}/consulta/${booking.meetingRoomId}`;
       return db;
     }
@@ -159,16 +159,37 @@ export async function confirmBookingPaid(
     const paymentId = uuid();
     const paidAt = new Date().toISOString();
 
+    // Pagamento OK, mas a consulta NÃO é confirmada automaticamente: aguarda o médico.
+    const events = [
+      ...(booking.events ?? []),
+      { at: paidAt, actor: "sistema" as const, type: "pagamento", detail: "Pagamento identificado." },
+      { at: paidAt, actor: "sistema" as const, type: "aguardando_confirmacao", detail: "Médico notificado. Aguardando confirmação." },
+    ];
     const updatedBooking: Booking = {
       ...booking,
-      status: "confirmed",
+      status: "paid",
+      stage: "aguardando_confirmacao",
+      events,
       paymentId,
       paidAt,
-      confirmationEmailSent: true,
+      confirmationEmailSent: false,
     };
 
     meetingUrl = `${appOrigin()}/consulta/${updatedBooking.meetingRoomId}`;
-    emailToSend = buildConfirmationEmail(updatedBooking, doctor, meetingUrl);
+    if (booking.patientEmail?.includes("@")) {
+      emailsToSend.push({
+        to: booking.patientEmail,
+        subject: "Recebemos sua solicitação de consulta — Meu Rim",
+        body: `Recebemos o pagamento da sua consulta com ${doctor.name}. Estamos aguardando a confirmação do horário pelo médico — avisaremos assim que confirmar.`,
+      });
+    }
+    if (doctor.email) {
+      emailsToSend.push({
+        to: doctor.email,
+        subject: `Nova solicitação de consulta — ${booking.patientName}`,
+        body: `${booking.patientName} solicitou uma consulta (pagamento identificado). Acesse o Meu Rim para confirmar ou propor outro horário.`,
+      });
+    }
 
     return {
       ...db,
@@ -188,19 +209,14 @@ export async function confirmBookingPaid(
           createdAt: paidAt,
         },
       ],
-      doctors: db.doctors.map((d) =>
-        d.id === doctor.id
-          ? { ...d, blockedSlots: [...d.blockedSlots, booking.slotStart] }
-          : d
-      ),
     };
   });
 
   const booking = result.bookings.find((b) => b.id === bookingId);
   if (!booking) return null;
 
-  if (emailToSend) {
-    await sendEmail(emailToSend);
+  for (const email of emailsToSend) {
+    await sendEmail(email);
   }
 
   return { booking, meetingUrl };
