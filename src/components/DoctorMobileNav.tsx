@@ -21,7 +21,7 @@ function Icon({ name, className }: { name: keyof typeof PATHS; className?: strin
 const ITEMS: { href: string; label: string; icon: keyof typeof PATHS }[] = [
   { href: "/medicos/painel", label: "Painel", icon: "home" },
   { href: "/medicos/painel#pacientes", label: "Pacientes", icon: "users" },
-  { href: "/medicos/painel#agenda", label: "Agenda", icon: "cal" },
+  { href: "/medicos/agenda", label: "Agenda", icon: "cal" },
   { href: "/medicos/links", label: "Links", icon: "link" },
   { href: "/admin/login", label: "Admin", icon: "shield" },
 ];
