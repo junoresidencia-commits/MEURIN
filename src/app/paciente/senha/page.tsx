@@ -3,6 +3,7 @@
 import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { postJson, toFriendlyMessage } from "@/lib/user-errors";
 
 export default function TrocarSenhaPage() {
   const router = useRouter();
@@ -22,17 +23,11 @@ export default function TrocarSenhaPage() {
     }
     setLoading(true);
     try {
-      const res = await fetch("/api/patient/password", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ currentPassword: current, newPassword: next }),
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || "Não foi possível trocar a senha.");
+      await postJson("/api/patient/password", { currentPassword: current, newPassword: next }, "Não foi possível trocar a senha.");
       setDone(true);
       setTimeout(() => router.push("/paciente/inicio"), 1200);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Erro inesperado.");
+      setError(toFriendlyMessage(err, "Não foi possível trocar a senha."));
     } finally {
       setLoading(false);
     }

@@ -3,6 +3,7 @@
 import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { postJson, toFriendlyMessage } from "@/lib/user-errors";
 
 export default function LoginMedicoPage() {
   const router = useRouter();
@@ -16,16 +17,10 @@ export default function LoginMedicoPage() {
     setLoading(true);
     setError("");
     try {
-      const res = await fetch("/api/auth", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email, password }),
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || "Falha no login");
+      await postJson("/api/auth", { email, password }, "E-mail ou senha inválidos.");
       router.push("/medicos/painel");
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Erro");
+      setError(toFriendlyMessage(err, "Não foi possível entrar. Tente novamente."));
     } finally {
       setLoading(false);
     }

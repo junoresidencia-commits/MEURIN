@@ -3,6 +3,7 @@
 import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { postJson, toFriendlyMessage } from "@/lib/user-errors";
 
 export default function CriarContaPacientePage() {
   const router = useRouter();
@@ -20,16 +21,17 @@ export default function CriarContaPacientePage() {
     setLoading(true);
     setError("");
     try {
-      const res = await fetch("/api/patient/register", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(form),
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || "Não foi possível criar a conta.");
+      await postJson("/api/patient/register", {
+        name: form.name.trim(),
+        cpf: form.cpf,
+        password: form.password,
+        // E-mail e telefone são opcionais: só enviamos se preenchidos.
+        email: form.email.trim() || undefined,
+        phone: form.phone.trim() || undefined,
+      }, "Não foi possível criar sua conta. Confira os dados e tente novamente.");
       router.push("/paciente/inicio");
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Erro inesperado.");
+      setError(toFriendlyMessage(err, "Não foi possível criar sua conta. Confira os dados e tente novamente."));
     } finally {
       setLoading(false);
     }

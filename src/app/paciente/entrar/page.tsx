@@ -3,6 +3,7 @@
 import { Suspense, useState } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
+import { postJson, toFriendlyMessage } from "@/lib/user-errors";
 
 function EntrarInner() {
   const router = useRouter();
@@ -18,16 +19,10 @@ function EntrarInner() {
     setLoading(true);
     setError("");
     try {
-      const res = await fetch("/api/patient/session", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || "Não foi possível entrar.");
+      await postJson("/api/patient/session", payload, "Não foi possível entrar. Confira os dados e tente novamente.");
       router.push(params.get("next") || "/paciente/inicio");
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Erro inesperado.");
+      setError(toFriendlyMessage(err, "Não foi possível entrar. Confira os dados e tente novamente."));
     } finally {
       setLoading(false);
     }
@@ -63,6 +58,7 @@ function EntrarInner() {
       {mode === "cpf" ? (
         <form
           onSubmit={(e) => { e.preventDefault(); submit({ cpf, password }); }}
+          noValidate
           className="panel mt-4 space-y-4"
         >
           <label className="block">
@@ -102,12 +98,14 @@ function EntrarInner() {
       ) : (
         <form
           onSubmit={(e) => { e.preventDefault(); submit({ email }); }}
+          noValidate
           className="panel mt-4 space-y-4"
         >
           <label className="block">
             <span className="mb-2 block text-xs font-bold uppercase tracking-wider text-[var(--gold)]">E-mail</span>
             <input
-              type="email"
+              type="text"
+              inputMode="email"
               className="input-field"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
