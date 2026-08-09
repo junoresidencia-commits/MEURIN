@@ -116,6 +116,30 @@ export default function PainelMedicoPage() {
     else window.alert("Não foi possível excluir a consulta.");
   }
 
+  async function confirmProof(id: string) {
+    if (!window.confirm("Confirmar que você recebeu o PIX desta consulta? Isso libera o atendimento.")) return;
+    const res = await fetch("/api/bookings", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ id, action: "confirm_proof" }),
+    });
+    if (res.ok) {
+      const data = await res.json();
+      setBookings((bs) => bs.map((b) => (b.id === id ? { ...b, status: data.booking?.status || "confirmed" } : b)));
+    } else window.alert("Não foi possível confirmar.");
+  }
+
+  async function rejectProof(id: string) {
+    const note = window.prompt("Motivo da recusa (opcional):") || "";
+    const res = await fetch("/api/bookings", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ id, action: "reject_proof", note }),
+    });
+    if (res.ok) setBookings((bs) => bs.map((b) => (b.id === id ? { ...b, proofStatus: "recusado" } : b)));
+    else window.alert("Não foi possível recusar.");
+  }
+
   async function removePatient(key: string, name: string) {
     if (!window.confirm(`Excluir o paciente ${name}? Esta ação não pode ser desfeita.`)) return;
     const res = await fetch("/api/doctor/patients", {
@@ -341,6 +365,37 @@ export default function PainelMedicoPage() {
           Conecte a sua conta Mercado Pago para receber o valor das suas consultas diretamente nela.
         </p>
         <PaymentSettings />
+
+        <p className="mt-6 text-sm font-semibold text-[var(--text)]">PIX próprio (receber sem Mercado Pago)</p>
+        <p className="mt-1 text-sm text-[var(--text-muted)]">
+          Cadastre sua chave PIX (CPF, CNPJ, telefone, e-mail ou aleatória), em qualquer banco. O paciente paga direto na sua conta e envia o comprovante; você confirma o recebimento.
+        </p>
+        <PixProprioCard />
+
+        {bookings.some((b) => b.proofStatus === "enviado" && b.status !== "confirmed") && (
+          <div className="mt-6">
+            <p className="text-sm font-semibold text-[var(--text)]">Comprovantes pendentes (PIX direto)</p>
+            <div className="mt-2 grid gap-3">
+              {bookings
+                .filter((b) => b.proofStatus === "enviado" && b.status !== "confirmed")
+                .map((b) => (
+                  <div key={b.id} className="panel flex flex-wrap items-center justify-between gap-3">
+                    <div>
+                      <p className="font-semibold text-[var(--text)]">{b.patientName}</p>
+                      <p className="text-sm text-[var(--text-muted)]">
+                        {formatSlotLabel(b.slotStart)} · {new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(b.priceCents / 100)}
+                      </p>
+                    </div>
+                    <div className="flex flex-wrap items-center gap-2">
+                      <a href={`/api/bookings/${b.id}/proof`} target="_blank" rel="noopener noreferrer" className="btn-ghost">Ver comprovante</a>
+                      <button type="button" className="btn-gold" onClick={() => confirmProof(b.id)}>Confirmar pagamento</button>
+                      <button type="button" className="btn-ghost" onClick={() => rejectProof(b.id)}>Recusar</button>
+                    </div>
+                  </div>
+                ))}
+            </div>
+          </div>
+        )}
       </section>
 
       <section className="mt-8">
@@ -657,6 +712,110 @@ function PaymentSettings() {
       )}
       {msg && <p className="mt-3 text-sm text-[var(--teal,#0d9488)]">{msg}</p>}
       {err && <p className="mt-3 text-sm text-[var(--danger)]">{err}</p>}
+    </div>
+  );
+}
+
+function PixProprioCard() {
+  const [pix, setPix] = useState({
+    accept: false,
+    key: "",
+    keyType: "",
+    holderName: "",
+    holderDoc: "",
+    bank: "",
+    businessName: "",
+  });
+  const [loaded, setLoaded] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [msg, setMsg] = useState("");
+  const [err, setErr] = useState("");
+
+  useEffect(() => {
+    fetch("/api/doctor/payment")
+      .then((r) => r.json())
+      .then((d) => {
+        if (d?.pix) {
+          setPix({
+            accept: Boolean(d.pix.accept),
+            key: d.pix.key || "",
+            keyType: d.pix.keyType || "",
+            holderName: d.pix.holderName || "",
+            holderDoc: d.pix.holderDoc || "",
+            bank: d.pix.bank || "",
+            businessName: d.pix.businessName || "",
+          });
+        }
+        setLoaded(true);
+      })
+      .catch(() => setLoaded(true));
+  }, []);
+
+  async function save() {
+    setSaving(true);
+    setErr("");
+    setMsg("");
+    const res = await fetch("/api/doctor/payment", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ pix }),
+    });
+    const data = await res.json().catch(() => ({}));
+    setSaving(false);
+    if (res.ok) setMsg("Dados de PIX salvos.");
+    else setErr(data.error || "Não foi possível salvar.");
+  }
+
+  function set<K extends keyof typeof pix>(k: K, v: (typeof pix)[K]) {
+    setPix((p) => ({ ...p, [k]: v }));
+  }
+
+  if (!loaded) return <div className="panel mt-4 text-[var(--text-muted)]">Carregando…</div>;
+
+  return (
+    <div className="panel mt-4 space-y-3">
+      <label className="flex items-center gap-2 text-sm font-semibold text-[var(--text)]">
+        <input type="checkbox" checked={pix.accept} onChange={(e) => set("accept", e.target.checked)} />
+        Aceitar pagamentos por PIX direto
+      </label>
+      <div className="grid gap-3 sm:grid-cols-2">
+        <label className="block">
+          <span className="mb-1 block text-xs font-semibold text-[var(--text-muted)]">Tipo da chave</span>
+          <select className="input-field" value={pix.keyType} onChange={(e) => set("keyType", e.target.value)}>
+            <option value="">Selecione</option>
+            <option value="cpf">CPF</option>
+            <option value="cnpj">CNPJ</option>
+            <option value="telefone">Telefone</option>
+            <option value="email">E-mail</option>
+            <option value="aleatoria">Aleatória</option>
+          </select>
+        </label>
+        <label className="block">
+          <span className="mb-1 block text-xs font-semibold text-[var(--text-muted)]">Chave PIX</span>
+          <input className="input-field" value={pix.key} onChange={(e) => set("key", e.target.value)} placeholder="CNPJ, telefone, e-mail ou aleatória" />
+        </label>
+        <label className="block">
+          <span className="mb-1 block text-xs font-semibold text-[var(--text-muted)]">Nome do titular</span>
+          <input className="input-field" value={pix.holderName} onChange={(e) => set("holderName", e.target.value)} />
+        </label>
+        <label className="block">
+          <span className="mb-1 block text-xs font-semibold text-[var(--text-muted)]">CPF/CNPJ do titular</span>
+          <input className="input-field" value={pix.holderDoc} onChange={(e) => set("holderDoc", e.target.value)} />
+        </label>
+        <label className="block">
+          <span className="mb-1 block text-xs font-semibold text-[var(--text-muted)]">Banco</span>
+          <input className="input-field" value={pix.bank} onChange={(e) => set("bank", e.target.value)} placeholder="Nubank, Itaú, Inter, Bradesco…" />
+        </label>
+        <label className="block">
+          <span className="mb-1 block text-xs font-semibold text-[var(--text-muted)]">Nome empresarial/fantasia (se CNPJ)</span>
+          <input className="input-field" value={pix.businessName} onChange={(e) => set("businessName", e.target.value)} />
+        </label>
+      </div>
+      {msg && <p className="text-sm text-[var(--teal,#0d9488)]">{msg}</p>}
+      {err && <p className="text-sm text-[var(--danger)]">{err}</p>}
+      <button type="button" className="btn-gold disabled:opacity-50" onClick={save} disabled={saving}>
+        {saving ? "Salvando…" : "Salvar PIX próprio"}
+      </button>
     </div>
   );
 }

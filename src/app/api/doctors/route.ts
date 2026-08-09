@@ -17,6 +17,7 @@ function toPublic(d: {
   weeklyAvailability: PublicDoctor["weeklyAvailability"];
   blockedSlots: string[];
   createdAt: string;
+  pixAccept?: boolean;
 }): PublicDoctor {
   return {
     id: d.id,
@@ -30,6 +31,8 @@ function toPublic(d: {
     weeklyAvailability: d.weeklyAvailability,
     blockedSlots: d.blockedSlots,
     createdAt: d.createdAt,
+    // Booleano seguro: informa se o médico aceita PIX direto (sem expor a chave).
+    pixAccept: Boolean(d.pixAccept),
   };
 }
 
