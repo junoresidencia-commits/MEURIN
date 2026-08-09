@@ -25,6 +25,7 @@ const ITEMS: { href: string; label: string; icon: keyof typeof PATHS }[] = [
   { href: "/medicos/painel", label: "Painel inicial", icon: "home" },
   { href: "/medicos/painel#pacientes", label: "Pacientes", icon: "users" },
   { href: "/medicos/painel#agenda", label: "Agenda", icon: "cal" },
+  { href: "/medicos/agenda", label: "Locais e horários", icon: "cal" },
   { href: "/medicos/painel#pacientes", label: "Prontuários", icon: "file" },
   { href: "/medicos/documentos", label: "Documento avulso", icon: "edit" },
   { href: "/medicos/pesquisa", label: "Pesquisa", icon: "chart" },
