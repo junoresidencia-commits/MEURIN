@@ -51,16 +51,16 @@ export function SiteHeader() {
               Agendar consulta
             </Link>
             <Link
-              href="/medicos/login"
+              href="/paciente/entrar"
               className="rounded-full border-[1.5px] border-[var(--border-gold)] px-4 py-2.5 text-[var(--gold)] transition hover:border-[var(--gold)]"
             >
-              Profissional
+              Já sou paciente
             </Link>
             <Link
-              href="/paciente/entrar"
+              href="/medicos/login"
               className="rounded-full px-3 py-2.5 text-[var(--text-soft)] transition hover:text-[var(--gold)]"
             >
-              Paciente
+              Sou médico
             </Link>
           </nav>
 
@@ -82,18 +82,18 @@ export function SiteHeader() {
                 Agendar consulta
               </Link>
               <Link
-                href="/medicos/login"
+                href="/paciente/entrar"
                 className="btn-ghost w-full"
                 onClick={() => setOpen(false)}
               >
-                Entrar como profissional
+                Já sou paciente
               </Link>
               <Link
-                href="/paciente/entrar"
+                href="/medicos/login"
                 className="rounded-full px-4 py-3 text-center text-sm font-semibold text-[var(--text-soft)]"
                 onClick={() => setOpen(false)}
               >
-                Sou paciente
+                Sou médico
               </Link>
               <Link
                 href="/educacao"

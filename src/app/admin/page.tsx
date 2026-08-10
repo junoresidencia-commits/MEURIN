@@ -25,6 +25,20 @@ type Doctor = {
   createdAt: string;
 };
 
+type FunnelSummary = {
+  home_view: number;
+  doctors_list_view: number;
+  doctor_profile_open: number;
+  schedule_click: number;
+  slot_selected: number;
+  payment_started: number;
+  payment_completed: number;
+  consultation_done: number;
+  return_done: number;
+  plan_hired: number;
+  rates: Record<string, number | null>;
+};
+
 const PAYOUT_LABEL: Record<Doctor["payoutStatus"], string> = {
   active: "Ativo",
   pending: "Pendente",
@@ -36,6 +50,7 @@ const TABS = [
   { id: "aprovados", label: "Aprovados", match: ["approved"] },
   { id: "recusados", label: "Recusados", match: ["rejected"] },
   { id: "suspensos", label: "Suspensos", match: ["suspended"] },
+  { id: "funil", label: "Funil", match: [] },
 ] as const;
 
 const STATUS_LABEL: Record<Doctor["status"], string> = {
@@ -46,12 +61,26 @@ const STATUS_LABEL: Record<Doctor["status"], string> = {
   correction: "Correção solicitada",
 };
 
+const FUNNEL_STEPS: { key: keyof Omit<FunnelSummary, "rates">; label: string }[] = [
+  { key: "home_view", label: "Visitantes (Home)" },
+  { key: "doctors_list_view", label: "Lista de médicos" },
+  { key: "doctor_profile_open", label: "Perfil médico" },
+  { key: "schedule_click", label: "Agenda" },
+  { key: "slot_selected", label: "Horário escolhido" },
+  { key: "payment_started", label: "Início pagamento" },
+  { key: "payment_completed", label: "Pagamento concluído" },
+  { key: "consultation_done", label: "Consulta realizada" },
+  { key: "return_done", label: "Retorno" },
+  { key: "plan_hired", label: "Acompanhamento" },
+];
+
 export default function AdminPage() {
   const router = useRouter();
   const [doctors, setDoctors] = useState<Doctor[]>([]);
   const [tab, setTab] = useState<(typeof TABS)[number]["id"]>("aguardando");
   const [loading, setLoading] = useState(true);
   const [showCreate, setShowCreate] = useState(false);
+  const [funnel, setFunnel] = useState<FunnelSummary | null>(null);
 
   const load = useCallback(async () => {
     const res = await fetch("/api/admin/doctors");
@@ -64,9 +93,20 @@ export default function AdminPage() {
     setLoading(false);
   }, [router]);
 
+  const loadFunnel = useCallback(async () => {
+    const res = await fetch("/api/analytics");
+    if (res.status === 401) return;
+    const data = await res.json();
+    setFunnel(data.summary || null);
+  }, []);
+
   useEffect(() => {
     load();
   }, [load]);
+
+  useEffect(() => {
+    if (tab === "funil") loadFunnel();
+  }, [tab, loadFunnel]);
 
   async function setStatus(id: string, status: string, adminNote?: string) {
     await fetch("/api/admin/doctors", {
@@ -124,9 +164,14 @@ export default function AdminPage() {
   }
 
   const current = TABS.find((t) => t.id === tab)!;
-  const list = doctors.filter((d) => (current.match as readonly string[]).includes(d.status));
+  const list =
+    tab === "funil"
+      ? []
+      : doctors.filter((d) => (current.match as readonly string[]).includes(d.status));
   const countFor = (t: (typeof TABS)[number]) =>
-    doctors.filter((d) => (t.match as readonly string[]).includes(d.status)).length;
+    t.id === "funil"
+      ? 0
+      : doctors.filter((d) => (t.match as readonly string[]).includes(d.status)).length;
 
   if (loading) {
     return <div className="mx-auto max-w-4xl px-5 py-20 text-[var(--text-muted)]">Carregando…</div>;
@@ -161,109 +206,154 @@ export default function AdminPage() {
               tab === t.id ? "bg-[var(--gold)] text-white" : "border border-[var(--border)] bg-white text-[var(--text-soft)]"
             }`}
           >
-            {t.label} ({countFor(t)})
+            {t.label}
+            {t.id !== "funil" ? ` (${countFor(t)})` : ""}
           </button>
         ))}
       </div>
 
-      <div className="mt-5 space-y-3">
-        {list.length === 0 && <p className="text-[var(--text-muted)]">Nenhum médico nesta categoria.</p>}
-        {list.map((d) => (
-          <div key={d.id} className="panel">
-            <div className="flex flex-wrap items-start justify-between gap-3">
-              <div>
-                <p className="text-lg font-bold text-[var(--text)]">{d.name}</p>
-                <p className="text-sm text-[var(--text-muted)]">{d.specialty} · {STATUS_LABEL[d.status]}</p>
-              </div>
-              <p className="text-sm font-bold text-[var(--gold)]">{formatBRL(d.consultationPriceCents)}</p>
-            </div>
-            <div className="mt-3 grid gap-1 text-sm text-[var(--text-soft)] sm:grid-cols-2">
-              <p><span className="text-[var(--text-muted)]">E-mail:</span> {d.email}</p>
-              <p><span className="text-[var(--text-muted)]">Telefone:</span> {d.phone || "—"}</p>
-              <p><span className="text-[var(--text-muted)]">CRM:</span> {d.crm}{d.crmState ? ` / ${d.crmState}` : ""}</p>
-              <p><span className="text-[var(--text-muted)]">RQE:</span> {d.rqe || "—"}</p>
-              <p><span className="text-[var(--text-muted)]">Clínica:</span> {d.clinic || "—"}</p>
-              <p><span className="text-[var(--text-muted)]">Solicitado em:</span> {new Date(d.createdAt).toLocaleDateString("pt-BR")}</p>
-            </div>
-            {d.adminNote && (
-              <p className="mt-2 rounded-xl border border-[var(--border)] bg-[var(--gold-soft)] px-3 py-2 text-sm text-[var(--text-soft)]">
-                Aviso ao médico: {d.adminNote}
-              </p>
-            )}
-
-            <div className="mt-3 rounded-xl border border-[var(--border)] bg-white p-3">
-              <p className="text-xs font-bold uppercase tracking-wider text-[var(--gold)]">Financeiro</p>
-              <div className="mt-2 grid gap-1 text-sm text-[var(--text-soft)] sm:grid-cols-2">
-                <p><span className="text-[var(--text-muted)]">Valor da consulta:</span> {formatBRL(d.consultationPriceCents)}</p>
-                <p><span className="text-[var(--text-muted)]">Repasse do médico:</span> {d.commissionPercent}%</p>
-                <p><span className="text-[var(--text-muted)]">Parte da plataforma:</span> {d.platformPercent}%</p>
-                <p>
-                  <span className="text-[var(--text-muted)]">Mercado Pago:</span>{" "}
-                  {d.mpConnected ? "Conectado" : "Não conectado"}
-                </p>
-                <p>
-                  <span className="text-[var(--text-muted)]">Recebimento:</span>{" "}
-                  <span className={d.payoutStatus === "active" ? "font-semibold text-[var(--green,#0d9488)]" : "font-semibold text-[var(--danger)]"}>
-                    {PAYOUT_LABEL[d.payoutStatus]}
-                  </span>
-                </p>
-              </div>
-              <div className="mt-3 flex flex-wrap gap-2">
-                <button type="button" className="btn-ghost" onClick={() => setCommission(d.id, d.commissionPercent)}>
-                  Alterar percentual
-                </button>
-                {d.payoutStatus !== "active" && (
-                  <button type="button" className="btn-ghost" onClick={() => setPayout(d.id, "active")}>
-                    Aprovar recebimento
-                  </button>
-                )}
-                {d.payoutStatus !== "blocked" && (
-                  <button type="button" className="btn-ghost" onClick={() => setPayout(d.id, "blocked")}>
-                    Bloquear recebimento
-                  </button>
-                )}
-                {d.payoutStatus !== "pending" && (
-                  <button type="button" className="btn-ghost" onClick={() => setPayout(d.id, "pending")}>
-                    Solicitar reconexão
-                  </button>
-                )}
-              </div>
-            </div>
-
-            <div className="mt-4 flex flex-wrap gap-2">
-              {(d.status === "pending" || d.status === "correction" || d.status === "rejected") && (
-                <button type="button" className="btn-gold" onClick={() => setStatus(d.id, "approved")}>Aprovar médico</button>
-              )}
-              {(d.status === "pending" || d.status === "correction") && (
-                <>
-                  <button
-                    type="button"
-                    className="btn-ghost"
-                    onClick={() => {
-                      const note = window.prompt("O que precisa ser corrigido?") || "";
-                      setStatus(d.id, "correction", note);
-                    }}
-                  >
-                    Solicitar correção
-                  </button>
-                  <button type="button" className="btn-ghost" onClick={() => setStatus(d.id, "rejected")}>Recusar cadastro</button>
-                </>
-              )}
-              {d.status === "approved" && (
-                <button type="button" className="btn-ghost" onClick={() => setStatus(d.id, "suspended")}>Suspender acesso</button>
-              )}
-              {d.status === "suspended" && (
-                <button type="button" className="btn-gold" onClick={() => setStatus(d.id, "approved")}>Reativar acesso</button>
-              )}
-              <button type="button" className="btn-ghost" onClick={() => resetPassword(d.id, d.name)}>
-                Redefinir senha
-              </button>
-            </div>
+      {tab === "funil" ? (
+        <div className="mt-5 space-y-4">
+          <div className="panel">
+            <p className="text-xs font-bold uppercase tracking-wider text-[var(--gold)]">Funil de conversão</p>
+            <p className="mt-1 text-sm text-[var(--text-muted)]">
+              Visitantes → perfil médico → agenda → pagamento → consulta → retorno
+            </p>
+            <p className="mt-1 text-xs text-[var(--text-muted)]">
+              Métricas de negócio — não interferem no prontuário clínico.
+            </p>
           </div>
-        ))}
-      </div>
+          {!funnel && <p className="text-[var(--text-muted)]">Carregando métricas…</p>}
+          {funnel && (
+            <>
+              <div className="grid gap-3 sm:grid-cols-2">
+                {FUNNEL_STEPS.map((s) => (
+                  <div key={s.key} className="panel flex items-center justify-between gap-3">
+                    <span className="text-sm text-[var(--text-soft)]">{s.label}</span>
+                    <span className="text-xl font-extrabold text-[var(--text)]">
+                      {Number(funnel[s.key] ?? 0)}
+                    </span>
+                  </div>
+                ))}
+              </div>
+              <div className="panel space-y-2 text-sm text-[var(--text-soft)]">
+                <p className="text-xs font-bold uppercase tracking-wider text-[var(--gold)]">Taxas (%)</p>
+                <p>Home → médicos: {fmtRate(funnel.rates.homeToDoctors)}</p>
+                <p>Médicos → perfil: {fmtRate(funnel.rates.doctorsToProfile)}</p>
+                <p>Perfil → agenda: {fmtRate(funnel.rates.profileToSchedule)}</p>
+                <p>Agenda → horário: {fmtRate(funnel.rates.scheduleToSlot)}</p>
+                <p>Horário → pagamento: {fmtRate(funnel.rates.slotToPayment)}</p>
+                <p>Pagamento → pago: {fmtRate(funnel.rates.paymentToPaid)}</p>
+                <p>Pago → consulta: {fmtRate(funnel.rates.paidToConsult)}</p>
+                <p>Consulta → retorno: {fmtRate(funnel.rates.consultToReturn)}</p>
+              </div>
+            </>
+          )}
+        </div>
+      ) : (
+        <div className="mt-5 space-y-3">
+          {list.length === 0 && <p className="text-[var(--text-muted)]">Nenhum médico nesta categoria.</p>}
+          {list.map((d) => (
+            <div key={d.id} className="panel">
+              <div className="flex flex-wrap items-start justify-between gap-3">
+                <div>
+                  <p className="text-lg font-bold text-[var(--text)]">{d.name}</p>
+                  <p className="text-sm text-[var(--text-muted)]">{d.specialty} · {STATUS_LABEL[d.status]}</p>
+                </div>
+                <p className="text-sm font-bold text-[var(--gold)]">{formatBRL(d.consultationPriceCents)}</p>
+              </div>
+              <div className="mt-3 grid gap-1 text-sm text-[var(--text-soft)] sm:grid-cols-2">
+                <p><span className="text-[var(--text-muted)]">E-mail:</span> {d.email}</p>
+                <p><span className="text-[var(--text-muted)]">Telefone:</span> {d.phone || "—"}</p>
+                <p><span className="text-[var(--text-muted)]">CRM:</span> {d.crm}{d.crmState ? ` / ${d.crmState}` : ""}</p>
+                <p><span className="text-[var(--text-muted)]">RQE:</span> {d.rqe || "—"}</p>
+                <p><span className="text-[var(--text-muted)]">Clínica:</span> {d.clinic || "—"}</p>
+                <p><span className="text-[var(--text-muted)]">Solicitado em:</span> {new Date(d.createdAt).toLocaleDateString("pt-BR")}</p>
+              </div>
+              {d.adminNote && (
+                <p className="mt-2 rounded-xl border border-[var(--border)] bg-[var(--gold-soft)] px-3 py-2 text-sm text-[var(--text-soft)]">
+                  Aviso ao médico: {d.adminNote}
+                </p>
+              )}
+
+              <div className="mt-3 rounded-xl border border-[var(--border)] bg-white p-3">
+                <p className="text-xs font-bold uppercase tracking-wider text-[var(--gold)]">Financeiro</p>
+                <div className="mt-2 grid gap-1 text-sm text-[var(--text-soft)] sm:grid-cols-2">
+                  <p><span className="text-[var(--text-muted)]">Valor da consulta:</span> {formatBRL(d.consultationPriceCents)}</p>
+                  <p><span className="text-[var(--text-muted)]">Repasse do médico:</span> {d.commissionPercent}%</p>
+                  <p><span className="text-[var(--text-muted)]">Parte da plataforma:</span> {d.platformPercent}%</p>
+                  <p>
+                    <span className="text-[var(--text-muted)]">Mercado Pago:</span>{" "}
+                    {d.mpConnected ? "Conectado" : "Não conectado"}
+                  </p>
+                  <p>
+                    <span className="text-[var(--text-muted)]">Recebimento:</span>{" "}
+                    <span className={d.payoutStatus === "active" ? "font-semibold text-[var(--green,#0d9488)]" : "font-semibold text-[var(--danger)]"}>
+                      {PAYOUT_LABEL[d.payoutStatus]}
+                    </span>
+                  </p>
+                </div>
+                <div className="mt-3 flex flex-wrap gap-2">
+                  <button type="button" className="btn-ghost" onClick={() => setCommission(d.id, d.commissionPercent)}>
+                    Alterar percentual
+                  </button>
+                  {d.payoutStatus !== "active" && (
+                    <button type="button" className="btn-ghost" onClick={() => setPayout(d.id, "active")}>
+                      Aprovar recebimento
+                    </button>
+                  )}
+                  {d.payoutStatus !== "blocked" && (
+                    <button type="button" className="btn-ghost" onClick={() => setPayout(d.id, "blocked")}>
+                      Bloquear recebimento
+                    </button>
+                  )}
+                  {d.payoutStatus !== "pending" && (
+                    <button type="button" className="btn-ghost" onClick={() => setPayout(d.id, "pending")}>
+                      Solicitar reconexão
+                    </button>
+                  )}
+                </div>
+              </div>
+
+              <div className="mt-4 flex flex-wrap gap-2">
+                {(d.status === "pending" || d.status === "correction" || d.status === "rejected") && (
+                  <button type="button" className="btn-gold" onClick={() => setStatus(d.id, "approved")}>Aprovar médico</button>
+                )}
+                {(d.status === "pending" || d.status === "correction") && (
+                  <>
+                    <button
+                      type="button"
+                      className="btn-ghost"
+                      onClick={() => {
+                        const note = window.prompt("O que precisa ser corrigido?") || "";
+                        setStatus(d.id, "correction", note);
+                      }}
+                    >
+                      Solicitar correção
+                    </button>
+                    <button type="button" className="btn-ghost" onClick={() => setStatus(d.id, "rejected")}>Recusar cadastro</button>
+                  </>
+                )}
+                {d.status === "approved" && (
+                  <button type="button" className="btn-ghost" onClick={() => setStatus(d.id, "suspended")}>Suspender acesso</button>
+                )}
+                {d.status === "suspended" && (
+                  <button type="button" className="btn-gold" onClick={() => setStatus(d.id, "approved")}>Reativar acesso</button>
+                )}
+                <button type="button" className="btn-ghost" onClick={() => resetPassword(d.id, d.name)}>
+                  Redefinir senha
+                </button>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   );
+}
+
+function fmtRate(v: number | null | undefined) {
+  return v == null ? "—" : `${v}%`;
 }
 
 function CreateDoctor({ onCreated }: { onCreated: () => void }) {

@@ -84,13 +84,13 @@ export default function CadastroMedicoPage() {
 
   return (
     <div className="mx-auto max-w-xl px-5 py-12">
-      <p className="text-sm font-semibold text-[var(--gold)]">Equipe médica</p>
+      <p className="text-sm font-semibold text-[var(--gold)]">Área médica</p>
       <h1 className="font-display mt-2 text-3xl font-extrabold text-[var(--text)]">
-        Solicitar cadastro
+        Seu prontuário nefrológico onde você estiver
       </h1>
       <p className="mt-3 text-[var(--text-muted)]">
-        Preencha seus dados. O acesso é liberado após a aprovação do administrador
-        do Meu Rim.
+        Atenda presencialmente ou online e mantenha pacientes, exames, documentos e evolução renal
+        organizados em um só lugar. O acesso é liberado após aprovação do administrador.
       </p>
 
       <form onSubmit={onSubmit} className="panel mt-8 space-y-4">

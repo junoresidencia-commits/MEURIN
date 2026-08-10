@@ -895,6 +895,9 @@ function CreatePatient({ onCreated }: { onCreated: () => void }) {
       }
       if (!res.ok) throw new Error(data.error || "Não foi possível criar.");
       setDone({ name: form.name, phone: form.phone, email: form.email, cpf: form.cpf });
+      if (data.linkedExisting) {
+        setError(""); // sucesso: conta do paciente vinculada ao prontuário deste médico
+      }
     } catch (e) {
       setError(e instanceof Error ? e.message : "Erro inesperado.");
     } finally {

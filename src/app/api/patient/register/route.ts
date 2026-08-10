@@ -1,14 +1,14 @@
 import { NextResponse } from "next/server";
 import bcrypt from "bcryptjs";
-import { createPatient, findByCpfAny, normalizeCpf, clinicalKey } from "@/lib/patients-store";
+import { createPatient, findByCpfAny, normalizeCpf, clinicalKey, maskPatientName } from "@/lib/patients-store";
 import { createPatientToken, PATIENT_COOKIE } from "@/lib/patient-session";
 
 const SESSION_MAX_AGE = 60 * 60 * 24 * 365;
 
 /**
  * Cria a conta do paciente com o mínimo: nome + CPF + senha (opcional → 123456).
- * E-mail e telefone são OPCIONAIS. Nenhum erro técnico é devolvido ao usuário:
- * a mensagem é sempre amigável em português e o detalhe vai para console.error.
+ * Se já existir prontuário/cadastro com o CPF (ex.: criado pelo médico),
+ * orienta o fluxo seguro de vinculação — sem criar duplicata.
  */
 export async function POST(req: Request) {
   let body: { name?: unknown; cpf?: unknown; password?: unknown; email?: unknown; phone?: unknown };
@@ -19,8 +19,7 @@ export async function POST(req: Request) {
   }
 
   const name = String(body.name || "").trim();
-  const cpfNorm = normalizeCpf(body.cpf as string); // aceita 000.000.000-00 ou 00000000000
-  // E-mail/telefone opcionais: string vazia vira null e NÃO impede o cadastro.
+  const cpfNorm = normalizeCpf(body.cpf as string);
   const email = body.email ? String(body.email).toLowerCase().trim() : null;
   const phone = body.phone ? String(body.phone).trim() : null;
   const password = String(body.password || "").trim();
@@ -33,18 +32,31 @@ export async function POST(req: Request) {
   }
 
   try {
-    // Evita cadastro duplicado (ex.: conta já criada pelo médico).
     const existing = await findByCpfAny(cpfNorm);
     if (existing) {
+      const needsExtra =
+        Boolean(existing.phone && String(existing.phone).replace(/\D/g, "").length >= 8) ||
+        Boolean(existing.birthdate && String(existing.birthdate).length >= 8);
       return NextResponse.json(
-        { error: "Este CPF já possui uma conta. Use a opção Entrar (senha inicial 123456, se criada pelo seu médico)." },
+        {
+          error: "Encontramos um cadastro relacionado ao seu CPF.",
+          code: "cpf_exists",
+          claimable: true,
+          maskedName: maskPatientName(existing.name),
+          needsPhone: Boolean(existing.phone && String(existing.phone).replace(/\D/g, "").length >= 8),
+          needsBirthdate: !needsExtra
+            ? false
+            : Boolean(existing.birthdate && String(existing.birthdate).length >= 8) &&
+              !(existing.phone && String(existing.phone).replace(/\D/g, "").length >= 8),
+          hint: "Confirme sua identidade para conectar sua conta ao prontuário existente. Você também pode entrar se já tiver senha.",
+        },
         { status: 409 }
       );
     }
 
     const passwordHash = await bcrypt.hash(password || "123456", 10);
     const patient = await createPatient({
-      doctorId: "", // conta criada pelo próprio paciente (sem médico vinculado ainda)
+      doctorId: "",
       name,
       cpf: cpfNorm,
       email: email || null,
@@ -52,7 +64,6 @@ export async function POST(req: Request) {
       passwordHash,
     });
 
-    // Login automático após criar a conta.
     const res = NextResponse.json({ ok: true, name: patient.name });
     res.cookies.set(PATIENT_COOKIE, createPatientToken(clinicalKey(patient)), {
       httpOnly: true,
@@ -63,7 +74,6 @@ export async function POST(req: Request) {
     });
     return res;
   } catch (error) {
-    // Detalhe técnico só nos logs; usuário recebe mensagem amigável.
     console.error("Erro ao criar paciente:", error);
     return NextResponse.json(
       { error: "Não foi possível criar sua conta agora. Tente novamente em instantes." },

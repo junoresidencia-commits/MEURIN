@@ -339,8 +339,7 @@ export default function ProntuarioPage() {
         {tab === "resumo" && (
           <div className="panel space-y-3">
             <p className="text-sm text-[var(--text-soft)]">
-              Dados registrados pelo próprio paciente em casa. Registros mais
-              recentes de cada tipo:
+              Informação registrada pelo paciente em casa (com data e horário). Não substitui evolução médica.
             </p>
             <ul className="space-y-2 text-sm">
               <li className="flex justify-between border-b border-[var(--border)] pb-2">
@@ -607,11 +606,17 @@ export default function ProntuarioPage() {
 
         {tab === "sinais" && (
           <div className="space-y-3">
+            <p className="text-sm text-[var(--text-soft)]">
+              Informação registrada pelo paciente — distinta da evolução profissional.
+            </p>
             {sinais.length === 0 && <p className="text-[var(--text-muted)]">Nenhum sinal registrado em casa.</p>}
             {sinais.map((r) => (
               <div key={r.id} className="panel flex items-center justify-between gap-3">
                 <div>
-                  <p className="font-semibold text-[var(--text)]">
+                  <p className="text-[11px] font-bold uppercase tracking-wider text-[var(--gold)]">
+                    Informação registrada pelo paciente
+                  </p>
+                  <p className="mt-1 font-semibold text-[var(--text)]">
                     {r.kind === "bp" && `Pressão ${r.systolic}/${r.diastolic} mmHg${r.heartRate ? ` · FC ${r.heartRate}` : ""}`}
                     {r.kind === "glucose" && `Glicemia ${r.glucoseMgDl} mg/dL`}
                     {r.kind === "weight" && `Peso ${String(r.weightKg).replace(".", ",")} kg`}
@@ -625,10 +630,13 @@ export default function ProntuarioPage() {
             ))}
             {sintomas.length > 0 && (
               <>
-                <p className="mt-4 text-xs font-bold uppercase tracking-wider text-[var(--gold)]">Sintomas relatados</p>
+                <p className="mt-4 text-xs font-bold uppercase tracking-wider text-[var(--gold)]">Sintomas relatados pelo paciente</p>
                 {sintomas.map((r) => (
                   <div key={r.id} className="panel">
-                    <p className="text-sm text-[var(--text)]">{r.symptoms}</p>
+                    <p className="text-[11px] font-bold uppercase tracking-wider text-[var(--gold)]">
+                      Informação registrada pelo paciente
+                    </p>
+                    <p className="mt-1 text-sm text-[var(--text)]">{r.symptoms}</p>
                     <p className="mt-1 text-xs text-[var(--text-muted)]">{fmt(r.measuredAt)}</p>
                   </div>
                 ))}

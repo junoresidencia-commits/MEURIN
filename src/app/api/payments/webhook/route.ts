@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { confirmBookingPaid, fetchMercadoPagoPayment, getCollectorToken } from "@/lib/payments";
 import { getDoctorById } from "@/lib/store";
+import { trackFunnelEvent } from "@/lib/analytics-store";
 
 /**
  * Webhook do Mercado Pago. Não confiamos no retorno do navegador: a consulta
@@ -31,6 +32,11 @@ export async function POST(req: Request) {
     const payment = await fetchMercadoPagoPayment(String(paymentId), token);
     if (payment && payment.status === "approved" && payment.external_reference) {
       await confirmBookingPaid(payment.external_reference);
+      await trackFunnelEvent({
+        type: "payment_completed",
+        doctorId: doctorId || undefined,
+        bookingId: String(payment.external_reference),
+      });
     }
   }
 

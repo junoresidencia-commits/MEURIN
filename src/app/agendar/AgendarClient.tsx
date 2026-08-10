@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import type { Booking, Modality, PaymentMethod, PublicDoctor } from "@/lib/types";
 import { formatBRL } from "@/lib/scheduling-client";
+import { trackEvent } from "@/lib/analytics-client";
 
 type Slot = {
   start: string;
@@ -40,25 +41,51 @@ const REASONS: { id: Booking["careReason"]; label: string; hint: string }[] = [
   },
   {
     id: "acompanhamento",
-    label: "Acompanhamento",
-    hint: "Exames, creatinina, pressão, DRC",
+    label: "Consulta nefrológica / acompanhamento",
+    hint: "Avaliação médica, exames disponíveis e continuidade do cuidado",
   },
   {
     id: "segunda_opiniao",
-    label: "Segunda opinião",
-    hint: "Quero ouvir outro nefrologista",
+    label: "Segunda opinião nefrológica",
+    hint: "Já tenho exames, diagnóstico ou tratamento e quero nova avaliação",
   },
   {
     id: "outro",
     label: "Outro motivo",
-    hint: "Conversa clínica online",
+    hint: "Conversa clínica online ou presencial",
   },
 ];
+
+const PRODUCT_COPY: Record<Booking["careReason"], { title: string; body: string }> = {
+  pressa: {
+    title: "Consulta nefrológica",
+    body: "Avaliação médica, análise dos exames disponíveis e emissão de documentos médicos quando clinicamente indicados.",
+  },
+  acompanhamento: {
+    title: "Consulta nefrológica",
+    body: "Avaliação médica, análise dos exames disponíveis e emissão de documentos médicos quando clinicamente indicados.",
+  },
+  segunda_opiniao: {
+    title: "Segunda opinião nefrológica",
+    body: "Avaliação médica para pacientes que já possuem exames, diagnóstico ou tratamento e desejam uma nova avaliação.",
+  },
+  outro: {
+    title: "Consulta nefrológica",
+    body: "Avaliação médica contextualizada, conforme a necessidade clínica apresentada.",
+  },
+};
 
 export default function AgendarClient() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const wantsFast = searchParams.get("rapido") === "1";
+  const motivoParam = searchParams.get("motivo");
+  const initialReason: Booking["careReason"] =
+    motivoParam === "segunda_opiniao" || motivoParam === "pressa" || motivoParam === "acompanhamento" || motivoParam === "outro"
+      ? motivoParam
+      : wantsFast
+        ? "pressa"
+        : "acompanhamento";
 
   const [step, setStep] = useState(0);
   const [doctors, setDoctors] = useState<PublicDoctor[]>([]);
@@ -74,9 +101,7 @@ export default function AgendarClient() {
   const [patientEmail, setPatientEmail] = useState("");
   const [patientPhone, setPatientPhone] = useState("");
   const [patientCity, setPatientCity] = useState("");
-  const [careReason, setCareReason] = useState<Booking["careReason"]>(
-    wantsFast ? "pressa" : "acompanhamento"
-  );
+  const [careReason, setCareReason] = useState<Booking["careReason"]>(initialReason);
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>("pix");
   const [cardNumber, setCardNumber] = useState("");
   const [loading, setLoading] = useState(false);
@@ -94,8 +119,10 @@ export default function AgendarClient() {
 
   const soonSlots = useMemo(() => slots.slice(0, 6), [slots]);
   const otherSlots = useMemo(() => slots.slice(6), [slots]);
+  const product = PRODUCT_COPY[careReason];
 
   useEffect(() => {
+    trackEvent("doctors_list_view");
     fetch("/api/doctors")
       .then((r) => r.json())
       .then(setDoctors)
@@ -151,6 +178,7 @@ export default function AgendarClient() {
         return false;
       }
       setSlot(s);
+      trackEvent("slot_selected", { doctorId });
       return true;
     } catch {
       setSlot(s); // rede instável: segue; o backend revalida ao finalizar
@@ -197,6 +225,7 @@ export default function AgendarClient() {
     }
     setLoading(true);
     setError("");
+    trackEvent("payment_started", { doctorId: doctor.id });
     try {
       // Registra o consentimento (auditável) antes de prosseguir com o pagamento.
       const accepted: Record<string, boolean> = {};
@@ -249,6 +278,7 @@ export default function AgendarClient() {
       }
 
       // Pagamento simulado: já confirmado, vai para a confirmação.
+      trackEvent("payment_completed", { doctorId: doctor.id, bookingId: bookingData.booking.id });
       router.push(`/confirmacao/${bookingData.booking.id}`);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Falha inesperada");
@@ -265,11 +295,12 @@ export default function AgendarClient() {
           : "Agendamento online"}
       </p>
       <h1 className="font-display mt-2 text-4xl text-[var(--text)]">
-        Consulta de nefrologia
+        {product.title}
       </h1>
+      <p className="mt-3 max-w-2xl text-[var(--text-muted)]">{product.body}</p>
       <p className="mt-3 max-w-xl text-[var(--text-muted)]">
-        Interior ou capital: escolha o médico, o horário, pague e receba o link
-        da sala. Sem deslocamento. Sem app externo pago.
+        Escolha o nefrologista, o horário e a modalidade (online ou presencial).
+        Depois da consulta, o acompanhamento continua no Meu Rim.
       </p>
 
       <div className="mt-8 flex gap-2">
@@ -309,24 +340,54 @@ export default function AgendarClient() {
               onClick={() => {
                 setDoctorId(d.id);
                 setSlot(null);
+                trackEvent("doctor_profile_open", { doctorId: d.id });
+                trackEvent("schedule_click", { doctorId: d.id });
                 setStep(1);
               }}
               className="panel text-left transition hover:-translate-y-0.5 hover:border-[var(--border-gold)]"
             >
               <div className="flex items-start justify-between gap-4">
-                <div>
-                  <h2 className="font-display text-xl text-[var(--text)]">{d.name}</h2>
-                  <p className="mt-1 text-sm text-[var(--gold-light)]">
-                    {d.specialty} · {d.crm}
-                  </p>
-                  <p className="mt-3 text-sm text-[var(--text-muted)]">{d.bio}</p>
-                  <p className="mt-3 text-xs font-semibold uppercase tracking-wider text-[var(--green)]">
-                    Atende online · todo o Brasil
-                  </p>
+                <div className="flex min-w-0 flex-1 gap-3">
+                  {d.logoUrl ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img
+                      src={d.logoUrl}
+                      alt=""
+                      className="h-14 w-14 shrink-0 rounded-2xl object-cover border border-[var(--border)]"
+                    />
+                  ) : (
+                    <span className="grid h-14 w-14 shrink-0 place-items-center rounded-2xl bg-[var(--gold-soft)] text-lg font-extrabold text-[var(--gold)]">
+                      {d.name.split(" ").filter(Boolean).slice(0, 2).map((p) => p[0]).join("")}
+                    </span>
+                  )}
+                  <div className="min-w-0">
+                    <h2 className="font-display text-xl text-[var(--text)]">{d.name}</h2>
+                    <p className="mt-1 text-sm text-[var(--gold-light)]">
+                      {d.specialty}
+                      {" · "}
+                      {d.crm}
+                      {d.crmState ? `/${d.crmState}` : ""}
+                      {d.rqe ? ` · RQE ${d.rqe}` : ""}
+                    </p>
+                    {d.bio && <p className="mt-3 text-sm text-[var(--text-muted)]">{d.bio}</p>}
+                    <div className="mt-3 flex flex-wrap gap-2">
+                      {d.onlineAvailable !== false && (
+                        <span className="rounded-full border border-[var(--border-gold)] bg-[var(--gold-soft)] px-2.5 py-1 text-[11px] font-bold text-[var(--gold)]">
+                          Consulta online disponível
+                        </span>
+                      )}
+                      {(d.cities && d.cities.length > 0) || d.clinic ? (
+                        <span className="rounded-full border border-[var(--border)] px-2.5 py-1 text-[11px] font-semibold text-[var(--text-muted)]">
+                          Presencial: {(d.cities && d.cities.length > 0 ? d.cities : [d.clinic]).filter(Boolean).join(", ")}
+                        </span>
+                      ) : null}
+                    </div>
+                  </div>
                 </div>
-                <p className="shrink-0 font-bold text-[var(--gold)]">
-                  {formatBRL(d.consultationPriceCents)}
-                </p>
+                <div className="shrink-0 text-right">
+                  <p className="text-[11px] font-semibold uppercase tracking-wider text-[var(--text-muted)]">Consulta</p>
+                  <p className="font-bold text-[var(--gold)]">{formatBRL(d.consultationPriceCents)}</p>
+                </div>
               </div>
             </button>
           ))}
@@ -554,7 +615,9 @@ export default function AgendarClient() {
       {step === 3 && doctor && slot && (
         <div className="panel mt-8 space-y-5">
           <div className="rounded-2xl border border-[var(--border-gold)] bg-[var(--gold-soft)] p-4 text-sm">
-            <p className="text-[var(--text)]">
+            <p className="font-semibold text-[var(--text)]">{product.title}</p>
+            <p className="mt-1 text-[var(--text-muted)]">{product.body}</p>
+            <p className="mt-3 text-[var(--text)]">
               <strong>{doctor.name}</strong> · {slot.label}
             </p>
             <p className="mt-1 text-[var(--text-muted)]">

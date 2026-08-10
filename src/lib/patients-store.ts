@@ -51,6 +51,15 @@ export function normalizeCpf(cpf?: string | null): string {
   return String(cpf || "").replace(/\D/g, "");
 }
 
+/** Mascara o nome para exibir no fluxo de vínculo por CPF. */
+export function maskPatientName(name: string): string {
+  return name
+    .split(/\s+/)
+    .filter(Boolean)
+    .map((p) => (p.length <= 1 ? "*" : `${p[0]}${"*".repeat(Math.min(4, p.length - 1))}`))
+    .join(" ");
+}
+
 async function readFile(): Promise<Patient[]> {
   try {
     const raw = await fs.readFile(FILE, "utf8");
@@ -219,10 +228,12 @@ export async function getPatient(id: string): Promise<Patient | null> {
   return list.find((p) => p.id === id) ?? null;
 }
 
-/** Atualiza dados cadastrais do paciente (usado na edição "Meus dados"). */
+/** Atualiza dados cadastrais do paciente (usado na edição "Meus dados" e vínculo médico↔CPF). */
 export async function updatePatient(
   id: string,
-  patch: Partial<Pick<Patient, "name" | "phone" | "email" | "birthdate" | "sex" | "address">>
+  patch: Partial<
+    Pick<Patient, "name" | "phone" | "email" | "birthdate" | "sex" | "address" | "doctorId" | "passwordHash">
+  >
 ): Promise<Patient | null> {
   const current = await getPatient(id);
   if (!current) return null;
@@ -233,16 +244,19 @@ export async function updatePatient(
   };
   if (active()) {
     const supabase = getSupabaseAdmin()!;
+    const row: Record<string, unknown> = {
+      name: updated.name,
+      phone: updated.phone ?? null,
+      email: updated.email ?? null,
+      birthdate: updated.birthdate || null,
+      sex: updated.sex ?? null,
+      address: updated.address ?? null,
+    };
+    if (patch.doctorId !== undefined) row.doctor_id = updated.doctorId;
+    if (patch.passwordHash !== undefined) row.password_hash = updated.passwordHash ?? null;
     const { error } = await supabase
       .from("patients")
-      .update({
-        name: updated.name,
-        phone: updated.phone ?? null,
-        email: updated.email ?? null,
-        birthdate: updated.birthdate || null,
-        sex: updated.sex ?? null,
-        address: updated.address ?? null,
-      })
+      .update(row)
       .eq("id", id);
     if (error) {
       if (isMissingTableError(error)) tableMissing = true;
