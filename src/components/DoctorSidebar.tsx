@@ -29,6 +29,7 @@ const ITEMS: { href: string; label: string; icon: keyof typeof PATHS }[] = [
   { href: "/medicos/agenda", label: "Locais e horários", icon: "cal" },
   { href: "/medicos/painel#pacientes", label: "Prontuários", icon: "file" },
   { href: "/medicos/documentos", label: "Documento avulso", icon: "edit" },
+  { href: "/medicos/configuracoes/documentos", label: "Papéis timbrados", icon: "file" },
   { href: "/medicos/pesquisa", label: "Pesquisa", icon: "chart" },
   { href: "/medicos/links", label: "Links úteis", icon: "link" },
   { href: "/medicos/configuracoes", label: "Configurações", icon: "gear" },
