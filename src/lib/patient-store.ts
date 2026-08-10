@@ -50,17 +50,38 @@ export interface ClinicalNote {
 
 export type DocumentType = "receita" | "exame" | "relatorio";
 
+export interface DocHistoryEntry {
+  at: string;
+  by: string; // médico id/nome
+  action: string; // criado | editado | assinado | disponibilizado | removido_paciente | nova_versao
+  detail?: string;
+}
+
 export interface ClinicalDocument {
   id: string;
   patientEmail: string;
   doctorId: string;
   doctorName: string;
   doctorCrm?: string | null;
-  type: DocumentType;
+  type: string; // universal: receita, exame, relatorio, livre, atestado, encaminhamento, laudo, ...
   title: string;
   body: string;
   sharedWithPatient: boolean;
   createdAt: string;
+  // Motor universal de documentos (opcionais — só quando gerado pelo motor):
+  letterheadId?: string | null;
+  pdfPath?: string | null;
+  pdfStorage?: "supabase" | "local" | null;
+  status?: "draft" | "final" | "signed";
+  version?: number;
+  groupId?: string | null;
+  signedAt?: string | null;
+  signedBy?: string | null;
+  signatureMethod?: "eletronica" | "imagem" | "certificada" | null;
+  signatureHash?: string | null;
+  availableAt?: string | null;
+  patientViewedAt?: string | null;
+  history?: DocHistoryEntry[];
 }
 
 export interface PatientData {
@@ -391,11 +412,24 @@ function mapDocumentRow(row: Record<string, unknown>): ClinicalDocument {
     doctorId: String(row.doctor_id),
     doctorName: String(row.doctor_name),
     doctorCrm: (row.doctor_crm as string | null) ?? null,
-    type: String(row.type) as DocumentType,
+    type: String(row.type),
     title: String(row.title),
     body: String(row.body ?? ""),
     sharedWithPatient: Boolean(row.shared_with_patient),
     createdAt: new Date(String(row.created_at)).toISOString(),
+    letterheadId: (row.letterhead_id as string) ?? null,
+    pdfPath: (row.pdf_path as string) ?? null,
+    pdfStorage: (row.pdf_storage as "supabase" | "local") ?? null,
+    status: (row.status as ClinicalDocument["status"]) ?? "final",
+    version: typeof row.version === "number" ? (row.version as number) : Number(row.version ?? 1),
+    groupId: (row.group_id as string) ?? null,
+    signedAt: (row.signed_at as string) ?? null,
+    signedBy: (row.signed_by as string) ?? null,
+    signatureMethod: (row.signature_method as ClinicalDocument["signatureMethod"]) ?? null,
+    signatureHash: (row.signature_hash as string) ?? null,
+    availableAt: (row.available_at as string) ?? null,
+    patientViewedAt: (row.patient_viewed_at as string) ?? null,
+    history: Array.isArray(row.history) ? (row.history as DocHistoryEntry[]) : [],
   };
 }
 
@@ -422,6 +456,18 @@ export async function addDocument(
       body: doc.body,
       shared_with_patient: doc.sharedWithPatient,
       created_at: doc.createdAt,
+      letterhead_id: doc.letterheadId ?? null,
+      pdf_path: doc.pdfPath ?? null,
+      pdf_storage: doc.pdfStorage ?? null,
+      status: doc.status ?? "final",
+      version: doc.version ?? 1,
+      group_id: doc.groupId ?? null,
+      signed_at: doc.signedAt ?? null,
+      signed_by: doc.signedBy ?? null,
+      signature_method: doc.signatureMethod ?? null,
+      signature_hash: doc.signatureHash ?? null,
+      available_at: doc.availableAt ?? null,
+      history: doc.history ?? [],
     });
     if (error) {
       if (isMissingTableError(error)) missingTables.add("documents");
@@ -589,4 +635,70 @@ export async function getDocumentById(id: string): Promise<ClinicalDocument | nu
 
   const file = await readFile();
   return file.documents.find((d) => d.id === id) ?? null;
+}
+
+/** Atualiza campos de um documento (uso interno pelas rotas do motor de documentos). */
+export async function updateDocument(id: string, patch: Partial<ClinicalDocument>): Promise<ClinicalDocument | null> {
+  const map: Record<string, unknown> = {};
+  const m = (k: keyof ClinicalDocument, col: string) => { if (patch[k] !== undefined) map[col] = patch[k] as unknown; };
+  m("title", "title"); m("body", "body"); m("type", "type");
+  m("sharedWithPatient", "shared_with_patient");
+  m("letterheadId", "letterhead_id"); m("pdfPath", "pdf_path"); m("pdfStorage", "pdf_storage");
+  m("status", "status"); m("version", "version"); m("groupId", "group_id");
+  m("signedAt", "signed_at"); m("signedBy", "signed_by"); m("signatureMethod", "signature_method"); m("signatureHash", "signature_hash");
+  m("availableAt", "available_at"); m("patientViewedAt", "patient_viewed_at"); m("history", "history");
+
+  if (supabaseActive("documents")) {
+    const supabase = getSupabaseAdmin()!;
+    const { data, error } = await supabase.from("documents").update(map).eq("id", id).select().maybeSingle();
+    if (error) {
+      if (isMissingTableError(error)) missingTables.add("documents");
+      else throw error;
+    } else {
+      return data ? mapDocumentRow(data as Record<string, unknown>) : null;
+    }
+  }
+  const file = await readFile();
+  const idx = file.documents.findIndex((d) => d.id === id);
+  if (idx < 0) return null;
+  file.documents[idx] = { ...file.documents[idx], ...patch };
+  await writeFile(file);
+  return file.documents[idx];
+}
+
+function appendHistory(doc: ClinicalDocument, entry: DocHistoryEntry): DocHistoryEntry[] {
+  return [...(doc.history ?? []), entry];
+}
+
+/** Disponibiliza (ou remove) o documento na área do paciente, registrando no histórico. */
+export async function setDocumentAvailability(id: string, available: boolean, by: string): Promise<ClinicalDocument | null> {
+  const doc = await getDocumentById(id);
+  if (!doc) return null;
+  const now = new Date().toISOString();
+  return updateDocument(id, {
+    sharedWithPatient: available,
+    availableAt: available ? now : doc.availableAt ?? null,
+    history: appendHistory(doc, { at: now, by, action: available ? "disponibilizado" : "removido_paciente" }),
+  });
+}
+
+/** Marca o documento como assinado (eletrônica/imagem) — versão passa a ser imutável. */
+export async function signDocument(id: string, opts: { by: string; method: NonNullable<ClinicalDocument["signatureMethod"]>; hash: string }): Promise<ClinicalDocument | null> {
+  const doc = await getDocumentById(id);
+  if (!doc) return null;
+  const now = new Date().toISOString();
+  return updateDocument(id, {
+    status: "signed",
+    signedAt: now,
+    signedBy: opts.by,
+    signatureMethod: opts.method,
+    signatureHash: opts.hash,
+    history: appendHistory(doc, { at: now, by: opts.by, action: "assinado", detail: `${opts.method} (${opts.hash.slice(0, 12)}…)` }),
+  });
+}
+
+export async function markPatientViewed(id: string): Promise<void> {
+  const doc = await getDocumentById(id);
+  if (!doc || doc.patientViewedAt) return;
+  await updateDocument(id, { patientViewedAt: new Date().toISOString() });
 }

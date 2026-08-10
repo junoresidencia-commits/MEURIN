@@ -7,6 +7,19 @@ export async function GET() {
   if (!email) {
     return NextResponse.json({ error: "Sessão de paciente não encontrada." }, { status: 401 });
   }
-  const documents = await getDocuments(email, { onlyShared: true });
+  const docs = await getDocuments(email, { onlyShared: true });
+  // Nunca expõe caminhos de storage. PDF gerado é servido pelo proxy autenticado.
+  const documents = docs.map((d) => ({
+    id: d.id,
+    type: d.type,
+    title: d.title,
+    body: d.pdfPath ? "" : d.body, // se tem PDF, o corpo é o próprio PDF
+    doctorName: d.doctorName,
+    createdAt: d.createdAt,
+    status: d.status ?? "final",
+    signed: d.status === "signed",
+    pdfUrl: d.pdfPath ? `/api/documents/${d.id}/pdf` : null,
+    viewUrl: d.pdfPath ? `/api/documents/${d.id}/pdf` : `/documento/${d.id}`,
+  }));
   return NextResponse.json({ documents });
 }
