@@ -11,6 +11,7 @@ export interface PatientAccess {
   city: string;
   phone: string;
   email: string;
+  cpf: string;
   birthdate: string | null;
   sex: string | null;
   isCreated: boolean;
@@ -52,7 +53,7 @@ export async function resolvePatientAccess(param: string): Promise<PatientAccess
     const email = decoded.toLowerCase();
     const bks = bookingsForEmail(email);
     if (bks.length === 0) {
-      return { allowed: false, key: email, name: "", city: "", phone: "", email, birthdate: null, sex: null, isCreated: false, bookings: [] };
+      return { allowed: false, key: email, name: "", city: "", phone: "", email, cpf: "", birthdate: null, sex: null, isCreated: false, bookings: [] };
     }
     const latest = db.bookings
       .filter((b) => b.doctorId === doctorId && b.patientEmail.toLowerCase() === email)
@@ -64,6 +65,7 @@ export async function resolvePatientAccess(param: string): Promise<PatientAccess
       city: latest.patientCity,
       phone: latest.patientPhone,
       email,
+      cpf: "",
       birthdate: null,
       sex: null,
       isCreated: false,
@@ -74,7 +76,7 @@ export async function resolvePatientAccess(param: string): Promise<PatientAccess
   // Paciente criado pelo médico (param = id)
   const patient = await getPatient(decoded);
   if (!patient || patient.doctorId !== doctorId) {
-    return { allowed: false, key: "", name: "", city: "", phone: "", email: "", birthdate: null, sex: null, isCreated: true, bookings: [] };
+    return { allowed: false, key: "", name: "", city: "", phone: "", email: "", cpf: "", birthdate: null, sex: null, isCreated: true, bookings: [] };
   }
   const key = clinicalKey(patient);
   return {
@@ -84,6 +86,7 @@ export async function resolvePatientAccess(param: string): Promise<PatientAccess
     city: patient.address || "",
     phone: patient.phone || "",
     email: patient.email || "",
+    cpf: patient.cpf || "",
     birthdate: patient.birthdate || null,
     sex: patient.sex || null,
     isCreated: true,

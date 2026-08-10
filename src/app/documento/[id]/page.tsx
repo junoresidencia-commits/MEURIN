@@ -6,7 +6,7 @@ import { whatsappLink } from "@/lib/contact";
 
 type Doc = {
   id: string;
-  type: "receita" | "exame" | "relatorio";
+  type: string;
   title: string;
   body: string;
   doctorName: string;
@@ -14,21 +14,18 @@ type Doc = {
   doctorLogoUrl?: string | null;
   patientEmail: string;
   createdAt: string;
+  hasPdf?: boolean;
+  pdfData?: string | null;
+  status?: string;
+  signatureMethod?: string | null;
 };
 
-function loadImage(src: string): Promise<HTMLImageElement> {
-  return new Promise((resolve, reject) => {
-    const img = new Image();
-    img.onload = () => resolve(img);
-    img.onerror = reject;
-    img.src = src;
-  });
-}
-
-const TYPE_LABEL: Record<Doc["type"], string> = {
+const TYPE_LABEL: Record<string, string> = {
   receita: "Receita médica",
   exame: "Solicitação de exames",
   relatorio: "Relatório médico",
+  evolucao: "Evolução médica",
+  livre: "Documento",
 };
 
 export default function DocumentoPage() {
@@ -60,7 +57,19 @@ export default function DocumentoPage() {
     year: "numeric",
   });
 
-  async function downloadPdf() {
+  function downloadPdf() {
+    if (!doc) return;
+    if (doc.pdfData) {
+      const a = document.createElement("a");
+      a.href = doc.pdfData;
+      a.download = `${doc.type}-${doc.id.slice(0, 8)}.pdf`;
+      a.click();
+      return;
+    }
+    void legacyDownload();
+  }
+
+  async function legacyDownload() {
     if (!doc) return;
     const { jsPDF } = await import("jspdf");
     const pdf = new jsPDF({ unit: "pt", format: "a4" });
@@ -68,81 +77,36 @@ export default function DocumentoPage() {
     const margin = 56;
     const maxW = pageW - margin * 2;
     let y = margin;
-
-    let textX = margin;
-    if (doc.doctorLogoUrl) {
-      try {
-        const img = await loadImage(doc.doctorLogoUrl);
-        const maxH = 46;
-        const maxW = 150;
-        const ratio = img.width / img.height || 1;
-        let h = maxH;
-        let w = h * ratio;
-        if (w > maxW) {
-          w = maxW;
-          h = w / ratio;
-        }
-        const fmt = doc.doctorLogoUrl.includes("image/png") ? "PNG" : "JPEG";
-        pdf.addImage(doc.doctorLogoUrl, fmt, margin, y - 6, w, h);
-        textX = margin + w + 12;
-      } catch {
-        /* segue sem logo */
-      }
-    }
-
-    pdf.setFont("helvetica", "bold");
-    pdf.setFontSize(16);
-    pdf.text("Meu Rim", textX, y);
-    pdf.setFont("helvetica", "normal");
-    pdf.setFontSize(10);
-    pdf.setTextColor(120);
-    pdf.text("Nefrologia online", textX, y + 15);
-    pdf.text(date, pageW - margin, y, { align: "right" });
-    pdf.setTextColor(20);
-    y += 40;
-    pdf.setDrawColor(210);
-    pdf.line(margin, y, pageW - margin, y);
-    y += 34;
-
     pdf.setFont("helvetica", "bold");
     pdf.setFontSize(14);
-    pdf.text((doc.title || TYPE_LABEL[doc.type]).toUpperCase(), pageW / 2, y, { align: "center" });
-    y += 30;
-
+    pdf.text(doc.doctorName, margin, y);
+    y += 20;
     pdf.setFont("helvetica", "normal");
-    pdf.setFontSize(12);
+    pdf.setFontSize(11);
+    pdf.text(doc.title || TYPE_LABEL[doc.type] || "Documento", margin, y);
+    y += 24;
     const lines = pdf.splitTextToSize(doc.body, maxW) as string[];
     for (const line of lines) {
-      if (y > 720) {
+      if (y > 760) {
         pdf.addPage();
         y = margin;
       }
       pdf.text(line, margin, y);
-      y += 20;
+      y += 16;
     }
-
-    y = Math.max(y + 60, 700);
-    pdf.line(margin + 120, y, pageW - margin - 120, y);
-    pdf.setFont("helvetica", "bold");
-    pdf.text(doc.doctorName, pageW / 2, y + 16, { align: "center" });
-    if (doc.doctorCrm) {
-      pdf.setFont("helvetica", "normal");
-      pdf.setTextColor(120);
-      pdf.text(doc.doctorCrm, pageW / 2, y + 32, { align: "center" });
-    }
-
     pdf.save(`${doc.type}-meu-rim.pdf`);
   }
 
   function shareWhatsApp() {
+    if (!doc) return;
     const url = typeof window !== "undefined" ? window.location.href : "";
-    const label = TYPE_LABEL[doc!.type];
-    const msg = `${label} — Meu Rim (${doc!.doctorName}).\nAbra o documento: ${url}`;
+    const label = TYPE_LABEL[doc.type] || doc.title;
+    const msg = `${label} — Meu Rim (${doc.doctorName}).\nAbra o documento: ${url}`;
     window.open(whatsappLink(msg), "_blank", "noopener,noreferrer");
   }
 
   return (
-    <div className="mx-auto max-w-2xl px-5 py-10">
+    <div className="mx-auto max-w-3xl px-5 py-10">
       <div className="mb-4 flex flex-wrap justify-end gap-2 print:hidden">
         <button type="button" className="btn-gold" onClick={downloadPdf}>
           Baixar PDF
@@ -150,49 +114,53 @@ export default function DocumentoPage() {
         <button type="button" className="btn-ghost" onClick={shareWhatsApp}>
           Enviar no WhatsApp
         </button>
-        <button type="button" className="btn-ghost" onClick={() => window.print()}>
-          Imprimir
-        </button>
+        {!doc.pdfData && (
+          <button type="button" className="btn-ghost" onClick={() => window.print()}>
+            Imprimir
+          </button>
+        )}
       </div>
 
-      <div className="rounded-[16px] border border-[var(--border)] bg-white p-8 shadow-[var(--shadow)] print:border-0 print:shadow-none">
-        {/* Cabeçalho */}
-        <div className="flex items-center justify-between border-b border-[var(--border)] pb-4">
-          <div className="flex items-center gap-3">
-            {doc.doctorLogoUrl ? (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img src={doc.doctorLogoUrl} alt="Logo do médico" className="h-12 max-w-[160px] object-contain" />
-            ) : (
-              <span className="grid h-10 w-10 place-items-center rounded-xl bg-[var(--gold)] text-sm font-extrabold text-white">
-                MR
-              </span>
-            )}
-            <div>
-              <p className="font-display text-lg font-extrabold text-[var(--text)]">Meu Rim</p>
-              <p className="text-xs text-[var(--text-muted)]">Nefrologia online</p>
+      {doc.pdfData ? (
+        <div className="panel">
+          <p className="mb-2 text-sm text-[var(--text-muted)]">
+            {doc.title} · {date} · {doc.doctorName}
+            {doc.signatureMethod ? " · assinado (rubrica eletrônica)" : ""}
+          </p>
+          <iframe title="Documento PDF" src={doc.pdfData} className="h-[80vh] w-full rounded-xl border border-[var(--border)]" />
+        </div>
+      ) : (
+        <div className="rounded-[16px] border border-[var(--border)] bg-white p-8 shadow-[var(--shadow)] print:border-0 print:shadow-none">
+          <div className="flex items-center justify-between border-b border-[var(--border)] pb-4">
+            <div className="flex items-center gap-3">
+              {doc.doctorLogoUrl ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img src={doc.doctorLogoUrl} alt="Logo do médico" className="h-12 max-w-[160px] object-contain" />
+              ) : (
+                <span className="grid h-10 w-10 place-items-center rounded-xl bg-[var(--gold)] text-sm font-extrabold text-white">
+                  MR
+                </span>
+              )}
+              <div>
+                <p className="font-display text-lg font-extrabold text-[var(--text)]">Meu Rim</p>
+                <p className="text-xs text-[var(--text-muted)]">Documento clínico</p>
+              </div>
             </div>
+            <p className="text-xs text-[var(--text-muted)]">{date}</p>
           </div>
-          <p className="text-xs text-[var(--text-muted)]">{date}</p>
+
+          <h1 className="mt-6 text-center text-xl font-extrabold uppercase tracking-wide text-[var(--text)]">
+            {doc.title || TYPE_LABEL[doc.type]}
+          </h1>
+
+          <div className="mt-6 whitespace-pre-wrap text-[15px] leading-relaxed text-[var(--text)]">{doc.body}</div>
+
+          <div className="mt-16 border-t border-[var(--text)] pt-2 text-center">
+            <p className="font-semibold text-[var(--text)]">{doc.doctorName}</p>
+            {doc.doctorCrm && <p className="text-sm text-[var(--text-muted)]">{doc.doctorCrm}</p>}
+          </div>
         </div>
-
-        <h1 className="mt-6 text-center text-xl font-extrabold uppercase tracking-wide text-[var(--text)]">
-          {doc.title || TYPE_LABEL[doc.type]}
-        </h1>
-
-        <div className="mt-6 whitespace-pre-wrap text-[15px] leading-relaxed text-[var(--text)]">
-          {doc.body}
-        </div>
-
-        {/* Assinatura */}
-        <div className="mt-16 border-t border-[var(--text)] pt-2 text-center">
-          <p className="font-semibold text-[var(--text)]">{doc.doctorName}</p>
-          {doc.doctorCrm && <p className="text-sm text-[var(--text-muted)]">{doc.doctorCrm}</p>}
-        </div>
-
-        <p className="mt-8 text-center text-[11px] text-[var(--text-muted)]">
-          Documento emitido pela plataforma Meu Rim. Em emergência, procure atendimento presencial.
-        </p>
-      </div>
+      )}
     </div>
   );
 }

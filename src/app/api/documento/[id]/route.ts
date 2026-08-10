@@ -29,7 +29,14 @@ export async function GET(
 
   // Anexa a logo do médico emissor para o cabeçalho do documento/PDF.
   const doctor = await getDoctorById(doc.doctorId);
+  const { pdfData, ...safe } = doc;
   return NextResponse.json({
-    document: { ...doc, doctorLogoUrl: doctor?.logoUrl ?? null },
+    document: {
+      ...safe,
+      doctorLogoUrl: doctor?.logoUrl ?? null,
+      hasPdf: Boolean(pdfData),
+      // PDF final autenticado — só para quem tem permissão (médico dono ou paciente com share).
+      pdfData: pdfData || null,
+    },
   });
 }

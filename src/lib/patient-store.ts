@@ -48,7 +48,39 @@ export interface ClinicalNote {
   createdAt: string;
 }
 
-export type DocumentType = "receita" | "exame" | "relatorio";
+export type DocumentType =
+  | "receita"
+  | "exame"
+  | "relatorio"
+  | "evolucao"
+  | "parecer"
+  | "atestado"
+  | "declaracao"
+  | "encaminhamento"
+  | "orientacao"
+  | "plano"
+  | "resumo"
+  | "alta"
+  | "carta"
+  | "termo"
+  | "lme"
+  | "laudo"
+  | "livre"
+  | "pronto";
+
+export type DocumentHistoryEvent = {
+  at: string;
+  actor: string;
+  action: string;
+  detail?: string;
+};
+
+export type DocumentMedication = {
+  name: string;
+  presentation?: string;
+  quantity?: string;
+  posology?: string;
+};
 
 export interface ClinicalDocument {
   id: string;
@@ -61,6 +93,19 @@ export interface ClinicalDocument {
   body: string;
   sharedWithPatient: boolean;
   createdAt: string;
+  letterheadId?: string | null;
+  pdfData?: string | null;
+  version?: number;
+  parentId?: string | null;
+  status?: "draft" | "final" | "signed";
+  signatureMethod?: string | null;
+  signedAt?: string | null;
+  signatureHash?: string | null;
+  history?: DocumentHistoryEvent[];
+  medications?: DocumentMedication[] | null;
+  patientName?: string | null;
+  patientCpf?: string | null;
+  documentDate?: string | null;
 }
 
 export interface PatientData {
@@ -396,36 +441,99 @@ function mapDocumentRow(row: Record<string, unknown>): ClinicalDocument {
     body: String(row.body ?? ""),
     sharedWithPatient: Boolean(row.shared_with_patient),
     createdAt: new Date(String(row.created_at)).toISOString(),
+    letterheadId: (row.letterhead_id as string | null) ?? null,
+    pdfData: (row.pdf_data as string | null) ?? null,
+    version: row.version == null ? 1 : Number(row.version),
+    parentId: (row.parent_id as string | null) ?? null,
+    status: (String(row.status || "final") as ClinicalDocument["status"]),
+    signatureMethod: (row.signature_method as string | null) ?? null,
+    signedAt: row.signed_at ? new Date(String(row.signed_at)).toISOString() : null,
+    signatureHash: (row.signature_hash as string | null) ?? null,
+    history: Array.isArray(row.history) ? (row.history as DocumentHistoryEvent[]) : [],
+    medications: (row.medications as DocumentMedication[] | null) ?? null,
+    patientName: (row.patient_name as string | null) ?? null,
+    patientCpf: (row.patient_cpf as string | null) ?? null,
+    documentDate: row.document_date ? String(row.document_date) : null,
+  };
+}
+
+function documentInsertRow(doc: ClinicalDocument) {
+  return {
+    id: doc.id,
+    patient_email: doc.patientEmail,
+    doctor_id: doc.doctorId,
+    doctor_name: doc.doctorName,
+    doctor_crm: doc.doctorCrm ?? null,
+    type: doc.type,
+    title: doc.title,
+    body: doc.body,
+    shared_with_patient: doc.sharedWithPatient,
+    created_at: doc.createdAt,
+    letterhead_id: doc.letterheadId ?? null,
+    pdf_data: doc.pdfData ?? null,
+    version: doc.version ?? 1,
+    parent_id: doc.parentId ?? null,
+    status: doc.status ?? "final",
+    signature_method: doc.signatureMethod ?? null,
+    signed_at: doc.signedAt ?? null,
+    signature_hash: doc.signatureHash ?? null,
+    history: doc.history ?? [],
+    medications: doc.medications ?? null,
+    patient_name: doc.patientName ?? null,
+    patient_cpf: doc.patientCpf ?? null,
+    document_date: doc.documentDate ?? null,
   };
 }
 
 export async function addDocument(
   input: Omit<ClinicalDocument, "id" | "createdAt">
 ): Promise<ClinicalDocument> {
+  const now = new Date().toISOString();
   const doc: ClinicalDocument = {
-    id: uuid(),
-    createdAt: new Date().toISOString(),
     ...input,
+    id: uuid(),
+    createdAt: now,
     patientEmail: input.patientEmail.toLowerCase().trim(),
+    version: input.version ?? 1,
+    status: input.status ?? "final",
+    sharedWithPatient: Boolean(input.sharedWithPatient),
+    history: input.history ?? [
+      {
+        at: now,
+        actor: input.doctorName,
+        action: "criado",
+        detail: `Documento ${input.type} criado`,
+      },
+    ],
   };
 
   if (supabaseActive("documents")) {
     const supabase = getSupabaseAdmin()!;
-    const { error } = await supabase.from("documents").insert({
-      id: doc.id,
-      patient_email: doc.patientEmail,
-      doctor_id: doc.doctorId,
-      doctor_name: doc.doctorName,
-      doctor_crm: doc.doctorCrm ?? null,
-      type: doc.type,
-      title: doc.title,
-      body: doc.body,
-      shared_with_patient: doc.sharedWithPatient,
-      created_at: doc.createdAt,
-    });
+    const { error } = await supabase.from("documents").insert(documentInsertRow(doc));
     if (error) {
-      if (isMissingTableError(error)) missingTables.add("documents");
-      else throw error;
+      // Colunas novas podem faltar se a migration ainda não rodou — tenta insert mínimo.
+      if (isMissingTableError(error) || /column|schema cache/i.test(error.message || "")) {
+        const { error: e2 } = await supabase.from("documents").insert({
+          id: doc.id,
+          patient_email: doc.patientEmail,
+          doctor_id: doc.doctorId,
+          doctor_name: doc.doctorName,
+          doctor_crm: doc.doctorCrm ?? null,
+          type: ["receita", "exame", "relatorio"].includes(doc.type) ? doc.type : "relatorio",
+          title: doc.title,
+          body: doc.body,
+          shared_with_patient: doc.sharedWithPatient,
+          created_at: doc.createdAt,
+        });
+        if (e2) {
+          if (isMissingTableError(e2)) missingTables.add("documents");
+          else throw e2;
+        } else {
+          return doc;
+        }
+      } else {
+        throw error;
+      }
     } else {
       return doc;
     }
@@ -435,6 +543,66 @@ export async function addDocument(
   data.documents.push(doc);
   await writeFile(data);
   return doc;
+}
+
+export async function updateDocument(
+  id: string,
+  doctorId: string,
+  patch: Partial<
+    Pick<
+      ClinicalDocument,
+      | "title"
+      | "body"
+      | "sharedWithPatient"
+      | "pdfData"
+      | "status"
+      | "signatureMethod"
+      | "signedAt"
+      | "signatureHash"
+      | "history"
+      | "letterheadId"
+      | "medications"
+      | "version"
+    >
+  >
+): Promise<ClinicalDocument | null> {
+  const current = await getDocumentById(id);
+  if (!current || current.doctorId !== doctorId) return null;
+  if (current.status === "signed" && (patch.body !== undefined || patch.pdfData !== undefined || patch.title !== undefined)) {
+    throw new Error("Documento assinado é imutável. Gere uma nova versão.");
+  }
+  const updated: ClinicalDocument = { ...current, ...patch };
+  if (supabaseActive("documents")) {
+    const supabase = getSupabaseAdmin()!;
+    const { error } = await supabase
+      .from("documents")
+      .update({
+        title: updated.title,
+        body: updated.body,
+        shared_with_patient: updated.sharedWithPatient,
+        pdf_data: updated.pdfData ?? null,
+        status: updated.status ?? "final",
+        signature_method: updated.signatureMethod ?? null,
+        signed_at: updated.signedAt ?? null,
+        signature_hash: updated.signatureHash ?? null,
+        history: updated.history ?? [],
+        letterhead_id: updated.letterheadId ?? null,
+        medications: updated.medications ?? null,
+        version: updated.version ?? 1,
+      })
+      .eq("id", id)
+      .eq("doctor_id", doctorId);
+    if (error) {
+      if (isMissingTableError(error)) missingTables.add("documents");
+      else throw error;
+    } else {
+      return updated;
+    }
+  }
+  const data = await readFile();
+  data.documents = data.documents.map((d) => (d.id === id ? updated : d));
+  await writeFile(data);
+  return updated;
 }
 
 export async function getDocuments(

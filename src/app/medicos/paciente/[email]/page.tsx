@@ -13,6 +13,7 @@ import { ExamReviewModal } from "@/components/ExamReviewModal";
 import { parseLabsFromText } from "@/lib/lab-parser";
 import { LogoUploader } from "@/components/LogoUploader";
 import { TemplatePicker } from "@/components/TemplatePicker";
+import { DocumentComposer } from "@/components/DocumentComposer";
 
 type Lab = { id: string; testKey: string; value: number; unit?: string | null; measuredAt: string };
 type Upload = { id: string; name: string; category?: string | null; examDate?: string | null; signedUrl?: string | null };
@@ -47,10 +48,11 @@ type Note = {
 };
 type Doc = {
   id: string;
-  type: "receita" | "exame" | "relatorio";
+  type: string;
   title: string;
   sharedWithPatient: boolean;
   createdAt: string;
+  hasPdf?: boolean;
 };
 
 const REASON: Record<string, string> = {
@@ -74,10 +76,18 @@ const TABS = [
 ] as const;
 type Tab = (typeof TABS)[number]["id"];
 
-const DOC_TYPE_LABEL: Record<Doc["type"], string> = {
+const DOC_TYPE_LABEL: Record<string, string> = {
   receita: "Receita",
   exame: "Pedido de exame",
   relatorio: "Relatório",
+  evolucao: "Evolução",
+  parecer: "Parecer",
+  atestado: "Atestado",
+  declaracao: "Declaração",
+  encaminhamento: "Encaminhamento",
+  orientacao: "Orientações",
+  livre: "Documento livre",
+  pronto: "Arquivo pronto",
 };
 
 function fmt(iso: string) {
@@ -130,11 +140,7 @@ export default function ProntuarioPage() {
   const [saveErr, setSaveErr] = useState("");
 
   // Formulário de documento (receita / exame / relatório)
-  const [docType, setDocType] = useState<Doc["type"]>("receita");
-  const [docBody, setDocBody] = useState("");
-  const [docShared, setDocShared] = useState(true);
-  const [docSaving, setDocSaving] = useState(false);
-  const [docErr, setDocErr] = useState("");
+  const [docSeed, setDocSeed] = useState<{ type: string; title: string; body: string } | null>(null);
 
   const load = useCallback(async () => {
     const res = await fetch(`/api/doctor/patients/${emailParam}`);
@@ -211,27 +217,6 @@ export default function ProntuarioPage() {
       setLabErr(e instanceof Error ? e.message : "Erro inesperado.");
     } finally {
       setLabSaving(false);
-    }
-  }
-
-  async function saveDocument() {
-    setDocSaving(true);
-    setDocErr("");
-    try {
-      const res = await fetch(`/api/doctor/patients/${emailParam}/documents`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ type: docType, body: docBody, sharedWithPatient: docShared }),
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || "Não foi possível emitir.");
-      setDocBody("");
-      await load();
-      if (data.document?.id) window.open(`/documento/${data.document.id}`, "_blank");
-    } catch (e) {
-      setDocErr(e instanceof Error ? e.message : "Erro inesperado.");
-    } finally {
-      setDocSaving(false);
     }
   }
 
@@ -397,6 +382,18 @@ export default function ProntuarioPage() {
               <button type="button" className="btn-gold w-full" onClick={saveNote} disabled={saving}>
                 {saving ? "Salvando…" : "Salvar evolução"}
               </button>
+              <button
+                type="button"
+                className="btn-ghost w-full"
+                disabled={!form.history.trim()}
+                onClick={() => {
+                  const text = [form.chiefComplaint, form.history, form.assessment, form.plan].filter(Boolean).join("\n\n");
+                  setDocSeed({ type: "evolucao", title: "Evolução médica", body: text });
+                  setTab("documentos");
+                }}
+              >
+                Gerar PDF da evolução / Transformar em documento
+              </button>
             </div>
 
             <p className="text-xs font-bold uppercase tracking-wider text-[var(--gold)]">Evoluções anteriores</p>
@@ -413,6 +410,17 @@ export default function ProntuarioPage() {
                 {n.history && <p className="whitespace-pre-wrap text-sm text-[var(--text-soft)]">{n.history}</p>}
                 {n.assessment && <p className="text-sm text-[var(--text-soft)]"><b>Avaliação:</b> {n.assessment}</p>}
                 {n.plan && <p className="text-sm text-[var(--text-soft)]"><b>Conduta:</b> {n.plan}</p>}
+                <button
+                  type="button"
+                  className="text-sm font-semibold text-[var(--gold)]"
+                  onClick={() => {
+                    const text = [n.chiefComplaint, n.history, n.assessment, n.plan].filter(Boolean).join("\n\n");
+                    setDocSeed({ type: "relatorio", title: "Relatório a partir da evolução", body: text });
+                    setTab("documentos");
+                  }}
+                >
+                  Transformar em documento →
+                </button>
               </div>
             ))}
           </div>
@@ -534,72 +542,65 @@ export default function ProntuarioPage() {
 
         {tab === "documentos" && (
           <div className="space-y-4">
-            <LogoUploader />
-            <div className="panel space-y-3">
-              <p className="text-xs font-bold uppercase tracking-wider text-[var(--gold)]">
-                Emitir documento
+            <div className="panel">
+              <p className="text-xs font-bold uppercase tracking-wider text-[var(--gold)]">Identidade visual</p>
+              <p className="mt-1 text-sm text-[var(--text-muted)]">
+                Logo pequena nos documentos legados. Para o receituário completo (PDF/imagem), use{" "}
+                <a href="/medicos/configuracoes/documentos" className="font-semibold text-[var(--gold)]">
+                  Meus Papéis Timbrados
+                </a>
+                .
               </p>
-              <div className="flex gap-2">
-                {(["receita", "exame", "relatorio"] as const).map((t) => (
-                  <button
-                    key={t}
-                    type="button"
-                    onClick={() => setDocType(t)}
-                    className={`rounded-full px-3 py-1.5 text-sm font-bold transition ${
-                      docType === t ? "bg-[var(--gold)] text-white" : "border border-[var(--border)] bg-white text-[var(--text-soft)]"
-                    }`}
-                  >
-                    {DOC_TYPE_LABEL[t]}
-                  </button>
-                ))}
+              <div className="mt-3">
+                <LogoUploader />
               </div>
-              <TemplatePicker
-                type={docType}
-                currentText={docBody}
-                onApply={setDocBody}
-                patientName={patient?.name}
-              />
-              <textarea
-                className="input-field min-h-[140px]"
-                value={docBody}
-                onChange={(e) => setDocBody(e.target.value)}
-                placeholder={
-                  docType === "receita"
-                    ? "Um medicamento por linha. Ex.:\nLosartana 50mg — 1 comprimido pela manhã\nDapagliflozina 10mg — 1 comprimido ao dia"
-                    : docType === "exame"
-                      ? "Um exame por linha. Ex.:\nCreatinina e ureia\nRelação albumina/creatinina (RAC)\nHemograma, potássio, HbA1c"
-                      : "Escreva o relatório médico."
-                }
-              />
-              <label className="flex items-center gap-2 text-sm text-[var(--text-soft)]">
-                <input type="checkbox" checked={docShared} onChange={(e) => setDocShared(e.target.checked)} className="h-4 w-4 accent-[var(--gold)]" />
-                Liberar para o paciente ver e baixar
-              </label>
-              {docErr && <p className="rounded-xl border border-[var(--danger)]/30 bg-[var(--danger)]/10 px-3 py-2 text-sm text-[var(--danger)]">{docErr}</p>}
-              <button type="button" className="btn-gold w-full" onClick={saveDocument} disabled={docSaving || !docBody.trim()}>
-                {docSaving ? "Emitindo…" : "Emitir e abrir PDF"}
-              </button>
-              <p className="text-xs text-[var(--text-muted)]">
-                O documento abre em uma página pronta para imprimir ou salvar em PDF.
-              </p>
             </div>
 
-            <p className="text-xs font-bold uppercase tracking-wider text-[var(--gold)]">Documentos emitidos</p>
+            <DocumentComposer
+              patientKey={emailParam}
+              patientName={patient?.name}
+              initialType={docSeed?.type || "receita"}
+              initialTitle={docSeed?.title || ""}
+              initialBody={docSeed?.body || ""}
+              onSaved={() => {
+                setDocSeed(null);
+                load();
+              }}
+            />
+
+            <p className="text-xs font-bold uppercase tracking-wider text-[var(--gold)]">Documentos no prontuário</p>
             {documents.length === 0 && <p className="text-[var(--text-muted)]">Nenhum documento emitido.</p>}
             {documents.map((d) => (
-              <a
-                key={d.id}
-                href={`/documento/${d.id}`}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="panel flex items-center justify-between gap-3 transition hover:-translate-y-0.5 hover:border-[var(--border-gold)]"
-              >
+              <div key={d.id} className="panel flex flex-wrap items-center justify-between gap-3">
                 <div>
                   <p className="font-semibold text-[var(--text)]">{d.title}</p>
-                  <p className="text-xs text-[var(--text-muted)]">{DOC_TYPE_LABEL[d.type]} · {fmt(d.createdAt)}</p>
+                  <p className="text-xs text-[var(--text-muted)]">
+                    {DOC_TYPE_LABEL[d.type] || d.type} · {fmt(d.createdAt)} ·{" "}
+                    {d.sharedWithPatient ? "visível ao paciente" : "somente prontuário"}
+                  </p>
                 </div>
-                <span className="text-sm font-semibold text-[var(--gold)]">Abrir PDF →</span>
-              </a>
+                <div className="flex flex-wrap gap-2">
+                  <a href={`/documento/${d.id}`} target="_blank" rel="noopener noreferrer" className="btn-ghost">
+                    Visualizar
+                  </a>
+                  <button
+                    type="button"
+                    className="btn-ghost"
+                    onClick={async () => {
+                      const action = d.sharedWithPatient ? "unshare" : "share";
+                      if (action === "share" && !confirm("Este documento ficará disponível na área do paciente.")) return;
+                      await fetch("/api/doctor/documents/generate", {
+                        method: "POST",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({ action, documentId: d.id }),
+                      });
+                      await load();
+                    }}
+                  >
+                    {d.sharedWithPatient ? "Remover da área do paciente" : "Disponibilizar ao paciente"}
+                  </button>
+                </div>
+              </div>
             ))}
           </div>
         )}

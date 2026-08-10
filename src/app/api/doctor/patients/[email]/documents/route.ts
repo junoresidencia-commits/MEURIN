@@ -5,7 +5,7 @@ import { addDocument, type DocumentType } from "@/lib/patient-store";
 import { resolvePatientAccess } from "@/lib/doctor-access";
 
 const TYPES: DocumentType[] = ["receita", "exame", "relatorio"];
-const DEFAULT_TITLE: Record<DocumentType, string> = {
+const DEFAULT_TITLE: Partial<Record<DocumentType, string>> = {
   receita: "Receita médica",
   exame: "Solicitação de exames",
   relatorio: "Relatório médico",
@@ -47,7 +47,7 @@ export async function POST(
     doctorName: doctor.name,
     doctorCrm: doctor.crm,
     type,
-    title: String(bodyReq.title || "").trim() || DEFAULT_TITLE[type],
+    title: String(bodyReq.title || "").trim() || DEFAULT_TITLE[type] || "Documento",
     body,
     sharedWithPatient: bodyReq.sharedWithPatient !== false,
   });
