@@ -270,18 +270,29 @@ export interface Database {
   signaling: SignalingMessage[];
 }
 
-export type PublicDoctor = Omit<
+/** Dados públicos do médico (sem segredos). Inclui confiança profissional para a agenda. */
+export type PublicDoctor = Pick<
   Doctor,
-  | "passwordHash"
-  | "pixKey"
-  | "bankAccountHint"
-  | "status"
-  | "phone"
+  | "id"
+  | "name"
+  | "email"
+  | "crm"
+  | "specialty"
+  | "bio"
+  | "consultationPriceCents"
+  | "stripeConnectReady"
+  | "weeklyAvailability"
+  | "blockedSlots"
+  | "createdAt"
   | "crmState"
   | "rqe"
   | "clinic"
-  | "adminNote"
-  | "mpAccessToken"
-  | "commissionPercent"
-  | "payoutStatus"
->;
+  | "logoUrl"
+  | "locations"
+  | "availabilityPeriods"
+> & {
+  /** Cidades/regiões de atendimento presencial (derivado de locations). */
+  cities?: string[];
+  /** True se houver período ou disponibilidade para teleconsulta. */
+  onlineAvailable?: boolean;
+};

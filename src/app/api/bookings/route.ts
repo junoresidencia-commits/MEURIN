@@ -8,6 +8,7 @@ import { generateAvailableSlots } from "@/lib/scheduling";
 import { activeHoldStarts, releaseHold } from "@/lib/holds-store";
 import { processReminders } from "@/lib/reminders";
 import { sendNotification, patientKey, links, fmtDateTime } from "@/lib/notify";
+import { trackFunnelEvent } from "@/lib/analytics-store";
 import type { Booking, ConsultationEvent, Modality, PaymentMethod } from "@/lib/types";
 
 const REASONS = new Set(["pressa", "acompanhamento", "segunda_opiniao", "outro"]);
@@ -159,6 +160,11 @@ export async function PATCH(req: Request) {
       proposalMessage: undefined,
       proposalBy: undefined,
       events: [...events, ev("medico", "confirmada", "Consulta confirmada pelo médico.")],
+    });
+    await trackFunnelEvent({
+      type: "consultation_done",
+      doctorId,
+      bookingId: id,
     });
     if (booking.patientEmail?.includes("@") && updated) {
       const meetingUrl = `${appOrigin()}/consulta/${booking.meetingRoomId}`;

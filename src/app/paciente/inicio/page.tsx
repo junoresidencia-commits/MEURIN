@@ -219,8 +219,20 @@ export default function PacienteInicioPage() {
 
       <KidneyNumbers labs={labs} />
 
+      <CareTimeline
+        bookings={bookings}
+        notes={notes}
+        documents={documents}
+        labs={labs}
+        records={records}
+        nextBooking={nextBooking}
+      />
+
       <p className="mt-6 text-xs font-bold uppercase tracking-wider text-[var(--gold)]">
         Resumo do dia
+      </p>
+      <p className="mt-1 text-xs text-[var(--text-muted)]">
+        Informação registrada pelo paciente — não substitui evolução médica.
       </p>
       <div className="mt-3 grid grid-cols-2 gap-3">
         <SummaryCard
@@ -400,7 +412,7 @@ function KidneyNumbers({ labs }: { labs: Lab[] }) {
     const prev = series[series.length - 2];
     let trend = "";
     if (last && prev) {
-      if (key === "tfge") trend = last.value > prev.value ? "melhorou" : last.value < prev.value ? "caiu" : "estável";
+      if (key === "tfge") trend = last.value > prev.value ? "tendência de melhora" : last.value < prev.value ? "tendência de queda" : "estável";
       else trend = last.value < prev.value ? "reduziu" : last.value > prev.value ? "subiu" : "estável";
     }
     return { key, label, edu, last, prev, trend };
@@ -409,12 +421,15 @@ function KidneyNumbers({ labs }: { labs: Lab[] }) {
   return (
     <>
       <div className="mt-6 flex items-center justify-between">
-        <p className="text-xs font-bold uppercase tracking-wider text-[var(--gold)]">Meu rim hoje</p>
+        <p className="text-xs font-bold uppercase tracking-wider text-[var(--gold)]">Meu Rim Hoje</p>
         <Link href="/paciente/entender" className="text-xs font-semibold text-[var(--gold)]">Entender meu rim →</Link>
       </div>
+      <p className="mt-1 text-xs text-[var(--text-muted)]">
+        Números educativos. Não representam diagnóstico automático.
+      </p>
       {rows.length === 0 ? (
         <div className="mt-3 rounded-[20px] border border-[var(--border-gold)] bg-[var(--gold-soft)] p-4 text-sm text-[var(--text-soft)]">
-          Seus exames de rim aparecerão aqui quando seu médico registrá-los. Enquanto isso,{" "}
+          Seus exames de rim aparecerão aqui quando forem registrados. Enquanto isso,{" "}
           <Link href="/paciente/entender" className="font-semibold text-[var(--gold)]">entenda como os rins funcionam</Link>.
         </div>
       ) : (
@@ -438,6 +453,133 @@ function KidneyNumbers({ labs }: { labs: Lab[] }) {
         </div>
       )}
     </>
+  );
+}
+
+type TimelineItem = { at: string; title: string; detail?: string; source: "medico" | "paciente" | "sistema" };
+
+function CareTimeline({
+  bookings,
+  notes,
+  documents,
+  labs,
+  records,
+  nextBooking,
+}: {
+  bookings: Booking[];
+  notes: SharedNote[];
+  documents: SharedDoc[];
+  labs: Lab[];
+  records: HomeRecord[];
+  nextBooking?: Booking;
+}) {
+  const items: TimelineItem[] = [];
+
+  for (const b of bookings) {
+    items.push({
+      at: b.slotStart,
+      title: "Consulta nefrológica",
+      detail: b.doctorName,
+      source: "sistema",
+    });
+  }
+  for (const n of notes) {
+    items.push({
+      at: n.createdAt,
+      title: "Orientação / evolução liberada",
+      detail: n.doctorName,
+      source: "medico",
+    });
+  }
+  for (const d of documents) {
+    const label =
+      d.type === "receita" ? "Receita" : d.type === "exame" ? "Pedido de exames" : "Relatório";
+    items.push({
+      at: d.createdAt,
+      title: label,
+      detail: d.title,
+      source: "medico",
+    });
+  }
+  for (const l of labs) {
+    const name =
+      l.testKey === "creatinina"
+        ? "Creatinina no histórico"
+        : l.testKey === "tfge"
+          ? "TFGe no histórico"
+          : l.testKey === "rac"
+            ? "Proteinúria/RAC no histórico"
+            : `Exame ${l.testKey}`;
+    items.push({
+      at: l.measuredAt,
+      title: name,
+      detail: `${fmtNum(l.value)}${l.unit ? ` ${l.unit}` : ""}`,
+      source: "sistema",
+    });
+  }
+  for (const r of records.filter((x) => x.kind !== "symptom").slice(0, 8)) {
+    items.push({
+      at: r.measuredAt,
+      title:
+        r.kind === "bp"
+          ? "Pressão registrada pelo paciente"
+          : r.kind === "glucose"
+            ? "Glicemia registrada pelo paciente"
+            : "Peso registrado pelo paciente",
+      detail:
+        r.kind === "bp"
+          ? `${r.systolic}/${r.diastolic} mmHg`
+          : r.kind === "glucose"
+            ? `${r.glucoseMgDl} mg/dL`
+            : `${r.weightKg} kg`,
+      source: "paciente",
+    });
+  }
+
+  items.sort((a, b) => a.at.localeCompare(b.at));
+  const recent = items.slice(-8);
+  if (recent.length === 0 && !nextBooking) return null;
+
+  return (
+    <div className="mt-8">
+      <p className="text-xs font-bold uppercase tracking-wider text-[var(--gold)]">
+        Continuidade do cuidado
+      </p>
+      <p className="mt-1 text-xs text-[var(--text-muted)]">
+        Consulta → exames → resultados → acompanhamento → retorno
+      </p>
+      <div className="mt-3 space-y-0">
+        {recent.map((it, idx) => (
+          <div key={`${it.at}-${it.title}-${idx}`} className="relative flex gap-3 pb-4 last:pb-0">
+            <div className="flex w-4 flex-col items-center">
+              <span className="mt-1 h-2.5 w-2.5 rounded-full bg-[var(--gold)]" />
+              {idx < recent.length - 1 && <span className="mt-1 w-px flex-1 bg-[var(--border)]" />}
+            </div>
+            <div className="min-w-0 flex-1">
+              <p className="text-xs text-[var(--text-muted)]">
+                {new Date(it.at).toLocaleDateString("pt-BR")}
+                {it.source === "paciente" ? " · registrado pelo paciente" : ""}
+              </p>
+              <p className="font-semibold text-[var(--text)]">{it.title}</p>
+              {it.detail && <p className="text-sm text-[var(--text-soft)]">{it.detail}</p>}
+            </div>
+          </div>
+        ))}
+        {nextBooking && (
+          <div className="relative flex gap-3">
+            <div className="flex w-4 flex-col items-center">
+              <span className="mt-1 h-2.5 w-2.5 rounded-full border-2 border-[var(--gold)] bg-white" />
+            </div>
+            <div>
+              <p className="text-xs text-[var(--text-muted)]">Próximo retorno</p>
+              <p className="font-semibold text-[var(--text)]">
+                {new Date(nextBooking.slotStart).toLocaleDateString("pt-BR")} · {nextBooking.doctorName}
+              </p>
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
   );
 }
 

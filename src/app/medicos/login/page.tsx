@@ -30,6 +30,9 @@ export default function LoginMedicoPage() {
     <div className="mx-auto max-w-md px-5 py-16">
       <p className="text-sm font-semibold text-[var(--gold)]">Área do médico</p>
       <h1 className="font-display mt-2 text-3xl font-extrabold text-[var(--text)]">Entrar</h1>
+      <p className="mt-3 text-sm text-[var(--text-muted)]">
+        Seu prontuário nefrológico onde você estiver. Atenda. Registre. Acompanhe seus pacientes.
+      </p>
 
       <form onSubmit={onSubmit} className="panel mt-8 space-y-4">
         <label className="block">

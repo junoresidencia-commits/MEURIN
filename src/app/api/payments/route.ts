@@ -6,6 +6,7 @@ import {
   isMercadoPagoEnabledFor,
 } from "@/lib/payments";
 import { buildConfirmationEmail } from "@/lib/email";
+import { trackFunnelEvent } from "@/lib/analytics-store";
 
 export async function POST(req: Request) {
   const { bookingId } = await req.json();
@@ -22,6 +23,12 @@ export async function POST(req: Request) {
   if (!doctor) {
     return NextResponse.json({ error: "Médico não encontrado" }, { status: 404 });
   }
+
+  await trackFunnelEvent({
+    type: "payment_started",
+    doctorId: booking.doctorId,
+    bookingId: booking.id,
+  });
 
   // Pagamento real (Mercado Pago): cria a preferência e devolve a URL de checkout.
   // A confirmação acontece só pelo webhook (não confiamos no retorno do navegador).
@@ -42,6 +49,12 @@ export async function POST(req: Request) {
   if (!confirmed) {
     return NextResponse.json({ error: "Não foi possível confirmar." }, { status: 500 });
   }
+
+  await trackFunnelEvent({
+    type: "payment_completed",
+    doctorId: booking.doctorId,
+    bookingId: booking.id,
+  });
 
   const payment = (await readDb()).payments.find((p) => p.bookingId === bookingId);
   const email = buildConfirmationEmail(confirmed.booking, doctor, confirmed.meetingUrl);

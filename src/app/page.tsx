@@ -1,11 +1,15 @@
+"use client";
+
 import Link from "next/link";
+import { useEffect, useMemo, useState } from "react";
 import { ShareButton } from "@/components/ShareButton";
+import { trackEvent } from "@/lib/analytics-client";
 
 const CONSULTA_INFOS = [
-  { t: "Atendimento seguro", d: "Sala de vídeo própria, com acesso controlado." },
-  { t: "Escolha de horário", d: "Agenda real do profissional, sem espera na fila." },
-  { t: "Pagamento online", d: "Pix, cartão ou boleto — direto para o médico." },
-  { t: "No seu dispositivo", d: "Celular, tablet ou computador, de onde estiver." },
+  { t: "Consulta nefrológica", d: "Avaliação médica, análise dos exames disponíveis e documentos quando indicados." },
+  { t: "Segunda opinião", d: "Para quem já tem exames, diagnóstico ou tratamento e quer nova avaliação." },
+  { t: "Online ou presencial", d: "Conforme a modalidade oferecida pelo nefrologista." },
+  { t: "Acompanhamento contínuo", d: "Exames, documentos e evolução renal ficam organizados no Meu Rim." },
 ];
 
 const FEATURES = [
@@ -32,52 +36,123 @@ const FEATURES = [
 ];
 
 const STEPS = [
-  { n: "1", t: "Escolha o profissional", d: "Veja especialidade, CRM e valor da consulta." },
-  { n: "2", t: "Escolha o horário", d: "Os horários mais próximos aparecem primeiro." },
-  { n: "3", t: "Informe seus dados", d: "Nome, e-mail e motivo — e aceite os termos." },
-  { n: "4", t: "Pague e confirme", d: "Receba o link da sala e entre no horário marcado." },
+  { n: "1", t: "Encontre seu nefrologista", d: "Veja especialidade, CRM, RQE e modalidades disponíveis." },
+  { n: "2", t: "Escolha o melhor horário", d: "Consulte a agenda disponibilizada pelo médico." },
+  { n: "3", t: "Faça sua consulta", d: "Online ou presencial, conforme o profissional oferecer." },
+  { n: "4", t: "Continue seu acompanhamento", d: "Exames, documentos e evolução renal permanecem organizados no Meu Rim." },
 ];
+
+const BENEFITS = [
+  { t: "Acesso à distância", d: "Nefrologista mesmo longe dos grandes centros." },
+  { t: "Menos deslocamento", d: "Teleconsulta quando for clinicamente apropriada." },
+  { t: "Acompanhamento renal", d: "Creatinina, TFGe, proteinúria e pressão organizados." },
+  { t: "Segunda opinião", d: "Nova avaliação com exames e histórico em mãos." },
+  { t: "Histórico contínuo", d: "Documentos e evolução disponíveis após a consulta." },
+  { t: "Médico e paciente conectados", d: "Prontuário profissional + área do paciente no mesmo ecossistema." },
+];
+
+const HELP_OPTIONS = [
+  {
+    id: "creatinina",
+    t: "Minha creatinina está alta",
+    d: "A creatinina elevada pode indicar alteração da função renal. Um nefrologista avalia o contexto clínico e os demais exames.",
+  },
+  {
+    id: "proteina",
+    t: "Tenho proteína na urina",
+    d: "Proteinúria ou RAC aumentada merecem avaliação especializada para investigar causas e acompanhar a evolução.",
+  },
+  {
+    id: "drc",
+    t: "Tenho doença renal crônica",
+    d: "O acompanhamento longitudinal ajuda a preservar a função renal e organizar exames, pressão e tratamentos.",
+  },
+  {
+    id: "segunda",
+    t: "Quero uma segunda opinião",
+    d: "Útil quando já existem exames, diagnóstico ou tratamento e você deseja uma nova avaliação nefrológica.",
+  },
+  {
+    id: "acompanhamento",
+    t: "Preciso de acompanhamento renal",
+    d: "Para hipertensão associada, glomerulopatias, alterações urinárias e outras condições que pedem continuidade.",
+  },
+  {
+    id: "consulta",
+    t: "Quero consultar um nefrologista",
+    d: "Encontre um profissional, escolha horário online ou presencial e inicie seu cuidado no Meu Rim.",
+  },
+] as const;
 
 const FAQ = [
   {
-    q: "Funciona no interior, sem deslocar?",
-    a: "Sim. A consulta é 100% online: você escolhe o profissional, paga e entra na sala pelo celular ou computador — de qualquer cidade.",
+    q: "O Meu Rim é só teleconsulta?",
+    a: "Não. É um ecossistema de cuidado renal: prontuário nefrológico, consulta online ou presencial e acompanhamento contínuo entre médico e paciente.",
   },
   {
-    q: "Estou com pressa. Consigo horário rápido?",
-    a: "No agendamento, os horários mais próximos aparecem primeiro. Pague, confirme e receba o link na hora por e-mail.",
+    q: "O médico pode usar o prontuário sem teleconsulta?",
+    a: "Sim. Depois de um atendimento presencial em qualquer clínica ou hospital, o médico pode cadastrar o paciente e manter o prontuário no Meu Rim.",
   },
   {
-    q: "Preciso de Zoom ou outro app pago?",
-    a: "Não. A sala de vídeo é da própria Meu Rim. Depois do pagamento, o link libera a consulta.",
+    q: "O paciente altera o prontuário médico?",
+    a: "Não. Evolução, diagnóstico, prescrição e documentos clínicos ficam sob responsabilidade do médico. O paciente alimenta sua área de acompanhamento, claramente identificada.",
   },
   {
-    q: "Para onde vai o dinheiro?",
-    a: "Direto para a conta do profissional que você escolheu. A plataforma organiza agenda, pagamento e sala.",
+    q: "Funciona no interior?",
+    a: "Sim. A teleconsulta e o acompanhamento pelo celular ajudam quem está longe dos grandes centros, quando a modalidade online for adequada.",
   },
   {
     q: "É emergência?",
-    a: "Não. Em dor forte, falta de ar, desmaio ou suspeita de urgência, procure o pronto-socorro. Meu Rim é para consulta eletiva e acompanhamento online.",
+    a: "Não. Em dor forte, falta de ar, desmaio ou urgência, procure o pronto-socorro. O Meu Rim é para consulta eletiva e acompanhamento.",
   },
 ];
 
 export default function HomePage() {
+  const [helpId, setHelpId] = useState<(typeof HELP_OPTIONS)[number]["id"] | null>(null);
+  const selectedHelp = useMemo(
+    () => HELP_OPTIONS.find((h) => h.id === helpId) || null,
+    [helpId]
+  );
+
+  useEffect(() => {
+    trackEvent("home_view");
+  }, []);
+
   return (
     <>
       <section className="mx-auto max-w-5xl px-5 pb-4 pt-10 sm:pt-14">
         <p className="animate-fade-up text-sm font-semibold text-[var(--gold)]">
           Meu Rim
         </p>
-        <h1 className="animate-fade-up font-display mt-2 max-w-[16ch] text-4xl font-extrabold leading-[1.05] text-[var(--text)] sm:text-5xl">
-          Cuidado que acompanha você, todos os dias.
+        <h1 className="animate-fade-up font-display mt-2 max-w-[18ch] text-4xl font-extrabold leading-[1.05] text-[var(--text)] sm:text-5xl">
+          Cuidado renal onde você estiver.
         </h1>
         <p className="animate-fade-up-delay mt-4 max-w-xl text-lg leading-relaxed text-[var(--text-soft)]">
-          Consulta online com nefrologista e acompanhamento da sua saúde renal —
-          do interior ou da capital, sem deslocamento.
+          Consulte um nefrologista, acompanhe seus exames e mantenha sua saúde
+          renal organizada em um só lugar — prontuário, consulta e acompanhamento
+          conectando médico e paciente.
         </p>
+        <div className="animate-fade-up-delay mt-6 flex flex-wrap gap-3">
+          <Link
+            href="/agendar"
+            className="btn-gold"
+            onClick={() => trackEvent("cta_agendar_home")}
+          >
+            Agendar consulta
+          </Link>
+          <Link href="/paciente/entrar" className="btn-ghost">
+            Já sou paciente
+          </Link>
+          <Link
+            href="/medicos/login"
+            className="rounded-full px-4 py-3 text-sm font-semibold text-[var(--text-soft)] transition hover:text-[var(--gold)]"
+          >
+            Sou médico
+          </Link>
+        </div>
       </section>
 
-      {/* Consulta online — primeiro destaque */}
+      {/* Consulta + continuidade */}
       <section className="mx-auto max-w-5xl px-5 pb-6">
         <div className="animate-fade-up-delay relative overflow-hidden rounded-[28px] border border-[var(--border-gold)] bg-gradient-to-br from-[var(--gold)] to-[var(--gold-dark)] p-7 text-white shadow-[var(--shadow-gold)] sm:p-9">
           <div
@@ -87,27 +162,28 @@ export default function HomePage() {
           <div className="relative flex flex-col gap-6 lg:flex-row lg:items-center lg:justify-between">
             <div className="max-w-xl">
               <span className="inline-flex items-center gap-2 rounded-full bg-white/15 px-3 py-1 text-xs font-bold uppercase tracking-wider">
-                <CalendarIcon className="h-4 w-4" /> Consulta online
+                <CalendarIcon className="h-4 w-4" /> Consulta online com nefrologista
               </span>
               <h2 className="font-display mt-4 text-3xl font-extrabold leading-tight sm:text-4xl">
-                Agende sua consulta online
+                Sua consulta termina. Seu acompanhamento não precisa terminar.
               </h2>
               <p className="mt-3 text-base leading-relaxed text-white/90">
-                Escolha o profissional, o melhor horário e faça sua consulta de
-                onde estiver.
+                Agende, consulte e continue com exames, documentos e evolução
+                renal no mesmo ecossistema.
               </p>
               <div className="mt-6 flex flex-wrap gap-3">
                 <Link
                   href="/agendar"
                   className="inline-flex min-h-[52px] items-center justify-center rounded-full bg-white px-6 text-sm font-extrabold text-[var(--gold)] shadow-lg transition hover:-translate-y-0.5"
+                  onClick={() => trackEvent("cta_agendar_destaque")}
                 >
                   Agendar consulta
                 </Link>
                 <Link
-                  href="/agendar?rapido=1"
+                  href="/paciente/entrar"
                   className="inline-flex min-h-[52px] items-center justify-center rounded-full border-[1.5px] border-white/60 px-6 text-sm font-extrabold text-white transition hover:bg-white/10"
                 >
-                  Estou com pressa
+                  Já sou paciente
                 </Link>
               </div>
             </div>
@@ -129,22 +205,23 @@ export default function HomePage() {
         </div>
       </section>
 
-      {/* Entradas de perfil — as portas do Meu Rim */}
+      {/* Portas de entrada */}
       <section className="mx-auto max-w-5xl px-5 pb-2">
         <div className="grid gap-4 sm:grid-cols-3">
           <Link
             href="/paciente/entrar"
             className="group flex items-center gap-4 rounded-[24px] border border-[var(--border)] bg-white p-5 shadow-[var(--shadow)] transition hover:-translate-y-0.5 hover:border-[var(--border-gold)]"
+            onClick={() => trackEvent("portal_paciente")}
           >
             <span className="grid h-12 w-12 shrink-0 place-items-center rounded-2xl bg-[var(--gold-soft)] text-[var(--gold)]">
               <UserIcon className="h-6 w-6" />
             </span>
             <span className="flex-1">
               <span className="block text-base font-bold text-[var(--text)]">
-                Sou paciente
+                Já sou paciente
               </span>
               <span className="mt-1 block text-sm text-[var(--text-muted)]">
-                Entre ou crie sua conta (nome e CPF) para acompanhar sua saúde.
+                Entre na área Meu Rim para exames, documentos e acompanhamento.
               </span>
             </span>
             <ArrowIcon className="h-8 w-8 shrink-0 text-[var(--gold)] transition group-hover:translate-x-0.5" />
@@ -153,16 +230,17 @@ export default function HomePage() {
           <Link
             href="/medicos/login"
             className="group flex items-center gap-4 rounded-[24px] border border-[var(--border)] bg-white p-5 shadow-[var(--shadow)] transition hover:-translate-y-0.5 hover:border-[var(--border-gold)]"
+            onClick={() => trackEvent("portal_medico")}
           >
             <span className="grid h-12 w-12 shrink-0 place-items-center rounded-2xl bg-[var(--gold-soft)] text-[var(--gold)]">
               <StethoscopeIcon className="h-6 w-6" />
             </span>
             <span className="flex-1">
               <span className="block text-base font-bold text-[var(--text)]">
-                Área do médico
+                Sou médico
               </span>
               <span className="mt-1 block text-sm text-[var(--text-muted)]">
-                Entre para gerenciar pacientes, consultas, exames e documentos.
+                Prontuário nefrológico, pacientes, documentos e agenda onde você estiver.
               </span>
             </span>
             <ArrowIcon className="h-8 w-8 shrink-0 text-[var(--gold)] transition group-hover:translate-x-0.5" />
@@ -180,7 +258,7 @@ export default function HomePage() {
                 Dúvida renal
               </span>
               <span className="mt-1 block text-sm text-[var(--text-muted)]">
-                Entenda seus rins, exames e cuidados — em linguagem simples.
+                Entenda creatinina, TFGe e cuidados — em linguagem simples.
               </span>
             </span>
             <ArrowIcon className="h-8 w-8 shrink-0 text-[var(--gold)] transition group-hover:translate-x-0.5" />
@@ -193,11 +271,69 @@ export default function HomePage() {
         </p>
       </section>
 
-      {/* Recursos */}
+      {/* Como podemos ajudar */}
       <section className="mx-auto max-w-5xl px-5 py-14">
+        <p className="text-sm font-semibold text-[var(--gold)]">Como podemos ajudar?</p>
+        <h2 className="font-display mt-2 text-2xl font-extrabold text-[var(--text)] sm:text-3xl">
+          Escolha o que melhor descreve sua situação
+        </h2>
+        <div className="mt-8 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+          {HELP_OPTIONS.map((opt) => (
+            <button
+              key={opt.id}
+              type="button"
+              onClick={() => {
+                setHelpId(opt.id);
+                trackEvent("help_option", { option: opt.id });
+              }}
+              className={`rounded-[22px] border p-5 text-left shadow-[var(--shadow)] transition hover:-translate-y-0.5 ${
+                helpId === opt.id
+                  ? "border-[var(--gold)] bg-[var(--gold-soft)]"
+                  : "border-[var(--border)] bg-white"
+              }`}
+            >
+              <h3 className="text-base font-bold text-[var(--text)]">{opt.t}</h3>
+            </button>
+          ))}
+        </div>
+        {selectedHelp && (
+          <div className="panel mt-5">
+            <p className="text-sm leading-relaxed text-[var(--text-soft)]">{selectedHelp.d}</p>
+            <p className="mt-3 text-xs text-[var(--text-muted)]">
+              Isto não é diagnóstico automático. A avaliação é sempre clínica, com um nefrologista.
+            </p>
+            <Link
+              href={`/agendar?motivo=${selectedHelp.id === "segunda" ? "segunda_opiniao" : selectedHelp.id === "acompanhamento" || selectedHelp.id === "drc" || selectedHelp.id === "creatinina" || selectedHelp.id === "proteina" ? "acompanhamento" : "outro"}`}
+              className="btn-gold mt-4 inline-flex"
+              onClick={() => trackEvent("help_find_doctor", { option: selectedHelp.id })}
+            >
+              Encontrar um nefrologista
+            </Link>
+          </div>
+        )}
+      </section>
+
+      {/* Benefícios */}
+      <section className="mx-auto max-w-5xl px-5 pb-14">
+        <p className="text-sm font-semibold text-[var(--gold)]">O que o Meu Rim resolve</p>
+        <h2 className="font-display mt-2 text-2xl font-extrabold text-[var(--text)] sm:text-3xl">
+          Cuidado renal com continuidade
+        </h2>
+        <div className="mt-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          {BENEFITS.map((b) => (
+            <div key={b.t} className="rounded-[22px] border border-[var(--border)] bg-white p-5 shadow-[var(--shadow)]">
+              <h3 className="text-base font-bold text-[var(--text)]">{b.t}</h3>
+              <p className="mt-1.5 text-sm leading-relaxed text-[var(--text-muted)]">{b.d}</p>
+            </div>
+          ))}
+        </div>
+      </section>
+
+      {/* Recursos paciente */}
+      <section className="mx-auto max-w-5xl px-5 pb-14">
         <p className="text-sm font-semibold text-[var(--gold)]">Para pacientes</p>
         <h2 className="font-display mt-2 text-2xl font-extrabold text-[var(--text)] sm:text-3xl">
-          Acompanhe sua saúde de onde estiver
+          Consulte. Acompanhe. Entenda melhor sua saúde renal.
         </h2>
         <div className="mt-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
           {FEATURES.map(({ t, d, icon: Icon }) => (
@@ -230,22 +366,44 @@ export default function HomePage() {
           ))}
         </ol>
         <div className="mt-8">
-          <Link href="/agendar" className="btn-gold">
+          <Link href="/agendar" className="btn-gold" onClick={() => trackEvent("cta_comecar_agendamento")}>
             Começar agendamento
           </Link>
         </div>
       </section>
 
-      {/* Compartilhar */}
+      {/* Acompanhamento */}
       <section className="mx-auto max-w-5xl px-5 pb-14">
         <div className="rounded-[28px] border border-[var(--border-gold)] bg-[var(--gold-soft)] p-7 sm:p-9">
+          <p className="text-sm font-semibold text-[var(--gold)]">Acompanhamento renal</p>
+          <h2 className="font-display mt-2 max-w-2xl text-2xl font-extrabold text-[var(--text)] sm:text-3xl">
+            Depois da consulta, o cuidado continua organizado
+          </h2>
+          <p className="mt-3 max-w-2xl text-[var(--text-soft)]">
+            Conforme liberação do profissional: receitas, pedidos de exame,
+            relatórios, creatinina, TFGe, proteinúria/RAC, pressão, peso, exames
+            enviados e próxima consulta — no mesmo lugar.
+          </p>
+          <div className="mt-6 flex flex-wrap gap-3">
+            <Link href="/paciente/entrar" className="btn-gold">
+              Abrir área do paciente
+            </Link>
+            <Link href="/agendar" className="btn-ghost">
+              Agendar agora
+            </Link>
+          </div>
+        </div>
+      </section>
+
+      {/* Compartilhar */}
+      <section className="mx-auto max-w-5xl px-5 pb-14">
+        <div className="rounded-[28px] border border-[var(--border)] bg-white p-7 shadow-[var(--shadow)] sm:p-9">
           <h2 className="font-display max-w-xl text-2xl font-extrabold text-[var(--text)] sm:text-3xl">
             Ajude alguém a cuidar dos rins
           </h2>
           <p className="mt-3 max-w-lg text-[var(--text-soft)]">
             Compartilhe a Meu Rim com um familiar no interior, um grupo de
-            pacientes ou um colega profissional. Quanto mais gente souber, menos
-            gente fica sem acesso.
+            pacientes ou um colega profissional.
           </p>
           <div className="mt-6 flex flex-wrap gap-3">
             <ShareButton />
@@ -260,13 +418,28 @@ export default function HomePage() {
       <section className="mx-auto max-w-5xl px-5 pb-14">
         <p className="text-sm font-semibold text-[var(--gold)]">Para a equipe de saúde</p>
         <h2 className="font-display mt-2 text-2xl font-extrabold text-[var(--text)] sm:text-3xl">
-          Você atende. A plataforma organiza.
+          Seu prontuário nefrológico onde você estiver.
         </h2>
         <p className="mt-3 max-w-2xl text-[var(--text-soft)]">
-          Cadastre CRM, Pix ou conta, defina os dias e o valor. Quando o paciente
-          paga, a consulta libera e o valor vai para você — sem pagar Zoom, sem
-          planilha.
+          Atenda presencialmente ou online e mantenha pacientes, exames,
+          documentos e evolução renal organizados. A teleconsulta é uma
+          funcionalidade — o centro é o prontuário e o acompanhamento.
         </p>
+        <ul className="mt-5 grid gap-2 text-sm text-[var(--text-soft)] sm:grid-cols-2">
+          {[
+            "Prontuário online e cadastro de pacientes",
+            "Evolução, receitas, pedidos e relatórios",
+            "LME, documentos e padrões",
+            "Gráficos e acompanhamento laboratorial",
+            "Agenda com locais e modalidades",
+            "Integração com a área do paciente",
+          ].map((item) => (
+            <li key={item} className="flex items-start gap-2">
+              <CheckIcon className="mt-0.5 h-4 w-4 shrink-0 text-[var(--gold)]" />
+              <span>{item}</span>
+            </li>
+          ))}
+        </ul>
         <div className="mt-6 flex flex-wrap gap-3">
           <Link href="/medicos/cadastro" className="btn-gold">
             Cadastrar minha conta
@@ -306,7 +479,7 @@ export default function HomePage() {
   );
 }
 
-/* --- Ícones lineares (estilo Lucide) --- */
+/* --- Ícones lineares (estilo Lucide) — preservados --- */
 type IconProps = { className?: string };
 
 function CalendarIcon({ className }: IconProps) {

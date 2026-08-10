@@ -5,6 +5,7 @@ import { readDb, updateDb } from "@/lib/store";
 import { generateAvailableSlots } from "@/lib/scheduling";
 import { activeHoldStarts } from "@/lib/holds-store";
 import { sendNotification, patientKey, links, fmtDateTime } from "@/lib/notify";
+import { trackFunnelEvent } from "@/lib/analytics-store";
 import type { Booking, Modality } from "@/lib/types";
 
 /**
@@ -65,6 +66,20 @@ export async function POST(req: Request) {
     ],
   };
   await updateDb((cur) => ({ ...cur, bookings: [...cur.bookings, booking] }));
+
+  const prior = db.bookings.some(
+    (x) =>
+      x.doctorId === doctorId &&
+      x.id !== booking.id &&
+      (booking.patientEmail
+        ? x.patientEmail.toLowerCase() === booking.patientEmail
+        : x.patientName.toLowerCase() === patientName.toLowerCase())
+  );
+  await trackFunnelEvent({
+    type: prior ? "return_done" : "consultation_done",
+    doctorId,
+    bookingId: booking.id,
+  });
 
   if (booking.patientEmail) {
     await sendNotification({

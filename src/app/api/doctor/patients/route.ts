@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { getDoctorSessionId } from "@/lib/auth";
 import { readDb } from "@/lib/store";
-import { createPatient, deletePatient, findByCpf, listPatientsByDoctor } from "@/lib/patients-store";
+import { createPatient, deletePatient, findByCpf, findByCpfAny, listPatientsByDoctor, updatePatient } from "@/lib/patients-store";
 
 export async function GET() {
   const doctorId = await getDoctorSessionId();
@@ -73,15 +73,52 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "Nome completo é obrigatório." }, { status: 400 });
   }
 
-  // Evita duplicidade silenciosa de CPF: se já existir, solicita vínculo.
+  // Evita duplicidade de CPF e permite vincular conta criada pelo próprio paciente.
   if (b.cpf && String(b.cpf).replace(/\D/g, "").length >= 11) {
-    const existing = await findByCpf(doctorId, String(b.cpf));
-    if (existing) {
+    const existingMine = await findByCpf(doctorId, String(b.cpf));
+    if (existingMine && existingMine.doctorId === doctorId) {
       return NextResponse.json(
         {
           error: "Já existe um paciente com este CPF.",
-          existingId: existing.id,
-          existingIsMine: existing.doctorId === doctorId,
+          existingId: existingMine.id,
+          existingIsMine: true,
+        },
+        { status: 409 }
+      );
+    }
+    const existingAny = await findByCpfAny(String(b.cpf));
+    if (existingAny) {
+      if (existingAny.doctorId === doctorId) {
+        return NextResponse.json(
+          {
+            error: "Já existe um paciente com este CPF.",
+            existingId: existingAny.id,
+            existingIsMine: true,
+          },
+          { status: 409 }
+        );
+      }
+      // Conta criada pelo paciente (sem médico) → vincula ao prontuário deste médico.
+      if (!existingAny.doctorId) {
+        const linked = await updatePatient(existingAny.id, {
+          doctorId,
+          name: name || existingAny.name,
+          phone: b.phone ? String(b.phone) : existingAny.phone,
+          email: b.email ? String(b.email) : existingAny.email,
+          birthdate: b.birthdate ? String(b.birthdate) : existingAny.birthdate,
+          sex: b.sex ? String(b.sex) : existingAny.sex,
+          address: b.address ? String(b.address) : existingAny.address,
+        });
+        return NextResponse.json(
+          { ok: true, id: linked?.id || existingAny.id, linkedExisting: true },
+          { status: 200 }
+        );
+      }
+      return NextResponse.json(
+        {
+          error: "Já existe um paciente com este CPF.",
+          existingId: existingAny.id,
+          existingIsMine: false,
         },
         { status: 409 }
       );

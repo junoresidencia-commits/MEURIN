@@ -22,30 +22,31 @@ const siteUrl = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
 export const metadata: Metadata = {
   metadataBase: new URL(siteUrl),
   title: {
-    default: "Meu Rim — Nefrologia online para todo o Brasil",
+    default: "Meu Rim — Cuidado renal onde você estiver",
     template: "%s · Meu Rim",
   },
   description:
-    "Consulta com nefrologista online: interior ou capital, com pressa ou acompanhamento. Pague, receba o link e entre na sala — sem Zoom pago.",
+    "Prontuário nefrológico, consultas presenciais ou online e acompanhamento renal conectando médico e paciente em um só lugar.",
   openGraph: {
-    title: "Meu Rim — Nefrologia online para todo o Brasil",
+    title: "Meu Rim — Cuidado renal onde você estiver",
     description:
-      "Quando a fila e a distância atrapalham, a consulta chega no celular. Agenda, pagamento e vídeo na mesma plataforma.",
+      "Consulte um nefrologista, acompanhe exames e mantenha sua saúde renal organizada. Prontuário + consulta + acompanhamento.",
     locale: "pt_BR",
     type: "website",
     siteName: "Meu Rim",
   },
   twitter: {
     card: "summary_large_image",
-    title: "Meu Rim — Nefrologia online",
+    title: "Meu Rim — Cuidado renal onde você estiver",
     description:
-      "Consulta com nefrologista sem deslocamento. Para o interior, para quem tem pressa, para quem precisa de online de verdade.",
+      "Consulte. Acompanhe. Entenda melhor sua saúde renal — com prontuário e continuidade do cuidado.",
   },
   keywords: [
-    "nefrologia online",
+    "nefrologia",
+    "prontuário nefrológico",
+    "acompanhamento renal",
     "teleconsulta rim",
-    "nefrologista interior",
-    "consulta renal online",
+    "nefrologista",
     "Meu Rim",
   ],
   applicationName: "Meu Rim",

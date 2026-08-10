@@ -3,21 +3,18 @@ import bcrypt from "bcryptjs";
 import { v4 as uuid } from "uuid";
 import { readDb, updateDb } from "@/lib/store";
 import { defaultAvailability } from "@/lib/scheduling";
-import type { PublicDoctor } from "@/lib/types";
+import type { Doctor, PublicDoctor } from "@/lib/types";
 
-function toPublic(d: {
-  id: string;
-  name: string;
-  email: string;
-  crm: string;
-  specialty: string;
-  bio: string;
-  consultationPriceCents: number;
-  stripeConnectReady: boolean;
-  weeklyAvailability: PublicDoctor["weeklyAvailability"];
-  blockedSlots: string[];
-  createdAt: string;
-}): PublicDoctor {
+function toPublic(d: Doctor): PublicDoctor {
+  const locations = (d.locations || []).filter((l) => l.active !== false);
+  const cities = Array.from(
+    new Set(locations.map((l) => l.city).filter(Boolean))
+  );
+  const periods = d.availabilityPeriods || [];
+  const onlineAvailable =
+    periods.some((p) => p.modality === "teleconsulta") ||
+    periods.length === 0; // agenda legado = online por padrão
+
   return {
     id: d.id,
     name: d.name,
@@ -30,6 +27,31 @@ function toPublic(d: {
     weeklyAvailability: d.weeklyAvailability,
     blockedSlots: d.blockedSlots,
     createdAt: d.createdAt,
+    crmState: d.crmState,
+    rqe: d.rqe,
+    clinic: d.clinic,
+    logoUrl: d.logoUrl,
+    locations: locations.map((l) => ({
+      id: l.id,
+      name: l.name,
+      city: l.city,
+      address: l.address,
+      type: l.type,
+      active: l.active,
+    })),
+    availabilityPeriods: periods.map((p) => ({
+      id: p.id,
+      dayOfWeek: p.dayOfWeek,
+      start: p.start,
+      end: p.end,
+      modality: p.modality,
+      locationId: p.locationId,
+      durationMin: p.durationMin,
+      intervalMin: p.intervalMin,
+      priceCents: p.priceCents,
+    })),
+    cities,
+    onlineAvailable,
   };
 }
 
@@ -70,7 +92,7 @@ export async function POST(req: Request) {
   }
 
   const passwordHash = await bcrypt.hash(String(password), 10);
-  const doctor = {
+  const doctor: Doctor = {
     id: uuid(),
     name: String(name),
     email: String(email).toLowerCase(),
@@ -83,10 +105,9 @@ export async function POST(req: Request) {
     bankAccountHint: bankAccountHint ? String(bankAccountHint) : undefined,
     stripeConnectReady: Boolean(pixKey || bankAccountHint),
     weeklyAvailability: defaultAvailability(),
-    blockedSlots: [] as string[],
+    blockedSlots: [],
     createdAt: new Date().toISOString(),
-    // Auto-cadastro entra pendente e só acessa após aprovação do administrador.
-    status: "pending" as const,
+    status: "pending",
     phone: phone ? String(phone) : undefined,
     crmState: crmState ? String(crmState) : undefined,
     rqe: rqe ? String(rqe) : undefined,
