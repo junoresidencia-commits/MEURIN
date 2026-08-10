@@ -6,7 +6,7 @@ import { COMPANY } from "@/lib/company";
 
 export function SiteFooter() {
   const pathname = usePathname();
-  if (pathname?.startsWith("/paciente") || pathname?.startsWith("/admin")) {
+  if (pathname?.startsWith("/paciente") || pathname?.startsWith("/admin") || pathname?.startsWith("/atendente")) {
     return null;
   }
 
