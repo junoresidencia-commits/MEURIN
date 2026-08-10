@@ -79,6 +79,9 @@ export default function LoginMedicoPage() {
               Solicitar cadastro
             </Link>
           </span>
+          <Link href="/atendente/login" className="text-[var(--text-muted)] hover:text-[var(--gold)]">
+            Sou atendente / secretária
+          </Link>
         </div>
       </form>
     </div>

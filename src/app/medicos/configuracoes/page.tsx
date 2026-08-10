@@ -115,6 +115,14 @@ export default function ConfiguracoesMedicoPage() {
             <span className="text-2xl text-[var(--gold)]">→</span>
           </Link>
 
+          <Link href="/medicos/equipe" className="panel mt-4 flex items-center justify-between transition hover:border-[var(--border-gold)]">
+            <div>
+              <h2 className="font-display text-xl text-[var(--text)]">Minha equipe — Atendentes</h2>
+              <p className="mt-1 text-sm text-[var(--text-muted)]">Cadastre atendentes (CPF e/ou e-mail) com login próprio e permissões administrativas. Elas agendam, remarcam e confirmam — sem acesso clínico.</p>
+            </div>
+            <span className="text-2xl text-[var(--gold)]">→</span>
+          </Link>
+
           <section className="panel mt-6">
             <h2 className="font-display text-xl text-[var(--text)]">Notificações neste aparelho</h2>
             <p className="mt-1 text-sm text-[var(--text-muted)]">
