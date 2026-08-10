@@ -105,7 +105,15 @@ export default function ConfiguracoesMedicoPage() {
         <div className="mx-auto max-w-3xl px-5 pb-28 pt-8 lg:pb-8">
           <Link href="/medicos/painel" className="text-sm font-semibold text-[var(--gold)]">← Painel</Link>
           <h1 className="font-display text-3xl font-extrabold text-[var(--text)]">Configurações</h1>
-          <p className="mt-1 text-[var(--text-muted)]">Notificações no celular, lembretes e calendário.</p>
+          <p className="mt-1 text-[var(--text-muted)]">Notificações no celular, lembretes, calendário e documentos.</p>
+
+          <Link href="/medicos/configuracoes/documentos" className="panel mt-6 flex items-center justify-between transition hover:border-[var(--border-gold)]">
+            <div>
+              <h2 className="font-display text-xl text-[var(--text)]">Meus papéis timbrados</h2>
+              <p className="mt-1 text-sm text-[var(--text-muted)]">Envie seu receituário (PDF/PNG/JPG) e configure onde o sistema escreve. Usado em receitas, relatórios, atestados e documentos livres.</p>
+            </div>
+            <span className="text-2xl text-[var(--gold)]">→</span>
+          </Link>
 
           <section className="panel mt-6">
             <h2 className="font-display text-xl text-[var(--text)]">Notificações neste aparelho</h2>

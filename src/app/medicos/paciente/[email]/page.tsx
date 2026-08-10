@@ -535,9 +535,17 @@ export default function ProntuarioPage() {
         {tab === "documentos" && (
           <div className="space-y-4">
             <LogoUploader />
+            <div className="panel flex flex-wrap items-center justify-between gap-2 border-[var(--border-gold)] bg-[var(--gold-soft)]">
+              <div>
+                <p className="font-semibold text-[var(--text)]">Novo documento com seu papel timbrado</p>
+                <p className="text-sm text-[var(--text-muted)]">Receita, relatório, atestado, encaminhamento ou documento livre — em PDF sobre o seu receituário.</p>
+              </div>
+              <Link href={`/medicos/paciente/${emailParam}/documento`} className="btn-gold">Abrir compositor →</Link>
+            </div>
+
             <div className="panel space-y-3">
               <p className="text-xs font-bold uppercase tracking-wider text-[var(--gold)]">
-                Emitir documento
+                Emitir documento (texto simples)
               </p>
               <div className="flex gap-2">
                 {(["receita", "exame", "relatorio"] as const).map((t) => (

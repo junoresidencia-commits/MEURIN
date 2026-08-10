@@ -196,6 +196,12 @@ export default function PacienteInicioPage() {
         <div className="flex items-center gap-2">
           <NotificationBell />
           <Link
+            href="/paciente/documentos"
+            className="rounded-full border border-[var(--border)] px-3 py-1.5 text-xs font-semibold text-[var(--text-muted)]"
+          >
+            Documentos
+          </Link>
+          <Link
             href="/paciente/dados"
             className="rounded-full border border-[var(--border)] px-3 py-1.5 text-xs font-semibold text-[var(--text-muted)]"
           >
