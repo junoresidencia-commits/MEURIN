@@ -31,6 +31,7 @@ const ITEMS: { href: string; label: string; icon: keyof typeof PATHS }[] = [
   { href: "/medicos/documentos", label: "Documento avulso", icon: "edit" },
   { href: "/medicos/pesquisa", label: "Pesquisa", icon: "chart" },
   { href: "/medicos/links", label: "Links úteis", icon: "link" },
+  { href: "/medicos/equipe", label: "Minha equipe", icon: "users" },
   { href: "/medicos/configuracoes", label: "Configurações", icon: "gear" },
   { href: "/admin/login", label: "Administração", icon: "shield" },
 ];

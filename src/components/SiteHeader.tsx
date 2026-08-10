@@ -28,7 +28,7 @@ export function SiteHeader() {
   const [open, setOpen] = useState(false);
 
   // Área do paciente e administração têm cara de app próprio, sem o header de marketing.
-  if (pathname?.startsWith("/paciente") || pathname?.startsWith("/admin")) {
+  if (pathname?.startsWith("/paciente") || pathname?.startsWith("/admin") || pathname?.startsWith("/atendente")) {
     return null;
   }
 
