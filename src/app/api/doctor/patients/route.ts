@@ -130,6 +130,7 @@ export async function POST(req: Request) {
     name,
     cpf: b.cpf ? String(b.cpf) : null,
     cns: b.cns ? String(b.cns).replace(/\s+/g, "") : null,
+    motherName: b.motherName ? String(b.motherName) : null,
     birthdate: b.birthdate ? String(b.birthdate) : null,
     sex: b.sex ? String(b.sex) : null,
     phone: b.phone ? String(b.phone) : null,

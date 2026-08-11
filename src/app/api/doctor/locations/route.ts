@@ -29,6 +29,7 @@ export async function POST(req: Request) {
     phone: b.phone ? String(b.phone).trim() : undefined,
     type: TYPES.includes(b.type) ? b.type : "clinica",
     active: b.active === undefined ? true : Boolean(b.active),
+    cnes: b.cnes ? String(b.cnes).replace(/\s+/g, "") : undefined,
   };
   await updateDb((db) => ({
     ...db,
@@ -59,6 +60,7 @@ export async function PUT(req: Request) {
                     phone: b.phone !== undefined ? String(b.phone).trim() || undefined : l.phone,
                     type: b.type !== undefined && TYPES.includes(b.type) ? b.type : l.type,
                     active: b.active !== undefined ? Boolean(b.active) : l.active,
+                    cnes: b.cnes !== undefined ? String(b.cnes).replace(/\s+/g, "") || undefined : l.cnes,
                   }
                 : l
             ),
