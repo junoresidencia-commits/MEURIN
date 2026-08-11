@@ -11,7 +11,15 @@ Este documento descreve o que foi implementado e como configurar/testar.
 - **Permissão sob demanda**: modal `src/components/EnableNotifications.tsx` ("Ativar lembretes"). Só pede a permissão nativa após o toque do usuário.
 - **Assinatura de push**: `src/lib/push-client.ts` + APIs `/api/push/vapid`, `/api/push/subscribe`, `/api/push/unsubscribe`.
 - **Disparos no ciclo da consulta**: pagamento (médico + paciente), confirmar, propor horário, remarcar (recria lembretes), cancelar, aceitar/recusar proposta, e consulta agendada pelo médico.
-- **Lembretes 24h/2h**: `src/lib/reminders.ts` (`runReminderSweep`) + cron `/api/cron/reminders` + `vercel.json` (a cada 15 min). Fuso padrão `America/Bahia`.
+- **Lembretes 24h/2h**: `src/lib/reminders.ts` (`runReminderSweep`) + cron `/api/cron/reminders`. Fuso padrão `America/Bahia`.
+
+  ### Agendamento do cron (importante — depende do plano da Vercel)
+  - **Plano Hobby**: a Vercel só permite cron **1x/dia**. Um agendamento mais frequente (ex.: `*/15 * * * *`) **faz o deploy falhar**. Por isso o `vercel.json` usa `"0 11 * * *"` (08:00 America/Bahia) — uma varredura diária que já cobre bem os lembretes de 24h.
+  - **Para lembretes de 2h com precisão** (ou no Hobby), use um **agendador externo grátis** chamando o endpoint a cada 15 min:
+    - `GET https://SEU-DOMINIO/api/cron/reminders?key=SEU_CRON_SECRET`
+    - Serviços: [cron-job.org](https://cron-job.org), EasyCron, ou um GitHub Action com `schedule`.
+  - **Plano Pro/Enterprise**: pode trocar o `vercel.json` para `"*/15 * * * *"` e dispensar o agendador externo.
+  - Fallback adicional já embutido: ao abrir a Agenda, o médico dispara `processReminders` (best-effort).
 - **Calendário**: `/api/bookings/[id]/ics` (evento .ics com VALARM) e botão `src/components/AddToCalendar.tsx` (.ics + Google Agenda) em "Minhas consultas". Título do evento do médico configurável ("Consulta — Meu Rim" x "Consulta — Nome").
 - **Configurações**: médico em `/medicos/configuracoes` (push, lembretes, calendário); paciente em `/paciente/dados` (ativar/desativar lembretes no aparelho).
 
