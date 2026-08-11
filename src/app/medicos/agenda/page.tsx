@@ -13,6 +13,37 @@ import type { AvailabilityPeriod, Booking, Modality } from "@/lib/types";
 type View = "dia" | "semana" | "mes";
 const DAY_LABELS = ["DOM", "SEG", "TER", "QUA", "QUI", "SEX", "SÁB"];
 
+type DoctorLoc = { id: string; name: string; city: string; active: boolean };
+type FreeSlot = { start: string; modality: Modality; locationId?: string; locationName?: string; priceCents?: number };
+export type Prefill = { modality: Modality; locationId?: string; start: string } | null;
+
+/** Gera os horários de um dia a partir dos períodos configurados (mesma regra do backend). */
+function buildDaySlots(date: Date, periods: AvailabilityPeriod[], locations: DoctorLoc[], modalityFilter: "" | Modality): FreeSlot[] {
+  const dow = getDay(date);
+  const out: FreeSlot[] = [];
+  for (const p of periods) {
+    if (p.dayOfWeek !== dow) continue;
+    if (modalityFilter && p.modality !== modalityFilter) continue;
+    let locName: string | undefined;
+    if (p.modality === "presencial") {
+      const loc = locations.find((l) => l.id === p.locationId);
+      if (!loc || !loc.active) continue;
+      locName = loc.name;
+    }
+    const [sh, sm] = p.start.split(":").map(Number);
+    const [eh, em] = p.end.split(":").map(Number);
+    const dur = p.durationMin || 30;
+    const step = Math.max(5, dur + (p.intervalMin || 0));
+    const cur = new Date(date); cur.setHours(sh, sm, 0, 0);
+    const end = new Date(date); end.setHours(eh, em, 0, 0);
+    while (cur.getTime() + dur * 60000 <= end.getTime()) {
+      out.push({ start: new Date(cur).toISOString(), modality: p.modality, locationId: p.locationId, locationName: locName, priceCents: p.priceCents });
+      cur.setTime(cur.getTime() + step * 60000);
+    }
+  }
+  return out.sort((a, b) => a.start.localeCompare(b.start));
+}
+
 function statusMeta(b: Booking): { label: string; cls: string; dot: string } | null {
   if (b.status === "cancelled" || b.stage === "cancelada") return null;
   if (b.stage === "nao_realizada") return { label: "Não realizada", cls: "bg-slate-100 border-slate-300 text-slate-500", dot: "bg-slate-400" };
@@ -31,11 +62,13 @@ export default function AgendaCalendarioPage() {
   const [loading, setLoading] = useState(true);
   const [bookings, setBookings] = useState<Booking[]>([]);
   const [periods, setPeriods] = useState<AvailabilityPeriod[]>([]);
+  const [locations, setLocations] = useState<DoctorLoc[]>([]);
   const [blocked, setBlocked] = useState<string[]>([]);
   const [view, setView] = useState<View>("semana");
   const [weekOffset, setWeekOffset] = useState(0);
   const [dayCursor, setDayCursor] = useState<Date>(new Date());
   const [modalityFilter, setModalityFilter] = useState<"" | Modality>("");
+  const [prefill, setPrefill] = useState<Prefill>(null);
 
   async function loadAll() {
     const [auth, books] = await Promise.all([
@@ -47,9 +80,16 @@ export default function AgendaCalendarioPage() {
       return;
     }
     setPeriods(auth.doctor.availabilityPeriods || []);
+    setLocations(auth.doctor.locations || []);
     setBlocked(auth.doctor.blockedSlots || []);
     setBookings(books.bookings || []);
     setLoading(false);
+  }
+
+  /** Ao clicar num horário livre, pré-preenche o formulário "Agendar nova consulta" e rola até ele. */
+  function pickFree(s: FreeSlot) {
+    setPrefill({ modality: s.modality, locationId: s.locationId, start: s.start });
+    if (typeof document !== "undefined") document.getElementById("nova-consulta")?.scrollIntoView({ behavior: "smooth", block: "start" });
   }
   useEffect(() => {
     loadAll();
@@ -89,6 +129,10 @@ export default function AgendaCalendarioPage() {
   function blockedOn(date: Date): string[] {
     return blocked.filter((s) => isSameDay(new Date(s), date));
   }
+  function slotsOn(date: Date): FreeSlot[] {
+    return buildDaySlots(date, periods, locations, modalityFilter);
+  }
+  const hasPeriods = periods.length > 0;
 
   async function confirmBooking(id: string) {
     await fetch("/api/bookings", { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id, action: "confirm" }) });
@@ -173,6 +217,14 @@ export default function AgendaCalendarioPage() {
                 </select>
               </div>
 
+              {!hasPeriods && (
+                <div className="mt-3 rounded-2xl border border-[var(--border-gold)] bg-[var(--gold-soft)] p-4">
+                  <p className="font-semibold text-[var(--text)]">Sua agenda ainda não tem horários configurados.</p>
+                  <p className="mt-1 text-sm text-[var(--text-muted)]">Defina os dias, horários, duração e local em que você atende — eles aparecem aqui e o paciente passa a ver esses horários para agendar.</p>
+                  <Link href="/medicos/agenda/configurar" className="btn-gold mt-3 inline-flex">Configurar minha semana</Link>
+                </div>
+              )}
+
               {view !== "mes" && (
                 <div className="mt-3 flex items-center justify-center gap-3">
                   <button type="button" className="btn-ghost !px-3" onClick={() => view === "dia" ? setDayCursor(addDays(dayCursor, -1)) : setWeekOffset((w) => w - 1)}>‹</button>
@@ -197,50 +249,74 @@ export default function AgendaCalendarioPage() {
                       </div>
                     ))}
                     {hours.map((h) => (
-                      <FragmentRow key={h} hour={h} days={weekDays} bookingsOn={bookingsOn} blockedOn={blockedOn} dayHasAvailability={dayHasAvailability} />
+                      <FragmentRow key={h} hour={h} days={weekDays} slotsOn={slotsOn} bookingsOn={bookingsOn} blockedOn={blockedOn} dayHasAvailability={dayHasAvailability} onPickFree={pickFree} />
                     ))}
                   </div>
                 </div>
               )}
 
               {/* DIA */}
-              {view === "dia" && (
-                <div className="mt-3 rounded-2xl border border-[var(--border)] bg-white p-3">
-                  {!dayHasAvailability(dayCursor) && <p className="mb-2 text-sm text-[var(--text-muted)]">Sem atendimento configurado neste dia.</p>}
-                  <div className="grid gap-2">
-                    {bookingsOn(dayCursor).length === 0 && blockedOn(dayCursor).length === 0 && (
-                      <p className="text-[var(--text-muted)]">Nenhuma consulta neste dia.</p>
-                    )}
-                    {bookingsOn(dayCursor).map((b) => {
-                      const m = statusMeta(b);
-                      if (!m) return null;
-                      return (
-                        <div key={b.id} className={`flex flex-wrap items-center justify-between gap-2 rounded-xl border px-3 py-2 text-sm ${m.cls}`}>
-                          <span>
-                            <span className="font-bold">{format(new Date(b.slotStart), "HH:mm")}</span> · {b.patientName}
-                            <span className="ml-2 text-xs">· {m.label}{b.locationName ? ` · ${b.locationName}` : ""}</span>
-                          </span>
-                          <span className="flex gap-2">
-                            <button type="button" className="text-xs font-semibold underline" onClick={() => remindWhatsApp(b)}>Lembrar</button>
-                            <button type="button" className="text-xs font-semibold underline" onClick={() => deleteBooking(b.id)}>Excluir</button>
-                          </span>
-                        </div>
-                      );
-                    })}
-                    {blockedOn(dayCursor).map((s) => (
-                      <div key={s} className="rounded-xl border border-slate-300 bg-slate-100 px-3 py-2 text-sm text-slate-500">
-                        <span className="font-bold">{format(new Date(s), "HH:mm")}</span> · Bloqueado
-                      </div>
-                    ))}
+              {view === "dia" && (() => {
+                const daySlots = slotsOn(dayCursor);
+                const nowT = Date.now();
+                const bByStart = new Map<number, Booking>();
+                for (const b of bookingsOn(dayCursor)) { if (statusMeta(b)) bByStart.set(new Date(b.slotStart).getTime(), b); }
+                const blkSet = new Set(blockedOn(dayCursor).map((s) => new Date(s).getTime()));
+                const slotStarts = new Set(daySlots.map((s) => new Date(s.start).getTime()));
+                const extra = bookingsOn(dayCursor).filter((b) => statusMeta(b) && !slotStarts.has(new Date(b.slotStart).getTime()));
+                return (
+                  <div className="mt-3 rounded-2xl border border-[var(--border)] bg-white p-3">
+                    {!dayHasAvailability(dayCursor) && <p className="mb-2 text-sm text-[var(--text-muted)]">Sem atendimento configurado neste dia.</p>}
+                    <div className="grid gap-2">
+                      {daySlots.length === 0 && extra.length === 0 && <p className="text-[var(--text-muted)]">Nenhum horário neste dia.</p>}
+                      {daySlots.map((s) => {
+                        const t = new Date(s.start).getTime();
+                        const b = bByStart.get(t);
+                        if (b) {
+                          const m = statusMeta(b)!;
+                          return (
+                            <div key={s.start} className={`flex flex-wrap items-center justify-between gap-2 rounded-xl border px-3 py-2 text-sm ${m.cls}`}>
+                              <span><span className="font-bold">{format(new Date(b.slotStart), "HH:mm")}</span> · {b.patientName}<span className="ml-2 text-xs">· {m.label}{b.locationName ? ` · ${b.locationName}` : ""}</span></span>
+                              <span className="flex gap-2">
+                                <button type="button" className="text-xs font-semibold underline" onClick={() => remindWhatsApp(b)}>Lembrar</button>
+                                <button type="button" className="text-xs font-semibold underline" onClick={() => deleteBooking(b.id)}>Excluir</button>
+                              </span>
+                            </div>
+                          );
+                        }
+                        if (blkSet.has(t)) return <div key={s.start} className="rounded-xl border border-slate-300 bg-slate-100 px-3 py-2 text-sm text-slate-500"><span className="font-bold">{format(new Date(s.start), "HH:mm")}</span> · Bloqueado</div>;
+                        const past = t < nowT;
+                        return (
+                          <button key={s.start} type="button" disabled={past} onClick={() => pickFree(s)}
+                            className={`flex items-center justify-between rounded-xl border border-dashed px-3 py-2 text-left text-sm transition ${past ? "border-[var(--border)] text-slate-300" : "border-[var(--border-gold)] text-[var(--gold)] hover:bg-[var(--gold-soft)]"}`}>
+                            <span><span className="font-bold">{format(new Date(s.start), "HH:mm")}</span> · Livre</span>
+                            <span className="text-xs">{s.modality === "teleconsulta" ? "Teleconsulta" : s.locationName || "Presencial"} · agendar</span>
+                          </button>
+                        );
+                      })}
+                      {extra.map((b) => {
+                        const m = statusMeta(b)!;
+                        return (
+                          <div key={b.id} className={`flex flex-wrap items-center justify-between gap-2 rounded-xl border px-3 py-2 text-sm ${m.cls}`}>
+                            <span><span className="font-bold">{format(new Date(b.slotStart), "HH:mm")}</span> · {b.patientName}<span className="ml-2 text-xs">· {m.label}</span></span>
+                            <span className="flex gap-2">
+                              <button type="button" className="text-xs font-semibold underline" onClick={() => remindWhatsApp(b)}>Lembrar</button>
+                              <button type="button" className="text-xs font-semibold underline" onClick={() => deleteBooking(b.id)}>Excluir</button>
+                            </span>
+                          </div>
+                        );
+                      })}
+                    </div>
                   </div>
-                </div>
-              )}
+                );
+              })()}
 
               {/* MÊS */}
               {view === "mes" && <MonthView bookings={visibleBookings} onPickDay={(d) => { setDayCursor(d); setView("dia"); }} />}
 
               {/* Legenda */}
               <div className="mt-3 flex flex-wrap gap-4 text-xs text-[var(--text-muted)]">
+                <span className="inline-flex items-center gap-1.5"><span className="h-2.5 w-3.5 rounded border border-dashed border-[var(--border-gold)]" /> Livre (clique p/ agendar)</span>
                 <Legend color="bg-emerald-500" label="Confirmada" />
                 <Legend color="bg-amber-500" label="Aguardando confirmação" />
                 <Legend color="bg-sky-500" label="Teleconsulta" />
@@ -302,7 +378,7 @@ export default function AgendaCalendarioPage() {
             </aside>
           </div>
 
-          <NewAppointment onCreated={loadAll} />
+          <NewAppointment onCreated={loadAll} prefill={prefill} />
         </div>
       </div>
       <DoctorMobileNav />
@@ -313,28 +389,65 @@ export default function AgendaCalendarioPage() {
 function FragmentRow({
   hour,
   days,
+  slotsOn,
   bookingsOn,
   blockedOn,
   dayHasAvailability,
+  onPickFree,
 }: {
   hour: number;
   days: Date[];
+  slotsOn: (d: Date) => FreeSlot[];
   bookingsOn: (d: Date) => Booking[];
   blockedOn: (d: Date) => string[];
   dayHasAvailability: (d: Date) => boolean;
+  onPickFree: (s: FreeSlot) => void;
 }) {
+  const now = Date.now();
   return (
     <>
       <div className="border-b border-[var(--border)] p-1 text-right text-[11px] text-[var(--text-muted)]">{String(hour).padStart(2, "0")}:00</div>
       {days.map((d, i) => {
-        const items = bookingsOn(d).filter((b) => new Date(b.slotStart).getHours() === hour);
-        const blocks = blockedOn(d).filter((s) => new Date(s).getHours() === hour);
         const noWork = !dayHasAvailability(d);
+        const dayBookings = bookingsOn(d);
+        const dayBlocked = blockedOn(d);
+        const slots = slotsOn(d).filter((s) => new Date(s.start).getHours() === hour);
+        const slotStarts = new Set(slots.map((s) => new Date(s.start).getTime()));
+        const bookingByStart = new Map<number, Booking>();
+        for (const b of dayBookings) { const m = statusMeta(b); if (m) bookingByStart.set(new Date(b.slotStart).getTime(), b); }
+        const blockedSet = new Set(dayBlocked.map((s) => new Date(s).getTime()));
+        // Consultas em horários fora dos períodos (ex.: legadas) também aparecem.
+        const extraBookings = dayBookings.filter((b) => new Date(b.slotStart).getHours() === hour && !slotStarts.has(new Date(b.slotStart).getTime()));
+
         return (
           <div key={i} className={`min-h-[46px] border-b border-l border-[var(--border)] p-1 ${noWork ? "bg-slate-50" : ""}`}>
-            {items.map((b) => {
-              const m = statusMeta(b);
-              if (!m) return null;
+            {slots.map((s) => {
+              const t = new Date(s.start).getTime();
+              const b = bookingByStart.get(t);
+              if (b) {
+                const m = statusMeta(b)!;
+                return (
+                  <div key={s.start} className={`mb-1 rounded-md border px-1.5 py-1 text-[11px] leading-tight ${m.cls}`}>
+                    <span className="font-bold">{format(new Date(b.slotStart), "HH:mm")}</span> {b.patientName}
+                    <span className="block opacity-80">{m.label}</span>
+                  </div>
+                );
+              }
+              if (blockedSet.has(t)) {
+                return <div key={s.start} className="mb-1 rounded-md border border-slate-300 bg-slate-100 px-1.5 py-1 text-[11px] text-slate-500">{format(new Date(s.start), "HH:mm")} Bloqueado</div>;
+              }
+              const past = t < now;
+              return (
+                <button key={s.start} type="button" disabled={past} onClick={() => onPickFree(s)}
+                  className={`mb-1 block w-full rounded-md border border-dashed px-1.5 py-1 text-left text-[11px] leading-tight transition ${past ? "border-[var(--border)] text-slate-300" : "border-[var(--border-gold)] text-[var(--gold)] hover:bg-[var(--gold-soft)]"}`}
+                  title={s.modality === "teleconsulta" ? "Teleconsulta — livre" : `${s.locationName || "Presencial"} — livre`}>
+                  <span className="font-bold">{format(new Date(s.start), "HH:mm")}</span> livre
+                  <span className="block opacity-70">{s.modality === "teleconsulta" ? "Online" : s.locationName || "Presencial"}</span>
+                </button>
+              );
+            })}
+            {extraBookings.map((b) => {
+              const m = statusMeta(b); if (!m) return null;
               return (
                 <div key={b.id} className={`mb-1 rounded-md border px-1.5 py-1 text-[11px] leading-tight ${m.cls}`}>
                   <span className="font-bold">{format(new Date(b.slotStart), "HH:mm")}</span> {b.patientName}
@@ -342,11 +455,6 @@ function FragmentRow({
                 </div>
               );
             })}
-            {blocks.map((s) => (
-              <div key={s} className="mb-1 rounded-md border border-slate-300 bg-slate-100 px-1.5 py-1 text-[11px] text-slate-500">
-                {format(new Date(s), "HH:mm")} Bloqueado
-              </div>
-            ))}
           </div>
         );
       })}
@@ -387,7 +495,7 @@ function MonthView({ bookings, onPickDay }: { bookings: Booking[]; onPickDay: (d
   );
 }
 
-function NewAppointment({ onCreated }: { onCreated: () => void }) {
+function NewAppointment({ onCreated, prefill }: { onCreated: () => void; prefill?: Prefill }) {
   const [doctorId, setDoctorId] = useState("");
   const [locations, setLocations] = useState<{ id: string; name: string; city: string }[]>([]);
   const [modality, setModality] = useState<"presencial" | "teleconsulta">("teleconsulta");
@@ -404,6 +512,14 @@ function NewAppointment({ onCreated }: { onCreated: () => void }) {
     fetch("/api/auth").then((r) => r.json()).then((d) => setDoctorId(d?.doctor?.id || ""));
     fetch("/api/doctor/locations").then((r) => r.json()).then((d) => setLocations((d.locations || []).filter((l: { active: boolean }) => l.active)));
   }, []);
+
+  // Pré-preenche quando o médico clica num horário livre no calendário.
+  useEffect(() => {
+    if (!prefill) return;
+    setModality(prefill.modality);
+    setLocationId(prefill.locationId || "");
+    setChosen(prefill.start);
+  }, [prefill]);
 
   useEffect(() => {
     if (!doctorId) return;
@@ -433,7 +549,7 @@ function NewAppointment({ onCreated }: { onCreated: () => void }) {
   }
 
   return (
-    <section className="mt-8">
+    <section id="nova-consulta" className="mt-8 scroll-mt-4">
       <h2 className="font-display text-2xl text-[var(--text)]">Agendar nova consulta</h2>
       <p className="mt-1 text-sm text-[var(--text-muted)]">Marque diretamente para um paciente — já entra confirmada e ocupa o horário.</p>
       <div className="panel mt-3 space-y-3">
