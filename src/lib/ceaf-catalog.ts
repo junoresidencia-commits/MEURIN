@@ -192,6 +192,43 @@ export const CEAF_PROTOCOLS: CeafProtocol[] = [
     requiresAccessForm: true,
     notes: "Micofenolato NÃO faz parte deste protocolo (não consta na relação atual da SESAB para SN primária pediátrica).",
   },
+  // 4b) SÍNDROME NEFRÓTICA PRIMÁRIA EM ADULTOS
+  {
+    id: "sindrome_nefrotica_adultos",
+    group: "nefrologia",
+    name: "Síndrome Nefrótica Primária em Adultos",
+    source: "SESAB/BA",
+    lastReview: LAST_REVIEW,
+    version: 1,
+    cids: [
+      { code: "N04.0", description: "Síndrome nefrótica — anormalidade glomerular minor" },
+      { code: "N04.1", description: "Síndrome nefrótica — lesões glomerulares focais e segmentares" },
+      { code: "N04.2", description: "Síndrome nefrótica — glomerulonefrite membranosa difusa" },
+      { code: "N04.3", description: "Síndrome nefrótica — glomerulonefrite proliferativa mesangial difusa" },
+      { code: "N04.4", description: "Síndrome nefrótica — glomerulonefrite proliferativa endocapilar difusa" },
+      { code: "N04.5", description: "Síndrome nefrótica — glomerulonefrite mesangiocapilar difusa" },
+      { code: "N04.6", description: "Síndrome nefrótica — doença de depósito denso" },
+      { code: "N04.7", description: "Síndrome nefrótica — glomerulonefrite difusa em crescente" },
+      { code: "N04.8", description: "Síndrome nefrótica — outras" },
+    ],
+    medications: [
+      { id: "ciclofosfamida_50_adulto", name: "Ciclofosfamida 50 mg", presentation: "drágea", note: "Contraindicações específicas: leucócitos <3.000, neutrófilos <1.500, plaquetas <50.000." },
+      { id: "ciclosporina_25_adulto", name: "Ciclosporina 25 mg", presentation: "cápsula", exams: [E.creatinina()] },
+      { id: "ciclosporina_50_adulto", name: "Ciclosporina 50 mg", presentation: "cápsula", exams: [E.creatinina()] },
+      { id: "ciclosporina_100_adulto", name: "Ciclosporina 100 mg", presentation: "cápsula", exams: [E.creatinina()] },
+      { id: "ciclosporina_sol_adulto", name: "Ciclosporina solução oral 100 mg/mL", presentation: "frasco", exams: [E.creatinina()] },
+    ],
+    baseExams: [
+      E.proteinuria(), E.albumina(), E.hemograma(), E.creatinina(),
+      { label: "Colesterol total", testKey: "colesterol_total", validityDays: 90, phase: "abertura", required: true },
+      { label: "Triglicerídeos", testKey: "triglicerideos", validityDays: 90, phase: "abertura", required: true },
+      E.anexo("Anti-HCV"), E.anexo("Anti-HIV"), E.anexo("HBsAg"), E.anexo("FAN"), E.anexo("Laudo de biópsia renal (quando aplicável)"),
+    ],
+    documents: ["LME oficial", "Receita", "TER oficial (Síndrome Nefrótica Primária em Adultos)", "Formulário de acesso oficial (Portaria Conjunta nº 8/2020) OU relatório adequado"],
+    requiresTer: true,
+    requiresAccessForm: true,
+    notes: "Medicamentos oficiais em adultos: ciclofosfamida e ciclosporina (não incluir tacrolimo/micofenolato neste protocolo). Proteinúria nefrótica >3,0–3,5 g/1,73m²/dia.",
+  },
   // 5) LÚPUS ERITEMATOSO SISTÊMICO / NEFRITE LÚPICA (quando aplicável)
   {
     id: "les",

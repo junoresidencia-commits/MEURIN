@@ -47,7 +47,7 @@ export async function POST(
     establishmentName: b.establishmentName ? String(b.establishmentName) : null,
     cnes: b.cnes ? String(b.cnes) : null,
     patientName: b.patientName ? String(b.patientName) : access.name,
-    motherName: b.motherName ? String(b.motherName) : null,
+    motherName: b.motherName ? String(b.motherName) : access.motherName ?? null,
     weightKg: b.weightKg ? Number(String(b.weightKg).replace(",", ".")) : null,
     heightCm: b.heightCm ? Number(String(b.heightCm).replace(",", ".")) : null,
     // CPF/CNS do paciente: reutilizados do cadastro quando não enviados.
