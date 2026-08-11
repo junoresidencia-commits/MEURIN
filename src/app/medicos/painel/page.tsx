@@ -849,6 +849,7 @@ function CreatePatient({ onCreated }: { onCreated: () => void }) {
   const [form, setForm] = useState({
     name: "",
     cpf: "",
+    cns: "",
     birthdate: "",
     sex: "",
     phone: "",
@@ -973,6 +974,7 @@ function CreatePatient({ onCreated }: { onCreated: () => void }) {
   const fields = [
     ["name", "Nome completo", "text"],
     ["cpf", "CPF", "text"],
+    ["cns", "CNS (Cartão SUS)", "text"],
     ["birthdate", "Data de nascimento", "date"],
     ["sex", "Sexo", "text"],
     ["phone", "Telefone", "tel"],

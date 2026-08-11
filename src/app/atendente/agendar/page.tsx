@@ -17,7 +17,7 @@ export default function AtendenteAgendarPage() {
   const [results, setResults] = useState<PatientRow[]>([]);
   const [patient, setPatient] = useState<{ name: string; email: string; phone: string } | null>(null);
   const [creating, setCreating] = useState(false);
-  const [newP, setNewP] = useState({ name: "", cpf: "", birthdate: "", phone: "", email: "" });
+  const [newP, setNewP] = useState({ name: "", cpf: "", cns: "", birthdate: "", phone: "", email: "" });
   const [modality, setModality] = useState<"presencial" | "teleconsulta">("teleconsulta");
   const [locations, setLocations] = useState<Loc[]>([]);
   const [locationId, setLocationId] = useState("");
@@ -121,6 +121,7 @@ export default function AtendenteAgendarPage() {
             <div className="mt-2 grid gap-2 rounded-xl border border-[var(--border)] p-3 sm:grid-cols-2">
               <input className="input-field" placeholder="Nome completo" value={newP.name} onChange={(e) => setNewP({ ...newP, name: e.target.value })} />
               <input className="input-field" placeholder="CPF" value={newP.cpf} onChange={(e) => setNewP({ ...newP, cpf: e.target.value })} />
+              <input className="input-field" placeholder="CNS (Cartão SUS)" value={newP.cns} onChange={(e) => setNewP({ ...newP, cns: e.target.value })} />
               <input className="input-field" placeholder="Telefone/WhatsApp" value={newP.phone} onChange={(e) => setNewP({ ...newP, phone: e.target.value })} />
               <input className="input-field" placeholder="E-mail (opcional)" value={newP.email} onChange={(e) => setNewP({ ...newP, email: e.target.value })} />
               <input className="input-field" type="date" value={newP.birthdate} onChange={(e) => setNewP({ ...newP, birthdate: e.target.value })} />

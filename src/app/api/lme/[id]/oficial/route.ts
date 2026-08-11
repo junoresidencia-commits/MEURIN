@@ -47,6 +47,19 @@ export async function GET(
       /* opção diferente — ignora */
     }
   };
+  const norm = (s: string) => s.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/\s+/g, " ").trim();
+  /** Seleciona no dropdown oficial (Selecao med N) a opção que casa com o medicamento. */
+  const selectMed = (idx: number, label: string) => {
+    try {
+      const dd = form.getDropdown(`Selecao med ${idx}`);
+      const opts = dd.getOptions();
+      const want = norm(label);
+      const found = opts.find((o) => norm(o) === want) || opts.find((o) => want && norm(o).startsWith(want));
+      if (found) dd.select(found);
+    } catch {
+      /* dropdown ausente — ignora */
+    }
+  };
 
   const dt = new Date(lme.createdAt);
   const dateStr = `${String(dt.getDate()).padStart(2, "0")}/${String(dt.getMonth() + 1).padStart(2, "0")}/${dt.getFullYear()}`;
@@ -64,16 +77,24 @@ export async function GET(
   setText("Telefone I", lme.patientPhone);
   setText("email", lme.patientEmailContact);
   setText("Nome do preencher", lme.doctorName);
-  setText("TextCNS", lme.doctorCns);
+  setText("Text46", lme.doctorName); // 14- Nome do médico solicitante
+  setText("TextCNS", lme.doctorCns); // CNS do médico (sempre reutilizado do perfil)
   setText("Today", dateStr);
   selectRadio("Incapaz?", lme.incapable ? "SIM" : "NÃO");
 
-  // Medicamentos: tenta o texto livre (med2..med5) e, se houver, o primeiro campo.
-  const medTextFields = ["med2", "med3", "med4", "med5"];
-  lme.medications.slice(0, 5).forEach((m, i) => {
-    const label = [m.name, m.presentation].filter(Boolean).join(" ");
-    if (i === 0) setText("med1", label);
-    setText(medTextFields[i - 1] || `med${i + 1}`, label);
+  // Documento do paciente: preferir CNS; senão CPF. Marca o tipo e escreve o número.
+  const patientDoc = lme.patientCns || lme.patientCpf || "";
+  if (patientDoc) {
+    selectRadio("Documentos", lme.patientCns ? "CNS" : "CPF");
+    setText("Text25b", patientDoc); // campo confirmado do "Número do documento do paciente"
+  }
+
+  // Medicamentos: seleciona a opção OFICIAL no dropdown (Selecao med N) + texto de apoio.
+  const medTextFields = ["med1", "med2", "med3", "med4", "med5", "med6"];
+  lme.medications.slice(0, 6).forEach((m, i) => {
+    const label = m.presentation ? `${m.name} (${m.presentation})` : m.name;
+    selectMed(i + 1, label);
+    setText(medTextFields[i], label);
   });
 
   const out = await doc.save();
