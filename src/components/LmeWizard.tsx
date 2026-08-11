@@ -23,6 +23,8 @@ export function LmeWizard({ emailParam, patientName, onCreated }: { emailParam: 
   const [cid, setCid] = useState("");
   const [form, setForm] = useState({ weightKg: "", heightCm: "", diagnosis: "", posologia: "", justificativa: "" });
   const [alsoReceita, setAlsoReceita] = useState(true);
+  const [locations, setLocations] = useState<{ id: string; name: string; city: string; cnes?: string }[]>([]);
+  const [establishmentId, setEstablishmentId] = useState("");
   const [exams, setExams] = useState<ExamCheck[] | null>(null);
   const [examsLoading, setExamsLoading] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -30,6 +32,15 @@ export function LmeWizard({ emailParam, patientName, onCreated }: { emailParam: 
 
   const protocol = getProtocol(protocolId);
   function set<K extends keyof typeof form>(k: K, v: string) { setForm((f) => ({ ...f, [k]: v })); }
+
+  useEffect(() => {
+    fetch("/api/doctor/locations").then((r) => r.json()).then((d) => {
+      const list = (d.locations || []).filter((l: { active: boolean }) => l.active);
+      setLocations(list);
+      if (list[0]) setEstablishmentId(list[0].id);
+    }).catch(() => {});
+  }, []);
+  const establishment = locations.find((l) => l.id === establishmentId);
 
   function chooseProtocol(id: string) {
     setProtocolId(id);
@@ -73,7 +84,7 @@ export function LmeWizard({ emailParam, patientName, onCreated }: { emailParam: 
       const medications = selectedMeds.map((m) => ({ name: m.name, presentation: m.presentation, monthlyQty: qty[m.id] || "" }));
       const res = await fetch(`/api/doctor/patients/${emailParam}/lme`, {
         method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ weightKg: form.weightKg || undefined, heightCm: form.heightCm || undefined, cid10: cid, diagnosis: form.diagnosis, anamnesis: form.justificativa, medications }),
+        body: JSON.stringify({ weightKg: form.weightKg || undefined, heightCm: form.heightCm || undefined, cid10: cid, diagnosis: form.diagnosis, anamnesis: form.justificativa, medications, establishmentName: establishment?.name, cnes: establishment?.cnes }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Não foi possível gerar a LME.");
@@ -107,6 +118,14 @@ export function LmeWizard({ emailParam, patientName, onCreated }: { emailParam: 
             <Field label="Peso (kg)" value={form.weightKg} onChange={(v) => set("weightKg", v)} />
             <Field label="Altura (cm)" value={form.heightCm} onChange={(v) => set("heightCm", v)} />
           </div>
+          <label className="block">
+            <span className="mb-1 block text-xs font-semibold text-[var(--text-muted)]">Estabelecimento solicitante (CNES)</span>
+            <select className="input-field" value={establishmentId} onChange={(e) => setEstablishmentId(e.target.value)}>
+              <option value="">Selecione o local</option>
+              {locations.map((l) => <option key={l.id} value={l.id}>{l.name}{l.cnes ? ` — CNES ${l.cnes}` : " — (sem CNES)"}</option>)}
+            </select>
+            {establishment && !establishment.cnes && <span className="mt-1 block text-xs text-amber-700">Este local está sem CNES. Cadastre em Configurar agenda → Locais.</span>}
+          </label>
         </div>
       )}
 

@@ -14,6 +14,7 @@ export interface Patient {
   name: string;
   cpf?: string | null;
   cns?: string | null;
+  motherName?: string | null;
   birthdate?: string | null;
   sex?: string | null;
   phone?: string | null;
@@ -81,6 +82,7 @@ function mapRow(r: Record<string, unknown>): Patient {
     name: String(r.name),
     cpf: (r.cpf as string | null) ?? null,
     cns: (r.cns as string | null) ?? null,
+    motherName: (r.mother_name as string | null) ?? null,
     birthdate: r.birthdate ? String(r.birthdate) : null,
     sex: (r.sex as string | null) ?? null,
     phone: (r.phone as string | null) ?? null,
@@ -148,6 +150,7 @@ export async function createPatient(input: NewPatient): Promise<Patient> {
       cpf: p.cpf ?? null,
       cpf_normalized: normalizeCpf(p.cpf),
       cns: p.cns ?? null,
+      mother_name: p.motherName ?? null,
       birthdate: p.birthdate || null,
       sex: p.sex ?? null,
       phone: p.phone ?? null,
@@ -235,7 +238,7 @@ export async function getPatient(id: string): Promise<Patient | null> {
 export async function updatePatient(
   id: string,
   patch: Partial<
-    Pick<Patient, "name" | "phone" | "email" | "birthdate" | "sex" | "address" | "doctorId" | "passwordHash" | "cns">
+    Pick<Patient, "name" | "phone" | "email" | "birthdate" | "sex" | "address" | "doctorId" | "passwordHash" | "cns" | "motherName">
   >
 ): Promise<Patient | null> {
   const current = await getPatient(id);
@@ -256,6 +259,7 @@ export async function updatePatient(
       address: updated.address ?? null,
     };
     if (patch.cns !== undefined) row.cns = updated.cns ?? null;
+    if (patch.motherName !== undefined) row.mother_name = updated.motherName ?? null;
     if (patch.doctorId !== undefined) row.doctor_id = updated.doctorId;
     if (patch.passwordHash !== undefined) row.password_hash = updated.passwordHash ?? null;
     const { error } = await supabase

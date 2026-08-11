@@ -215,7 +215,7 @@ export default function AgendaMedicoPage() {
 }
 
 function LocationsCard({ locations, onChange, show, setShow }: { locations: DoctorLocation[]; onChange: (l: DoctorLocation[]) => void; show: boolean; setShow: (v: boolean) => void }) {
-  const [form, setForm] = useState({ name: "", city: "", address: "", phone: "", type: "clinica" });
+  const [form, setForm] = useState({ name: "", city: "", address: "", phone: "", type: "clinica", cnes: "" });
 
   async function reload() {
     const r = await fetch("/api/doctor/locations").then((x) => x.json());
@@ -224,7 +224,7 @@ function LocationsCard({ locations, onChange, show, setShow }: { locations: Doct
   async function add() {
     if (!form.name || !form.city) return;
     await fetch("/api/doctor/locations", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(form) });
-    setForm({ name: "", city: "", address: "", phone: "", type: "clinica" });
+    setForm({ name: "", city: "", address: "", phone: "", type: "clinica", cnes: "" });
     setShow(false);
     await reload();
   }
@@ -253,6 +253,7 @@ function LocationsCard({ locations, onChange, show, setShow }: { locations: Doct
           <label className="block"><span className="mb-1 block text-xs font-semibold text-[var(--text-muted)]">Cidade</span><input className="input-field" value={form.city} onChange={(e) => setForm({ ...form, city: e.target.value })} placeholder="Irecê" /></label>
           <label className="block"><span className="mb-1 block text-xs font-semibold text-[var(--text-muted)]">Endereço (opcional)</span><input className="input-field" value={form.address} onChange={(e) => setForm({ ...form, address: e.target.value })} /></label>
           <label className="block"><span className="mb-1 block text-xs font-semibold text-[var(--text-muted)]">Telefone (opcional)</span><input className="input-field" value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} /></label>
+          <label className="block"><span className="mb-1 block text-xs font-semibold text-[var(--text-muted)]">CNES (SUS/CEAF)</span><input className="input-field" value={form.cnes} onChange={(e) => setForm({ ...form, cnes: e.target.value })} inputMode="numeric" placeholder="0000000" /></label>
           <label className="block"><span className="mb-1 block text-xs font-semibold text-[var(--text-muted)]">Tipo</span>
             <select className="input-field" value={form.type} onChange={(e) => setForm({ ...form, type: e.target.value })}>
               <option value="clinica">Clínica</option><option value="consultorio">Consultório</option><option value="hospital">Hospital</option><option value="outro">Outro</option>

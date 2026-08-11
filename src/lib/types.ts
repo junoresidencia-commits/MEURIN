@@ -24,6 +24,7 @@ export interface DoctorLocation {
   phone?: string;
   type: "clinica" | "consultorio" | "hospital" | "outro";
   active: boolean;
+  cnes?: string; // CNES do estabelecimento (SUS/CEAF) — reutilizado na LME.
 }
 
 /** Período de disponibilidade por dia, com local/modalidade, duração, intervalo e valor. */
