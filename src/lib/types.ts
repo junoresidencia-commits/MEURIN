@@ -80,6 +80,7 @@ export interface Doctor {
   crmState?: string;
   rqe?: string;
   clinic?: string;
+  cns?: string; // Cartão Nacional de Saúde do médico (SUS/CEAF). Preenchido uma vez, reutilizado nas LMEs.
   adminNote?: string;
   // Logo do médico (data URL base64) exibida no cabeçalho dos documentos/PDF.
   logoUrl?: string;

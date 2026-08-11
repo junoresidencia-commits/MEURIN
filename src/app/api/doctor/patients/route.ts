@@ -129,6 +129,7 @@ export async function POST(req: Request) {
     doctorId,
     name,
     cpf: b.cpf ? String(b.cpf) : null,
+    cns: b.cns ? String(b.cns).replace(/\s+/g, "") : null,
     birthdate: b.birthdate ? String(b.birthdate) : null,
     sex: b.sex ? String(b.sex) : null,
     phone: b.phone ? String(b.phone) : null,

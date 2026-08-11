@@ -67,6 +67,7 @@ export async function PUT(req: Request) {
   const notifyReminder2 = body.notifyReminder2 !== undefined ? Boolean(body.notifyReminder2) : undefined;
   const calendarEventMode = body.calendarEventMode === "patient" || body.calendarEventMode === "meurim" ? body.calendarEventMode : undefined;
   const tz = body.tz !== undefined ? String(body.tz || "").trim() || undefined : undefined;
+  const cns = body.cns !== undefined ? String(body.cns || "").replace(/\s+/g, "") || undefined : undefined;
 
   // Períodos avançados de agenda (local/modalidade/duração/intervalo/valor).
   let availabilityPeriods: AvailabilityPeriod[] | undefined;
@@ -132,6 +133,7 @@ export async function PUT(req: Request) {
             notifyReminder2: notifyReminder2 !== undefined ? notifyReminder2 : d.notifyReminder2,
             calendarEventMode: calendarEventMode !== undefined ? calendarEventMode : d.calendarEventMode,
             tz: tz !== undefined ? tz : d.tz,
+            cns: cns !== undefined ? cns : d.cns,
             availabilityPeriods: availabilityPeriods !== undefined ? availabilityPeriods : d.availabilityPeriods,
           }
         : d

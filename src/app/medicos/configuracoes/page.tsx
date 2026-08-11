@@ -35,6 +35,7 @@ export default function ConfiguracoesMedicoPage() {
   const [supported, setSupported] = useState(true);
   const [msg, setMsg] = useState("");
   const [pushMsg, setPushMsg] = useState("");
+  const [cns, setCns] = useState("");
 
   useEffect(() => {
     (async () => {
@@ -53,6 +54,7 @@ export default function ConfiguracoesMedicoPage() {
         notifyPayments: d.notifyPayments !== false,
         calendarEventMode: d.calendarEventMode === "patient" ? "patient" : "meurim",
       });
+      setCns(d.cns || "");
       setSupported(pushSupported());
       setSubscribed(await isSubscribed());
       setLoading(false);
@@ -69,7 +71,7 @@ export default function ConfiguracoesMedicoPage() {
     const res = await fetch("/api/availability", {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(prefs),
+      body: JSON.stringify({ ...prefs, cns }),
     });
     setMsg(res.ok ? "Preferências salvas." : "Não foi possível salvar agora.");
   }
@@ -105,7 +107,16 @@ export default function ConfiguracoesMedicoPage() {
         <div className="mx-auto max-w-3xl px-5 pb-28 pt-8 lg:pb-8">
           <Link href="/medicos/painel" className="text-sm font-semibold text-[var(--gold)]">← Painel</Link>
           <h1 className="font-display text-3xl font-extrabold text-[var(--text)]">Configurações</h1>
-          <p className="mt-1 text-[var(--text-muted)]">Notificações no celular, lembretes, calendário e documentos.</p>
+          <p className="mt-1 text-[var(--text-muted)]">Notificações no celular, lembretes, calendário, documentos e dados SUS/CEAF.</p>
+
+          <section className="panel mt-6">
+            <h2 className="font-display text-xl text-[var(--text)]">Dados SUS / CEAF</h2>
+            <p className="mt-1 text-sm text-[var(--text-muted)]">Cadastre uma vez — reutilizado automaticamente em toda LME/CEAF.</p>
+            <label className="mt-3 block max-w-sm">
+              <span className="mb-1 block text-xs font-semibold text-[var(--text-muted)]">CNS do médico (Cartão Nacional de Saúde)</span>
+              <input className="input-field" value={cns} onChange={(e) => setCns(e.target.value)} inputMode="numeric" placeholder="000 0000 0000 0000" />
+            </label>
+          </section>
 
           <Link href="/medicos/configuracoes/documentos" className="panel mt-6 flex items-center justify-between transition hover:border-[var(--border-gold)]">
             <div>
