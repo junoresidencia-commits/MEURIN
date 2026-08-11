@@ -62,6 +62,12 @@ export function SiteHeader() {
             >
               Sou médico
             </Link>
+            <Link
+              href="/atendente/login"
+              className="rounded-full px-3 py-2.5 text-[var(--text-soft)] transition hover:text-[var(--gold)]"
+            >
+              Sou atendente
+            </Link>
           </nav>
 
           <button
@@ -94,6 +100,13 @@ export function SiteHeader() {
                 onClick={() => setOpen(false)}
               >
                 Sou médico
+              </Link>
+              <Link
+                href="/atendente/login"
+                className="rounded-full px-4 py-3 text-center text-sm font-semibold text-[var(--text-soft)]"
+                onClick={() => setOpen(false)}
+              >
+                Sou atendente
               </Link>
               <Link
                 href="/educacao"
