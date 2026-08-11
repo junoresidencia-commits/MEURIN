@@ -14,35 +14,9 @@ type View = "dia" | "semana" | "mes";
 const DAY_LABELS = ["DOM", "SEG", "TER", "QUA", "QUI", "SEX", "SÁB"];
 
 type DoctorLoc = { id: string; name: string; city: string; active: boolean };
-type FreeSlot = { start: string; modality: Modality; locationId?: string; locationName?: string; priceCents?: number };
+type FreeSlot = { start: string; end: string; modality: Modality; locationId?: string; locationName?: string; priceCents?: number };
+type DayPeriod = { key: string; period: AvailabilityPeriod; locationName?: string; city?: string; slots: FreeSlot[] };
 export type Prefill = { modality: Modality; locationId?: string; start: string } | null;
-
-/** Gera os horários de um dia a partir dos períodos configurados (mesma regra do backend). */
-function buildDaySlots(date: Date, periods: AvailabilityPeriod[], locations: DoctorLoc[], modalityFilter: "" | Modality): FreeSlot[] {
-  const dow = getDay(date);
-  const out: FreeSlot[] = [];
-  for (const p of periods) {
-    if (p.dayOfWeek !== dow) continue;
-    if (modalityFilter && p.modality !== modalityFilter) continue;
-    let locName: string | undefined;
-    if (p.modality === "presencial") {
-      const loc = locations.find((l) => l.id === p.locationId);
-      if (!loc || !loc.active) continue;
-      locName = loc.name;
-    }
-    const [sh, sm] = p.start.split(":").map(Number);
-    const [eh, em] = p.end.split(":").map(Number);
-    const dur = p.durationMin || 30;
-    const step = Math.max(5, dur + (p.intervalMin || 0));
-    const cur = new Date(date); cur.setHours(sh, sm, 0, 0);
-    const end = new Date(date); end.setHours(eh, em, 0, 0);
-    while (cur.getTime() + dur * 60000 <= end.getTime()) {
-      out.push({ start: new Date(cur).toISOString(), modality: p.modality, locationId: p.locationId, locationName: locName, priceCents: p.priceCents });
-      cur.setTime(cur.getTime() + step * 60000);
-    }
-  }
-  return out.sort((a, b) => a.start.localeCompare(b.start));
-}
 
 function statusMeta(b: Booking): { label: string; cls: string; dot: string } | null {
   if (b.status === "cancelled" || b.stage === "cancelada") return null;
@@ -55,6 +29,23 @@ function statusMeta(b: Booking): { label: string; cls: string; dot: string } | n
   if (b.status === "paid" || b.stage === "aguardando_confirmacao") return { label: "Aguardando conf.", cls: "bg-amber-50 border-amber-300 text-amber-800", dot: "bg-amber-500" };
   if (b.status === "pending_payment") return { label: "Aguardando pagamento", cls: "bg-amber-50 border-amber-200 text-amber-700", dot: "bg-amber-400" };
   return { label: b.status, cls: "bg-slate-100 border-slate-300 text-slate-600", dot: "bg-slate-400" };
+}
+
+/** Gera os horários de UM período num dia (mesma regra do backend). */
+function genPeriodSlots(date: Date, p: AvailabilityPeriod, locName?: string): FreeSlot[] {
+  const out: FreeSlot[] = [];
+  const [sh, sm] = p.start.split(":").map(Number);
+  const [eh, em] = p.end.split(":").map(Number);
+  const dur = p.durationMin || 30;
+  const step = Math.max(5, dur + (p.intervalMin || 0));
+  const cur = new Date(date); cur.setHours(sh, sm, 0, 0);
+  const end = new Date(date); end.setHours(eh, em, 0, 0);
+  while (cur.getTime() + dur * 60000 <= end.getTime()) {
+    const start = new Date(cur);
+    out.push({ start: start.toISOString(), end: new Date(cur.getTime() + dur * 60000).toISOString(), modality: p.modality, locationId: p.locationId, locationName: locName, priceCents: p.priceCents });
+    cur.setTime(cur.getTime() + step * 60000);
+  }
+  return out;
 }
 
 export default function AgendaCalendarioPage() {
@@ -75,21 +66,12 @@ export default function AgendaCalendarioPage() {
       fetch("/api/auth").then((r) => r.json()),
       fetch("/api/bookings").then((r) => r.json()),
     ]);
-    if (!auth.doctor) {
-      router.replace("/medicos/login");
-      return;
-    }
+    if (!auth.doctor) { router.replace("/medicos/login"); return; }
     setPeriods(auth.doctor.availabilityPeriods || []);
     setLocations(auth.doctor.locations || []);
     setBlocked(auth.doctor.blockedSlots || []);
     setBookings(books.bookings || []);
     setLoading(false);
-  }
-
-  /** Ao clicar num horário livre, pré-preenche o formulário "Agendar nova consulta" e rola até ele. */
-  function pickFree(s: FreeSlot) {
-    setPrefill({ modality: s.modality, locationId: s.locationId, start: s.start });
-    if (typeof document !== "undefined") document.getElementById("nova-consulta")?.scrollIntoView({ behavior: "smooth", block: "start" });
   }
   useEffect(() => {
     loadAll();
@@ -98,41 +80,38 @@ export default function AgendaCalendarioPage() {
 
   const weekStart = useMemo(() => addWeeks(startOfWeek(new Date(), { weekStartsOn: 0 }), weekOffset), [weekOffset]);
   const weekDays = useMemo(() => Array.from({ length: 7 }, (_, i) => addDays(weekStart, i)), [weekStart]);
+  const hasPeriods = periods.length > 0;
 
-  const [hourStart, hourEnd] = useMemo(() => {
-    let min = 8;
-    let max = 18;
-    for (const p of periods) {
-      const sh = Number(p.start.split(":")[0]);
-      const eh = Number(p.end.split(":")[0]) + (Number(p.end.split(":")[1]) > 0 ? 1 : 0);
-      if (sh < min) min = sh;
-      if (eh > max) max = eh;
-    }
-    return [Math.min(min, 8), Math.max(max, 18)];
-  }, [periods]);
-  const hours = useMemo(() => Array.from({ length: hourEnd - hourStart }, (_, i) => hourStart + i), [hourStart, hourEnd]);
+  const visibleBookings = useMemo(() => bookings.filter((b) => (modalityFilter ? b.modality === modalityFilter : true)), [bookings, modalityFilter]);
 
-  const visibleBookings = useMemo(
-    () => bookings.filter((b) => (modalityFilter ? b.modality === modalityFilter : true)),
-    [bookings, modalityFilter]
-  );
-
-  function dayHasAvailability(date: Date): boolean {
+  function periodsForDay(date: Date): DayPeriod[] {
     const dow = getDay(date);
-    return periods.some((p) => p.dayOfWeek === dow);
+    return periods
+      .filter((p) => p.dayOfWeek === dow && (modalityFilter ? p.modality === modalityFilter : true))
+      .filter((p) => p.modality !== "presencial" || locations.find((l) => l.id === p.locationId)?.active)
+      .sort((a, b) => a.start.localeCompare(b.start))
+      .map((p, i) => {
+        const loc = locations.find((l) => l.id === p.locationId);
+        return { key: `${p.id || i}`, period: p, locationName: loc?.name, city: loc?.city, slots: genPeriodSlots(date, p, loc?.name) };
+      });
   }
   function bookingsOn(date: Date): Booking[] {
-    return visibleBookings
-      .filter((b) => isSameDay(new Date(b.slotStart), date))
-      .sort((a, b) => a.slotStart.localeCompare(b.slotStart));
+    return visibleBookings.filter((b) => isSameDay(new Date(b.slotStart), date)).sort((a, b) => a.slotStart.localeCompare(b.slotStart));
   }
   function blockedOn(date: Date): string[] {
     return blocked.filter((s) => isSameDay(new Date(s), date));
   }
-  function slotsOn(date: Date): FreeSlot[] {
-    return buildDaySlots(date, periods, locations, modalityFilter);
+  /** Consultas que não caem em nenhum horário dos períodos (encaixes / fora da rotina). */
+  function extraBookingsOn(date: Date, dayPeriods: DayPeriod[]): Booking[] {
+    const starts = new Set<number>();
+    for (const dp of dayPeriods) for (const s of dp.slots) starts.add(new Date(s.start).getTime());
+    return bookingsOn(date).filter((b) => statusMeta(b) && !starts.has(new Date(b.slotStart).getTime()));
   }
-  const hasPeriods = periods.length > 0;
+
+  function pickFree(s: FreeSlot) {
+    setPrefill({ modality: s.modality, locationId: s.locationId, start: s.start });
+    if (typeof document !== "undefined") document.getElementById("nova-consulta")?.scrollIntoView({ behavior: "smooth", block: "start" });
+  }
 
   async function confirmBooking(id: string) {
     await fetch("/api/bookings", { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id, action: "confirm" }) });
@@ -159,7 +138,6 @@ export default function AgendaCalendarioPage() {
     await fetch("/api/doctor/block", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ slotStart: start.toISOString() }) });
     await loadAll();
   }
-
   async function deleteBooking(id: string) {
     if (!window.confirm("Excluir esta consulta? O horário volta a ficar livre.")) return;
     await fetch("/api/bookings", { method: "DELETE", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id }) });
@@ -175,12 +153,27 @@ export default function AgendaCalendarioPage() {
   const pending = useMemo(() => bookings.filter((b) => b.status === "paid" || b.stage === "proposto_novo_horario"), [bookings]);
   const nextConfirmed = useMemo(() => {
     const now = Date.now();
-    return bookings
-      .filter((b) => b.status === "confirmed" && new Date(b.slotStart).getTime() >= now - 3600000)
-      .sort((a, b) => a.slotStart.localeCompare(b.slotStart))[0];
+    return bookings.filter((b) => b.status === "confirmed" && new Date(b.slotStart).getTime() >= now - 3600000).sort((a, b) => a.slotStart.localeCompare(b.slotStart))[0];
   }, [bookings]);
+  // Próximo período de trabalho (quando não há consulta marcada) — a agenda vira sua rotina.
+  const nextPeriod = useMemo(() => {
+    const now = new Date();
+    for (let d = 0; d < 14; d++) {
+      const date = addDays(now, d);
+      const dps = periodsForDay(date);
+      for (const dp of dps) {
+        const [sh, sm] = dp.period.start.split(":").map(Number);
+        const start = new Date(date); start.setHours(sh, sm, 0, 0);
+        if (start.getTime() > now.getTime()) return { date: start, dp };
+      }
+    }
+    return null;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [periods, locations, modalityFilter]);
 
   if (loading) return <div className="mx-auto max-w-4xl px-5 py-20 text-[var(--text-muted)]">Carregando agenda…</div>;
+
+  const dayForDay = view === "dia" ? dayCursor : null;
 
   return (
     <div className="flex min-h-screen bg-[var(--bg)]">
@@ -190,7 +183,7 @@ export default function AgendaCalendarioPage() {
           <div className="flex flex-wrap items-start justify-between gap-3">
             <div>
               <h1 className="font-display text-3xl font-extrabold text-[var(--text)]">Agenda</h1>
-              <p className="text-[var(--text-muted)]">Gerencie seus horários e consultas</p>
+              <p className="text-[var(--text-muted)]">Sua rotina de atendimento e consultas — onde você trabalha e quem está marcado.</p>
             </div>
             <div className="flex flex-wrap items-center gap-2">
               <NotificationBell />
@@ -201,7 +194,6 @@ export default function AgendaCalendarioPage() {
 
           <div className="mt-5 grid gap-5 lg:grid-cols-[1fr_320px]">
             <div>
-              {/* Controles */}
               <div className="flex flex-wrap items-center justify-between gap-3">
                 <div className="inline-flex rounded-full border border-[var(--border)] bg-white p-1">
                   {(["dia", "semana", "mes"] as View[]).map((v) => (
@@ -219,8 +211,8 @@ export default function AgendaCalendarioPage() {
 
               {!hasPeriods && (
                 <div className="mt-3 rounded-2xl border border-[var(--border-gold)] bg-[var(--gold-soft)] p-4">
-                  <p className="font-semibold text-[var(--text)]">Sua agenda ainda não tem horários configurados.</p>
-                  <p className="mt-1 text-sm text-[var(--text-muted)]">Defina os dias, horários, duração e local em que você atende — eles aparecem aqui e o paciente passa a ver esses horários para agendar.</p>
+                  <p className="font-semibold text-[var(--text)]">Sua agenda ainda não tem períodos de trabalho.</p>
+                  <p className="mt-1 text-sm text-[var(--text-muted)]">Cadastrar o local não basta — defina em quais dias/horários você atende em cada local. Isso passa a aparecer aqui em toda semana e o paciente vê esses horários.</p>
                   <Link href="/medicos/agenda/configurar" className="btn-gold mt-3 inline-flex">Configurar minha semana</Link>
                 </div>
               )}
@@ -229,106 +221,92 @@ export default function AgendaCalendarioPage() {
                 <div className="mt-3 flex items-center justify-center gap-3">
                   <button type="button" className="btn-ghost !px-3" onClick={() => view === "dia" ? setDayCursor(addDays(dayCursor, -1)) : setWeekOffset((w) => w - 1)}>‹</button>
                   <p className="text-sm font-semibold text-[var(--text)]">
-                    {view === "dia"
-                      ? format(dayCursor, "EEEE, d 'de' MMMM 'de' yyyy", { locale: ptBR })
-                      : `${format(weekDays[0], "d")} a ${format(weekDays[6], "d 'de' MMMM 'de' yyyy", { locale: ptBR })}`}
+                    {view === "dia" ? format(dayCursor, "EEEE, d 'de' MMMM 'de' yyyy", { locale: ptBR }) : `${format(weekDays[0], "d")} a ${format(weekDays[6], "d 'de' MMMM 'de' yyyy", { locale: ptBR })}`}
                   </p>
                   <button type="button" className="btn-ghost !px-3" onClick={() => view === "dia" ? setDayCursor(addDays(dayCursor, 1)) : setWeekOffset((w) => w + 1)}>›</button>
                 </div>
               )}
 
-              {/* SEMANA */}
+              {/* SEMANA — colunas por dia com blocos de período */}
               {view === "semana" && (
-                <div className="mt-3 overflow-x-auto rounded-2xl border border-[var(--border)] bg-white">
-                  <div className="grid min-w-[820px]" style={{ gridTemplateColumns: "56px repeat(7, 1fr)" }}>
-                    <div className="border-b border-[var(--border)] p-2" />
-                    {weekDays.map((d, i) => (
-                      <div key={i} className={`border-b border-l border-[var(--border)] p-2 text-center ${!dayHasAvailability(d) ? "bg-slate-50" : ""}`}>
-                        <p className="text-xs font-bold text-[var(--text-soft)]">{DAY_LABELS[getDay(d)]}</p>
-                        <p className="text-sm font-semibold text-[var(--text)]">{format(d, "dd/MM")}</p>
-                      </div>
-                    ))}
-                    {hours.map((h) => (
-                      <FragmentRow key={h} hour={h} days={weekDays} slotsOn={slotsOn} bookingsOn={bookingsOn} blockedOn={blockedOn} dayHasAvailability={dayHasAvailability} onPickFree={pickFree} />
-                    ))}
+                <div className="mt-3 overflow-x-auto">
+                  <div className="grid min-w-[900px] grid-cols-7 gap-2">
+                    {weekDays.map((d, i) => {
+                      const dps = periodsForDay(d);
+                      const extras = extraBookingsOn(d, dps);
+                      const isToday = isSameDay(d, new Date());
+                      return (
+                        <div key={i} className="rounded-2xl border border-[var(--border)] bg-white">
+                          <div className={`rounded-t-2xl border-b border-[var(--border)] p-2 text-center ${isToday ? "bg-[var(--gold-soft)]" : ""}`}>
+                            <p className="text-xs font-bold text-[var(--text-soft)]">{DAY_LABELS[getDay(d)]}</p>
+                            <p className="text-sm font-semibold text-[var(--text)]">{format(d, "dd/MM")}</p>
+                          </div>
+                          <div className="grid gap-2 p-2">
+                            {dps.length === 0 && extras.length === 0 && <p className="py-4 text-center text-xs text-[var(--text-muted)]">Não atende</p>}
+                            {dps.map((dp) => (
+                              <PeriodBlock key={dp.key} dp={dp} bookings={bookingsOn(d)} blocked={blockedOn(d)} onPickFree={pickFree} compact />
+                            ))}
+                            {extras.length > 0 && (
+                              <div className="rounded-xl border border-dashed border-[var(--border)] p-2">
+                                <p className="text-[11px] font-bold uppercase text-[var(--text-muted)]">Encaixes / fora da rotina</p>
+                                {extras.map((b) => { const m = statusMeta(b)!; return (
+                                  <div key={b.id} className={`mt-1 rounded-md border px-1.5 py-1 text-[11px] ${m.cls}`}><span className="font-bold">{format(new Date(b.slotStart), "HH:mm")}</span> {b.patientName}</div>
+                                ); })}
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      );
+                    })}
                   </div>
                 </div>
               )}
 
-              {/* DIA */}
-              {view === "dia" && (() => {
-                const daySlots = slotsOn(dayCursor);
-                const nowT = Date.now();
-                const bByStart = new Map<number, Booking>();
-                for (const b of bookingsOn(dayCursor)) { if (statusMeta(b)) bByStart.set(new Date(b.slotStart).getTime(), b); }
-                const blkSet = new Set(blockedOn(dayCursor).map((s) => new Date(s).getTime()));
-                const slotStarts = new Set(daySlots.map((s) => new Date(s.start).getTime()));
-                const extra = bookingsOn(dayCursor).filter((b) => statusMeta(b) && !slotStarts.has(new Date(b.slotStart).getTime()));
+              {/* DIA — blocos grandes com pacientes dentro */}
+              {view === "dia" && dayForDay && (() => {
+                const dps = periodsForDay(dayForDay);
+                const extras = extraBookingsOn(dayForDay, dps);
                 return (
-                  <div className="mt-3 rounded-2xl border border-[var(--border)] bg-white p-3">
-                    {!dayHasAvailability(dayCursor) && <p className="mb-2 text-sm text-[var(--text-muted)]">Sem atendimento configurado neste dia.</p>}
-                    <div className="grid gap-2">
-                      {daySlots.length === 0 && extra.length === 0 && <p className="text-[var(--text-muted)]">Nenhum horário neste dia.</p>}
-                      {daySlots.map((s) => {
-                        const t = new Date(s.start).getTime();
-                        const b = bByStart.get(t);
-                        if (b) {
-                          const m = statusMeta(b)!;
-                          return (
-                            <div key={s.start} className={`flex flex-wrap items-center justify-between gap-2 rounded-xl border px-3 py-2 text-sm ${m.cls}`}>
-                              <span><span className="font-bold">{format(new Date(b.slotStart), "HH:mm")}</span> · {b.patientName}<span className="ml-2 text-xs">· {m.label}{b.locationName ? ` · ${b.locationName}` : ""}</span></span>
-                              <span className="flex gap-2">
-                                <button type="button" className="text-xs font-semibold underline" onClick={() => remindWhatsApp(b)}>Lembrar</button>
-                                <button type="button" className="text-xs font-semibold underline" onClick={() => deleteBooking(b.id)}>Excluir</button>
-                              </span>
+                  <div className="mt-3 grid gap-3">
+                    {dps.length === 0 && extras.length === 0 && (
+                      <div className="rounded-2xl border border-[var(--border)] bg-white p-6 text-center text-[var(--text-muted)]">Não há atendimento configurado neste dia.</div>
+                    )}
+                    {dps.map((dp) => (
+                      <PeriodBlock key={dp.key} dp={dp} bookings={bookingsOn(dayForDay)} blocked={blockedOn(dayForDay)} onPickFree={pickFree} onRemind={remindWhatsApp} onDelete={deleteBooking} />
+                    ))}
+                    {extras.length > 0 && (
+                      <div className="rounded-2xl border border-dashed border-[var(--border)] bg-white p-3">
+                        <p className="text-xs font-bold uppercase tracking-wider text-[var(--text-muted)]">Encaixes / fora da rotina</p>
+                        <div className="mt-2 grid gap-2">
+                          {extras.map((b) => { const m = statusMeta(b)!; return (
+                            <div key={b.id} className={`flex items-center justify-between rounded-xl border px-3 py-2 text-sm ${m.cls}`}>
+                              <span><span className="font-bold">{format(new Date(b.slotStart), "HH:mm")}</span> · {b.patientName} <span className="text-xs">· {m.label}</span></span>
+                              <span className="flex gap-2"><button type="button" className="text-xs font-semibold underline" onClick={() => remindWhatsApp(b)}>Lembrar</button><button type="button" className="text-xs font-semibold underline" onClick={() => deleteBooking(b.id)}>Excluir</button></span>
                             </div>
-                          );
-                        }
-                        if (blkSet.has(t)) return <div key={s.start} className="rounded-xl border border-slate-300 bg-slate-100 px-3 py-2 text-sm text-slate-500"><span className="font-bold">{format(new Date(s.start), "HH:mm")}</span> · Bloqueado</div>;
-                        const past = t < nowT;
-                        return (
-                          <button key={s.start} type="button" disabled={past} onClick={() => pickFree(s)}
-                            className={`flex items-center justify-between rounded-xl border border-dashed px-3 py-2 text-left text-sm transition ${past ? "border-[var(--border)] text-slate-300" : "border-[var(--border-gold)] text-[var(--gold)] hover:bg-[var(--gold-soft)]"}`}>
-                            <span><span className="font-bold">{format(new Date(s.start), "HH:mm")}</span> · Livre</span>
-                            <span className="text-xs">{s.modality === "teleconsulta" ? "Teleconsulta" : s.locationName || "Presencial"} · agendar</span>
-                          </button>
-                        );
-                      })}
-                      {extra.map((b) => {
-                        const m = statusMeta(b)!;
-                        return (
-                          <div key={b.id} className={`flex flex-wrap items-center justify-between gap-2 rounded-xl border px-3 py-2 text-sm ${m.cls}`}>
-                            <span><span className="font-bold">{format(new Date(b.slotStart), "HH:mm")}</span> · {b.patientName}<span className="ml-2 text-xs">· {m.label}</span></span>
-                            <span className="flex gap-2">
-                              <button type="button" className="text-xs font-semibold underline" onClick={() => remindWhatsApp(b)}>Lembrar</button>
-                              <button type="button" className="text-xs font-semibold underline" onClick={() => deleteBooking(b.id)}>Excluir</button>
-                            </span>
-                          </div>
-                        );
-                      })}
-                    </div>
+                          ); })}
+                        </div>
+                      </div>
+                    )}
                   </div>
                 );
               })()}
 
-              {/* MÊS */}
-              {view === "mes" && <MonthView bookings={visibleBookings} onPickDay={(d) => { setDayCursor(d); setView("dia"); }} />}
+              {view === "mes" && <MonthView periodsForDay={periodsForDay} bookings={visibleBookings} onPickDay={(d) => { setDayCursor(d); setView("dia"); }} />}
 
-              {/* Legenda */}
               <div className="mt-3 flex flex-wrap gap-4 text-xs text-[var(--text-muted)]">
-                <span className="inline-flex items-center gap-1.5"><span className="h-2.5 w-3.5 rounded border border-dashed border-[var(--border-gold)]" /> Livre (clique p/ agendar)</span>
+                <span className="inline-flex items-center gap-1.5"><span className="h-2.5 w-3.5 rounded bg-[var(--gold-soft)] ring-1 ring-[var(--border-gold)]" /> Período de trabalho</span>
                 <Legend color="bg-emerald-500" label="Confirmada" />
-                <Legend color="bg-amber-500" label="Aguardando confirmação" />
+                <Legend color="bg-amber-500" label="Aguardando" />
                 <Legend color="bg-sky-500" label="Teleconsulta" />
+                <span className="inline-flex items-center gap-1.5"><span className="h-2.5 w-3.5 rounded border border-dashed border-[var(--border-gold)]" /> Livre (clique p/ agendar)</span>
                 <Legend color="bg-slate-400" label="Bloqueado" />
-                <Legend color="bg-slate-200" label="Não atende" />
               </div>
             </div>
 
             {/* Barra lateral */}
             <aside className="space-y-4">
               <div className="panel">
-                <p className="text-xs font-bold uppercase tracking-wider text-[var(--gold)]">Próxima consulta</p>
+                <p className="text-xs font-bold uppercase tracking-wider text-[var(--gold)]">{nextConfirmed ? "Próxima consulta" : "Próximo período"}</p>
                 {nextConfirmed ? (
                   <div className="mt-2">
                     <p className="font-bold text-[var(--text)]">{nextConfirmed.patientName}</p>
@@ -338,16 +316,19 @@ export default function AgendaCalendarioPage() {
                       <button type="button" className="btn-ghost" onClick={() => remindWhatsApp(nextConfirmed)}>Lembrar no WhatsApp</button>
                     </div>
                   </div>
+                ) : nextPeriod ? (
+                  <div className="mt-2">
+                    <p className="font-bold text-[var(--text)]">{format(nextPeriod.date, "EEEE, d/MM 'às' HH:mm", { locale: ptBR })}</p>
+                    <p className="text-sm text-[var(--text-muted)]">📍 {nextPeriod.dp.period.modality === "teleconsulta" ? "Teleconsulta (online)" : `${nextPeriod.dp.locationName || "Presencial"}${nextPeriod.dp.city ? " — " + nextPeriod.dp.city : ""}`}</p>
+                    <p className="mt-1 text-xs text-[var(--text-muted)]">Sem consultas marcadas ainda neste período.</p>
+                  </div>
                 ) : (
-                  <p className="mt-2 text-sm text-[var(--text-muted)]">Nenhuma consulta confirmada por enquanto.</p>
+                  <p className="mt-2 text-sm text-[var(--text-muted)]">Configure sua semana para ver sua rotina aqui.</p>
                 )}
               </div>
 
               <div className="panel">
-                <p className="text-xs font-bold uppercase tracking-wider text-[var(--gold)]">
-                  Aguardando sua resposta
-                  {pending.length > 0 && <span className="ml-2 rounded-full bg-[var(--danger)] px-2 py-0.5 text-xs text-white">{pending.length}</span>}
-                </p>
+                <p className="text-xs font-bold uppercase tracking-wider text-[var(--gold)]">Aguardando sua resposta {pending.length > 0 && <span className="ml-2 rounded-full bg-[var(--danger)] px-2 py-0.5 text-xs text-white">{pending.length}</span>}</p>
                 {pending.length === 0 && <p className="mt-2 text-sm text-[var(--text-muted)]">Tudo em dia.</p>}
                 <div className="mt-2 grid gap-3">
                   {pending.slice(0, 4).map((b) => (
@@ -386,83 +367,69 @@ export default function AgendaCalendarioPage() {
   );
 }
 
-function FragmentRow({
-  hour,
-  days,
-  slotsOn,
-  bookingsOn,
-  blockedOn,
-  dayHasAvailability,
-  onPickFree,
+/** Bloco de um período de trabalho (Camada 1) com as consultas/horários dentro (Camadas 2–4). */
+function PeriodBlock({
+  dp, bookings, blocked, onPickFree, onRemind, onDelete, compact,
 }: {
-  hour: number;
-  days: Date[];
-  slotsOn: (d: Date) => FreeSlot[];
-  bookingsOn: (d: Date) => Booking[];
-  blockedOn: (d: Date) => string[];
-  dayHasAvailability: (d: Date) => boolean;
-  onPickFree: (s: FreeSlot) => void;
+  dp: DayPeriod; bookings: Booking[]; blocked: string[];
+  onPickFree: (s: FreeSlot) => void; onRemind?: (b: Booking) => void; onDelete?: (id: string) => void; compact?: boolean;
 }) {
   const now = Date.now();
-  return (
-    <>
-      <div className="border-b border-[var(--border)] p-1 text-right text-[11px] text-[var(--text-muted)]">{String(hour).padStart(2, "0")}:00</div>
-      {days.map((d, i) => {
-        const noWork = !dayHasAvailability(d);
-        const dayBookings = bookingsOn(d);
-        const dayBlocked = blockedOn(d);
-        const slots = slotsOn(d).filter((s) => new Date(s.start).getHours() === hour);
-        const slotStarts = new Set(slots.map((s) => new Date(s.start).getTime()));
-        const bookingByStart = new Map<number, Booking>();
-        for (const b of dayBookings) { const m = statusMeta(b); if (m) bookingByStart.set(new Date(b.slotStart).getTime(), b); }
-        const blockedSet = new Set(dayBlocked.map((s) => new Date(s).getTime()));
-        // Consultas em horários fora dos períodos (ex.: legadas) também aparecem.
-        const extraBookings = dayBookings.filter((b) => new Date(b.slotStart).getHours() === hour && !slotStarts.has(new Date(b.slotStart).getTime()));
+  const tele = dp.period.modality === "teleconsulta";
+  const bByStart = new Map<number, Booking>();
+  for (const b of bookings) { if (statusMeta(b)) bByStart.set(new Date(b.slotStart).getTime(), b); }
+  const blockedSet = new Set(blocked.map((s) => new Date(s).getTime()));
+  const filled = dp.slots.filter((s) => bByStart.has(new Date(s.start).getTime())).length;
 
-        return (
-          <div key={i} className={`min-h-[46px] border-b border-l border-[var(--border)] p-1 ${noWork ? "bg-slate-50" : ""}`}>
-            {slots.map((s) => {
-              const t = new Date(s.start).getTime();
-              const b = bookingByStart.get(t);
-              if (b) {
-                const m = statusMeta(b)!;
-                return (
-                  <div key={s.start} className={`mb-1 rounded-md border px-1.5 py-1 text-[11px] leading-tight ${m.cls}`}>
-                    <span className="font-bold">{format(new Date(b.slotStart), "HH:mm")}</span> {b.patientName}
-                    <span className="block opacity-80">{m.label}</span>
-                  </div>
-                );
-              }
-              if (blockedSet.has(t)) {
-                return <div key={s.start} className="mb-1 rounded-md border border-slate-300 bg-slate-100 px-1.5 py-1 text-[11px] text-slate-500">{format(new Date(s.start), "HH:mm")} Bloqueado</div>;
-              }
-              const past = t < now;
-              return (
-                <button key={s.start} type="button" disabled={past} onClick={() => onPickFree(s)}
-                  className={`mb-1 block w-full rounded-md border border-dashed px-1.5 py-1 text-left text-[11px] leading-tight transition ${past ? "border-[var(--border)] text-slate-300" : "border-[var(--border-gold)] text-[var(--gold)] hover:bg-[var(--gold-soft)]"}`}
-                  title={s.modality === "teleconsulta" ? "Teleconsulta — livre" : `${s.locationName || "Presencial"} — livre`}>
-                  <span className="font-bold">{format(new Date(s.start), "HH:mm")}</span> livre
-                  <span className="block opacity-70">{s.modality === "teleconsulta" ? "Online" : s.locationName || "Presencial"}</span>
-                </button>
-              );
-            })}
-            {extraBookings.map((b) => {
-              const m = statusMeta(b); if (!m) return null;
-              return (
-                <div key={b.id} className={`mb-1 rounded-md border px-1.5 py-1 text-[11px] leading-tight ${m.cls}`}>
-                  <span className="font-bold">{format(new Date(b.slotStart), "HH:mm")}</span> {b.patientName}
-                  <span className="block opacity-80">{m.label}</span>
-                </div>
-              );
-            })}
-          </div>
-        );
-      })}
-    </>
+  return (
+    <div className="rounded-xl border border-[var(--border-gold)] bg-[var(--gold-soft)]/40 p-2">
+      <div className="flex items-center justify-between gap-2">
+        <div className="flex items-center gap-1.5">
+          <span className={`h-2.5 w-2.5 rounded-full ${tele ? "bg-sky-500" : "bg-[var(--gold)]"}`} />
+          <p className={`font-bold text-[var(--text)] ${compact ? "text-[12px]" : "text-sm"}`}>
+            {dp.period.start}–{dp.period.end}
+          </p>
+        </div>
+        {!compact && <span className="text-xs text-[var(--text-muted)]">{filled}/{dp.slots.length} ocupados</span>}
+      </div>
+      <p className={`text-[var(--text-soft)] ${compact ? "text-[11px]" : "text-sm"}`}>
+        📍 {tele ? "Teleconsulta (online)" : `${dp.locationName || "Presencial"}${dp.city ? " — " + dp.city : ""}`}
+      </p>
+
+      <div className={`mt-2 grid gap-1 ${compact ? "" : "sm:grid-cols-2"}`}>
+        {dp.slots.map((s) => {
+          const t = new Date(s.start).getTime();
+          const b = bByStart.get(t);
+          if (b) {
+            const m = statusMeta(b)!;
+            return (
+              <div key={s.start} className={`rounded-md border px-1.5 py-1 text-[11px] leading-tight ${m.cls}`}>
+                <span className="font-bold">{format(new Date(b.slotStart), "HH:mm")}</span> {b.patientName}
+                <span className="block opacity-80">{m.label}</span>
+                {!compact && (onRemind || onDelete) && (
+                  <span className="mt-0.5 flex gap-2">
+                    {onRemind && <button type="button" className="text-[10px] font-semibold underline" onClick={() => onRemind(b)}>Lembrar</button>}
+                    {onDelete && <button type="button" className="text-[10px] font-semibold underline" onClick={() => onDelete(b.id)}>Excluir</button>}
+                  </span>
+                )}
+              </div>
+            );
+          }
+          if (blockedSet.has(t)) return <div key={s.start} className="rounded-md border border-slate-300 bg-slate-100 px-1.5 py-1 text-[11px] text-slate-500">{format(new Date(s.start), "HH:mm")} Bloqueado</div>;
+          const past = t < now;
+          return (
+            <button key={s.start} type="button" disabled={past} onClick={() => onPickFree(s)}
+              className={`rounded-md border border-dashed px-1.5 py-1 text-left text-[11px] leading-tight transition ${past ? "border-[var(--border)] text-slate-300" : "border-[var(--border-gold)] text-[var(--gold)] hover:bg-white"}`}>
+              <span className="font-bold">{format(new Date(s.start), "HH:mm")}</span> livre
+            </button>
+          );
+        })}
+      </div>
+    </div>
   );
 }
 
-function MonthView({ bookings, onPickDay }: { bookings: Booking[]; onPickDay: (d: Date) => void }) {
+function MonthView({ periodsForDay, bookings, onPickDay }: { periodsForDay: (d: Date) => DayPeriod[]; bookings: Booking[]; onPickDay: (d: Date) => void }) {
   const [cursor, setCursor] = useState(new Date());
   const first = new Date(cursor.getFullYear(), cursor.getMonth(), 1);
   const gridStart = startOfWeek(first, { weekStartsOn: 0 });
@@ -483,10 +450,16 @@ function MonthView({ bookings, onPickDay }: { bookings: Booking[]; onPickDay: (d
         {cells.map((d, i) => {
           const inMonth = d.getMonth() === cursor.getMonth();
           const n = countOn(d);
+          const dps = periodsForDay(d);
           return (
-            <button key={i} type="button" onClick={() => onPickDay(d)} className={`min-h-[64px] rounded-lg border p-1 text-left ${inMonth ? "border-[var(--border)] bg-white" : "border-transparent bg-slate-50 text-slate-400"}`}>
+            <button key={i} type="button" onClick={() => onPickDay(d)} className={`min-h-[70px] rounded-lg border p-1 text-left ${inMonth ? "border-[var(--border)] bg-white" : "border-transparent bg-slate-50 text-slate-400"}`}>
               <span className="text-xs font-semibold">{format(d, "d")}</span>
-              {n > 0 && <span className="mt-1 block rounded-full bg-[var(--gold-soft)] px-1.5 py-0.5 text-[10px] font-bold text-[var(--gold)]">{n} consulta{n > 1 ? "s" : ""}</span>}
+              {dps.slice(0, 2).map((dp) => (
+                <span key={dp.key} className="mt-0.5 block truncate rounded bg-[var(--gold-soft)] px-1 text-[9px] font-semibold text-[var(--gold)]">
+                  {dp.period.modality === "teleconsulta" ? "Online" : dp.locationName || "Local"} {dp.period.start}
+                </span>
+              ))}
+              {n > 0 && <span className="mt-0.5 block text-[9px] font-bold text-[var(--text-muted)]">{n} consulta{n > 1 ? "s" : ""}</span>}
             </button>
           );
         })}
@@ -513,7 +486,6 @@ function NewAppointment({ onCreated, prefill }: { onCreated: () => void; prefill
     fetch("/api/doctor/locations").then((r) => r.json()).then((d) => setLocations((d.locations || []).filter((l: { active: boolean }) => l.active)));
   }, []);
 
-  // Pré-preenche quando o médico clica num horário livre no calendário.
   useEffect(() => {
     if (!prefill) return;
     setModality(prefill.modality);
@@ -539,19 +511,14 @@ function NewAppointment({ onCreated, prefill }: { onCreated: () => void; prefill
     });
     const d = await res.json().catch(() => ({}));
     setSaving(false);
-    if (res.ok) {
-      setMsg("Consulta agendada e confirmada.");
-      setName(""); setEmail(""); setPhone(""); setChosen("");
-      onCreated();
-    } else {
-      setMsg(d.error || "Não foi possível agendar.");
-    }
+    if (res.ok) { setMsg("Consulta agendada e confirmada."); setName(""); setEmail(""); setPhone(""); setChosen(""); onCreated(); }
+    else setMsg(d.error || "Não foi possível agendar.");
   }
 
   return (
     <section id="nova-consulta" className="mt-8 scroll-mt-4">
       <h2 className="font-display text-2xl text-[var(--text)]">Agendar nova consulta</h2>
-      <p className="mt-1 text-sm text-[var(--text-muted)]">Marque diretamente para um paciente — já entra confirmada e ocupa o horário.</p>
+      <p className="mt-1 text-sm text-[var(--text-muted)]">Marque diretamente para um paciente — já entra confirmada e ocupa o horário. Dica: clique num horário “livre” no calendário para preencher automaticamente.</p>
       <div className="panel mt-3 space-y-3">
         <div className="grid gap-3 sm:grid-cols-3">
           <label className="block"><span className="mb-1 block text-xs font-semibold text-[var(--text-muted)]">Paciente</span><input className="input-field" value={name} onChange={(e) => setName(e.target.value)} /></label>
@@ -594,9 +561,5 @@ function NewAppointment({ onCreated, prefill }: { onCreated: () => void; prefill
 }
 
 function Legend({ color, label }: { color: string; label: string }) {
-  return (
-    <span className="inline-flex items-center gap-1.5">
-      <span className={`h-2.5 w-2.5 rounded-full ${color}`} /> {label}
-    </span>
-  );
+  return <span className="inline-flex items-center gap-1.5"><span className={`h-2.5 w-2.5 rounded-full ${color}`} /> {label}</span>;
 }
