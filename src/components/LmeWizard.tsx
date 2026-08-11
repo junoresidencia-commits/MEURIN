@@ -210,7 +210,15 @@ export function LmeWizard({ emailParam, patientName, onCreated }: { emailParam: 
             <input type="checkbox" className="h-4 w-4 accent-[var(--gold)]" checked={alsoReceita} onChange={(e) => setAlsoReceita(e.target.checked)} />
             Gerar também a receita dos medicamentos (mesmos dados da LME)
           </label>
-          <p className="text-xs text-[var(--text-muted)]">O TER e o formulário de acesso são documentos OFICIAIS da SESAB. Este assistente gera a LME oficial e a receita; anexe o TER/formulário oficiais conforme o protocolo.</p>
+          <div className="mt-2 rounded-xl border border-[var(--border)] p-3">
+            <p className="text-xs font-bold uppercase tracking-wider text-[var(--gold)]">Documentos oficiais SESAB (páginas exatas — sem redesenho)</p>
+            <div className="mt-2 flex flex-wrap gap-2">
+              <a className="btn-ghost text-sm" href={`/api/ceaf/official?protocol=${protocol.id}&doc=ter`} target="_blank" rel="noopener noreferrer">Baixar TER oficial</a>
+              <a className="btn-ghost text-sm" href={`/api/ceaf/official?protocol=${protocol.id}&doc=form`} target="_blank" rel="noopener noreferrer">Baixar formulário oficial</a>
+              <a className="btn-ghost text-sm" href={`/api/ceaf/official?protocol=${protocol.id}&doc=residencia`} target="_blank" rel="noopener noreferrer">Declaração de residência (terceiro)</a>
+            </div>
+            <p className="mt-2 text-xs text-[var(--text-muted)]">A LME oficial é gerada no botão abaixo; TER e formulário são os arquivos oficiais da SESAB (conferidos em {new Date(protocol.lastReview).toLocaleDateString("pt-BR")}). Imprima, colha assinatura e anexe ao processo.</p>
+          </div>
         </div>
       )}
 
