@@ -1,140 +1,108 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { CEAF_PROTOCOLS, getProtocol } from "@/lib/ceaf-catalog";
 
-type Med = { name: string; presentation: string; monthlyQty: string };
-type Protocol = { id: string; name: string; cid10?: string | null; medications: Med[] };
+const STEPS = ["Paciente", "Protocolo", "Medicamento", "CID / Diagnóstico", "Dose", "Exames", "Justificativa", "Revisão"];
 
-const STEPS = [
-  "Paciente",
-  "Categoria",
-  "Medicamento",
-  "Diagnóstico e CID",
-  "Dose",
-  "Exames",
-  "Justificativa",
-  "Revisão",
-];
+type ExamCheck = {
+  label: string; testKey?: string; required: boolean; validityDays: number; autoCheck: boolean;
+  status: "valido" | "vencido" | "ausente" | "anexar"; value?: number; unit?: string | null; measuredAt?: string; ageDays?: number; note?: string;
+};
 
 /**
- * Assistente de LME em 8 etapas. Reaproveita os protocolos cadastrados e a API
- * de LME existente. Ao finalizar, gera a LME (e opcionalmente a receita).
+ * Assistente de LME/CEAF baseado no CATÁLOGO OFICIAL (SESAB/BA).
+ * Protocolo → medicamentos oficiais → CID permitido do protocolo → exames com validade
+ * conferida no prontuário. Não permite CID/medicamento fora do protocolo (anti-devolução).
  */
-export function LmeWizard({
-  emailParam,
-  patientName,
-  onCreated,
-}: {
-  emailParam: string;
-  patientName?: string;
-  onCreated: () => void;
-}) {
+export function LmeWizard({ emailParam, patientName, onCreated }: { emailParam: string; patientName?: string; onCreated: () => void }) {
   const [step, setStep] = useState(0);
-  const [protocols, setProtocols] = useState<Protocol[]>([]);
   const [protocolId, setProtocolId] = useState("");
-  const [meds, setMeds] = useState<Med[]>([{ name: "", presentation: "", monthlyQty: "" }]);
-  const [form, setForm] = useState({
-    weightKg: "",
-    heightCm: "",
-    cid10: "",
-    diagnosis: "",
-    posologia: "",
-    exames: "",
-    justificativa: "",
-  });
+  const [medIds, setMedIds] = useState<string[]>([]);
+  const [qty, setQty] = useState<Record<string, string>>({});
+  const [cid, setCid] = useState("");
+  const [form, setForm] = useState({ weightKg: "", heightCm: "", diagnosis: "", posologia: "", justificativa: "" });
   const [alsoReceita, setAlsoReceita] = useState(true);
+  const [exams, setExams] = useState<ExamCheck[] | null>(null);
+  const [examsLoading, setExamsLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
 
-  useEffect(() => {
-    fetch("/api/protocols")
-      .then((r) => (r.ok ? r.json() : { protocols: [] }))
-      .then((d) => setProtocols(d.protocols || []))
-      .catch(() => {});
-  }, []);
+  const protocol = getProtocol(protocolId);
+  function set<K extends keyof typeof form>(k: K, v: string) { setForm((f) => ({ ...f, [k]: v })); }
 
-  function set<K extends keyof typeof form>(k: K, v: string) {
-    setForm((f) => ({ ...f, [k]: v }));
-  }
-
-  function applyProtocol(id: string) {
+  function chooseProtocol(id: string) {
     setProtocolId(id);
-    const p = protocols.find((x) => x.id === id);
-    if (!p) return;
-    if (p.cid10) set("cid10", p.cid10);
-    if (p.medications.length) {
-      setMeds(p.medications.map((m) => ({ name: m.name || "", presentation: m.presentation || "", monthlyQty: m.monthlyQty || "" })));
-    }
+    setMedIds([]); setQty({}); setCid(""); setExams(null);
   }
+  function toggleMed(id: string) {
+    setMedIds((a) => (a.includes(id) ? a.filter((x) => x !== id) : [...a, id]));
+    setExams(null);
+  }
+
+  // Confere exames ao entrar na etapa de Exames (ou quando muda protocolo/medicamentos).
+  useEffect(() => {
+    if (step !== 5 || !protocolId || medIds.length === 0) return;
+    setExamsLoading(true);
+    fetch(`/api/doctor/patients/${emailParam}/ceaf-check`, {
+      method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ protocolId, medIds }),
+    })
+      .then((r) => r.json())
+      .then((d) => setExams(d.exams || []))
+      .catch(() => setExams([]))
+      .finally(() => setExamsLoading(false));
+  }, [step, protocolId, medIds, emailParam]);
+
+  const blockingExams = useMemo(() => (exams || []).filter((e) => e.required && e.autoCheck && (e.status === "ausente" || e.status === "vencido")), [exams]);
 
   const canAdvance = useMemo(() => {
-    if (step === 2) return meds.some((m) => m.name.trim());
-    if (step === 3) return Boolean(form.cid10.trim());
+    if (step === 1) return Boolean(protocolId);
+    if (step === 2) return medIds.length > 0;
+    if (step === 3) return Boolean(cid);
     return true;
-  }, [step, meds, form.cid10]);
+  }, [step, protocolId, medIds, cid]);
+
+  const selectedMeds = useMemo(() => (protocol?.medications || []).filter((m) => medIds.includes(m.id)), [protocol, medIds]);
 
   async function finish() {
-    setSaving(true);
-    setError("");
+    if (!protocol) return;
+    if (!protocol.cids.some((c) => c.code === cid)) { setError("O CID selecionado não pertence a este protocolo."); return; }
+    if (blockingExams.length > 0) { setError("Há exames obrigatórios ausentes/vencidos. Corrija antes de gerar."); setStep(5); return; }
+    setSaving(true); setError("");
     try {
+      const medications = selectedMeds.map((m) => ({ name: m.name, presentation: m.presentation, monthlyQty: qty[m.id] || "" }));
       const res = await fetch(`/api/doctor/patients/${emailParam}/lme`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          weightKg: form.weightKg || undefined,
-          heightCm: form.heightCm || undefined,
-          cid10: form.cid10,
-          diagnosis: form.diagnosis,
-          anamnesis: form.justificativa,
-          medications: meds.filter((m) => m.name.trim()),
-        }),
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ weightKg: form.weightKg || undefined, heightCm: form.heightCm || undefined, cid10: cid, diagnosis: form.diagnosis, anamnesis: form.justificativa, medications }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Não foi possível gerar a LME.");
-
       if (alsoReceita) {
-        const body = meds
-          .filter((m) => m.name.trim())
-          .map((m) => `${m.name} ${m.presentation} — ${form.posologia || m.monthlyQty || ""}`.trim())
-          .join("\n");
-        if (body) {
-          await fetch(`/api/doctor/patients/${emailParam}/documents`, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ type: "receita", body, sharedWithPatient: true }),
-          });
-        }
+        const body = selectedMeds.map((m) => `${m.name} (${m.presentation}) — ${form.posologia || qty[m.id] || ""}`.trim()).join("\n");
+        if (body) await fetch(`/api/doctor/patients/${emailParam}/documents`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ type: "receita", body, sharedWithPatient: false }) });
       }
-
       await onCreated();
       if (data.id) window.open(`/lme/${data.id}`, "_blank");
     } catch (e) {
       setError(e instanceof Error ? e.message : "Erro inesperado.");
-    } finally {
-      setSaving(false);
-    }
+    } finally { setSaving(false); }
   }
 
   return (
     <div className="panel space-y-4">
-      {/* Progresso */}
       <div className="flex items-center gap-1 overflow-x-auto pb-1">
         {STEPS.map((label, i) => (
           <div key={label} className="flex items-center">
-            <span className={`grid h-6 w-6 shrink-0 place-items-center rounded-full text-[11px] font-bold ${i <= step ? "bg-[var(--gold)] text-white" : "bg-[var(--border)] text-[var(--text-muted)]"}`}>
-              {i + 1}
-            </span>
+            <span className={`grid h-6 w-6 shrink-0 place-items-center rounded-full text-[11px] font-bold ${i <= step ? "bg-[var(--gold)] text-white" : "bg-[var(--border)] text-[var(--text-muted)]"}`}>{i + 1}</span>
             {i < STEPS.length - 1 && <span className={`mx-1 h-0.5 w-4 ${i < step ? "bg-[var(--gold)]" : "bg-[var(--border)]"}`} />}
           </div>
         ))}
       </div>
-      <p className="text-xs font-bold uppercase tracking-wider text-[var(--gold)]">
-        Etapa {step + 1} de 8 — {STEPS[step]}
-      </p>
+      <p className="text-xs font-bold uppercase tracking-wider text-[var(--gold)]">Etapa {step + 1} de 8 — {STEPS[step]}</p>
 
       {step === 0 && (
         <div className="space-y-3">
-          <p className="text-sm text-[var(--text-soft)]">Paciente: <strong className="text-[var(--text)]">{patientName || "—"}</strong>. Confira/complete os dados abaixo (opcional).</p>
+          <p className="text-sm text-[var(--text-soft)]">Paciente: <strong className="text-[var(--text)]">{patientName || "—"}</strong>. Confira/complete (opcional).</p>
           <div className="grid grid-cols-2 gap-3">
             <Field label="Peso (kg)" value={form.weightKg} onChange={(v) => set("weightKg", v)} />
             <Field label="Altura (cm)" value={form.heightCm} onChange={(v) => set("heightCm", v)} />
@@ -144,95 +112,116 @@ export function LmeWizard({
 
       {step === 1 && (
         <div className="space-y-2">
-          <p className="text-sm text-[var(--text-soft)]">Escolha um protocolo (preenche CID e medicamentos). Você pode ajustar depois.</p>
-          {protocols.length === 0 && <p className="text-sm text-[var(--text-muted)]">Nenhum protocolo cadastrado — preencha manualmente nas próximas etapas.</p>}
+          <p className="text-sm text-[var(--text-soft)]">Escolha o protocolo oficial (SESAB/BA). Só aparecem CIDs e medicamentos oficiais daquele protocolo.</p>
           <div className="grid gap-2">
-            {protocols.map((p) => (
-              <button
-                key={p.id}
-                type="button"
-                onClick={() => applyProtocol(p.id)}
-                className={`rounded-2xl border px-4 py-3 text-left text-sm transition ${protocolId === p.id ? "border-[var(--gold)] bg-[var(--gold-soft)]" : "border-[var(--border)]"}`}
-              >
+            {CEAF_PROTOCOLS.map((p) => (
+              <button key={p.id} type="button" onClick={() => chooseProtocol(p.id)} className={`rounded-2xl border px-4 py-3 text-left text-sm transition ${protocolId === p.id ? "border-[var(--gold)] bg-[var(--gold-soft)]" : "border-[var(--border)]"}`}>
                 <span className="block font-semibold text-[var(--text)]">{p.name}</span>
-                <span className="block text-xs text-[var(--text-muted)]">{p.cid10 ? `CID ${p.cid10} · ` : ""}{p.medications.length} medicamento(s)</span>
+                <span className="block text-xs text-[var(--text-muted)]">{p.cids.map((c) => c.code).join(", ")} · {p.medications.length} medicamento(s) · Fonte: {p.source} · conferido em {new Date(p.lastReview).toLocaleDateString("pt-BR")}</span>
               </button>
             ))}
           </div>
         </div>
       )}
 
-      {step === 2 && (
+      {step === 2 && protocol && (
         <div className="space-y-2">
-          {meds.map((m, i) => (
-            <div key={i} className="grid grid-cols-1 gap-2 sm:grid-cols-3">
-              <input className="input-field" placeholder="Medicamento (DCB)" value={m.name} onChange={(e) => setMeds((a) => a.map((x, j) => (j === i ? { ...x, name: e.target.value } : x)))} />
-              <input className="input-field" placeholder="Apresentação" value={m.presentation} onChange={(e) => setMeds((a) => a.map((x, j) => (j === i ? { ...x, presentation: e.target.value } : x)))} />
-              <input className="input-field" placeholder="Qtde/mês" value={m.monthlyQty} onChange={(e) => setMeds((a) => a.map((x, j) => (j === i ? { ...x, monthlyQty: e.target.value } : x)))} />
-            </div>
-          ))}
-          <button type="button" className="text-sm font-semibold text-[var(--gold)]" onClick={() => setMeds((a) => [...a, { name: "", presentation: "", monthlyQty: "" }])}>
-            + Adicionar medicamento
-          </button>
+          <p className="text-sm text-[var(--text-soft)]">Selecione o(s) medicamento(s) oficiais e a quantidade mensal.</p>
+          <div className="grid gap-2">
+            {protocol.medications.map((m) => (
+              <div key={m.id} className={`rounded-xl border px-3 py-2 ${medIds.includes(m.id) ? "border-[var(--gold)] bg-[var(--gold-soft)]" : "border-[var(--border)]"}`}>
+                <label className="flex items-center gap-2">
+                  <input type="checkbox" className="h-4 w-4 accent-[var(--gold)]" checked={medIds.includes(m.id)} onChange={() => toggleMed(m.id)} />
+                  <span className="text-sm font-semibold text-[var(--text)]">{m.name} <span className="font-normal text-[var(--text-muted)]">· {m.presentation}</span></span>
+                </label>
+                {medIds.includes(m.id) && (
+                  <div className="mt-2 pl-6">
+                    <input className="input-field w-40" placeholder="Qtde/mês" value={qty[m.id] || ""} onChange={(e) => setQty((q) => ({ ...q, [m.id]: e.target.value }))} />
+                    {m.note && <p className="mt-1 text-xs text-amber-700">{m.note}</p>}
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
         </div>
       )}
 
-      {step === 3 && (
+      {step === 3 && protocol && (
         <div className="space-y-3">
-          <Field label="CID-10" value={form.cid10} onChange={(v) => set("cid10", v)} />
+          <label className="block">
+            <span className="mb-1 block text-xs font-semibold text-[var(--text-muted)]">CID-10 (somente os do protocolo)</span>
+            <select className="input-field" value={cid} onChange={(e) => setCid(e.target.value)}>
+              <option value="">Selecione o CID</option>
+              {protocol.cids.map((c) => <option key={c.code} value={c.code}>{c.code} — {c.description}</option>)}
+            </select>
+          </label>
           <Field label="Diagnóstico" value={form.diagnosis} onChange={(v) => set("diagnosis", v)} />
+          <p className="text-xs text-[var(--text-muted)]">Não é possível digitar um CID livre — evita devolução por CID fora do protocolo.</p>
         </div>
       )}
 
       {step === 4 && (
         <label className="block">
           <span className="mb-1 block text-xs font-semibold text-[var(--text-muted)]">Dose e posologia</span>
-          <textarea className="input-field min-h-[100px]" value={form.posologia} onChange={(e) => set("posologia", e.target.value)} placeholder="Ex.: 1 comprimido 2x/dia por 30 dias. Revise a quantidade mensal de cada medicamento na etapa anterior." />
+          <textarea className="input-field min-h-[100px]" value={form.posologia} onChange={(e) => set("posologia", e.target.value)} placeholder="Ex.: 4.000 UI SC 3x/semana. Confirme a quantidade mensal de cada medicamento na etapa de medicamentos." />
         </label>
       )}
 
       {step === 5 && (
-        <label className="block">
-          <span className="mb-1 block text-xs font-semibold text-[var(--text-muted)]">Exames e critérios</span>
-          <textarea className="input-field min-h-[100px]" value={form.exames} onChange={(e) => set("exames", e.target.value)} placeholder="Exames comprobatórios e critérios (revise as exigências da Secretaria de Saúde responsável)." />
-          <p className="mt-2 text-xs text-[var(--text-muted)]">Revise os critérios e exigências da Secretaria de Saúde. Os requisitos podem variar conforme protocolo, estado e município.</p>
-        </label>
+        <div className="space-y-2">
+          <p className="text-sm text-[var(--text-soft)]">Exames exigidos pelo protocolo — conferidos automaticamente no prontuário.</p>
+          {examsLoading && <p className="text-sm text-[var(--text-muted)]">Conferindo exames…</p>}
+          <div className="grid gap-1.5">
+            {(exams || []).map((e, i) => (
+              <div key={i} className={`flex items-center justify-between rounded-xl border px-3 py-2 text-sm ${e.status === "valido" ? "border-emerald-300 bg-emerald-50" : e.status === "anexar" ? "border-[var(--border)]" : "border-amber-300 bg-amber-50"}`}>
+                <span className="text-[var(--text)]">{e.label}{e.note ? <span className="block text-xs text-[var(--text-muted)]">{e.note}</span> : null}</span>
+                <span className="text-xs font-semibold">
+                  {e.status === "valido" && <span className="text-emerald-700">✅ válido {e.measuredAt ? `(${new Date(e.measuredAt).toLocaleDateString("pt-BR")})` : ""}</span>}
+                  {e.status === "vencido" && <span className="text-amber-700">🔴 vencido{typeof e.ageDays === "number" ? ` (há ${e.ageDays}d)` : ""}</span>}
+                  {e.status === "ausente" && <span className="text-amber-700">🔴 ausente</span>}
+                  {e.status === "anexar" && <span className="text-[var(--text-muted)]">📎 anexar</span>}
+                </span>
+              </div>
+            ))}
+          </div>
+          {blockingExams.length > 0 && (
+            <p className="rounded-xl border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-800">
+              ⛔ {blockingExams.length} exame(s) obrigatório(s) ausente(s)/vencido(s): {blockingExams.map((e) => e.label).join(", ")}. Atualize no prontuário antes de gerar.
+            </p>
+          )}
+        </div>
       )}
 
       {step === 6 && (
         <label className="block">
-          <span className="mb-1 block text-xs font-semibold text-[var(--text-muted)]">Justificativa</span>
+          <span className="mb-1 block text-xs font-semibold text-[var(--text-muted)]">Justificativa clínica</span>
           <textarea className="input-field min-h-[140px]" value={form.justificativa} onChange={(e) => set("justificativa", e.target.value)} placeholder="Justificativa clínica (texto livre)." />
         </label>
       )}
 
-      {step === 7 && (
+      {step === 7 && protocol && (
         <div className="space-y-2 text-sm">
-          <p className="text-[var(--text-soft)]"><b>Paciente:</b> {patientName || "—"}</p>
-          <p className="text-[var(--text-soft)]"><b>CID:</b> {form.cid10 || "—"} · <b>Diagnóstico:</b> {form.diagnosis || "—"}</p>
-          <p className="text-[var(--text-soft)]"><b>Medicamentos:</b> {meds.filter((m) => m.name.trim()).map((m) => `${m.name} ${m.presentation}`.trim()).join("; ") || "—"}</p>
-          <p className="text-[var(--text-soft)]"><b>Justificativa:</b> {form.justificativa || "—"}</p>
+          <p className="text-[var(--text-soft)]"><b>Protocolo:</b> {protocol.name} <span className="text-xs text-[var(--text-muted)]">({protocol.source}, conferido {new Date(protocol.lastReview).toLocaleDateString("pt-BR")})</span></p>
+          <p className="text-[var(--text-soft)]"><b>CID:</b> {cid || "—"} · <b>Diagnóstico:</b> {form.diagnosis || "—"}</p>
+          <p className="text-[var(--text-soft)]"><b>Medicamentos:</b> {selectedMeds.map((m) => `${m.name} (${m.presentation})${qty[m.id] ? " — " + qty[m.id] + "/mês" : ""}`).join("; ") || "—"}</p>
+          <p className="text-[var(--text-soft)]"><b>Documentos:</b> {protocol.documents.join("; ")}</p>
+          {blockingExams.length > 0 && <p className="text-amber-800">⛔ Exames pendentes: {blockingExams.map((e) => e.label).join(", ")}</p>}
           <label className="mt-2 flex items-center gap-2 text-[var(--text-soft)]">
             <input type="checkbox" className="h-4 w-4 accent-[var(--gold)]" checked={alsoReceita} onChange={(e) => setAlsoReceita(e.target.checked)} />
-            Gerar também a receita dos medicamentos
+            Gerar também a receita dos medicamentos (mesmos dados da LME)
           </label>
+          <p className="text-xs text-[var(--text-muted)]">O TER e o formulário de acesso são documentos OFICIAIS da SESAB. Este assistente gera a LME oficial e a receita; anexe o TER/formulário oficiais conforme o protocolo.</p>
         </div>
       )}
 
       {error && <p className="rounded-xl border border-[var(--danger)]/30 bg-[var(--danger)]/10 px-3 py-2 text-sm text-[var(--danger)]">{error}</p>}
 
       <div className="flex justify-between gap-3">
-        <button type="button" className="btn-ghost" onClick={() => setStep((s) => Math.max(0, s - 1))} disabled={step === 0}>
-          Voltar
-        </button>
+        <button type="button" className="btn-ghost" onClick={() => setStep((s) => Math.max(0, s - 1))} disabled={step === 0}>Voltar</button>
         {step < 7 ? (
-          <button type="button" className="btn-gold" onClick={() => setStep((s) => s + 1)} disabled={!canAdvance}>
-            Avançar
-          </button>
+          <button type="button" className="btn-gold" onClick={() => setStep((s) => s + 1)} disabled={!canAdvance}>Avançar</button>
         ) : (
-          <button type="button" className="btn-gold" onClick={finish} disabled={saving}>
-            {saving ? "Gerando…" : "Gerar LME"}
-          </button>
+          <button type="button" className="btn-gold" onClick={finish} disabled={saving || blockingExams.length > 0}>{saving ? "Gerando…" : "Gerar LME"}</button>
         )}
       </div>
     </div>
