@@ -1,19 +1,15 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { CEAF_PROTOCOLS, getProtocol } from "@/lib/ceaf-catalog";
+import { CEAF_PROTOCOLS, getProtocol, reportTemplate, examReminderList } from "@/lib/ceaf-catalog";
 
-const STEPS = ["Paciente", "Protocolo", "Medicamento", "CID / Diagnóstico", "Dose", "Exames", "Justificativa", "Revisão"];
-
-type ExamCheck = {
-  label: string; testKey?: string; required: boolean; validityDays: number; autoCheck: boolean;
-  status: "valido" | "vencido" | "ausente" | "anexar"; value?: number; unit?: string | null; measuredAt?: string; ageDays?: number; note?: string;
-};
+const STEPS = ["Paciente", "Protocolo", "Medicamento", "CID / Diagnóstico", "Dose", "Relatório médico", "Revisão"];
 
 /**
  * Assistente de LME/CEAF baseado no CATÁLOGO OFICIAL (SESAB/BA).
- * Protocolo → medicamentos oficiais → CID permitido do protocolo → exames com validade
- * conferida no prontuário. Não permite CID/medicamento fora do protocolo (anti-devolução).
+ * Protocolo → medicamentos oficiais → CID permitido do protocolo → relatório médico
+ * (com modelo do PCDT). Os exames NÃO são exigidos para gerar: o paciente leva impressos;
+ * o app só lembra de listá-los no relatório. Não permite CID/medicamento fora do protocolo.
  */
 export function LmeWizard({ emailParam, patientName, onCreated }: { emailParam: string; patientName?: string; onCreated: () => void }) {
   const [step, setStep] = useState(0);
@@ -23,11 +19,10 @@ export function LmeWizard({ emailParam, patientName, onCreated }: { emailParam: 
   const [cid, setCid] = useState("");
   const [form, setForm] = useState({ weightKg: "", heightCm: "", diagnosis: "", posologia: "", justificativa: "" });
   const [alsoReceita, setAlsoReceita] = useState(true);
+  const [alsoRelatorio, setAlsoRelatorio] = useState(true);
   const [locations, setLocations] = useState<{ id: string; name: string; city: string; cnes?: string }[]>([]);
   const [establishmentId, setEstablishmentId] = useState("");
   const [doctorInfo, setDoctorInfo] = useState<{ name: string; crm: string }>({ name: "", crm: "" });
-  const [exams, setExams] = useState<ExamCheck[] | null>(null);
-  const [examsLoading, setExamsLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
 
@@ -48,27 +43,19 @@ export function LmeWizard({ emailParam, patientName, onCreated }: { emailParam: 
 
   function chooseProtocol(id: string) {
     setProtocolId(id);
-    setMedIds([]); setQty({}); setCid(""); setExams(null);
+    setMedIds([]); setQty({}); setCid("");
   }
   function toggleMed(id: string) {
     setMedIds((a) => (a.includes(id) ? a.filter((x) => x !== id) : [...a, id]));
-    setExams(null);
   }
 
-  // Confere exames ao entrar na etapa de Exames (ou quando muda protocolo/medicamentos).
-  useEffect(() => {
-    if (step !== 5 || !protocolId || medIds.length === 0) return;
-    setExamsLoading(true);
-    fetch(`/api/doctor/patients/${emailParam}/ceaf-check`, {
-      method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ protocolId, medIds }),
-    })
-      .then((r) => r.json())
-      .then((d) => setExams(d.exams || []))
-      .catch(() => setExams([]))
-      .finally(() => setExamsLoading(false));
-  }, [step, protocolId, medIds, emailParam]);
+  const examReminders = useMemo(() => (protocolId && medIds.length ? examReminderList(protocolId, medIds) : []), [protocolId, medIds]);
 
-  const blockingExams = useMemo(() => (exams || []).filter((e) => e.required && e.autoCheck && (e.status === "ausente" || e.status === "vencido")), [exams]);
+  function fillReportTemplate() {
+    if (!protocolId) return;
+    const meds = selectedMeds.map((m) => ({ name: m.name, presentation: m.presentation, monthlyQty: qty[m.id] || undefined }));
+    set("justificativa", reportTemplate({ protocolId, medIds, patientName, cid, diagnosis: form.diagnosis, meds }));
+  }
 
   const canAdvance = useMemo(() => {
     if (step === 1) return Boolean(protocolId);
@@ -82,7 +69,6 @@ export function LmeWizard({ emailParam, patientName, onCreated }: { emailParam: 
   async function finish() {
     if (!protocol) return;
     if (!protocol.cids.some((c) => c.code === cid)) { setError("O CID selecionado não pertence a este protocolo."); return; }
-    if (blockingExams.length > 0) { setError("Há exames obrigatórios ausentes/vencidos. Corrija antes de gerar."); setStep(5); return; }
     setSaving(true); setError("");
     try {
       const medications = selectedMeds.map((m) => ({ name: m.name, presentation: m.presentation, monthlyQty: qty[m.id] || "" }));
@@ -95,6 +81,10 @@ export function LmeWizard({ emailParam, patientName, onCreated }: { emailParam: 
       if (alsoReceita) {
         const body = selectedMeds.map((m) => `${m.name} (${m.presentation}) — ${form.posologia || qty[m.id] || ""}`.trim()).join("\n");
         if (body) await fetch(`/api/doctor/patients/${emailParam}/documents`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ type: "receita", body, sharedWithPatient: false }) });
+      }
+      if (alsoRelatorio) {
+        const body = (form.justificativa || "").trim() || reportTemplate({ protocolId, medIds, patientName, cid, diagnosis: form.diagnosis, meds: medications });
+        if (body) await fetch(`/api/doctor/patients/${emailParam}/documents`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ type: "relatorio", title: `Relatório médico — ${protocol.name}`, body, sharedWithPatient: false }) });
       }
       await onCreated();
       if (data.id) window.open(`/lme/${data.id}`, "_blank");
@@ -113,7 +103,7 @@ export function LmeWizard({ emailParam, patientName, onCreated }: { emailParam: 
           </div>
         ))}
       </div>
-      <p className="text-xs font-bold uppercase tracking-wider text-[var(--gold)]">Etapa {step + 1} de 8 — {STEPS[step]}</p>
+      <p className="text-xs font-bold uppercase tracking-wider text-[var(--gold)]">Etapa {step + 1} de {STEPS.length} — {STEPS[step]}</p>
 
       {step === 0 && (
         <div className="space-y-3">
@@ -190,48 +180,41 @@ export function LmeWizard({ emailParam, patientName, onCreated }: { emailParam: 
         </label>
       )}
 
-      {step === 5 && (
-        <div className="space-y-2">
-          <p className="text-sm text-[var(--text-soft)]">Exames exigidos pelo protocolo — conferidos automaticamente no prontuário.</p>
-          {examsLoading && <p className="text-sm text-[var(--text-muted)]">Conferindo exames…</p>}
-          <div className="grid gap-1.5">
-            {(exams || []).map((e, i) => (
-              <div key={i} className={`flex items-center justify-between rounded-xl border px-3 py-2 text-sm ${e.status === "valido" ? "border-emerald-300 bg-emerald-50" : e.status === "anexar" ? "border-[var(--border)]" : "border-amber-300 bg-amber-50"}`}>
-                <span className="text-[var(--text)]">{e.label}{e.note ? <span className="block text-xs text-[var(--text-muted)]">{e.note}</span> : null}</span>
-                <span className="text-xs font-semibold">
-                  {e.status === "valido" && <span className="text-emerald-700">✅ válido {e.measuredAt ? `(${new Date(e.measuredAt).toLocaleDateString("pt-BR")})` : ""}</span>}
-                  {e.status === "vencido" && <span className="text-amber-700">🔴 vencido{typeof e.ageDays === "number" ? ` (há ${e.ageDays}d)` : ""}</span>}
-                  {e.status === "ausente" && <span className="text-amber-700">🔴 ausente</span>}
-                  {e.status === "anexar" && <span className="text-[var(--text-muted)]">📎 anexar</span>}
-                </span>
-              </div>
-            ))}
+      {step === 5 && protocol && (
+        <div className="space-y-3">
+          <div className="flex items-center justify-between gap-2">
+            <span className="text-xs font-semibold text-[var(--text-muted)]">Relatório médico (conforme o PCDT)</span>
+            <button type="button" className="btn-ghost text-xs" onClick={fillReportTemplate}>Usar modelo do protocolo</button>
           </div>
-          {blockingExams.length > 0 && (
-            <p className="rounded-xl border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-800">
-              ⛔ {blockingExams.length} exame(s) obrigatório(s) ausente(s)/vencido(s): {blockingExams.map((e) => e.label).join(", ")}. Atualize no prontuário antes de gerar.
-            </p>
-          )}
+          <textarea className="input-field min-h-[220px] font-mono text-[13px] leading-relaxed" value={form.justificativa} onChange={(e) => set("justificativa", e.target.value)} placeholder="Clique em “Usar modelo do protocolo” para preencher o relatório conforme o PCDT e edite à vontade." />
+          <div className="rounded-xl border border-[var(--border)] bg-[var(--gold-soft)]/40 px-3 py-2 text-sm">
+            <p className="font-semibold text-[var(--text)]">Lembrete — exames deste protocolo (o paciente leva impressos e anexa):</p>
+            {examReminders.length ? (
+              <ul className="mt-1 list-disc pl-5 text-[var(--text-soft)]">
+                {examReminders.map((e, i) => <li key={i}>{e}</li>)}
+              </ul>
+            ) : (
+              <p className="mt-1 text-[var(--text-muted)]">Selecione o(s) medicamento(s) para ver os exames sugeridos pelo protocolo.</p>
+            )}
+            <p className="mt-1 text-xs text-[var(--text-muted)]">Os exames não são exigidos aqui para gerar a LME — servem de lembrete para constar no relatório e serem anexados impressos.</p>
+          </div>
         </div>
       )}
 
-      {step === 6 && (
-        <label className="block">
-          <span className="mb-1 block text-xs font-semibold text-[var(--text-muted)]">Justificativa clínica</span>
-          <textarea className="input-field min-h-[140px]" value={form.justificativa} onChange={(e) => set("justificativa", e.target.value)} placeholder="Justificativa clínica (texto livre)." />
-        </label>
-      )}
-
-      {step === 7 && protocol && (
+      {step === 6 && protocol && (
         <div className="space-y-2 text-sm">
           <p className="text-[var(--text-soft)]"><b>Protocolo:</b> {protocol.name} <span className="text-xs text-[var(--text-muted)]">({protocol.source}, conferido {new Date(protocol.lastReview).toLocaleDateString("pt-BR")})</span></p>
           <p className="text-[var(--text-soft)]"><b>CID:</b> {cid || "—"} · <b>Diagnóstico:</b> {form.diagnosis || "—"}</p>
           <p className="text-[var(--text-soft)]"><b>Medicamentos:</b> {selectedMeds.map((m) => `${m.name} (${m.presentation})${qty[m.id] ? " — " + qty[m.id] + "/mês" : ""}`).join("; ") || "—"}</p>
           <p className="text-[var(--text-soft)]"><b>Documentos:</b> {protocol.documents.join("; ")}</p>
-          {blockingExams.length > 0 && <p className="text-amber-800">⛔ Exames pendentes: {blockingExams.map((e) => e.label).join(", ")}</p>}
+          <p className="rounded-xl border border-[var(--border)] bg-[var(--gold-soft)]/40 px-3 py-2 text-[var(--text-soft)]">📎 Lembrete: os exames do protocolo não são exigidos aqui — o paciente leva impressos e anexa. Eles já constam no relatório médico.</p>
           <label className="mt-2 flex items-center gap-2 text-[var(--text-soft)]">
             <input type="checkbox" className="h-4 w-4 accent-[var(--gold)]" checked={alsoReceita} onChange={(e) => setAlsoReceita(e.target.checked)} />
             Gerar também a receita dos medicamentos (mesmos dados da LME)
+          </label>
+          <label className="flex items-center gap-2 text-[var(--text-soft)]">
+            <input type="checkbox" className="h-4 w-4 accent-[var(--gold)]" checked={alsoRelatorio} onChange={(e) => setAlsoRelatorio(e.target.checked)} />
+            Gerar também o relatório médico (documento no prontuário)
           </label>
           <div className="mt-2 rounded-xl border border-[var(--border)] p-3">
             <p className="text-xs font-bold uppercase tracking-wider text-[var(--gold)]">Documentos oficiais SESAB</p>
@@ -254,10 +237,10 @@ export function LmeWizard({ emailParam, patientName, onCreated }: { emailParam: 
 
       <div className="flex justify-between gap-3">
         <button type="button" className="btn-ghost" onClick={() => setStep((s) => Math.max(0, s - 1))} disabled={step === 0}>Voltar</button>
-        {step < 7 ? (
+        {step < STEPS.length - 1 ? (
           <button type="button" className="btn-gold" onClick={() => setStep((s) => s + 1)} disabled={!canAdvance}>Avançar</button>
         ) : (
-          <button type="button" className="btn-gold" onClick={finish} disabled={saving || blockingExams.length > 0}>{saving ? "Gerando…" : "Gerar LME"}</button>
+          <button type="button" className="btn-gold" onClick={finish} disabled={saving}>{saving ? "Gerando…" : "Gerar LME"}</button>
         )}
       </div>
     </div>

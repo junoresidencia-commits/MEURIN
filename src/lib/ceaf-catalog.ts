@@ -288,3 +288,56 @@ export function cidAllowed(protocolId: string, code: string): boolean {
   const p = getProtocol(protocolId);
   return Boolean(p && p.cids.some((c) => c.code === code));
 }
+
+/** Exames recomendados pelo PCDT — apenas para LEMBRAR no relatório e anexar impressos
+ *  (o app não exige nem bloqueia a geração da LME). */
+export function examReminderList(protocolId: string, medIds: string[]): string[] {
+  return effectiveExams(protocolId, medIds).map((e) => {
+    const val = e.validityDays > 0 ? ` (validade ~${e.validityDays} dias)` : "";
+    const note = e.note ? ` — ${e.note}` : "";
+    return `${e.label}${val}${note}`;
+  });
+}
+
+/** Modelo de RELATÓRIO MÉDICO conforme o PCDT/SESAB — texto-base editável pelo médico,
+ *  já com o lembrete dos exames do protocolo (que o paciente leva impressos e anexa). */
+export function reportTemplate(opts: {
+  protocolId: string;
+  medIds: string[];
+  patientName?: string;
+  cid?: string;
+  diagnosis?: string;
+  meds?: { name: string; presentation: string; monthlyQty?: string }[];
+}): string {
+  const p = getProtocol(opts.protocolId);
+  if (!p) return "";
+  const cidObj = p.cids.find((c) => c.code === opts.cid);
+  const meds =
+    opts.meds && opts.meds.length
+      ? opts.meds
+      : p.medications.filter((m) => opts.medIds.includes(m.id)).map((m) => ({ name: m.name, presentation: m.presentation, monthlyQty: undefined as string | undefined }));
+  const exams = examReminderList(opts.protocolId, opts.medIds);
+  const L: string[] = [];
+  L.push("RELATÓRIO MÉDICO — CEAF/SESAB");
+  L.push(`Protocolo: ${p.name} (${p.source})`);
+  if (opts.patientName) L.push(`Paciente: ${opts.patientName}`);
+  L.push(`CID-10: ${opts.cid || "—"}${cidObj ? " — " + cidObj.description : ""}`);
+  L.push(`Diagnóstico: ${opts.diagnosis || "—"}`);
+  L.push("");
+  L.push("História clínica e justificativa:");
+  L.push("[Descreva tempo de doença, evolução e por que o paciente preenche os critérios do PCDT para o(s) medicamento(s) abaixo.]");
+  L.push("");
+  L.push("Medicamento(s) solicitado(s):");
+  for (const m of meds) L.push(`- ${m.name} (${m.presentation})${m.monthlyQty ? ` — ${m.monthlyQty}/mês` : ""}`);
+  L.push("");
+  L.push("Exames que acompanham o processo (o paciente leva/anexa impressos):");
+  if (exams.length) for (const e of exams) L.push(`- ${e}`);
+  else L.push("- Conforme o protocolo.");
+  L.push("");
+  if (p.notes) {
+    L.push(`Observações do protocolo: ${p.notes}`);
+    L.push("");
+  }
+  L.push("Declaro que o(a) paciente preenche os critérios do PCDT/SESAB para o(s) medicamento(s) solicitado(s).");
+  return L.join("\n");
+}
