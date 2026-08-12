@@ -102,7 +102,8 @@ export async function GET(
     status: 200,
     headers: {
       "Content-Type": "application/pdf",
-      "Content-Disposition": `attachment; filename="lme-oficial-preenchida.pdf"`,
+      "Content-Disposition": `inline; filename="lme-oficial-preenchida.pdf"`,
+      "Cache-Control": "no-store",
     },
   });
 }

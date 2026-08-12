@@ -101,17 +101,36 @@ export default function LmePage() {
   }
 
   return (
-    <div className="mx-auto max-w-2xl px-5 py-10">
-      <div className="mb-4 flex flex-wrap justify-end gap-2 print:hidden">
-        <a className="btn-gold" href={`/api/lme/${id}/oficial`}>Baixar PDF OFICIAL preenchido</a>
-        <button type="button" className="btn-ghost" onClick={downloadPdf}>Baixar resumo</button>
-        <button type="button" className="btn-ghost" onClick={() => window.print()}>Imprimir</button>
+    <div className="mx-auto max-w-3xl px-5 py-10">
+      <div className="mb-3 flex flex-wrap items-center justify-between gap-2 print:hidden">
+        <div>
+          <p className="text-xs font-bold uppercase tracking-wide text-[var(--gold)]">LME OFICIAL — CEAF/SESAB</p>
+          <h1 className="font-display text-2xl font-extrabold text-[var(--text)]">Formulário oficial preenchido</h1>
+        </div>
+        <div className="flex flex-wrap gap-2">
+          <a className="btn-gold" href={`/api/lme/${id}/oficial`} target="_blank" rel="noopener noreferrer">Baixar / imprimir LME OFICIAL</a>
+        </div>
       </div>
-      <p className="mb-4 rounded-xl border border-[var(--warn)]/30 bg-[#fff7e8] px-3 py-2 text-xs text-[#7a5a12] print:hidden">
-        O PDF oficial vem pré-preenchido com os dados. Revise no formulário do Ministério
-        a seleção do medicamento (lista oficial) e a grade de quantidades por mês antes de assinar.
+      <p className="mb-3 rounded-xl border border-[var(--warn)]/30 bg-[#fff7e8] px-3 py-2 text-xs text-[#7a5a12] print:hidden">
+        Este é o <b>formulário oficial do Ministério/SESAB</b> pré-preenchido com os dados. Revise a
+        seleção do medicamento (lista oficial) e a grade de quantidades por mês antes de assinar.
       </p>
-      <div className="rounded-[16px] border border-[var(--border)] bg-white p-8 shadow-[var(--shadow)]">
+
+      {/* Documento OFICIAL preenchido — conteúdo principal */}
+      <div className="overflow-hidden rounded-[16px] border border-[var(--border)] bg-white shadow-[var(--shadow)] print:hidden">
+        <iframe title="LME oficial preenchida" src={`/api/lme/${id}/oficial#toolbar=1`} className="h-[80vh] w-full" />
+      </div>
+
+      {/* Resumo dos dados — uso interno, NÃO é o documento oficial */}
+      <details className="mt-6">
+        <summary className="cursor-pointer text-sm font-semibold text-[var(--text-muted)] print:hidden">
+          Ver resumo dos dados (uso interno — não substitui a LME oficial)
+        </summary>
+        <div className="mt-2 flex flex-wrap justify-end gap-2 print:hidden">
+          <button type="button" className="btn-ghost" onClick={downloadPdf}>Baixar resumo interno</button>
+          <button type="button" className="btn-ghost" onClick={() => window.print()}>Imprimir resumo</button>
+        </div>
+      <div className="mt-2 rounded-[16px] border border-[var(--border)] bg-white p-8 shadow-[var(--shadow)]">
         <p className="text-center text-xs font-bold uppercase tracking-wide text-[var(--gold)]">Componente Especializado (CEAF)</p>
         <h1 className="mt-1 text-center text-lg font-extrabold text-[var(--text)]">Laudo de Solicitação de Medicamento(s) — LME</h1>
         <p className="mt-1 text-center text-xs text-[var(--text-muted)]">Data: {date}</p>
@@ -155,9 +174,10 @@ export default function LmePage() {
           <p className="text-sm text-[var(--text-muted)]">{lme.doctorCrm} · CNS {lme.doctorCns || "—"}</p>
         </div>
         <p className="mt-6 text-center text-[11px] text-[var(--text-muted)]">
-          Documento gerado pela plataforma Meu Rim. Confira as exigências da unidade responsável.
+          Resumo interno gerado pela plataforma Meu Rim — não substitui a LME oficial.
         </p>
       </div>
+      </details>
     </div>
   );
 }
