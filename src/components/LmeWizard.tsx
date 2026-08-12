@@ -234,13 +234,18 @@ export function LmeWizard({ emailParam, patientName, onCreated }: { emailParam: 
             Gerar também a receita dos medicamentos (mesmos dados da LME)
           </label>
           <div className="mt-2 rounded-xl border border-[var(--border)] p-3">
-            <p className="text-xs font-bold uppercase tracking-wider text-[var(--gold)]">Documentos oficiais SESAB (páginas exatas — sem redesenho)</p>
-            <div className="mt-2 flex flex-wrap gap-2">
-              <a className="btn-ghost text-sm" href={`/api/ceaf/official?protocol=${protocol.id}&doc=ter&name=${encodeURIComponent(patientName || "")}&doctor=${encodeURIComponent(doctorInfo.name)}&crm=${encodeURIComponent(doctorInfo.crm)}&date=${encodeURIComponent(new Date().toLocaleDateString("pt-BR"))}`} target="_blank" rel="noopener noreferrer">Baixar TER oficial (com nome)</a>
-              <a className="btn-ghost text-sm" href={`/api/ceaf/official?protocol=${protocol.id}&doc=form`} target="_blank" rel="noopener noreferrer">Baixar formulário oficial</a>
-              <a className="btn-ghost text-sm" href={`/api/ceaf/official?protocol=${protocol.id}&doc=residencia`} target="_blank" rel="noopener noreferrer">Declaração de residência (terceiro)</a>
-            </div>
-            <p className="mt-2 text-xs text-[var(--text-muted)]">A LME oficial é gerada no botão abaixo; TER e formulário são os arquivos oficiais da SESAB (conferidos em {new Date(protocol.lastReview).toLocaleDateString("pt-BR")}). Imprima, colha assinatura e anexe ao processo.</p>
+            <p className="text-xs font-bold uppercase tracking-wider text-[var(--gold)]">Documentos oficiais SESAB</p>
+            {(() => {
+              const q = `protocol=${protocol.id}&name=${encodeURIComponent(patientName || "")}&doctor=${encodeURIComponent(doctorInfo.name)}&crm=${encodeURIComponent(doctorInfo.crm)}&date=${encodeURIComponent(new Date().toLocaleDateString("pt-BR"))}`;
+              return (
+                <div className="mt-2 flex flex-wrap gap-2">
+                  <a className="btn-ghost text-sm" href={`/medicos/documento-oficial?${q}&doc=ter`} target="_blank" rel="noopener noreferrer">Preencher TER oficial</a>
+                  <a className="btn-ghost text-sm" href={`/medicos/documento-oficial?${q}&doc=form`} target="_blank" rel="noopener noreferrer">Preencher formulário oficial</a>
+                  <a className="btn-ghost text-sm" href={`/api/ceaf/official?protocol=${protocol.id}&doc=residencia`} target="_blank" rel="noopener noreferrer">Declaração de residência (terceiro)</a>
+                </div>
+              );
+            })()}
+            <p className="mt-2 text-xs text-[var(--text-muted)]">TER e formulário são os arquivos OFICIAIS da SESAB (conferidos em {new Date(protocol.lastReview).toLocaleDateString("pt-BR")}). No editor você digita e arrasta as caixas até a linha certa e salva como padrão (reaproveita a posição). A LME oficial é gerada no botão abaixo.</p>
           </div>
         </div>
       )}
