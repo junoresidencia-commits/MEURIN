@@ -515,7 +515,7 @@ export default function ProntuarioPage() {
               </p>
             </div>
 
-            {/* Assistente de LME em 8 etapas */}
+            {/* Assistente de LME em 7 etapas (exames não são exigidos — só lembrete no relatório) */}
             <LmeWizard emailParam={emailParam} patientName={patient?.name} onCreated={load} />
 
             <p className="text-xs font-bold uppercase tracking-wider text-[var(--gold)]">LMEs geradas</p>
