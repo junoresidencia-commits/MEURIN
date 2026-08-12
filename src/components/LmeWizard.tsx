@@ -25,6 +25,7 @@ export function LmeWizard({ emailParam, patientName, onCreated }: { emailParam: 
   const [alsoReceita, setAlsoReceita] = useState(true);
   const [locations, setLocations] = useState<{ id: string; name: string; city: string; cnes?: string }[]>([]);
   const [establishmentId, setEstablishmentId] = useState("");
+  const [doctorInfo, setDoctorInfo] = useState<{ name: string; crm: string }>({ name: "", crm: "" });
   const [exams, setExams] = useState<ExamCheck[] | null>(null);
   const [examsLoading, setExamsLoading] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -38,6 +39,9 @@ export function LmeWizard({ emailParam, patientName, onCreated }: { emailParam: 
       const list = (d.locations || []).filter((l: { active: boolean }) => l.active);
       setLocations(list);
       if (list[0]) setEstablishmentId(list[0].id);
+    }).catch(() => {});
+    fetch("/api/auth").then((r) => r.json()).then((d) => {
+      if (d?.doctor) setDoctorInfo({ name: d.doctor.name || "", crm: [d.doctor.crm, d.doctor.crmState].filter(Boolean).join("-") });
     }).catch(() => {});
   }, []);
   const establishment = locations.find((l) => l.id === establishmentId);
@@ -232,7 +236,7 @@ export function LmeWizard({ emailParam, patientName, onCreated }: { emailParam: 
           <div className="mt-2 rounded-xl border border-[var(--border)] p-3">
             <p className="text-xs font-bold uppercase tracking-wider text-[var(--gold)]">Documentos oficiais SESAB (páginas exatas — sem redesenho)</p>
             <div className="mt-2 flex flex-wrap gap-2">
-              <a className="btn-ghost text-sm" href={`/api/ceaf/official?protocol=${protocol.id}&doc=ter`} target="_blank" rel="noopener noreferrer">Baixar TER oficial</a>
+              <a className="btn-ghost text-sm" href={`/api/ceaf/official?protocol=${protocol.id}&doc=ter&name=${encodeURIComponent(patientName || "")}&doctor=${encodeURIComponent(doctorInfo.name)}&crm=${encodeURIComponent(doctorInfo.crm)}&date=${encodeURIComponent(new Date().toLocaleDateString("pt-BR"))}`} target="_blank" rel="noopener noreferrer">Baixar TER oficial (com nome)</a>
               <a className="btn-ghost text-sm" href={`/api/ceaf/official?protocol=${protocol.id}&doc=form`} target="_blank" rel="noopener noreferrer">Baixar formulário oficial</a>
               <a className="btn-ghost text-sm" href={`/api/ceaf/official?protocol=${protocol.id}&doc=residencia`} target="_blank" rel="noopener noreferrer">Declaração de residência (terceiro)</a>
             </div>

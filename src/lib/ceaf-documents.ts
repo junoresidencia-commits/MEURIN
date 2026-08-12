@@ -46,3 +46,21 @@ export function officialDocPages(protocolId: string, doc: "ter" | "form" | "resi
   if (doc === "residencia") return CEAF_RESIDENCIA_DOC;
   return CEAF_OFFICIAL_DOCS[protocolId]?.[doc];
 }
+
+/** Sobreposição de texto no TER oficial (PDF achatado): posições em pontos (origem inferior-esquerda),
+ *  relativas à página de saída (0 = primeira página do TER). Campo: name/doctor/crm/date. */
+export type TerField = { field: "name" | "doctor" | "crm" | "date"; page: number; x: number; y: number; size?: number };
+export const TER_OVERLAY: Record<string, TerField[]> = {
+  anemia_drc_alfaepoetina: [
+    { field: "name", page: 0, x: 150, y: 201 },
+    { field: "date", page: 0, x: 470, y: 201 },
+    { field: "doctor", page: 0, x: 165, y: 121 },
+    { field: "crm", page: 0, x: 395, y: 121 },
+  ],
+  anemia_drc_ferro: [
+    { field: "name", page: 0, x: 150, y: 201 },
+    { field: "date", page: 0, x: 470, y: 201 },
+    { field: "doctor", page: 0, x: 165, y: 121 },
+    { field: "crm", page: 0, x: 395, y: 121 },
+  ],
+};
