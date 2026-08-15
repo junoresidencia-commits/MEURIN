@@ -101,16 +101,23 @@ export async function POST(
 
   const body = await req.json();
 
-  // Lote (importação da evolução): { results: [{ testKey, value, unit?, measuredAt?, onConflict? }] }
+  // Lote (importação da evolução/laudo com VÁRIAS datas):
+  // { results: [{ testKey, value, unit?, measuredAt?, onConflict? }] }
+  // Cada item é salvo NA SUA data. Nada é apagado; exames anteriores são preservados.
   if (Array.isArray(body.results)) {
     const defaultAt = body.measuredAt
       ? new Date(String(body.measuredAt)).toISOString()
       : new Date().toISOString();
-    const existing = await getLabResults(access.key);
+    // Cópia de trabalho: inclui os já existentes e vai recebendo os inseridos no próprio lote,
+    // para deduplicar corretamente mesmo com múltiplas datas de uma vez.
+    const work = [...(await getLabResults(access.key))];
     const saved: unknown[] = [];
     let updated = 0;
     let kept = 0;
+    let duplicate = 0; // mesmo exame + mesma data + mesmo resultado
     const rejected: { testKey: string; reason: string }[] = [];
+    const conflicts: { testKey: string; date: string; existingValue: number; newValue: number }[] = [];
+    const sameValue = (a: number, b: number) => Math.round(a * 1000) === Math.round(b * 1000);
 
     for (const item of body.results) {
       const key = String(item?.testKey || "");
@@ -124,20 +131,35 @@ export async function POST(
         continue;
       }
       const at = item?.measuredAt ? new Date(String(item.measuredAt)).toISOString() : defaultAt;
+      const day = dayOf(at);
       const onConflict = item?.onConflict === "keep" || item?.onConflict === "update" ? item.onConflict : null;
 
-      // Já existe exame igual (mesma chave) na mesma data?
-      const collisions = existing.filter((l) => l.testKey === key && dayOf(l.measuredAt) === dayOf(at));
+      const collisions = work.filter((l) => l.testKey === key && dayOf(l.measuredAt) === day);
+
+      // 1) Duplicata exata (mesmo exame + data + resultado) => nunca duplica.
+      if (collisions.some((c) => sameValue(c.value, val))) {
+        duplicate += 1;
+        continue;
+      }
+
+      // 2) Já existe o mesmo exame na mesma data com valor DIFERENTE.
       if (collisions.length > 0) {
         if (onConflict === "keep") {
           kept += 1;
           continue;
         }
         if (onConflict === "update") {
-          for (const c of collisions) await deleteLabResult(c.id);
+          for (const c of collisions) {
+            await deleteLabResult(c.id);
+            const idx = work.indexOf(c);
+            if (idx >= 0) work.splice(idx, 1);
+          }
           updated += 1;
+        } else {
+          // Sem política definida: NÃO apaga nem duplica silenciosamente — sinaliza p/ revisão.
+          conflicts.push({ testKey: key, date: day, existingValue: collisions[0].value, newValue: val });
+          continue;
         }
-        // sem política definida => trata como inserção normal (adiciona mais um ponto)
       }
 
       const lab = await addLabResult({
@@ -151,17 +173,21 @@ export async function POST(
         measuredAt: at,
       });
       saved.push(lab);
+      work.push(lab as LabResult);
 
       if (key === "creatinina") {
         const egfr = await autoEgfr(access, doctorId || null, val, at);
-        if (egfr) saved.push(egfr);
+        if (egfr) { saved.push(egfr); work.push(egfr); }
       }
       if (key === "cistatina_c") {
         const egfrc = await autoEgfrCystatin(access, doctorId || null, val, at);
-        if (egfrc) saved.push(egfrc);
+        if (egfrc) { saved.push(egfrc); work.push(egfrc); }
       }
     }
-    return NextResponse.json({ saved, updated, kept, rejected, count: saved.length }, { status: 201 });
+    return NextResponse.json(
+      { saved, updated, kept, duplicate, conflicts, rejected, count: saved.length },
+      { status: 201 }
+    );
   }
 
   // Registro único (formulário manual)
