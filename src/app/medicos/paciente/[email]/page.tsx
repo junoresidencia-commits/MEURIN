@@ -71,6 +71,7 @@ const TABS = [
   { id: "sinais", label: "Sinais em casa" },
   { id: "alimentacao", label: "Alimentação" },
   { id: "consultas", label: "Consultas" },
+  { id: "pesquisa", label: "Pesquisa" },
 ] as const;
 type Tab = (typeof TABS)[number]["id"];
 
@@ -738,6 +739,8 @@ export default function ProntuarioPage() {
             ))}
           </div>
         )}
+
+        {tab === "pesquisa" && <ResearchTab emailParam={emailParam} patientName={patient?.name || ""} />}
       </div>
 
       {review && (
@@ -763,6 +766,94 @@ export default function ProntuarioPage() {
           onSaved={async () => { await load(); }}
         />
       )}
+    </div>
+  );
+}
+
+const RESEARCH_CASE_CATS: { key: string; label: string }[] = [
+  { key: "relato", label: "Possível relato de caso" },
+  { key: "serie", label: "Série de casos" },
+  { key: "raro", label: "Caso raro" },
+  { key: "discussao", label: "Caso para discussão" },
+  { key: "aula", label: "Caso para aula" },
+  { key: "artigo", label: "Caso para artigo" },
+  { key: "congresso", label: "Caso para congresso" },
+  { key: "longitudinal", label: "Acompanhamento longitudinal" },
+  { key: "pesquisa", label: "Possível inclusão em pesquisa" },
+];
+
+function ResearchTab({ emailParam, patientName }: { emailParam: string; patientName: string }) {
+  const [categories, setCategories] = useState<string[]>([]);
+  const [note, setNote] = useState("");
+  const [loaded, setLoaded] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [msg, setMsg] = useState("");
+
+  useEffect(() => {
+    fetch(`/api/doctor/patients/${emailParam}/research`)
+      .then((r) => r.json())
+      .then((d) => {
+        if (d.case) { setCategories(d.case.categories || []); setNote(d.case.note || ""); }
+      })
+      .catch(() => {})
+      .finally(() => setLoaded(true));
+  }, [emailParam]);
+
+  function toggle(cat: string) {
+    setCategories((cs) => (cs.includes(cat) ? cs.filter((c) => c !== cat) : [...cs, cat]));
+  }
+  async function save() {
+    setSaving(true);
+    setMsg("");
+    try {
+      const res = await fetch(`/api/doctor/patients/${emailParam}/research`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ categories, note, patientName }),
+      });
+      setMsg(res.ok ? "Salvo. Aparece em Pesquisa Científica › Casos interessantes." : "Não foi possível salvar.");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  const marked = categories.length > 0 || note.trim().length > 0;
+
+  return (
+    <div className="space-y-4">
+      <div className="panel space-y-3">
+        <div className="flex items-center justify-between gap-2">
+          <p className="text-xs font-bold uppercase tracking-wider text-[var(--gold)]">⭐ Marcar caso interessante</p>
+          {marked && <span className="rounded-full bg-emerald-100 px-2.5 py-1 text-xs font-bold text-emerald-700">Marcado</span>}
+        </div>
+        <p className="text-sm text-[var(--text-soft)]">Classifique este caso para estudo. Só você vê estas informações — o paciente não tem acesso.</p>
+        <div className="flex flex-wrap gap-1.5">
+          {RESEARCH_CASE_CATS.map((c) => {
+            const on = categories.includes(c.key);
+            return (
+              <button key={c.key} type="button" onClick={() => toggle(c.key)} className={`rounded-full px-3 py-1.5 text-xs font-semibold ${on ? "bg-[var(--gold)] text-white" : "border border-[var(--border)] text-[var(--text-soft)]"}`}>
+                {c.label}
+              </button>
+            );
+          })}
+        </div>
+        <label className="block">
+          <span className="mb-1 block text-xs font-semibold text-[var(--text-muted)]">Anotação científica (privada)</span>
+          <textarea className="input-field min-h-[100px]" value={note} onChange={(e) => setNote(e.target.value)} placeholder="Ex.: Possível MGRS com imunofixação urinária positiva e sérica negativa. Aguardar biópsia renal." disabled={!loaded} />
+        </label>
+        {msg && <p className="text-sm font-semibold text-[var(--gold)]">{msg}</p>}
+        <button type="button" className="btn-gold" onClick={save} disabled={saving || !loaded}>{saving ? "Salvando…" : "Salvar marcação"}</button>
+      </div>
+
+      <div className="panel">
+        <p className="text-xs font-bold uppercase tracking-wider text-[var(--gold)]">Atalhos de pesquisa</p>
+        <div className="mt-2 flex flex-wrap gap-2">
+          <Link href="/medicos/pesquisa/estudos" className="btn-ghost text-sm">Criar / abrir estudo</Link>
+          <Link href="/medicos/pesquisa/casos" className="btn-ghost text-sm">Casos interessantes</Link>
+          <Link href="/medicos/pesquisa" className="btn-ghost text-sm">Central de pesquisa</Link>
+        </div>
+        <p className="mt-2 text-xs text-[var(--text-muted)]">Os dados usados em pesquisa são anonimizados e separados do prontuário identificável.</p>
+      </div>
     </div>
   );
 }
