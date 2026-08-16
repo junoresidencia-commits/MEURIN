@@ -4,6 +4,7 @@ import { getStudy } from "@/lib/research-studies-store";
 import { buildCohortRecords, applyFilters } from "@/lib/research";
 import { completeness, describeVars, resultsText, cohortSeries, type TableRow } from "@/lib/research-analysis";
 import { RESEARCH_VARS_BY_KEY, type Operator } from "@/lib/research-fields";
+import { labLabel } from "@/lib/labs";
 import { STUDY_TYPE_LABEL, STUDY_STATUS_LABEL } from "@/app/medicos/pesquisa/studyMeta";
 import { createZip, type ZipFile } from "@/lib/zip";
 
@@ -168,7 +169,7 @@ export async function GET(_req: Request, ctx: { params: Promise<{ id: string }> 
   for (const key of labKeys) {
     const series = await cohortSeries(doctorId, study.filters, key);
     seriesByKey[key] = series;
-    for (const s of series) for (const p of s.points) longRows.push([s.code, RESEARCH_VARS_BY_KEY.get(`lab_${key}`)?.label || key, p.t, num(p.y)]);
+    for (const s of series) for (const p of s.points) longRows.push([s.code, labLabel(key), p.t, num(p.y)]);
   }
 
   // Gráficos SVG
