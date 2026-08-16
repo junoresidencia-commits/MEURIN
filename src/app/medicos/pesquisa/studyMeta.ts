@@ -50,15 +50,18 @@ export const STUDY_STATUS_LABEL: Record<string, string> = {
 export const STUDY_STATUSES: StudyStatus[] = ["rascunho", "coleta", "analise", "escrita", "submetido", "concluido"];
 
 export const CASE_CATEGORY_LABEL: Record<string, string> = {
-  relato: "Possível relato de caso",
+  relato: "Relato de caso",
   serie: "Série de casos",
   raro: "Caso raro",
   discussao: "Caso para discussão",
   aula: "Caso para aula",
-  artigo: "Caso para artigo",
-  congresso: "Caso para congresso",
+  artigo: "Possível artigo",
+  congresso: "Possível congresso",
   longitudinal: "Acompanhamento longitudinal",
+  outro: "Outro",
+  // legado (registros antigos): exibição apenas
   pesquisa: "Possível inclusão em pesquisa",
 };
 
-export const CASE_CATEGORIES = Object.keys(CASE_CATEGORY_LABEL);
+/** Categorias selecionáveis na marcação (ordem do usuário). */
+export const CASE_CATEGORIES = ["relato", "serie", "raro", "discussao", "aula", "artigo", "congresso", "longitudinal", "outro"];

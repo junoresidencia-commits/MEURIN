@@ -771,15 +771,15 @@ export default function ProntuarioPage() {
 }
 
 const RESEARCH_CASE_CATS: { key: string; label: string }[] = [
-  { key: "relato", label: "Possível relato de caso" },
+  { key: "relato", label: "Relato de caso" },
   { key: "serie", label: "Série de casos" },
   { key: "raro", label: "Caso raro" },
   { key: "discussao", label: "Caso para discussão" },
   { key: "aula", label: "Caso para aula" },
-  { key: "artigo", label: "Caso para artigo" },
-  { key: "congresso", label: "Caso para congresso" },
+  { key: "artigo", label: "Possível artigo" },
+  { key: "congresso", label: "Possível congresso" },
   { key: "longitudinal", label: "Acompanhamento longitudinal" },
-  { key: "pesquisa", label: "Possível inclusão em pesquisa" },
+  { key: "outro", label: "Outro" },
 ];
 
 function ResearchTab({ emailParam, patientName }: { emailParam: string; patientName: string }) {

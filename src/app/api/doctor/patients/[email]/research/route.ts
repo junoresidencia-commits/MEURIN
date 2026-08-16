@@ -3,7 +3,7 @@ import { getDoctorSessionId } from "@/lib/auth";
 import { resolvePatientAccess } from "@/lib/doctor-access";
 import { getCase, upsertCase, type CaseCategory } from "@/lib/research-studies-store";
 
-const CATS: CaseCategory[] = ["relato", "serie", "raro", "discussao", "aula", "artigo", "congresso", "longitudinal", "pesquisa"];
+const CATS: CaseCategory[] = ["relato", "serie", "raro", "discussao", "aula", "artigo", "congresso", "longitudinal", "outro", "pesquisa"];
 
 export async function GET(_req: Request, ctx: { params: Promise<{ email: string }> }) {
   const doctorId = await getDoctorSessionId();

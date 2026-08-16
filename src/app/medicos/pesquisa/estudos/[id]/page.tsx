@@ -290,6 +290,22 @@ export default function EstudoDetailPage() {
                 </div>
                 <p className="text-xs text-[var(--text-muted)]">Sem nome/CPF/CNS/contato. A anonimização não substitui consentimento nem aprovação ética (CEP/CONEP quando aplicável).</p>
               </div>
+
+              {/* Pacote completo para produção científica externa */}
+              <div className="panel mt-4 space-y-2">
+                <p className="text-xs font-bold uppercase tracking-wider text-[var(--gold)]">Preparar para análise externa / artigo</p>
+                <p className="text-sm text-[var(--text-soft)]">
+                  Gera um pacote <b>.zip</b> com: resumo do estudo, banco anonimizado (CSV), estatística/Tabela 1,
+                  qualidade do banco, dicionário de variáveis, metodologia dos dados, fluxograma, dados longitudinais e gráficos (SVG).
+                </p>
+                <a
+                  href={analysis.n === 0 ? undefined : `/api/pesquisa/studies/${id}/package`}
+                  className={`btn-gold w-fit ${analysis.n === 0 ? "pointer-events-none opacity-60" : ""}`}
+                >
+                  Baixar pacote (.zip)
+                </a>
+                <p className="text-xs text-[var(--text-muted)]">A produção textual (artigo/abstract/revisão) é feita fora da plataforma, a partir deste pacote.</p>
+              </div>
             </>
           )}
         </div>

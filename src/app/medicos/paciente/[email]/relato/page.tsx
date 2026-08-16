@@ -55,10 +55,33 @@ export default function RelatoCasoPage() {
 
   function set<K extends keyof Draft>(k: K, v: string) { setDraft((d) => (d ? { ...d, [k]: v } : d)); }
 
+  function buildMarkdown(): string {
+    if (!draft) return "";
+    const head = meta ? `# ${draft.title}\n\n**${meta.initials}**${meta.age != null ? ` · ${meta.age} anos` : ""} · ${meta.sex}\n\n` : `# ${draft.title}\n\n`;
+    const body = (Object.keys(SECTION_LABEL) as (keyof Draft)[])
+      .filter((k) => k !== "title")
+      .map((k) => `## ${SECTION_LABEL[k]}\n\n${draft[k]}`)
+      .join("\n\n");
+    const tl = timeline.length
+      ? "\n\n## Linha do tempo\n\n" + timeline.map((e) => `- **${br(e.date)}** — ${e.kind}: ${e.text}`).join("\n")
+      : "";
+    const footer = "\n\n---\n_Documento anonimizado gerado pelo Meu Rim (sem nome/CPF/CNS/telefone/endereço). Revisar antes de usar; relato de caso pode exigir consentimento e autorização de imagens._";
+    return head + body + tl + footer;
+  }
   function copyAll() {
-    if (!draft) return;
-    const text = (Object.keys(SECTION_LABEL) as (keyof Draft)[]).map((k) => `## ${SECTION_LABEL[k]}\n${draft[k]}`).join("\n\n");
-    navigator.clipboard?.writeText(text);
+    const text = buildMarkdown();
+    if (text) navigator.clipboard?.writeText(text);
+  }
+  function downloadMd() {
+    const text = buildMarkdown();
+    if (!text) return;
+    const blob = new Blob([text], { type: "text/markdown;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `caso-${meta?.initials || "clinico"}.md`;
+    a.click();
+    URL.revokeObjectURL(url);
   }
 
   if (!ready) return <div className="mx-auto max-w-4xl px-5 py-20 text-[var(--text-muted)]">Carregando…</div>;
@@ -93,7 +116,10 @@ export default function RelatoCasoPage() {
                   )}
                 </label>
               ))}
-              <button type="button" className="btn-gold w-fit" onClick={copyAll}>Copiar rascunho</button>
+              <div className="flex flex-wrap gap-2">
+                <button type="button" className="btn-gold w-fit" onClick={downloadMd}>Exportar caso para produção científica (.md)</button>
+                <button type="button" className="btn-ghost w-fit" onClick={copyAll}>Copiar rascunho</button>
+              </div>
             </div>
           )}
 

@@ -50,7 +50,8 @@ export type CaseCategory =
   | "artigo"
   | "congresso"
   | "longitudinal"
-  | "pesquisa";
+  | "outro"
+  | "pesquisa"; // legado
 
 export interface InterestingCase {
   id: string;
