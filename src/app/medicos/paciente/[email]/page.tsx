@@ -11,6 +11,7 @@ import { ClinicalReviewModal } from "@/components/ClinicalReviewModal";
 import { extractClinicalFields, type DetectedField } from "@/lib/clinical-extractor";
 import { ExamReviewModal } from "@/components/ExamReviewModal";
 import { parseLabGroups, type ParsedLabGroup } from "@/lib/lab-parser";
+import { extractPdfText } from "@/lib/pdf-text-client";
 import { LogoUploader } from "@/components/LogoUploader";
 import { TemplatePicker } from "@/components/TemplatePicker";
 
@@ -115,6 +116,7 @@ export default function ProntuarioPage() {
   // Importar exames de texto colado (laudo/prontuário antigo com várias datas)
   const [importText, setImportText] = useState("");
   const [importErr, setImportErr] = useState("");
+  const [pdfBusy, setPdfBusy] = useState(false);
 
   // Agendamento pelo médico
   const [apptDate, setApptDate] = useState("");
@@ -280,6 +282,29 @@ export default function ProntuarioPage() {
     }
     setReview({ groups, source: "importação (texto)" });
     setImportText("");
+  }
+
+  async function importFromPdf(file: File | null) {
+    if (!file) return;
+    setImportErr("");
+    setPdfBusy(true);
+    try {
+      const text = await extractPdfText(file);
+      if (!text.trim()) {
+        setImportErr("Este PDF não tem texto selecionável (parece escaneado/foto). Abra o PDF, copie o texto e cole no campo acima.");
+        return;
+      }
+      const groups = parseLabGroups(text);
+      if (groups.length === 0) {
+        setImportErr("Não reconheci exames neste PDF. Você pode copiar o texto e colar no campo acima para conferir manualmente.");
+        return;
+      }
+      setReview({ groups, source: `PDF (${file.name})` });
+    } catch (e) {
+      setImportErr("Não foi possível ler o PDF. " + (e instanceof Error ? e.message : ""));
+    } finally {
+      setPdfBusy(false);
+    }
   }
 
   useEffect(() => {
@@ -465,17 +490,38 @@ export default function ProntuarioPage() {
 
             <div className="panel space-y-3">
               <p className="text-xs font-bold uppercase tracking-wider text-[var(--gold)]">
-                Importar exames de texto (várias datas)
+                Importar exames (várias datas)
               </p>
               <p className="text-sm text-[var(--text-soft)]">
-                Cole um laudo ou trecho de prontuário com exames de <b>várias datas</b>. O sistema separa
-                automaticamente por data e mostra tudo para você conferir antes de salvar no histórico.
+                Envie um <b>PDF</b> de laudo ou cole um texto com exames de <b>várias datas</b>. O sistema
+                separa automaticamente por data e mostra tudo para você conferir antes de salvar no histórico.
               </p>
+
+              <div className="flex flex-wrap items-center gap-3 rounded-xl border border-dashed border-[var(--border)] p-3">
+                <label className={`btn-gold cursor-pointer ${pdfBusy ? "pointer-events-none opacity-60" : ""}`}>
+                  {pdfBusy ? "Lendo PDF…" : "Importar de PDF"}
+                  <input
+                    type="file"
+                    accept="application/pdf,.pdf"
+                    className="hidden"
+                    disabled={pdfBusy}
+                    onChange={(e) => {
+                      const f = e.target.files?.[0] || null;
+                      e.currentTarget.value = "";
+                      importFromPdf(f);
+                    }}
+                  />
+                </label>
+                <span className="text-xs text-[var(--text-muted)]">
+                  PDF de laudo com texto selecionável (não escaneado). Lido no seu navegador.
+                </span>
+              </div>
+
               <textarea
                 className="input-field min-h-[120px] font-mono text-[13px]"
                 value={importText}
                 onChange={(e) => setImportText(e.target.value)}
-                placeholder={"Ex.:\n10/01/2024\nCreatinina 1,2  Ureia 45  Potássio 4,4\n20/06/2024\nCreatinina 1,5  Ureia 58  Potássio 4,8\n15/02/2025\nCreatinina 1,8  Ureia 70  Potássio 5,0"}
+                placeholder={"Ou cole o texto. Ex.:\n10/01/2024\nCreatinina 1,2  Ureia 45  Potássio 4,4\n20/06/2024\nCreatinina 1,5  Ureia 58  Potássio 4,8\n15/02/2025\nCreatinina 1,8  Ureia 70  Potássio 5,0"}
               />
               {importErr && <p className="text-sm text-[var(--danger)]">{importErr}</p>}
               <button type="button" className="btn-ghost" onClick={importFromText} disabled={!importText.trim()}>
