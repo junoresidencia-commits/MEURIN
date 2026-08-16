@@ -10,7 +10,7 @@ import { ClinicalProfileEditor } from "@/components/ClinicalProfileEditor";
 import { ClinicalReviewModal } from "@/components/ClinicalReviewModal";
 import { extractClinicalFields, type DetectedField } from "@/lib/clinical-extractor";
 import { ExamReviewModal } from "@/components/ExamReviewModal";
-import { parseLabsFromText } from "@/lib/lab-parser";
+import { parseLabGroups, type ParsedLabGroup } from "@/lib/lab-parser";
 import { LogoUploader } from "@/components/LogoUploader";
 import { TemplatePicker } from "@/components/TemplatePicker";
 
@@ -61,13 +61,13 @@ const REASON: Record<string, string> = {
 };
 
 const TABS = [
-  { id: "resumo", label: "Resumo" },
+  { id: "evolucao", label: "Evolução clínica" },
   { id: "perfil", label: "Perfil clínico" },
-  { id: "evolucao", label: "Evolução" },
+  { id: "resumo", label: "Resumo" },
   { id: "exames", label: "Exames" },
-  { id: "enviados", label: "Enviados" },
-  { id: "lme", label: "LME / CEAF" },
   { id: "documentos", label: "Documentos" },
+  { id: "lme", label: "LME / CEAF" },
+  { id: "enviados", label: "Enviados" },
   { id: "sinais", label: "Sinais em casa" },
   { id: "alimentacao", label: "Alimentação" },
   { id: "consultas", label: "Consultas" },
@@ -103,7 +103,7 @@ export default function ProntuarioPage() {
   const [labs, setLabs] = useState<Lab[]>([]);
   const [uploads, setUploads] = useState<Upload[]>([]);
   const [lmeList, setLmeList] = useState<Lme[]>([]);
-  const [tab, setTab] = useState<Tab>("resumo");
+  const [tab, setTab] = useState<Tab>("evolucao");
 
   // Formulário de exame
   const [labTest, setLabTest] = useState<string>("creatinina");
@@ -111,6 +111,10 @@ export default function ProntuarioPage() {
   const [labDate, setLabDate] = useState("");
   const [labSaving, setLabSaving] = useState(false);
   const [labErr, setLabErr] = useState("");
+
+  // Importar exames de texto colado (laudo/prontuário antigo com várias datas)
+  const [importText, setImportText] = useState("");
+  const [importErr, setImportErr] = useState("");
 
   // Agendamento pelo médico
   const [apptDate, setApptDate] = useState("");
@@ -122,7 +126,7 @@ export default function ProntuarioPage() {
 
   // Formulário de evolução
   const [form, setForm] = useState({ chiefComplaint: "", history: "", assessment: "", plan: "" });
-  const [review, setReview] = useState<{ labs: { testKey: string; value: number | string; unit?: string }[]; date?: string } | null>(null);
+  const [review, setReview] = useState<{ groups: ParsedLabGroup[]; source?: string } | null>(null);
   const [clinicalReview, setClinicalReview] = useState<DetectedField[] | null>(null);
   const [shared, setShared] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -247,15 +251,15 @@ export default function ProntuarioPage() {
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Não foi possível salvar.");
-      // Leitura automática: detecta exames E dados clínicos escritos na evolução.
+      // Leitura automática: detecta exames (em VÁRIAS datas) E dados clínicos na evolução.
       const evolutionText = [form.chiefComplaint, form.history, form.assessment, form.plan].filter(Boolean).join("\n");
-      const detected = parseLabsFromText(evolutionText);
+      const groups = parseLabGroups(evolutionText);
       const detectedClinical = extractClinicalFields(evolutionText);
       setForm({ chiefComplaint: "", history: "", assessment: "", plan: "" });
       setSaveMsg("Evolução salva no prontuário." + (shared ? " Liberada ao paciente." : ""));
       await load();
-      if (detected.labs.length > 0) {
-        setReview({ labs: detected.labs, date: detected.date });
+      if (groups.length > 0) {
+        setReview({ groups });
       }
       if (detectedClinical.length > 0) {
         setClinicalReview(detectedClinical);
@@ -265,6 +269,17 @@ export default function ProntuarioPage() {
     } finally {
       setSaving(false);
     }
+  }
+
+  function importFromText() {
+    setImportErr("");
+    const groups = parseLabGroups(importText);
+    if (groups.length === 0) {
+      setImportErr("Nenhum exame reconhecido no texto. Verifique se há nomes de exames e valores.");
+      return;
+    }
+    setReview({ groups, source: "importação (texto)" });
+    setImportText("");
   }
 
   useEffect(() => {
@@ -445,6 +460,26 @@ export default function ProntuarioPage() {
               {labErr && <p className="text-sm text-[var(--danger)]">{labErr}</p>}
               <button type="button" className="btn-gold" onClick={saveLab} disabled={labSaving || !labValue.trim()}>
                 {labSaving ? "Salvando…" : "Adicionar exame"}
+              </button>
+            </div>
+
+            <div className="panel space-y-3">
+              <p className="text-xs font-bold uppercase tracking-wider text-[var(--gold)]">
+                Importar exames de texto (várias datas)
+              </p>
+              <p className="text-sm text-[var(--text-soft)]">
+                Cole um laudo ou trecho de prontuário com exames de <b>várias datas</b>. O sistema separa
+                automaticamente por data e mostra tudo para você conferir antes de salvar no histórico.
+              </p>
+              <textarea
+                className="input-field min-h-[120px] font-mono text-[13px]"
+                value={importText}
+                onChange={(e) => setImportText(e.target.value)}
+                placeholder={"Ex.:\n10/01/2024\nCreatinina 1,2  Ureia 45  Potássio 4,4\n20/06/2024\nCreatinina 1,5  Ureia 58  Potássio 4,8\n15/02/2025\nCreatinina 1,8  Ureia 70  Potássio 5,0"}
+              />
+              {importErr && <p className="text-sm text-[var(--danger)]">{importErr}</p>}
+              <button type="button" className="btn-ghost" onClick={importFromText} disabled={!importText.trim()}>
+                Reconhecer exames do texto
               </button>
             </div>
 
@@ -708,10 +743,9 @@ export default function ProntuarioPage() {
       {review && (
         <ExamReviewModal
           emailParam={emailParam}
-          initialLabs={review.labs}
-          initialDate={review.date}
+          groups={review.groups}
           existingLabs={labs.map((l) => ({ testKey: l.testKey, measuredAt: l.measuredAt }))}
-          source="evolução"
+          source={review.source || "evolução"}
           onClose={() => setReview(null)}
           onSaved={async () => {
             await load();

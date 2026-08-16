@@ -13,6 +13,12 @@ export type ParseResult = {
   date?: string; // YYYY-MM-DD, quando encontrada no texto
 };
 
+/** Um bloco de exames pertencente a UMA data (ou sem data, quando não identificada). */
+export type ParsedLabGroup = {
+  date?: string; // YYYY-MM-DD
+  labs: ParsedLab[];
+};
+
 /**
  * Sinônimos/abreviações usados por laboratórios e médicos → chave do exame.
  * Chaves multi-palavra vêm antes das curtas (a ordenação por tamanho garante isso).
@@ -147,10 +153,14 @@ const LAB_RE = new RegExp(
 );
 
 const DATE_RE = /(\d{1,2})[\/.-](\d{1,2})[\/.-](\d{2,4})/;
+const DATE_RE_G = /(\d{1,2})[\/.-](\d{1,2})[\/.-](\d{2,4})/g;
 
 function toIsoDate(match: RegExpMatchArray): string | undefined {
   const [, d, m, yRaw] = match;
+  if (yRaw.length !== 2 && yRaw.length !== 4) return undefined; // evita "1/2/3"
   const y = yRaw.length === 2 ? `20${yRaw}` : yRaw;
+  const yr = Number(y);
+  if (yr < 1990 || yr > 2099) return undefined; // sanidade: ignora números soltos
   const dd = d.padStart(2, "0");
   const mm = m.padStart(2, "0");
   const day = Number(dd);
@@ -159,19 +169,10 @@ function toIsoDate(match: RegExpMatchArray): string | undefined {
   return `${y}-${mm}-${dd}`;
 }
 
-/**
- * Extrai resultados laboratoriais de texto livre (evolução, colagem de laudo, OCR).
- * Mantém apenas a primeira ocorrência de cada exame.
- */
-export function parseLabsFromText(text: string): ParseResult {
-  if (!text || !text.trim()) return { labs: [] };
-
-  const dateMatch = text.match(DATE_RE);
-  const date = dateMatch ? toIsoDate(dateMatch) : undefined;
-
+/** Extrai os exames de UM trecho de texto, mantendo a 1ª ocorrência de cada exame nele. */
+function extractLabs(text: string): ParsedLab[] {
   const seen = new Set<string>();
   const labs: ParsedLab[] = [];
-
   for (const m of text.matchAll(LAB_RE)) {
     const rawLabel = m[1].toLowerCase();
     const testKey = SYNONYMS[rawLabel];
@@ -183,14 +184,66 @@ export function parseLabsFromText(text: string): ParseResult {
 
     seen.add(testKey);
     const def = NEPHRO_LABS.find((l) => l.key === testKey)!;
-    labs.push({
-      testKey,
-      label: def.label,
-      value,
-      unit: labUnit(testKey),
-      raw: m[0].trim(),
-    });
+    labs.push({ testKey, label: def.label, value, unit: labUnit(testKey), raw: m[0].trim() });
+  }
+  return labs;
+}
+
+/**
+ * Extrai resultados laboratoriais de texto livre (evolução, colagem de laudo, OCR).
+ * Mantém apenas a primeira ocorrência de cada exame. (Compatível com o fluxo antigo.)
+ */
+export function parseLabsFromText(text: string): ParseResult {
+  if (!text || !text.trim()) return { labs: [] };
+  const dateMatch = text.match(DATE_RE);
+  const date = dateMatch ? toIsoDate(dateMatch) : undefined;
+  return { labs: extractLabs(text), date };
+}
+
+/**
+ * Extrai exames AGRUPADOS por data. Reconhece VÁRIAS datas dentro do mesmo texto
+ * (evolução/prontuário longo, colagem de laudo) e separa os resultados por data.
+ *
+ * Regra: cada data encontrada abre um bloco; os exames que vêm depois dela (até a
+ * próxima data) pertencem a essa data. Exames antes da primeira data ficam sem data
+ * (o médico confirma no modal). Blocos com a MESMA data são unidos.
+ */
+export function parseLabGroups(text: string): ParsedLabGroup[] {
+  if (!text || !text.trim()) return [];
+
+  const marks: { index: number; iso?: string }[] = [];
+  for (const m of text.matchAll(DATE_RE_G)) {
+    marks.push({ index: m.index ?? 0, iso: toIsoDate(m) });
   }
 
-  return { labs, date };
+  if (marks.length === 0) {
+    const labs = extractLabs(text);
+    return labs.length ? [{ date: undefined, labs }] : [];
+  }
+
+  const groups: ParsedLabGroup[] = [];
+  const pre = extractLabs(text.slice(0, marks[0].index));
+  if (pre.length) groups.push({ date: undefined, labs: pre });
+
+  for (let i = 0; i < marks.length; i++) {
+    const start = marks[i].index;
+    const end = i + 1 < marks.length ? marks[i + 1].index : text.length;
+    const labs = extractLabs(text.slice(start, end));
+    if (labs.length) groups.push({ date: marks[i].iso, labs });
+  }
+
+  // Une blocos com a MESMA data (mantém a 1ª ocorrência de cada exame).
+  const merged: ParsedLabGroup[] = [];
+  for (const g of groups) {
+    const key = g.date ?? "__none__";
+    const existing = merged.find((x) => (x.date ?? "__none__") === key);
+    if (!existing) {
+      merged.push({ date: g.date, labs: [...g.labs] });
+      continue;
+    }
+    for (const lab of g.labs) {
+      if (!existing.labs.some((l) => l.testKey === lab.testKey)) existing.labs.push(lab);
+    }
+  }
+  return merged;
 }
