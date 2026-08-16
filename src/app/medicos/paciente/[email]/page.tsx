@@ -848,6 +848,7 @@ function ResearchTab({ emailParam, patientName }: { emailParam: string; patientN
       <div className="panel">
         <p className="text-xs font-bold uppercase tracking-wider text-[var(--gold)]">Atalhos de pesquisa</p>
         <div className="mt-2 flex flex-wrap gap-2">
+          <Link href={`/medicos/paciente/${emailParam}/relato`} className="btn-ghost text-sm">Criar relato de caso + linha do tempo</Link>
           <Link href="/medicos/pesquisa/estudos" className="btn-ghost text-sm">Criar / abrir estudo</Link>
           <Link href="/medicos/pesquisa/casos" className="btn-ghost text-sm">Casos interessantes</Link>
           <Link href="/medicos/pesquisa" className="btn-ghost text-sm">Central de pesquisa</Link>

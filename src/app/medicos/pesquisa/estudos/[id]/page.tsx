@@ -120,6 +120,11 @@ export default function EstudoDetailPage() {
         <div className="mx-auto max-w-4xl px-5 pb-28 pt-8 lg:pb-8">
           <p className="text-sm font-semibold text-[var(--gold)]"><Link href="/medicos/pesquisa/estudos" className="hover:underline">Estudos</Link> › {STUDY_TYPE_LABEL[study.type]}</p>
 
+          <div className="mt-2 flex flex-wrap gap-2">
+            <Link href={`/medicos/pesquisa/estudos/${id}/graficos`} className="btn-ghost text-sm">Gráficos</Link>
+            <Link href={`/medicos/pesquisa/estudos/${id}/comparar`} className="btn-ghost text-sm">Comparar grupos (estatística)</Link>
+          </div>
+
           {/* Cabeçalho editável */}
           <div className="panel mt-2 space-y-3">
             <input

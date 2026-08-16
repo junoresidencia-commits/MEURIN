@@ -137,6 +137,31 @@ export async function egfrRapidDeclineCount(
   return count;
 }
 
+/** Séries longitudinais (anonimizadas) de um exame para a coorte filtrada. */
+export interface PatientSeries {
+  code: string;
+  points: { t: string; y: number }[];
+}
+export async function cohortSeries(doctorId: string, filters: Filter[], testKey: string): Promise<PatientSeries[]> {
+  const all = await buildCohortRecords(doctorId);
+  const matched = applyFilters(all, filters);
+  const ids = new Set(matched.map((r) => String(r.__id)));
+  const patients = await listPatientsByDoctor(doctorId);
+  const series: PatientSeries[] = [];
+  let i = 0;
+  for (const p of patients) {
+    if (!ids.has(p.id)) continue;
+    i += 1;
+    const labs = await getLabResults(clinicalKey(p));
+    const points = labs
+      .filter((l) => l.testKey === testKey && Number.isFinite(l.value))
+      .map((l) => ({ t: new Date(l.measuredAt).toISOString().slice(0, 10), y: l.value }))
+      .sort((a, b) => a.t.localeCompare(b.t));
+    if (points.length) series.push({ code: `P${String(i).padStart(4, "0")}`, points });
+  }
+  return series;
+}
+
 /** Sugestão de estudo derivada de contagem REAL nos dados do médico. */
 export interface StudyIdea {
   key: string;
