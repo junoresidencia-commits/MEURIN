@@ -22,18 +22,20 @@ function Icon({ name, className }: { name: keyof typeof PATHS; className?: strin
   );
 }
 
-const ITEMS: { href: string; label: string; icon: keyof typeof PATHS }[] = [
-  { href: "/medicos/painel", label: "Painel inicial", icon: "home" },
+// Itens principais (dia a dia) + seção "Mais" (áreas secundárias, sem excluir nada).
+const PRIMARY: { href: string; label: string; icon: keyof typeof PATHS }[] = [
+  { href: "/medicos/painel", label: "Painel", icon: "home" },
   { href: "/medicos/painel#pacientes", label: "Pacientes", icon: "users" },
-  { href: "/medicos/painel#agenda", label: "Agenda", icon: "cal" },
-  { href: "/medicos/agenda", label: "Locais e horários", icon: "cal" },
-  { href: "/medicos/painel#pacientes", label: "Prontuários", icon: "file" },
-  { href: "/medicos/documentos", label: "Documento avulso", icon: "edit" },
-  { href: "/medicos/pesquisa", label: "Pesquisa Científica", icon: "chart" },
-  { href: "/medicos/links", label: "Links úteis", icon: "link" },
-  { href: "/medicos/equipe", label: "Minha equipe", icon: "users" },
+  { href: "/medicos/agenda", label: "Agenda", icon: "cal" },
+  { href: "/medicos/links", label: "Links", icon: "link" },
+];
+const MORE: { href: string; label: string; icon: keyof typeof PATHS }[] = [
+  { href: "/medicos/painel#financeiro", label: "Financeiro", icon: "chart" },
+  { href: "/medicos/pesquisa", label: "Estudos e Pesquisa", icon: "chart" },
+  { href: "/medicos/documentos", label: "Documentos", icon: "edit" },
+  { href: "/medicos/agenda/configurar", label: "Clínicas e horários", icon: "cal" },
+  { href: "/medicos/equipe", label: "Atendentes", icon: "users" },
   { href: "/medicos/configuracoes", label: "Configurações", icon: "gear" },
-  { href: "/admin/login", label: "Administração", icon: "shield" },
 ];
 
 export function DoctorSidebar() {
@@ -45,7 +47,18 @@ export function DoctorSidebar() {
           <span className="font-display text-lg font-extrabold text-[var(--text)]">Meu <span className="text-[var(--gold)]">Rim</span></span>
         </Link>
         <nav className="flex flex-col gap-1">
-          {ITEMS.map(({ href, label, icon }) => (
+          {PRIMARY.map(({ href, label, icon }) => (
+            <Link
+              key={label}
+              href={href}
+              className="flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-semibold text-[var(--text-soft)] transition hover:bg-[var(--gold-soft)] hover:text-[var(--gold)]"
+            >
+              <Icon name={icon} className="h-5 w-5" />
+              {label}
+            </Link>
+          ))}
+          <p className="mt-4 px-3 text-[11px] font-bold uppercase tracking-wider text-[var(--text-muted)]">Mais</p>
+          {MORE.map(({ href, label, icon }) => (
             <Link
               key={label}
               href={href}

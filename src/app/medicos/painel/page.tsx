@@ -171,11 +171,6 @@ export default function PainelMedicoPage() {
     window.open(url, "_blank", "noopener,noreferrer");
   }
 
-  async function logout() {
-    await fetch("/api/auth", { method: "DELETE" });
-    router.push("/medicos/login");
-  }
-
   async function reloadPatients() {
     const res = await fetch("/api/doctor/patients");
     const data = await res.json();
@@ -245,11 +240,7 @@ export default function PainelMedicoPage() {
         </div>
         <div className="flex flex-wrap items-center gap-2">
           <NotificationBell />
-          <Link href="/medicos/documentos" className="btn-ghost">Documento avulso</Link>
-          <a href="/admin/login" className="btn-ghost">Administração</a>
-          <button type="button" className="btn-ghost" onClick={logout}>
-            Sair
-          </button>
+          <Link href="/medicos/mais" className="btn-ghost">Mais</Link>
         </div>
       </div>
       <EnableNotifications />
@@ -260,23 +251,23 @@ export default function PainelMedicoPage() {
           <p className="mt-3 text-xs uppercase tracking-wider text-[var(--text-muted)]">Pacientes</p>
           <p className="font-display text-3xl text-[var(--text)]">{patients.length}</p>
         </a>
-        <a href="#agenda" className="panel transition hover:-translate-y-0.5 hover:border-[var(--border-gold)]">
+        <Link href="/medicos/agenda" className="panel transition hover:-translate-y-0.5 hover:border-[var(--border-gold)]">
           <span className="grid h-10 w-10 place-items-center rounded-xl bg-[var(--gold-soft)] text-[var(--gold)]">A</span>
           <p className="mt-3 text-xs uppercase tracking-wider text-[var(--text-muted)]">Agenda hoje</p>
           <p className="font-display text-3xl text-[var(--text)]">{agendaHoje}</p>
-        </a>
-        <div className="panel">
+        </Link>
+        <Link href="/medicos/agenda" className="panel transition hover:-translate-y-0.5 hover:border-[var(--border-gold)]">
           <span className="grid h-10 w-10 place-items-center rounded-xl bg-[#eaf8f2] text-[#1c8c70]">✓</span>
           <p className="mt-3 text-xs uppercase tracking-wider text-[var(--text-muted)]">Consultas liberadas</p>
           <p className="font-display text-3xl text-[var(--green)]">
             {bookings.filter((b) => b.status === "confirmed").length}
           </p>
-        </div>
-        <div className="panel">
+        </Link>
+        <a href="#financeiro" className="panel transition hover:-translate-y-0.5 hover:border-[var(--border-gold)]">
           <span className="grid h-10 w-10 place-items-center rounded-xl bg-[var(--gold-soft)] text-[var(--gold)]">R$</span>
           <p className="mt-3 text-xs uppercase tracking-wider text-[var(--text-muted)]">Na sua conta (estimado)</p>
           <p className="font-display text-3xl text-[var(--gold)]">{formatBRL(earnings)}</p>
-        </div>
+        </a>
       </div>
 
       <section id="agenda" className="panel mt-8 scroll-mt-4">
