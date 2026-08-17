@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import bcrypt from "bcryptjs";
-import { COOKIE, createSessionToken, getDoctorSessionId } from "@/lib/auth";
+import { COOKIE, DOCTOR_MAX_AGE, createSessionToken, getDoctorSessionId } from "@/lib/auth";
 import { readDb } from "@/lib/store";
 
 export async function GET() {
@@ -53,8 +53,9 @@ export async function POST(req: Request) {
   res.cookies.set(COOKIE, token, {
     httpOnly: true,
     sameSite: "lax",
+    secure: process.env.NODE_ENV === "production",
     path: "/",
-    maxAge: 60 * 60 * 24 * 7,
+    maxAge: DOCTOR_MAX_AGE,
   });
   return res;
 }

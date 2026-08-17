@@ -3,13 +3,15 @@ import { cookies } from "next/headers";
 
 const SECRET = process.env.SESSION_SECRET || "meu-rim-dev-secret-change-me";
 const COOKIE = "meurim_doctor_session";
+// Sessão persiste até o médico clicar em "Sair" (~1 ano).
+const MAX_AGE = 60 * 60 * 24 * 365;
 
 function sign(payload: string): string {
   return createHmac("sha256", SECRET).update(payload).digest("hex");
 }
 
 export function createSessionToken(doctorId: string): string {
-  const exp = Date.now() + 1000 * 60 * 60 * 24 * 7;
+  const exp = Date.now() + MAX_AGE * 1000;
   const payload = `${doctorId}.${exp}`;
   return `${payload}.${sign(payload)}`;
 }
@@ -37,4 +39,4 @@ export async function getDoctorSessionId(): Promise<string | null> {
   return verifySessionToken(jar.get(COOKIE)?.value);
 }
 
-export { COOKIE };
+export { COOKIE, MAX_AGE as DOCTOR_MAX_AGE };
