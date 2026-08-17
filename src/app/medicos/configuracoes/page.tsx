@@ -38,6 +38,8 @@ export default function ConfiguracoesMedicoPage() {
   const [msg, setMsg] = useState("");
   const [pushMsg, setPushMsg] = useState("");
   const [cns, setCns] = useState("");
+  const [name, setName] = useState("");
+  const [cpf, setCpf] = useState("");
 
   useEffect(() => {
     (async () => {
@@ -57,6 +59,8 @@ export default function ConfiguracoesMedicoPage() {
         calendarEventMode: d.calendarEventMode === "patient" ? "patient" : "meurim",
       });
       setCns(d.cns || "");
+      setName(d.name || "");
+      setCpf(d.cpf || "");
       setSupported(pushSupported());
       setSubscribed(await isSubscribed());
       setLoading(false);
@@ -73,7 +77,7 @@ export default function ConfiguracoesMedicoPage() {
     const res = await fetch("/api/availability", {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ ...prefs, cns }),
+      body: JSON.stringify({ ...prefs, cns, name, cpf }),
     });
     setMsg(res.ok ? "Preferências salvas." : "Não foi possível salvar agora.");
   }
@@ -112,12 +116,22 @@ export default function ConfiguracoesMedicoPage() {
           <p className="mt-1 text-[var(--text-muted)]">Notificações no celular, lembretes, calendário, documentos e dados SUS/CEAF.</p>
 
           <section className="panel mt-6">
-            <h2 className="font-display text-xl text-[var(--text)]">Dados SUS / CEAF</h2>
-            <p className="mt-1 text-sm text-[var(--text-muted)]">Cadastre uma vez — reutilizado automaticamente em toda LME/CEAF.</p>
-            <label className="mt-3 block max-w-sm">
-              <span className="mb-1 block text-xs font-semibold text-[var(--text-muted)]">CNS do médico (Cartão Nacional de Saúde)</span>
-              <input className="input-field" value={cns} onChange={(e) => setCns(e.target.value)} inputMode="numeric" placeholder="000 0000 0000 0000" />
-            </label>
+            <h2 className="font-display text-xl text-[var(--text)]">Meus dados (documentos, LME e receitas)</h2>
+            <p className="mt-1 text-sm text-[var(--text-muted)]">O nome completo aparece nas receitas, LME e relatórios. CPF e CNS são reutilizados automaticamente na LME/CEAF.</p>
+            <div className="mt-3 grid gap-3 sm:grid-cols-2">
+              <label className="block sm:col-span-2">
+                <span className="mb-1 block text-xs font-semibold text-[var(--text-muted)]">Nome completo</span>
+                <input className="input-field" value={name} onChange={(e) => setName(e.target.value)} placeholder="Ex.: Juno Damacena Barbosa" />
+              </label>
+              <label className="block">
+                <span className="mb-1 block text-xs font-semibold text-[var(--text-muted)]">CPF do médico</span>
+                <input className="input-field" value={cpf} onChange={(e) => setCpf(e.target.value)} inputMode="numeric" placeholder="000.000.000-00" />
+              </label>
+              <label className="block">
+                <span className="mb-1 block text-xs font-semibold text-[var(--text-muted)]">CNS (Cartão Nacional de Saúde)</span>
+                <input className="input-field" value={cns} onChange={(e) => setCns(e.target.value)} inputMode="numeric" placeholder="000 0000 0000 0000" />
+              </label>
+            </div>
           </section>
 
           <section id="recebimentos" className="mt-6 scroll-mt-4">

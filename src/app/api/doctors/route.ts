@@ -77,6 +77,8 @@ export async function POST(req: Request) {
     crmState,
     rqe,
     clinic,
+    cpf,
+    cns,
   } = body;
 
   if (!name || !email || !password || !crm) {
@@ -112,6 +114,8 @@ export async function POST(req: Request) {
     crmState: crmState ? String(crmState) : undefined,
     rqe: rqe ? String(rqe) : undefined,
     clinic: clinic ? String(clinic) : undefined,
+    cpf: cpf ? String(cpf).replace(/\D/g, "") : undefined,
+    cns: cns ? String(cns).replace(/\s+/g, "") : undefined,
   };
 
   await updateDb((current) => ({

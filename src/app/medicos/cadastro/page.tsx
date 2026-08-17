@@ -17,6 +17,8 @@ export default function CadastroMedicoPage() {
     bio: "",
     consultationPriceCents: "350",
     pixKey: "",
+    cpf: "",
+    cns: "",
   });
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
@@ -76,6 +78,8 @@ export default function CadastroMedicoPage() {
     ["phone", "Telefone", "tel", true],
     ["crm", "CRM", "text", true],
     ["crmState", "Estado do CRM (UF)", "text", true],
+    ["cpf", "CPF", "text", true],
+    ["cns", "CNS (Cartão Nacional de Saúde)", "text", true],
     ["rqe", "RQE (se houver)", "text", false],
     ["specialty", "Especialidade", "text", true],
     ["clinic", "Clínica / local de atendimento", "text", false],
