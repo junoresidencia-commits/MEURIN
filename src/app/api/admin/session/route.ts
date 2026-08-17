@@ -1,6 +1,11 @@
 import { NextResponse } from "next/server";
 import { timingSafeEqual } from "crypto";
-import { ADMIN_COOKIE, createAdminToken, getAdminCredentials } from "@/lib/admin-session";
+import { ADMIN_COOKIE, createAdminToken, getAdminCredentials, isAdmin } from "@/lib/admin-session";
+
+/** Status da sessão admin (para exibir a opção "Administração" só a administradores). */
+export async function GET() {
+  return NextResponse.json({ admin: await isAdmin() });
+}
 
 function safeEqual(a: string, b: string): boolean {
   const ab = Buffer.from(a);

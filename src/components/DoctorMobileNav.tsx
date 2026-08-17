@@ -7,7 +7,7 @@ const PATHS: Record<string, string> = {
   users: "M17 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2M9 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8Z",
   cal: "M8 2v4M16 2v4M3 10h18M5 4h14a2 2 0 0 1 2 2v13a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2Z",
   link: "M10 13a5 5 0 0 0 7 0l3-3a5 5 0 0 0-7-7l-1 1M14 11a5 5 0 0 0-7 0l-3 3a5 5 0 0 0 7 7l1-1",
-  shield: "M12 3l8 3v6c0 5-3.5 8-8 9-4.5-1-8-4-8-9V6l8-3Z",
+  more: "M4 6h16M4 12h16M4 18h16",
 };
 
 function Icon({ name, className }: { name: keyof typeof PATHS; className?: string }) {
@@ -23,7 +23,7 @@ const ITEMS: { href: string; label: string; icon: keyof typeof PATHS }[] = [
   { href: "/medicos/painel#pacientes", label: "Pacientes", icon: "users" },
   { href: "/medicos/agenda", label: "Agenda", icon: "cal" },
   { href: "/medicos/links", label: "Links", icon: "link" },
-  { href: "/admin/login", label: "Admin", icon: "shield" },
+  { href: "/medicos/mais", label: "Mais", icon: "more" },
 ];
 
 /** Navegação inferior do médico — só no celular (no desktop usamos o menu lateral). */
