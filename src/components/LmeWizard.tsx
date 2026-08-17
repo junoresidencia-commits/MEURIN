@@ -23,6 +23,7 @@ export function LmeWizard({ emailParam, patientName, onCreated }: { emailParam: 
   const [cid, setCid] = useState("");
   const [form, setForm] = useState({ weightKg: "", heightCm: "", diagnosis: "", posologia: "", justificativa: "" });
   const [alsoReceita, setAlsoReceita] = useState(true);
+  const [alsoRelatorio, setAlsoRelatorio] = useState(true);
   const [locations, setLocations] = useState<{ id: string; name: string; city: string; cnes?: string }[]>([]);
   const [establishmentId, setEstablishmentId] = useState("");
   const [doctorInfo, setDoctorInfo] = useState<{ name: string; crm: string }>({ name: "", crm: "" });
@@ -95,6 +96,27 @@ export function LmeWizard({ emailParam, patientName, onCreated }: { emailParam: 
       if (alsoReceita) {
         const body = selectedMeds.map((m) => `${m.name} (${m.presentation}) — ${form.posologia || qty[m.id] || ""}`.trim()).join("\n");
         if (body) await fetch(`/api/doctor/patients/${emailParam}/documents`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ type: "receita", body, sharedWithPatient: false }) });
+      }
+      if (alsoRelatorio) {
+        const cidObj = protocol.cids.find((c) => c.code === cid);
+        const examesTexto = (exams || []).map((e) => e.label).join("; ");
+        const relatorio = [
+          `RELATÓRIO MÉDICO — CEAF/SESAB`,
+          `Protocolo: ${protocol.name} (${protocol.source})`,
+          `Paciente: ${patientName || "—"}`,
+          `CID-10: ${cid}${cidObj ? " — " + cidObj.description : ""}`,
+          form.diagnosis ? `Diagnóstico: ${form.diagnosis}` : "",
+          "",
+          `Medicamento(s) solicitado(s): ${selectedMeds.map((m) => `${m.name} (${m.presentation})${qty[m.id] ? " — " + qty[m.id] + "/mês" : ""}`).join("; ")}`,
+          "",
+          `História clínica e justificativa:`,
+          form.justificativa || "(a completar)",
+          "",
+          examesTexto ? `Exames que acompanham o processo (o paciente leva impressos e anexa): ${examesTexto}` : "",
+          "",
+          `Declaro que o(a) paciente preenche os critérios do PCDT/SESAB para o(s) medicamento(s) solicitado(s).`,
+        ].filter((l) => l !== "").join("\n");
+        await fetch(`/api/doctor/patients/${emailParam}/documents`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ type: "relatorio", title: `Relatório médico — ${protocol.name}`, body: relatorio, sharedWithPatient: false }) });
       }
       await onCreated();
       if (data.id) window.open(`/lme/${data.id}`, "_blank");
@@ -232,6 +254,10 @@ export function LmeWizard({ emailParam, patientName, onCreated }: { emailParam: 
           <label className="mt-2 flex items-center gap-2 text-[var(--text-soft)]">
             <input type="checkbox" className="h-4 w-4 accent-[var(--gold)]" checked={alsoReceita} onChange={(e) => setAlsoReceita(e.target.checked)} />
             Gerar também a receita dos medicamentos (mesmos dados da LME)
+          </label>
+          <label className="flex items-center gap-2 text-[var(--text-soft)]">
+            <input type="checkbox" className="h-4 w-4 accent-[var(--gold)]" checked={alsoRelatorio} onChange={(e) => setAlsoRelatorio(e.target.checked)} />
+            Gerar também o relatório médico (documento no prontuário)
           </label>
           <div className="mt-2 rounded-xl border border-[var(--border)] p-3">
             <p className="text-xs font-bold uppercase tracking-wider text-[var(--gold)]">Documentos oficiais SESAB (páginas exatas — sem redesenho)</p>
