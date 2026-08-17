@@ -295,8 +295,9 @@ export default function EstudoDetailPage() {
               <div className="panel mt-4 space-y-2">
                 <p className="text-xs font-bold uppercase tracking-wider text-[var(--gold)]">Preparar para análise externa / artigo</p>
                 <p className="text-sm text-[var(--text-soft)]">
-                  Gera um pacote <b>.zip</b> com: resumo do estudo, banco anonimizado (CSV), estatística/Tabela 1,
-                  qualidade do banco, dicionário de variáveis, metodologia dos dados, fluxograma, dados longitudinais e gráficos (SVG).
+                  Gera um pacote <b>.zip</b> com o banco em <b>CSV, Excel, R, Python e SPSS</b>, além de dicionário de variáveis
+                  (tipo, unidade, codificação, valores, ausentes, fórmulas e definições), resumo do estudo, estatística/Tabela 1,
+                  qualidade do banco, metodologia, fluxograma, dados longitudinais e gráficos (SVG). Pronto para entregar a um estatístico.
                 </p>
                 <a
                   href={analysis.n === 0 ? undefined : `/api/pesquisa/studies/${id}/package`}

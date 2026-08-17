@@ -7,6 +7,8 @@ import { RESEARCH_VARS_BY_KEY, type Operator } from "@/lib/research-fields";
 import { labLabel } from "@/lib/labs";
 import { STUDY_TYPE_LABEL, STUDY_STATUS_LABEL } from "@/app/medicos/pesquisa/studyMeta";
 import { createZip, type ZipFile } from "@/lib/zip";
+import { buildDictionary, definitionsText, rScript, pyScript, spssSyntax } from "@/lib/research-export";
+import * as XLSX from "xlsx";
 
 const DEFAULT_VARS = ["idade", "sexo", "drc", "estagio_g", "categoria_a", "has", "dm", "lab_creatinina", "lab_tfge", "lab_rac"];
 const BOM = "\ufeff";
@@ -88,26 +90,45 @@ export async function GET(_req: Request, ctx: { params: Promise<{ id: string }> 
   const quality = completeness(matched, variables);
   const results = resultsText(study.question, matched.length, all.length, table1);
 
-  // Banco anonimizado
+  // Banco (colunas = CHAVES p/ análise direta em R/Python/SPSS)
   const cols = ["codigo", ...variables];
-  const header = cols.map((c) => (c === "codigo" ? "Código" : RESEARCH_VARS_BY_KEY.get(c)?.label || c));
-  const bankRows: (string | number)[][] = [header];
+  const rawRows: (string | number)[][] = [cols];
   matched.forEach((r, i) => {
     const code = `P${String(i + 1).padStart(4, "0")}`;
-    bankRows.push(cols.map((c) => {
+    rawRows.push(cols.map((c) => {
       if (c === "codigo") return code;
       const def = RESEARCH_VARS_BY_KEY.get(c);
       const raw = r[c];
       return raw === null || raw === undefined ? (def?.type === "num" ? "" : "desconhecido") : (raw as string | number);
     }));
   });
+  // dados.csv: números sem aspas com decimal vírgula; textos entre aspas.
+  const dadosCsv = BOM + rawRows.map((r) => r.map((c) => (typeof c === "number" ? num(c) : `"${String(c).replace(/"/g, '""')}"`)).join(";")).join("\r\n");
+  // dados.xlsx (números reais)
+  const ws = XLSX.utils.aoa_to_sheet(rawRows);
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, "dados");
+  const xlsxBuf = new Uint8Array(XLSX.write(wb, { type: "array", bookType: "xlsx" }) as ArrayBuffer);
 
-  // Dicionário
-  const dictRows: (string | number)[][] = [["Chave", "Variável", "Tipo", "Unidade", "Origem"]];
-  for (const c of variables) {
-    const def = RESEARCH_VARS_BY_KEY.get(c);
-    dictRows.push([c, def?.label || c, def?.type || "", def?.unit || "", def?.source || ""]);
-  }
+  // Dicionário enriquecido
+  const dict = buildDictionary(variables);
+  const dictRows: (string | number)[][] = [["Variável (chave)", "Descrição", "Tipo", "Unidade", "Valores possíveis", "Codificação", "Dados ausentes", "Fórmula/critério"]];
+  for (const d of dict) dictRows.push([d.key, d.label, d.kind, d.unit, d.values, d.coding, d.missing, d.formula]);
+  const dictTxt = [
+    "DICIONÁRIO DE VARIÁVEIS",
+    "",
+    ...dict.map((d) => [
+      `Variável: ${d.key}`,
+      `  Descrição: ${d.label}`,
+      `  Tipo: ${d.kind}${d.unit ? ` · Unidade: ${d.unit}` : ""}`,
+      `  Valores: ${d.values}`,
+      `  Codificação: ${d.coding}`,
+      `  Ausentes: ${d.missing}`,
+      d.formula ? `  Fórmula/critério: ${d.formula}` : "",
+    ].filter(Boolean).join("\n")),
+    "",
+    definitionsText(),
+  ].join("\n");
 
   // Estatística / Tabela 1
   const tableRows: (string | number)[][] = [["Variável", "Resultado"]];
@@ -178,12 +199,17 @@ export async function GET(_req: Request, ctx: { params: Promise<{ id: string }> 
   const tfgeSeries = seriesByKey["tfge"] || [];
 
   const files: ZipFile[] = [
-    { name: "README.txt", data: `PACOTE DE PRODUÇÃO CIENTÍFICA — MEU RIM\nEstudo: ${study.title}\nGerado em: ${new Date().toLocaleString("pt-BR")}\n\nConteúdo:\n- resumo_do_estudo.txt\n- banco_anonimizado.csv\n- estatistica_tabela1.csv\n- qualidade_do_banco.csv\n- dicionario_variaveis.csv\n- metodologia.txt\n- fluxograma.txt\n- dados_longitudinais.csv\n- graficos/*.svg\n\nPrivacidade: banco anonimizado (P0001…), sem nome/CPF/CNS/telefone/e-mail/endereço.\nA produção textual (artigo/abstract/revisão) é feita externamente.` },
+    { name: "README.txt", data: `PACOTE DE PRODUÇÃO CIENTÍFICA — MEU RIM\nEstudo: ${study.title}\nGerado em: ${new Date().toLocaleString("pt-BR")}\n\nBanco (colunas = chaves de variável; separador ";"; decimal ","):\n- dados.csv         banco principal (analise em R/Python/SPSS/Excel)\n- dados.xlsx        versao Excel\n- dados.R           script de importacao no R (read.csv2 + fatores + binarias _bin)\n- dados.py          script de importacao no Python (pandas)\n- dados_spss.sps    sintaxe SPSS (GET DATA + VARIABLE/VALUE LABELS)\n- dicionario_variaveis.csv / .txt   definicao de cada variavel (tipo, unidade, codificacao, valores, ausentes, formulas, definicoes)\n\nApoio:\n- resumo_do_estudo.txt, estatistica_tabela1.csv, qualidade_do_banco.csv,\n  metodologia.txt, fluxograma.txt, dados_longitudinais.csv, graficos/*.svg\n\nPrivacidade: banco anonimizado (P0001…), sem nome/CPF/CNS/telefone/e-mail/endereco.\nA producao textual (artigo/abstract/revisao) e feita externamente a partir deste pacote.` },
     { name: "resumo_do_estudo.txt", data: resumo },
-    { name: "banco_anonimizado.csv", data: csv(bankRows) },
+    { name: "dados.csv", data: dadosCsv },
+    { name: "dados.xlsx", data: xlsxBuf },
+    { name: "dados.R", data: rScript(variables) },
+    { name: "dados.py", data: pyScript(variables) },
+    { name: "dados_spss.sps", data: spssSyntax(variables) },
+    { name: "dicionario_variaveis.csv", data: csv(dictRows) },
+    { name: "dicionario_variaveis.txt", data: dictTxt },
     { name: "estatistica_tabela1.csv", data: csv(tableRows) },
     { name: "qualidade_do_banco.csv", data: csv(qualRows) },
-    { name: "dicionario_variaveis.csv", data: csv(dictRows) },
     { name: "metodologia.txt", data: methodology },
     { name: "fluxograma.txt", data: fluxograma },
     { name: "dados_longitudinais.csv", data: csv(longRows) },
