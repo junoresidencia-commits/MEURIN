@@ -57,6 +57,18 @@ export type DoctorStatus =
   | "suspended"
   | "correction";
 
+export type PixKeyType = "cpf" | "cnpj" | "email" | "telefone" | "aleatoria";
+
+/** Perfil Pix do médico para recebimento direto (dados do recebedor). */
+export interface PixProfile {
+  keyType?: PixKeyType;
+  key?: string;
+  holderName?: string; // nome do titular da chave
+  holderDoc?: string; // CPF/CNPJ do titular
+  bank?: string; // banco/instituição
+  city?: string; // cidade do recebedor (para o BR Code)
+}
+
 export interface Doctor {
   id: string;
   name: string;
@@ -69,6 +81,8 @@ export interface Doctor {
   pixKey?: string;
   bankAccountHint?: string;
   stripeConnectReady: boolean;
+  /** Perfil Pix estruturado (recebimento direto). Complementa pixKey (legado). */
+  pixProfile?: PixProfile;
   weeklyAvailability: WeeklySlot[];
   // Agenda avançada (locais + períodos por modalidade). Quando vazia, usa weeklyAvailability.
   locations?: DoctorLocation[];
