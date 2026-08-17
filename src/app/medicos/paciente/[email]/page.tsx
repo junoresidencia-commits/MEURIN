@@ -11,7 +11,6 @@ import { ClinicalReviewModal } from "@/components/ClinicalReviewModal";
 import { extractClinicalFields, type DetectedField } from "@/lib/clinical-extractor";
 import { ExamReviewModal } from "@/components/ExamReviewModal";
 import { parseLabGroups, type ParsedLabGroup } from "@/lib/lab-parser";
-import { LogoUploader } from "@/components/LogoUploader";
 import { TemplatePicker } from "@/components/TemplatePicker";
 
 type Lab = { id: string; testKey: string; value: number; unit?: string | null; measuredAt: string };
@@ -135,11 +134,8 @@ export default function ProntuarioPage() {
   const [saveErr, setSaveErr] = useState("");
 
   // Formulário de documento (receita / exame / relatório)
-  const [docType, setDocType] = useState<Doc["type"]>("receita");
-  const [docBody, setDocBody] = useState("");
-  const [docShared, setDocShared] = useState(true);
-  const [docSaving, setDocSaving] = useState(false);
-  const [docErr, setDocErr] = useState("");
+  // Documentos usam o papel timbrado salvo (compositor). hasLetterhead controla a orientação.
+  const [hasLetterhead, setHasLetterhead] = useState<boolean | null>(null);
 
   const load = useCallback(async () => {
     const res = await fetch(`/api/doctor/patients/${emailParam}`);
@@ -219,27 +215,6 @@ export default function ProntuarioPage() {
     }
   }
 
-  async function saveDocument() {
-    setDocSaving(true);
-    setDocErr("");
-    try {
-      const res = await fetch(`/api/doctor/patients/${emailParam}/documents`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ type: docType, body: docBody, sharedWithPatient: docShared }),
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || "Não foi possível emitir.");
-      setDocBody("");
-      await load();
-      if (data.document?.id) window.open(`/documento/${data.document.id}`, "_blank");
-    } catch (e) {
-      setDocErr(e instanceof Error ? e.message : "Erro inesperado.");
-    } finally {
-      setDocSaving(false);
-    }
-  }
-
   async function saveNote() {
     setSaving(true);
     setSaveErr("");
@@ -286,6 +261,13 @@ export default function ProntuarioPage() {
   useEffect(() => {
     load();
   }, [load]);
+
+  useEffect(() => {
+    fetch("/api/doctor/letterheads")
+      .then((r) => r.json())
+      .then((d) => setHasLetterhead(Array.isArray(d.letterheads) && d.letterheads.length > 0))
+      .catch(() => setHasLetterhead(false));
+  }, []);
 
   const labKeys = Array.from(new Set(labs.map((l) => l.testKey)));
   const bp = records.find((r) => r.kind === "bp");
@@ -570,63 +552,30 @@ export default function ProntuarioPage() {
 
         {tab === "documentos" && (
           <div className="space-y-4">
-            <LogoUploader />
-            <div className="panel flex flex-wrap items-center justify-between gap-2 border-[var(--border-gold)] bg-[var(--gold-soft)]">
-              <div>
-                <p className="font-semibold text-[var(--text)]">Novo documento com seu papel timbrado</p>
-                <p className="text-sm text-[var(--text-muted)]">Receita, relatório, atestado, encaminhamento ou documento livre — em PDF sobre o seu receituário.</p>
+            {hasLetterhead === false ? (
+              <div className="panel border-[var(--border-gold)] bg-[var(--gold-soft)]">
+                <p className="font-semibold text-[var(--text)]">Adicione seu papel timbrado</p>
+                <p className="mt-1 text-sm text-[var(--text-muted)]">
+                  Os documentos (receita, relatório, atestado, pedido de exame, encaminhamento) são emitidos sobre o seu
+                  papel timbrado — um só, que serve para tudo. Envie o seu receituário uma vez em Configurações.
+                </p>
+                <Link href="/medicos/configuracoes/documentos" className="btn-gold mt-3 inline-block">Adicionar papel timbrado →</Link>
               </div>
-              <Link href={`/medicos/paciente/${emailParam}/documento`} className="btn-gold">Abrir compositor →</Link>
-            </div>
-
-            <div className="panel space-y-3">
-              <p className="text-xs font-bold uppercase tracking-wider text-[var(--gold)]">
-                Emitir documento (texto simples)
-              </p>
-              <div className="flex gap-2">
-                {(["receita", "exame", "relatorio"] as const).map((t) => (
-                  <button
-                    key={t}
-                    type="button"
-                    onClick={() => setDocType(t)}
-                    className={`rounded-full px-3 py-1.5 text-sm font-bold transition ${
-                      docType === t ? "bg-[var(--gold)] text-white" : "border border-[var(--border)] bg-white text-[var(--text-soft)]"
-                    }`}
-                  >
-                    {DOC_TYPE_LABEL[t]}
-                  </button>
-                ))}
+            ) : (
+              <div className="panel flex flex-wrap items-center justify-between gap-2 border-[var(--border-gold)] bg-[var(--gold-soft)]">
+                <div>
+                  <p className="font-semibold text-[var(--text)]">Novo documento com seu papel timbrado</p>
+                  <p className="text-sm text-[var(--text-muted)]">Receita, relatório, atestado, encaminhamento, pedido de exame ou documento livre — em PDF sobre o seu receituário salvo.</p>
+                </div>
+                <Link href={`/medicos/paciente/${emailParam}/documento`} className="btn-gold">Abrir compositor →</Link>
               </div>
-              <TemplatePicker
-                type={docType}
-                currentText={docBody}
-                onApply={setDocBody}
-                patientName={patient?.name}
-              />
-              <textarea
-                className="input-field min-h-[140px]"
-                value={docBody}
-                onChange={(e) => setDocBody(e.target.value)}
-                placeholder={
-                  docType === "receita"
-                    ? "Um medicamento por linha. Ex.:\nLosartana 50mg — 1 comprimido pela manhã\nDapagliflozina 10mg — 1 comprimido ao dia"
-                    : docType === "exame"
-                      ? "Um exame por linha. Ex.:\nCreatinina e ureia\nRelação albumina/creatinina (RAC)\nHemograma, potássio, HbA1c"
-                      : "Escreva o relatório médico."
-                }
-              />
-              <label className="flex items-center gap-2 text-sm text-[var(--text-soft)]">
-                <input type="checkbox" checked={docShared} onChange={(e) => setDocShared(e.target.checked)} className="h-4 w-4 accent-[var(--gold)]" />
-                Liberar para o paciente ver e baixar
-              </label>
-              {docErr && <p className="rounded-xl border border-[var(--danger)]/30 bg-[var(--danger)]/10 px-3 py-2 text-sm text-[var(--danger)]">{docErr}</p>}
-              <button type="button" className="btn-gold w-full" onClick={saveDocument} disabled={docSaving || !docBody.trim()}>
-                {docSaving ? "Emitindo…" : "Emitir e abrir PDF"}
-              </button>
+            )}
+            {hasLetterhead !== false && (
               <p className="text-xs text-[var(--text-muted)]">
-                O documento abre em uma página pronta para imprimir ou salvar em PDF.
+                Gerencie seus papéis timbrados em{" "}
+                <Link href="/medicos/configuracoes/documentos" className="font-semibold text-[var(--gold)]">Configurações › Papéis timbrados</Link>.
               </p>
-            </div>
+            )}
 
             <p className="text-xs font-bold uppercase tracking-wider text-[var(--gold)]">Documentos emitidos</p>
             {documents.length === 0 && <p className="text-[var(--text-muted)]">Nenhum documento emitido.</p>}

@@ -6,6 +6,8 @@ import { useRouter } from "next/navigation";
 import { DoctorSidebar } from "@/components/DoctorSidebar";
 import { DoctorMobileNav } from "@/components/DoctorMobileNav";
 import { disablePush, enablePush, isSubscribed, notificationPermission, pushSupported } from "@/lib/push-client";
+import { DoctorPaymentSettings } from "@/components/DoctorPaymentSettings";
+import { DoctorPixSettings } from "@/components/DoctorPixSettings";
 
 type Prefs = {
   notifyPush: boolean;
@@ -116,6 +118,15 @@ export default function ConfiguracoesMedicoPage() {
               <span className="mb-1 block text-xs font-semibold text-[var(--text-muted)]">CNS do médico (Cartão Nacional de Saúde)</span>
               <input className="input-field" value={cns} onChange={(e) => setCns(e.target.value)} inputMode="numeric" placeholder="000 0000 0000 0000" />
             </label>
+          </section>
+
+          <section id="recebimentos" className="mt-6 scroll-mt-4">
+            <h2 className="font-display text-xl text-[var(--text)]">Recebimentos</h2>
+            <p className="mt-1 text-sm text-[var(--text-muted)]">Como você recebe o valor das consultas: conta Mercado Pago e/ou chave Pix própria.</p>
+            <p className="mt-3 text-sm font-semibold text-[var(--text)]">Mercado Pago</p>
+            <DoctorPaymentSettings />
+            <p className="mt-5 text-sm font-semibold text-[var(--text)]">Pix (recebimento direto)</p>
+            <DoctorPixSettings />
           </section>
 
           <Link href="/medicos/configuracoes/documentos" className="panel mt-6 flex items-center justify-between transition hover:border-[var(--border-gold)]">
