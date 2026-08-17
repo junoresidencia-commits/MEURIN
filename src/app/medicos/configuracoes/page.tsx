@@ -126,6 +126,14 @@ export default function ConfiguracoesMedicoPage() {
             <span className="text-2xl text-[var(--gold)]">→</span>
           </Link>
 
+          <Link href="/medicos/assinatura" className="panel mt-4 flex items-center justify-between transition hover:border-[var(--border-gold)]">
+            <div>
+              <h2 className="font-display text-xl text-[var(--text)]">Minha assinatura digital</h2>
+              <p className="mt-1 text-sm text-[var(--text-muted)]">Assinatura visual e integração ICP-Brasil (quando o provedor estiver configurado). Assinatura digital e manual dos documentos.</p>
+            </div>
+            <span className="text-2xl text-[var(--gold)]">→</span>
+          </Link>
+
           <Link href="/medicos/equipe" className="panel mt-4 flex items-center justify-between transition hover:border-[var(--border-gold)]">
             <div>
               <h2 className="font-display text-xl text-[var(--text)]">Minha equipe — Atendentes</h2>

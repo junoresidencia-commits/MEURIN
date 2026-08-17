@@ -57,6 +57,13 @@ export type DoctorStatus =
   | "suspended"
   | "correction";
 
+/** Assinatura VISUAL (aparência no documento). NÃO substitui assinatura digital ICP-Brasil. */
+export interface SignatureVisual {
+  kind: "typed" | "image" | "draw";
+  value: string; // texto (typed) ou dataURL (image/draw)
+  updatedAt?: string;
+}
+
 export interface Doctor {
   id: string;
   name: string;
@@ -69,6 +76,8 @@ export interface Doctor {
   pixKey?: string;
   bankAccountHint?: string;
   stripeConnectReady: boolean;
+  /** Assinatura visual do médico (aparência). Não é ICP-Brasil. */
+  signatureVisual?: SignatureVisual;
   weeklyAvailability: WeeklySlot[];
   // Agenda avançada (locais + períodos por modalidade). Quando vazia, usa weeklyAvailability.
   locations?: DoctorLocation[];
