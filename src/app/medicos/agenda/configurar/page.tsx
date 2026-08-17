@@ -214,8 +214,14 @@ export default function AgendaMedicoPage() {
   );
 }
 
+type LocForm = { name: string; city: string; address: string; phone: string; type: string; cnes: string };
+const emptyForm: LocForm = { name: "", city: "", address: "", phone: "", type: "clinica", cnes: "" };
+
 function LocationsCard({ locations, onChange, show, setShow }: { locations: DoctorLocation[]; onChange: (l: DoctorLocation[]) => void; show: boolean; setShow: (v: boolean) => void }) {
-  const [form, setForm] = useState({ name: "", city: "", address: "", phone: "", type: "clinica", cnes: "" });
+  const [form, setForm] = useState<LocForm>(emptyForm);
+  const [editId, setEditId] = useState<string | null>(null);
+  const [editForm, setEditForm] = useState<LocForm>(emptyForm);
+  const [saving, setSaving] = useState(false);
 
   async function reload() {
     const r = await fetch("/api/doctor/locations").then((x) => x.json());
@@ -224,9 +230,31 @@ function LocationsCard({ locations, onChange, show, setShow }: { locations: Doct
   async function add() {
     if (!form.name || !form.city) return;
     await fetch("/api/doctor/locations", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(form) });
-    setForm({ name: "", city: "", address: "", phone: "", type: "clinica", cnes: "" });
+    setForm(emptyForm);
     setShow(false);
     await reload();
+  }
+  function startEdit(l: DoctorLocation) {
+    setEditId(l.id);
+    setEditForm({
+      name: l.name || "",
+      city: l.city || "",
+      address: l.address || "",
+      phone: l.phone || "",
+      type: l.type || "clinica",
+      cnes: l.cnes || "",
+    });
+  }
+  async function saveEdit(id: string) {
+    if (!editForm.name || !editForm.city) return;
+    setSaving(true);
+    try {
+      await fetch("/api/doctor/locations", { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id, ...editForm }) });
+      setEditId(null);
+      await reload();
+    } finally {
+      setSaving(false);
+    }
   }
   async function toggleActive(l: DoctorLocation) {
     await fetch("/api/doctor/locations", { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id: l.id, active: !l.active }) });
@@ -265,16 +293,39 @@ function LocationsCard({ locations, onChange, show, setShow }: { locations: Doct
       <div className="mt-3 grid gap-2">
         {locations.length === 0 && <p className="text-sm text-[var(--text-muted)]">Nenhum local ainda. (Teleconsulta não precisa de local.)</p>}
         {locations.map((l) => (
-          <div key={l.id} className="panel flex flex-wrap items-center justify-between gap-2">
-            <div>
-              <p className="font-semibold text-[var(--text)]">{l.name} <span className="text-sm font-normal text-[var(--text-muted)]">· {l.city}</span></p>
-              {l.address && <p className="text-xs text-[var(--text-muted)]">{l.address}</p>}
-            </div>
-            <div className="flex items-center gap-2">
-              <span className={`rounded-full px-2 py-0.5 text-xs font-semibold ${l.active ? "bg-emerald-100 text-emerald-700" : "bg-slate-100 text-slate-500"}`}>{l.active ? "Ativo" : "Inativo"}</span>
-              <button type="button" className="btn-ghost text-sm" onClick={() => toggleActive(l)}>{l.active ? "Desativar" : "Ativar"}</button>
-              <button type="button" className="btn-ghost text-sm text-[var(--danger)]" onClick={() => remove(l.id)}>Remover</button>
-            </div>
+          <div key={l.id} className="panel">
+            {editId === l.id ? (
+              <div className="grid gap-3 sm:grid-cols-2">
+                <label className="block"><span className="mb-1 block text-xs font-semibold text-[var(--text-muted)]">Nome do local</span><input className="input-field" value={editForm.name} onChange={(e) => setEditForm({ ...editForm, name: e.target.value })} /></label>
+                <label className="block"><span className="mb-1 block text-xs font-semibold text-[var(--text-muted)]">Cidade</span><input className="input-field" value={editForm.city} onChange={(e) => setEditForm({ ...editForm, city: e.target.value })} /></label>
+                <label className="block"><span className="mb-1 block text-xs font-semibold text-[var(--text-muted)]">Endereço (opcional)</span><input className="input-field" value={editForm.address} onChange={(e) => setEditForm({ ...editForm, address: e.target.value })} /></label>
+                <label className="block"><span className="mb-1 block text-xs font-semibold text-[var(--text-muted)]">Telefone (opcional)</span><input className="input-field" value={editForm.phone} onChange={(e) => setEditForm({ ...editForm, phone: e.target.value })} /></label>
+                <label className="block"><span className="mb-1 block text-xs font-semibold text-[var(--text-muted)]">CNES (SUS/CEAF)</span><input className="input-field" value={editForm.cnes} onChange={(e) => setEditForm({ ...editForm, cnes: e.target.value })} inputMode="numeric" placeholder="0000000" /></label>
+                <label className="block"><span className="mb-1 block text-xs font-semibold text-[var(--text-muted)]">Tipo</span>
+                  <select className="input-field" value={editForm.type} onChange={(e) => setEditForm({ ...editForm, type: e.target.value })}>
+                    <option value="clinica">Clínica</option><option value="consultorio">Consultório</option><option value="hospital">Hospital</option><option value="outro">Outro</option>
+                  </select>
+                </label>
+                <div className="flex items-end gap-2 sm:col-span-2">
+                  <button type="button" className="btn-gold" onClick={() => saveEdit(l.id)} disabled={saving || !editForm.name || !editForm.city}>{saving ? "Salvando…" : "Salvar alterações"}</button>
+                  <button type="button" className="btn-ghost" onClick={() => setEditId(null)}>Cancelar</button>
+                </div>
+              </div>
+            ) : (
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <div>
+                  <p className="font-semibold text-[var(--text)]">{l.name} <span className="text-sm font-normal text-[var(--text-muted)]">· {l.city}</span></p>
+                  {l.address && <p className="text-xs text-[var(--text-muted)]">{l.address}</p>}
+                  <p className="text-xs text-[var(--text-muted)]">CNES: {l.cnes ? l.cnes : <span className="font-semibold text-[var(--danger)]">falta preencher</span>}</p>
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className={`rounded-full px-2 py-0.5 text-xs font-semibold ${l.active ? "bg-emerald-100 text-emerald-700" : "bg-slate-100 text-slate-500"}`}>{l.active ? "Ativo" : "Inativo"}</span>
+                  <button type="button" className="btn-ghost text-sm" onClick={() => startEdit(l)}>Alterar</button>
+                  <button type="button" className="btn-ghost text-sm" onClick={() => toggleActive(l)}>{l.active ? "Desativar" : "Ativar"}</button>
+                  <button type="button" className="btn-ghost text-sm text-[var(--danger)]" onClick={() => remove(l.id)}>Remover</button>
+                </div>
+              </div>
+            )}
           </div>
         ))}
       </div>
