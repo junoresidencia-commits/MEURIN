@@ -171,7 +171,13 @@ export default function AgendaCalendarioPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [periods, locations, modalityFilter]);
 
-  if (loading) return <div className="mx-auto max-w-4xl px-5 py-20 text-[var(--text-muted)]">Carregando agenda…</div>;
+  if (loading) return (
+    <div className="flex min-h-screen bg-[var(--bg)]">
+      <DoctorSidebar />
+      <div className="min-w-0 flex-1"><div className="mx-auto max-w-4xl px-5 py-20 text-[var(--text-muted)]">Carregando agenda…</div></div>
+      <DoctorMobileNav />
+    </div>
+  );
 
   const dayForDay = view === "dia" ? dayCursor : null;
 
