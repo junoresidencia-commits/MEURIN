@@ -68,6 +68,8 @@ export async function PUT(req: Request) {
   const calendarEventMode = body.calendarEventMode === "patient" || body.calendarEventMode === "meurim" ? body.calendarEventMode : undefined;
   const tz = body.tz !== undefined ? String(body.tz || "").trim() || undefined : undefined;
   const cns = body.cns !== undefined ? String(body.cns || "").replace(/\s+/g, "") || undefined : undefined;
+  const name = body.name !== undefined ? String(body.name || "").trim() : undefined;
+  const cpf = body.cpf !== undefined ? String(body.cpf || "").replace(/\D/g, "") || undefined : undefined;
 
   // Períodos avançados de agenda (local/modalidade/duração/intervalo/valor).
   let availabilityPeriods: AvailabilityPeriod[] | undefined;
@@ -134,6 +136,8 @@ export async function PUT(req: Request) {
             calendarEventMode: calendarEventMode !== undefined ? calendarEventMode : d.calendarEventMode,
             tz: tz !== undefined ? tz : d.tz,
             cns: cns !== undefined ? cns : d.cns,
+            name: name && name.length > 1 ? name : d.name,
+            cpf: cpf !== undefined ? cpf : d.cpf,
             availabilityPeriods: availabilityPeriods !== undefined ? availabilityPeriods : d.availabilityPeriods,
           }
         : d

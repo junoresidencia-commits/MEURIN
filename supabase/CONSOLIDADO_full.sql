@@ -833,3 +833,6 @@ grant all privileges on table public.ceaf_doc_patterns to service_role;
 -- ===== EXTRA: assinatura visual do medico (PR #71) =====
 alter table public.doctors add column if not exists signature_visual jsonb;
 
+-- ===== 20260817030000_doctor_cpf.sql =====
+alter table public.doctors add column if not exists cpf text;
+
