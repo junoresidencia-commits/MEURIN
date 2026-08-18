@@ -640,6 +640,8 @@ export default function ProntuarioPage() {
 
         {tab === "alimentacao" && (
           <div className="space-y-3">
+            <NutritionReferralBox emailParam={emailParam} />
+            <p className="text-xs font-bold uppercase tracking-wider text-[var(--gold)]">Diário alimentar do paciente</p>
             {food.length === 0 && <p className="text-[var(--text-muted)]">Nenhum alimento registrado.</p>}
             {food.map((f) => (
               <div key={f.id} className="panel flex items-center justify-between gap-3">
@@ -849,6 +851,55 @@ function Metric({ label, value, unit }: { label: string; value: string; unit: st
       <p className="text-[11px] uppercase tracking-wider text-[var(--text-muted)]">{label}</p>
       <p className="mt-1 text-lg font-extrabold text-[var(--text)]">{value}</p>
       <p className="text-[10px] text-[var(--text-muted)]">{unit}</p>
+    </div>
+  );
+}
+
+function NutritionReferralBox({ emailParam }: { emailParam: string }) {
+  const [open, setOpen] = useState(false);
+  const [form, setForm] = useState({ reason: "", objective: "", restrictions: "", priority: "normal", notes: "" });
+  const [saving, setSaving] = useState(false);
+  const [msg, setMsg] = useState<string | null>(null);
+
+  async function send() {
+    setSaving(true); setMsg(null);
+    try {
+      const res = await fetch(`/api/doctor/patients/${emailParam}/nutrition-referral`, {
+        method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(form),
+      });
+      const d = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(d.error || "Erro");
+      setMsg("Encaminhado para a nutrição. Aparecerá no painel da nutricionista vinculada.");
+      setForm({ reason: "", objective: "", restrictions: "", priority: "normal", notes: "" });
+      setOpen(false);
+    } catch (e) { setMsg(e instanceof Error ? e.message : "Erro"); }
+    finally { setSaving(false); }
+  }
+
+  return (
+    <div className="panel border-[var(--border-gold)] bg-[var(--gold-soft)]">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <div>
+          <p className="font-semibold text-[var(--text)]">Encaminhar para Nutrição</p>
+          <p className="text-sm text-[var(--text-muted)]">Envie este paciente à sua equipe de nutrição (configure em Mais › Equipe de Nutrição).</p>
+        </div>
+        <button type="button" className="btn-gold" onClick={() => setOpen((v) => !v)}>{open ? "Fechar" : "Encaminhar"}</button>
+      </div>
+      {open && (
+        <div className="mt-3 grid gap-3 sm:grid-cols-2">
+          <label className="block sm:col-span-2"><span className="mb-1 block text-xs font-semibold text-[var(--text-muted)]">Motivo</span><input className="input-field" value={form.reason} onChange={(e) => setForm({ ...form, reason: e.target.value })} placeholder="Ex.: DRC em tratamento conservador; hipercalemia" /></label>
+          <label className="block"><span className="mb-1 block text-xs font-semibold text-[var(--text-muted)]">Objetivo nutricional</span><input className="input-field" value={form.objective} onChange={(e) => setForm({ ...form, objective: e.target.value })} placeholder="Ex.: controle de potássio e sódio" /></label>
+          <label className="block"><span className="mb-1 block text-xs font-semibold text-[var(--text-muted)]">Prioridade</span>
+            <select className="input-field" value={form.priority} onChange={(e) => setForm({ ...form, priority: e.target.value })}>
+              <option value="normal">Normal</option><option value="alta">Alta</option>
+            </select>
+          </label>
+          <label className="block sm:col-span-2"><span className="mb-1 block text-xs font-semibold text-[var(--text-muted)]">Restrições / cuidados</span><input className="input-field" value={form.restrictions} onChange={(e) => setForm({ ...form, restrictions: e.target.value })} /></label>
+          <label className="block sm:col-span-2"><span className="mb-1 block text-xs font-semibold text-[var(--text-muted)]">Observações clínicas</span><textarea className="input-field min-h-[60px]" value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} /></label>
+          <div className="sm:col-span-2"><button type="button" className="btn-gold" onClick={send} disabled={saving}>{saving ? "Enviando…" : "Confirmar encaminhamento"}</button></div>
+        </div>
+      )}
+      {msg && <p className="mt-2 text-sm font-semibold text-[var(--text-soft)]">{msg}</p>}
     </div>
   );
 }
