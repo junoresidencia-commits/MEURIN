@@ -11,8 +11,9 @@ type Doctor = {
   specialty?: string;
   rqe?: string;
   clinic?: string;
-  logoUrl?: string | null;
 };
+
+type Letterhead = { id: string; name: string; isDefault: boolean; active: boolean };
 
 type DocType = "receita" | "exame" | "relatorio";
 
@@ -28,14 +29,7 @@ const PLACEHOLDER: Record<DocType, string> = {
   relatorio: "Escreva o relatório médico.",
 };
 
-function loadImage(src: string): Promise<HTMLImageElement> {
-  return new Promise((resolve, reject) => {
-    const img = new Image();
-    img.onload = () => resolve(img);
-    img.onerror = reject;
-    img.src = src;
-  });
-}
+const NO_LETTERHEAD = "__none__";
 
 export default function DocumentoAvulsoPage() {
   const router = useRouter();
@@ -45,104 +39,61 @@ export default function DocumentoAvulsoPage() {
   const [patientName, setPatientName] = useState("");
   const [body, setBody] = useState("");
   const [phone, setPhone] = useState("");
+  const [letterheads, setLetterheads] = useState<Letterhead[]>([]);
+  const [letterheadId, setLetterheadId] = useState<string>(NO_LETTERHEAD);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
 
   useEffect(() => {
-    fetch("/api/auth")
-      .then((r) => r.json())
-      .then((d) => {
-        if (!d.doctor) {
-          router.replace("/medicos/login");
-          return;
-        }
-        setDoctor(d.doctor);
-        setLoading(false);
-      });
+    (async () => {
+      const [auth, lh] = await Promise.all([
+        fetch("/api/auth").then((r) => r.json()),
+        fetch("/api/doctor/letterheads").then((r) => r.json()).catch(() => ({ letterheads: [] })),
+      ]);
+      if (!auth.doctor) {
+        router.replace("/medicos/login");
+        return;
+      }
+      setDoctor(auth.doctor);
+      const list: Letterhead[] = (lh.letterheads || []).filter((l: Letterhead) => l.active);
+      setLetterheads(list);
+      const def = list.find((l) => l.isDefault) || list[0];
+      setLetterheadId(def ? def.id : NO_LETTERHEAD);
+      setLoading(false);
+    })();
   }, [router]);
 
   const dateLabel = new Date().toLocaleDateString("pt-BR", { day: "2-digit", month: "long", year: "numeric" });
   const credential = doctor ? [doctor.crm, doctor.rqe ? `RQE ${doctor.rqe}` : ""].filter(Boolean).join(" · ") : "";
 
-  async function downloadPdf() {
-    if (!doctor) return;
-    const { jsPDF } = await import("jspdf");
-    const pdf = new jsPDF({ unit: "pt", format: "a4" });
-    const pageW = pdf.internal.pageSize.getWidth();
-    const margin = 56;
-    const maxW = pageW - margin * 2;
-    let y = margin;
-
-    let textX = margin;
-    if (doctor.logoUrl) {
-      try {
-        const img = await loadImage(doctor.logoUrl);
-        const maxH = 46;
-        const maxLogoW = 150;
-        const ratio = img.width / img.height || 1;
-        let h = maxH;
-        let w = h * ratio;
-        if (w > maxLogoW) {
-          w = maxLogoW;
-          h = w / ratio;
-        }
-        const fmt = doctor.logoUrl.includes("image/png") ? "PNG" : "JPEG";
-        pdf.addImage(doctor.logoUrl, fmt, margin, y - 6, w, h);
-        textX = margin + w + 12;
-      } catch {
-        /* segue sem logo */
+  async function generatePdf() {
+    if (!doctor || !body.trim()) return;
+    setBusy(true);
+    setError("");
+    try {
+      const res = await fetch("/api/documents/avulso", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          type,
+          title: TYPE_LABEL[type],
+          content: body,
+          patientName: patientName.trim(),
+          letterheadId: letterheadId === NO_LETTERHEAD ? "" : letterheadId,
+        }),
+      });
+      if (!res.ok) {
+        const d = await res.json().catch(() => ({}));
+        throw new Error(d.error || "Não foi possível gerar o documento.");
       }
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      window.open(url, "_blank", "noopener,noreferrer");
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Erro inesperado.");
+    } finally {
+      setBusy(false);
     }
-
-    pdf.setFont("helvetica", "bold");
-    pdf.setFontSize(16);
-    pdf.text(doctor.name, textX, y);
-    pdf.setFont("helvetica", "normal");
-    pdf.setFontSize(10);
-    pdf.setTextColor(120);
-    pdf.text([doctor.specialty, credential].filter(Boolean).join(" — "), textX, y + 15);
-    pdf.text(dateLabel, pageW - margin, y, { align: "right" });
-    pdf.setTextColor(20);
-    y += 40;
-    pdf.setDrawColor(210);
-    pdf.line(margin, y, pageW - margin, y);
-    y += 30;
-
-    if (patientName.trim()) {
-      pdf.setFont("helvetica", "normal");
-      pdf.setFontSize(11);
-      pdf.setTextColor(80);
-      pdf.text(`Paciente: ${patientName.trim()}`, margin, y);
-      pdf.setTextColor(20);
-      y += 24;
-    }
-
-    pdf.setFont("helvetica", "bold");
-    pdf.setFontSize(14);
-    pdf.text(TYPE_LABEL[type].toUpperCase(), pageW / 2, y, { align: "center" });
-    y += 30;
-
-    pdf.setFont("helvetica", "normal");
-    pdf.setFontSize(12);
-    const lines = pdf.splitTextToSize(body || "", maxW) as string[];
-    for (const line of lines) {
-      if (y > 720) {
-        pdf.addPage();
-        y = margin;
-      }
-      pdf.text(line, margin, y);
-      y += 20;
-    }
-
-    y = Math.max(y + 60, 700);
-    pdf.line(margin + 120, y, pageW - margin - 120, y);
-    pdf.setFont("helvetica", "bold");
-    pdf.text(doctor.name, pageW / 2, y + 16, { align: "center" });
-    if (credential) {
-      pdf.setFont("helvetica", "normal");
-      pdf.setTextColor(120);
-      pdf.text(credential, pageW / 2, y + 32, { align: "center" });
-    }
-
-    pdf.save(`${type}-meu-rim.pdf`);
   }
 
   function shareWhatsApp() {
@@ -161,89 +112,93 @@ export default function DocumentoAvulsoPage() {
 
   return (
     <div className="mx-auto max-w-3xl px-5 py-10">
-      <div className="print:hidden">
-        <Link href="/medicos/painel" className="text-sm font-semibold text-[var(--gold)]">← Painel</Link>
-        <h1 className="font-display mt-3 text-3xl font-extrabold text-[var(--text)]">Documento avulso</h1>
-        <p className="mt-1 text-sm text-[var(--text-muted)]">
-          Gere uma receita, pedido de exame ou relatório rápido — sem precisar abrir um paciente. Sai
-          com a sua identidade e logo, pronto para baixar em PDF, imprimir ou enviar no WhatsApp.
-        </p>
+      <Link href="/medicos/painel" className="text-sm font-semibold text-[var(--gold)]">← Painel</Link>
+      <h1 className="font-display mt-3 text-3xl font-extrabold text-[var(--text)]">Documento avulso</h1>
+      <p className="mt-1 text-sm text-[var(--text-muted)]">
+        Gere uma receita, pedido de exame ou relatório rápido — sem precisar abrir um paciente. Sai sobre o seu
+        <b> papel timbrado</b> salvo, pronto para baixar, imprimir ou enviar no WhatsApp.
+      </p>
 
-        <div className="panel mt-6 space-y-3">
-          <div className="flex flex-wrap gap-2">
-            {(["receita", "exame", "relatorio"] as const).map((t) => (
-              <button
-                key={t}
-                type="button"
-                onClick={() => setType(t)}
-                className={`rounded-full px-3 py-1.5 text-sm font-bold transition ${type === t ? "bg-[var(--gold)] text-white" : "border border-[var(--border)] bg-white text-[var(--text-soft)]"}`}
-              >
-                {TYPE_LABEL[t]}
-              </button>
-            ))}
-          </div>
-          <label className="block">
-            <span className="mb-1 block text-xs font-semibold text-[var(--text-muted)]">Nome do paciente (opcional)</span>
-            <input className="input-field" value={patientName} onChange={(e) => setPatientName(e.target.value)} placeholder="Deixe em branco se não quiser identificar" />
-          </label>
-          <TemplatePicker type={type} currentText={body} onApply={setBody} patientName={patientName} />
-          <label className="block">
-            <span className="mb-1 block text-xs font-semibold text-[var(--text-muted)]">Conteúdo</span>
-            <textarea className="input-field min-h-[160px]" value={body} onChange={(e) => setBody(e.target.value)} placeholder={PLACEHOLDER[type]} />
-          </label>
-          <label className="block">
-            <span className="mb-1 block text-xs font-semibold text-[var(--text-muted)]">WhatsApp do paciente (opcional, para enviar)</span>
-            <input className="input-field" inputMode="tel" value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="Ex.: 73999998888" />
-          </label>
-          <div className="flex flex-wrap gap-2">
-            <button type="button" className="btn-gold" onClick={downloadPdf} disabled={!body.trim()}>Baixar PDF</button>
-            <button type="button" className="btn-ghost" onClick={() => window.print()} disabled={!body.trim()}>Imprimir</button>
-            <button type="button" className="btn-ghost" onClick={shareWhatsApp} disabled={!body.trim()}>Enviar no WhatsApp</button>
-          </div>
+      {letterheads.length === 0 && (
+        <div className="panel mt-6 border-[var(--border-gold)] bg-[var(--gold-soft)]">
+          <p className="font-semibold text-[var(--text)]">Adicione seu papel timbrado</p>
+          <p className="mt-1 text-sm text-[var(--text-muted)]">
+            Envie o seu receituário (PDF, PNG ou JPG) uma vez e ele será usado em todos os documentos. Sem timbrado, o
+            documento sai em papel branco com o seu nome no cabeçalho.
+          </p>
+          <Link href="/medicos/configuracoes/documentos" className="btn-gold mt-3 inline-block">Adicionar papel timbrado →</Link>
+        </div>
+      )}
+
+      <div className="panel mt-6 space-y-3">
+        <div className="flex flex-wrap gap-2">
+          {(["receita", "exame", "relatorio"] as const).map((t) => (
+            <button
+              key={t}
+              type="button"
+              onClick={() => setType(t)}
+              className={`rounded-full px-3 py-1.5 text-sm font-bold transition ${type === t ? "bg-[var(--gold)] text-white" : "border border-[var(--border)] bg-white text-[var(--text-soft)]"}`}
+            >
+              {TYPE_LABEL[t]}
+            </button>
+          ))}
         </div>
 
-        <p className="mt-6 text-xs font-bold uppercase tracking-wider text-[var(--gold)]">Pré-visualização</p>
+        <label className="block">
+          <span className="mb-1 block text-xs font-semibold text-[var(--text-muted)]">Papel timbrado</span>
+          <select className="input-field" value={letterheadId} onChange={(e) => setLetterheadId(e.target.value)}>
+            {letterheads.map((l) => (
+              <option key={l.id} value={l.id}>{l.name}{l.isDefault ? " (padrão)" : ""}</option>
+            ))}
+            <option value={NO_LETTERHEAD}>Sem papel timbrado (papel branco)</option>
+          </select>
+          <span className="mt-1 block text-xs text-[var(--text-muted)]">
+            Gerencie seus papéis em{" "}
+            <Link href="/medicos/configuracoes/documentos" className="font-semibold text-[var(--gold)]">Configurações › Papéis timbrados</Link>.
+          </span>
+        </label>
+
+        <label className="block">
+          <span className="mb-1 block text-xs font-semibold text-[var(--text-muted)]">Nome do paciente (opcional)</span>
+          <input className="input-field" value={patientName} onChange={(e) => setPatientName(e.target.value)} placeholder="Deixe em branco se não quiser identificar" />
+        </label>
+        <TemplatePicker type={type} currentText={body} onApply={setBody} patientName={patientName} />
+        <label className="block">
+          <span className="mb-1 block text-xs font-semibold text-[var(--text-muted)]">Conteúdo</span>
+          <textarea className="input-field min-h-[160px]" value={body} onChange={(e) => setBody(e.target.value)} placeholder={PLACEHOLDER[type]} />
+        </label>
+        <label className="block">
+          <span className="mb-1 block text-xs font-semibold text-[var(--text-muted)]">WhatsApp do paciente (opcional, para enviar)</span>
+          <input className="input-field" inputMode="tel" value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="Ex.: 73999998888" />
+        </label>
+        {error && <p className="text-sm font-semibold text-[var(--danger)]">{error}</p>}
+        <div className="flex flex-wrap gap-2">
+          <button type="button" className="btn-gold" onClick={generatePdf} disabled={busy || !body.trim()}>
+            {busy ? "Gerando…" : "Gerar PDF (timbrado)"}
+          </button>
+          <button type="button" className="btn-ghost" onClick={shareWhatsApp} disabled={!body.trim()}>Enviar no WhatsApp</button>
+        </div>
       </div>
 
-      {/* Documento (também é o que sai na impressão) */}
-      <div className="mt-3 rounded-[16px] border border-[var(--border)] bg-white p-8 shadow-[var(--shadow)] print:mt-0 print:border-0 print:shadow-none">
+      {/* Prévia do texto (o PDF final sai sobre o papel timbrado selecionado). */}
+      <p className="mt-6 text-xs font-bold uppercase tracking-wider text-[var(--gold)]">Prévia do conteúdo</p>
+      <div className="mt-3 rounded-[16px] border border-[var(--border)] bg-white p-8 shadow-[var(--shadow)]">
         <div className="flex items-center justify-between border-b border-[var(--border)] pb-4">
-          <div className="flex items-center gap-3">
-            {doctor.logoUrl ? (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img src={doctor.logoUrl} alt="Logo" className="h-12 max-w-[160px] object-contain" />
-            ) : (
-              <span className="grid h-11 w-11 place-items-center rounded-xl bg-[var(--gold)] text-sm font-extrabold text-white">
-                {doctor.name.slice(0, 2).toUpperCase()}
-              </span>
-            )}
-            <div>
-              <p className="font-display text-lg font-extrabold text-[var(--text)]">{doctor.name}</p>
-              <p className="text-xs text-[var(--text-muted)]">{[doctor.specialty, credential].filter(Boolean).join(" — ")}</p>
-            </div>
+          <div>
+            <p className="font-display text-lg font-extrabold text-[var(--text)]">{doctor.name}</p>
+            <p className="text-xs text-[var(--text-muted)]">{[doctor.specialty, credential].filter(Boolean).join(" — ")}</p>
           </div>
           <p className="text-xs text-[var(--text-muted)]">{dateLabel}</p>
         </div>
-
         {patientName.trim() && (
           <p className="mt-4 text-sm text-[var(--text-soft)]">Paciente: <b className="text-[var(--text)]">{patientName.trim()}</b></p>
         )}
-
-        <h2 className="mt-6 text-center text-xl font-extrabold uppercase tracking-wide text-[var(--text)]">
-          {TYPE_LABEL[type]}
-        </h2>
-
+        <h2 className="mt-6 text-center text-xl font-extrabold uppercase tracking-wide text-[var(--text)]">{TYPE_LABEL[type]}</h2>
         <div className="mt-6 min-h-[120px] whitespace-pre-wrap text-[15px] leading-relaxed text-[var(--text)]">
           {body || <span className="text-[var(--text-muted)]">O conteúdo aparecerá aqui…</span>}
         </div>
-
-        <div className="mt-16 border-t border-[var(--text)] pt-2 text-center">
-          <p className="font-semibold text-[var(--text)]">{doctor.name}</p>
-          {credential && <p className="text-sm text-[var(--text-muted)]">{credential}</p>}
-        </div>
-
         <p className="mt-8 text-center text-[11px] text-[var(--text-muted)]">
-          Documento emitido pela plataforma Meu Rim. Em emergência, procure atendimento presencial.
+          Prévia apenas do texto. Clique em <b>Gerar PDF (timbrado)</b> para o documento final sobre o seu papel timbrado.
         </p>
       </div>
     </div>
