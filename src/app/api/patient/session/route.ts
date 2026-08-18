@@ -35,7 +35,7 @@ export async function POST(req: Request) {
       if (!ok) {
         return NextResponse.json({ error: "Senha incorreta." }, { status: 401 });
       }
-      return setSession(clinicalKey(patient), { name: patient.name });
+      return setSession(clinicalKey(patient), { name: patient.name, mustChangePassword: patient.mustChangePassword === true });
     }
 
     // Login por e-mail (pacientes vindos de agendamento)
