@@ -51,16 +51,19 @@ export function officialDocPages(protocolId: string, doc: "ter" | "form" | "resi
  *  relativas à página de saída (0 = primeira página do TER). Campo: name/doctor/crm/date. */
 export type TerField = { field: "name" | "doctor" | "crm" | "date"; page: number; x: number; y: number; size?: number };
 export const TER_OVERLAY: Record<string, TerField[]> = {
+  // Página 2 do pacote: "Nome do paciente" (baseline ~200), "Médico Responsável/CRM" (~133).
   anemia_drc_alfaepoetina: [
-    { field: "name", page: 0, x: 150, y: 201 },
-    { field: "date", page: 0, x: 470, y: 201 },
-    { field: "doctor", page: 0, x: 165, y: 121 },
-    { field: "crm", page: 0, x: 395, y: 121 },
+    { field: "name", page: 0, x: 160, y: 200, size: 9 },
+    { field: "date", page: 0, x: 470, y: 200, size: 9 },
+    { field: "doctor", page: 0, x: 170, y: 133, size: 9 },
+    { field: "crm", page: 0, x: 422, y: 133, size: 9 },
   ],
+  // Página 4 do pacote: "Nome do paciente ... Data do" (baseline ~224),
+  // "Médico Responsável" / "CRM: UF:" (~155).
   anemia_drc_ferro: [
-    { field: "name", page: 0, x: 150, y: 201 },
-    { field: "date", page: 0, x: 470, y: 201 },
-    { field: "doctor", page: 0, x: 165, y: 121 },
-    { field: "crm", page: 0, x: 395, y: 121 },
+    { field: "name", page: 0, x: 150, y: 224, size: 8 },
+    { field: "date", page: 0, x: 486, y: 224, size: 8 },
+    { field: "doctor", page: 0, x: 168, y: 155, size: 9 },
+    { field: "crm", page: 0, x: 420, y: 155, size: 9 },
   ],
 };

@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { PDFDocument, StandardFonts } from "pdf-lib";
+import { PDFDocument, StandardFonts, PDFName, PDFBool } from "pdf-lib";
 import { getDoctorSessionId } from "@/lib/auth";
 import { getPatientEmail } from "@/lib/patient-session";
 import { getLme } from "@/lib/lme-store";
@@ -32,15 +32,27 @@ export async function GET(
   const bytes = await fetch(pdfUrl).then((r) => r.arrayBuffer());
   const doc = await PDFDocument.load(bytes);
   const form = doc.getForm();
+  const helv = await doc.embedFont(StandardFonts.Helvetica);
 
-  // Preenche um campo de texto com tamanho de fonte FIXO (evita o auto-size do
-  // AcroForm, que deixa a letra gigante em caixas grandes como a Anamnese).
+  // Preenche um campo de texto com tamanho de fonte FIXO. Vários campos do PDF
+  // oficial NÃO têm /DA (default appearance): nesse caso setFontSize lança erro e,
+  // sem tamanho definido, o AcroForm usa auto-size (letra gigante em texto curto).
+  // Então definimos uma /DA padrão antes de aplicar o tamanho.
   const setText = (name: string, value?: string | number | null, size = 9) => {
     if (value === null || value === undefined || value === "") return;
     try {
       const f = form.getTextField(name);
       f.setText(String(value));
-      f.setFontSize(size);
+      try {
+        f.setFontSize(size);
+      } catch {
+        try {
+          f.acroField.setDefaultAppearance(`/Helv ${size} Tf 0 g`);
+          f.setFontSize(size);
+        } catch {
+          /* segue sem tamanho fixo */
+        }
+      }
     } catch {
       /* campo ausente/diferente — ignora */
     }
@@ -82,7 +94,9 @@ export async function GET(
   setText("Peso", lme.weightKg);
   setText("Altura", lme.heightCm);
   setText("CID", lme.cid10, 10);
-  setText("Diagnóstico", lme.diagnosis, 9);
+  // O diagnóstico deve casar com o CID. Se não veio preenchido, usa a descrição do CID.
+  const diagnosisText = lme.diagnosis && String(lme.diagnosis).trim() ? String(lme.diagnosis) : cidDescription(lme.cid10);
+  setText("Diagnóstico", diagnosisText, 9);
   setText("Anamnese", lme.anamnesis, 8);
   setText("Etnia", lme.race);
   setText("Telefone I", lme.patientPhone);
@@ -148,6 +162,19 @@ export async function GET(
     /* assinatura indisponível — segue sem imagem */
   }
 
+  // Regenera as aparências com o tamanho de fonte definido e desativa NeedAppearances,
+  // para que TODOS os visualizadores (Chrome/Safari) usem a nossa aparência (sem auto-size).
+  try {
+    form.updateFieldAppearances(helv);
+  } catch {
+    /* segue com as aparências atuais */
+  }
+  try {
+    form.acroForm.dict.set(PDFName.of("NeedAppearances"), PDFBool.False);
+  } catch {
+    /* ok */
+  }
+
   const out = await doc.save();
   return new NextResponse(Buffer.from(out), {
     status: 200,
@@ -157,4 +184,30 @@ export async function GET(
       "Cache-Control": "no-store",
     },
   });
+}
+
+/** Descrição oficial do diagnóstico a partir do CID-10 (o diagnóstico deve casar com o CID). */
+function cidDescription(code?: string | null): string {
+  const c = String(code || "").toUpperCase().replace(/\s+/g, "");
+  const map: Record<string, string> = {
+    "N18.0": "Doença renal crônica em estágio terminal",
+    "N18.1": "Doença renal crônica, estágio 1",
+    "N18.2": "Doença renal crônica, estágio 2 (leve)",
+    "N18.3": "Doença renal crônica, estágio 3 (moderada)",
+    "N18.4": "Doença renal crônica, estágio 4 (grave)",
+    "N18.5": "Doença renal crônica, estágio 5",
+    "N18.8": "Outra doença renal crônica",
+    "N18.9": "Doença renal crônica não especificada",
+    "N04.0": "Síndrome nefrótica — anormalidade glomerular minor",
+    "N04.1": "Síndrome nefrótica — lesões glomerulares focais e segmentares",
+    "N04.2": "Síndrome nefrótica — glomerulonefrite membranosa difusa",
+    "N04.9": "Síndrome nefrótica",
+    "D63.8": "Anemia em doença renal crônica",
+    "M32.1": "Lúpus eritematoso sistêmico com comprometimento de órgãos",
+    "M31.3": "Granulomatose de Wegener (vasculite associada a ANCA)",
+  };
+  if (map[c]) return map[c];
+  if (c.startsWith("N18")) return "Doença renal crônica";
+  if (c.startsWith("N04")) return "Síndrome nefrótica";
+  return "";
 }
