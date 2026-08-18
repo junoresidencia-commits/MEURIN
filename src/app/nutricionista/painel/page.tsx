@@ -53,8 +53,13 @@ export default function NutricionistaPainelPage() {
             Vinculada a {me?.doctors.length || 0} médico(s): {me?.doctors.map((d) => d.name).join(", ") || "—"}
           </p>
         </div>
-        <button type="button" className="btn-ghost" onClick={logout}>Sair</button>
+        <div className="flex gap-2">
+          <Link href="/nutricionista/configuracoes" className="btn-ghost">Recebimentos</Link>
+          <button type="button" className="btn-ghost" onClick={logout}>Sair</button>
+        </div>
       </div>
+
+      <NutriAppointments />
 
       {/* Encaminhamentos abertos */}
       <section className="mt-8">
@@ -98,5 +103,56 @@ export default function NutricionistaPainelPage() {
         </div>
       </section>
     </div>
+  );
+}
+
+type Appt = { id: string; patientName?: string | null; slotStart?: string | null; priceCents: number; status: string; proofUrl?: string | null; nutritionistPayoutCents?: number | null; platformFeeCents?: number | null; commissionPercent?: number | null };
+const APPT_STATUS: Record<string, string> = {
+  aguardando_pagamento: "Aguardando pagamento", aguardando_confirmacao: "Comprovante enviado", confirmada: "Confirmada", cancelada: "Cancelada", realizada: "Realizada",
+};
+
+function NutriAppointments() {
+  const [appts, setAppts] = useState<Appt[]>([]);
+  const [open, setOpen] = useState(false);
+  async function load() { const d = await fetch("/api/nutricionista/appointments").then((r) => r.json()); setAppts(d.appointments || []); }
+  useEffect(() => { load(); }, []);
+  async function setStatus(id: string, status: string) {
+    await fetch("/api/nutricionista/appointments", { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id, status }) });
+    await load();
+  }
+  const pending = appts.filter((a) => a.status === "aguardando_confirmacao" || a.status === "aguardando_pagamento");
+  if (appts.length === 0) return null;
+  return (
+    <section className="panel mt-6">
+      <button type="button" className="flex w-full items-center justify-between" onClick={() => setOpen((v) => !v)}>
+        <span className="font-display text-xl text-[var(--text)]">Consultas e comprovantes {pending.length > 0 && <span className="ml-2 rounded-full bg-amber-100 px-2 py-0.5 text-xs font-bold text-amber-700">{pending.length}</span>}</span>
+        <span className="text-[var(--gold)]">{open ? "−" : "+"}</span>
+      </button>
+      {open && (
+        <div className="mt-3 grid gap-2">
+          {appts.map((a) => (
+            <div key={a.id} className="rounded-xl border border-[var(--border)] p-3">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <div>
+                  <p className="font-semibold text-[var(--text)]">{a.patientName || "Paciente"} <span className="text-sm font-normal text-[var(--text-muted)]">· R$ {(a.priceCents / 100).toFixed(2)}</span></p>
+                  <p className="text-xs text-[var(--text-muted)]">{a.slotStart ? new Date(a.slotStart).toLocaleString("pt-BR") : "sem horário"} · repasse R$ {((a.nutritionistPayoutCents ?? a.priceCents) / 100).toFixed(2)} (comissão {a.commissionPercent ?? 0}%)</p>
+                </div>
+                <span className={`rounded-full px-2 py-0.5 text-xs font-semibold ${a.status === "confirmada" || a.status === "realizada" ? "bg-emerald-100 text-emerald-700" : a.status === "cancelada" ? "bg-slate-100 text-slate-500" : "bg-amber-100 text-amber-700"}`}>{APPT_STATUS[a.status] || a.status}</span>
+              </div>
+              {a.proofUrl && (
+                <a href={a.proofUrl} target="_blank" rel="noopener noreferrer" className="mt-1 inline-block text-xs font-semibold text-[var(--gold)]">Ver comprovante ↗</a>
+              )}
+              {(a.status === "aguardando_confirmacao" || a.status === "aguardando_pagamento") && (
+                <div className="mt-2 flex gap-2">
+                  <button type="button" className="btn-gold text-sm" onClick={() => setStatus(a.id, "confirmada")}>Confirmar recebimento</button>
+                  <button type="button" className="btn-ghost text-sm text-[var(--danger)]" onClick={() => setStatus(a.id, "cancelada")}>Cancelar</button>
+                </div>
+              )}
+              {a.status === "confirmada" && <button type="button" className="btn-ghost mt-2 text-sm" onClick={() => setStatus(a.id, "realizada")}>Marcar como realizada</button>}
+            </div>
+          ))}
+        </div>
+      )}
+    </section>
   );
 }
