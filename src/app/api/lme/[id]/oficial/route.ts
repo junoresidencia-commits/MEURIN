@@ -3,7 +3,6 @@ import { PDFDocument, StandardFonts, PDFName, PDFBool } from "pdf-lib";
 import { getDoctorSessionId } from "@/lib/auth";
 import { getPatientEmail } from "@/lib/patient-session";
 import { getLme } from "@/lib/lme-store";
-import { getDoctorById } from "@/lib/store";
 
 /**
  * Preenche o PDF oficial do CEAF (AcroForm) com os dados da LME e devolve para
@@ -135,32 +134,9 @@ export async function GET(
     if (q) qtyGrid[i].forEach((fn) => setText(fn, q, 8));
   });
 
-  // Assinatura visual do médico (imagem) no campo 17 (Assinatura e carimbo).
-  try {
-    const doctor = lme.doctorId ? await getDoctorById(lme.doctorId) : null;
-    const sig = doctor?.signatureUrl;
-    if (sig && sig.startsWith("data:")) {
-      const b64 = sig.split(",")[1] || "";
-      const raw = Uint8Array.from(Buffer.from(b64, "base64"));
-      const img = sig.includes("image/jpeg") || sig.includes("image/jpg")
-        ? await doc.embedJpg(raw)
-        : await doc.embedPng(raw);
-      const page = doc.getPages()[0];
-      // Caixa "17- Assinatura e carimbo do médico" (à direita do nome). Coordenadas em pt (A4).
-      const boxX = 392, boxY = 170, boxW = 166, boxH = 52;
-      const scale = Math.min(boxW / img.width, boxH / img.height);
-      const w = img.width * scale;
-      const h = img.height * scale;
-      page.drawImage(img, { x: boxX + (boxW - w) / 2, y: boxY + (boxH - h) / 2, width: w, height: h });
-    } else if (lme.doctorName) {
-      // Fallback: assinatura "manuscrita" tipografada, para o campo não ficar vazio.
-      const page = doc.getPages()[0];
-      const font = await doc.embedFont(StandardFonts.HelveticaOblique);
-      page.drawText(lme.doctorName, { x: 400, y: 190, size: 12, font });
-    }
-  } catch {
-    /* assinatura indisponível — segue sem imagem */
-  }
+  // Campo 17 (Assinatura e carimbo do médico) fica EM BRANCO de propósito: a LME é
+  // impressa e assinada à mão, ou o PDF é assinado digitalmente (ICP-Brasil). Não
+  // desenhamos assinatura visual aqui.
 
   // Regenera as aparências com o tamanho de fonte definido e desativa NeedAppearances,
   // para que TODOS os visualizadores (Chrome/Safari) usem a nossa aparência (sem auto-size).
