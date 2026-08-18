@@ -81,6 +81,16 @@ export default function PacienteInicioPage() {
       router.replace("/paciente/entrar");
       return;
     }
+    // 1º acesso: se ainda precisa criar senha pessoal, envia para a troca obrigatória.
+    try {
+      const me = await fetch("/api/patient/me").then((r) => (r.ok ? r.json() : null));
+      if (me?.mustChangePassword) {
+        router.replace("/paciente/senha?primeiro=1&next=/paciente/inicio");
+        return;
+      }
+    } catch {
+      /* segue mesmo se a checagem falhar */
+    }
     const data = await res.json();
     setEmail(data.email || "");
 

@@ -19,8 +19,14 @@ function EntrarInner() {
     setLoading(true);
     setError("");
     try {
-      await postJson("/api/patient/session", payload, "Não foi possível entrar. Confira os dados e tente novamente.");
-      router.push(params.get("next") || "/paciente/inicio");
+      const data = await postJson<{ mustChangePassword?: boolean }>("/api/patient/session", payload, "Não foi possível entrar. Confira os dados e tente novamente.");
+      const next = params.get("next") || "/paciente/inicio";
+      // 1º acesso: obriga a criar uma senha pessoal antes de acessar os dados.
+      if (data?.mustChangePassword) {
+        router.push(`/paciente/senha?primeiro=1&next=${encodeURIComponent(next)}`);
+        return;
+      }
+      router.push(next);
     } catch (err) {
       setError(toFriendlyMessage(err, "Não foi possível entrar. Confira os dados e tente novamente."));
     } finally {
@@ -35,7 +41,7 @@ function EntrarInner() {
         Acompanhe sua saúde
       </h1>
       <p className="mt-3 text-[var(--text-muted)]">
-        Entre para registrar pressão, glicemia, peso, ver consultas, exames e documentos.
+        Acesse pelo celular ou computador para acompanhar consultas, exames, medicamentos, documentos e a evolução da sua saúde renal.
       </p>
 
       <div className="mt-6 flex gap-2">
@@ -92,7 +98,10 @@ function EntrarInner() {
             {loading ? "Entrando…" : "Entrar"}
           </button>
           <p className="text-center text-xs text-[var(--text-muted)]">
-            Seu médico criou seu acesso? A senha inicial é <b>123456</b> — você pode trocá-la depois de entrar.
+            <b>Primeiro acesso?</b> Seu médico criou seu acesso: entre com seu <b>CPF</b> e a senha provisória <b>123456</b>. O sistema pedirá para você criar uma senha pessoal.
+          </p>
+          <p className="text-center text-xs">
+            <Link href="/paciente/recuperar" className="font-semibold text-[var(--gold)]">Esqueci minha senha</Link>
           </p>
         </form>
       ) : (

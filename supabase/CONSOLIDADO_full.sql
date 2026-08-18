@@ -839,6 +839,9 @@ alter table public.doctors add column if not exists cpf text;
 -- ===== 20260817040000_doctor_signature_url.sql =====
 alter table public.doctors add column if not exists signature_url text;
 
+-- ===== 20260818050000_patient_must_change_password.sql =====
+alter table public.patients add column if not exists must_change_password boolean not null default false;
+
 -- ===== 20260818010000_nutrition.sql (Módulo Nutrição Renal — Fase 1) =====
 create table if not exists public.nutritionists (
   id uuid primary key default gen_random_uuid(),

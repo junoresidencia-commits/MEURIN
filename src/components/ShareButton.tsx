@@ -1,5 +1,7 @@
 "use client";
 
+import { SITE_URL } from "@/lib/site";
+
 type Props = {
   title?: string;
   text?: string;
@@ -15,8 +17,7 @@ export function ShareButton({
   className = "btn-gold",
 }: Props) {
   async function share() {
-    const url =
-      typeof window !== "undefined" ? window.location.origin : "https://meurim.app";
+    const url = SITE_URL;
     const full = `${text} ${url}`;
 
     if (typeof navigator !== "undefined" && navigator.share) {

@@ -9,6 +9,8 @@ import { DoctorSidebar } from "@/components/DoctorSidebar";
 import { DoctorMobileNav } from "@/components/DoctorMobileNav";
 import { NotificationBell } from "@/components/NotificationBell";
 import { EnableNotifications } from "@/components/EnableNotifications";
+import { QrCode } from "@/components/QrCode";
+import { SITE_URL, patientAccessMessage } from "@/lib/site";
 
 const DAYS = [
   { id: 1, label: "Seg" },
@@ -728,6 +730,8 @@ function CreatePatient({ onCreated }: { onCreated: () => void }) {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   const [done, setDone] = useState<{ name: string; phone: string; email: string; cpf: string } | null>(null);
+  const [copyMsg, setCopyMsg] = useState("");
+  function copyText(text: string, label: string) { navigator.clipboard?.writeText(text); setCopyMsg(`${label} copiado!`); setTimeout(() => setCopyMsg(""), 1500); }
 
   function set<K extends keyof typeof form>(k: K, v: string) {
     setForm((f) => ({ ...f, [k]: v }));
@@ -767,67 +771,68 @@ function CreatePatient({ onCreated }: { onCreated: () => void }) {
     }
   }
 
+  function accessMessage() {
+    return patientAccessMessage(done!.name);
+  }
   function inviteLink() {
     const digits = done!.phone.replace(/\D/g, "");
     const withCountry = digits.length >= 12 ? digits : `55${digits}`;
-    const origin = typeof window !== "undefined" ? window.location.origin : "";
-    const cpfDigits = done!.cpf.replace(/\D/g, "");
-    const login = cpfDigits
-      ? `Entre com seu CPF ${cpfDigits} e a senha 123456 (você pode trocar depois).`
-      : done!.email
-        ? `Entre com seu e-mail ${done!.email}.`
-        : "Peça ao seu médico o CPF de acesso.";
-    const msg =
-      `Olá, ${done!.name}! Seu médico criou seu acesso no Meu Rim.\n` +
-      `Acesse ${origin}/paciente/entrar\n` +
-      `${login}\n` +
-      `Lá você acompanha sua saúde, registra pressão/glicemia e vê seus documentos.`;
-    return `https://wa.me/${withCountry}?text=${encodeURIComponent(msg)}`;
+    return `https://wa.me/${withCountry}?text=${encodeURIComponent(accessMessage())}`;
   }
 
   if (done) {
+    const hasPhone = done.phone.replace(/\D/g, "").length >= 10;
     return (
       <div className="panel mt-4 space-y-3">
-        <p className="text-sm font-semibold text-[var(--green)]">Paciente criado ✅</p>
-        <p className="text-sm text-[var(--text-soft)]">
-          <strong>{done.name}</strong> foi cadastrado. Convide para acessar a área do paciente:
-        </p>
+        <p className="text-sm font-semibold text-[var(--green)]">Paciente cadastrado ✅</p>
         {done.cpf.replace(/\D/g, "") ? (
           <div className="rounded-2xl border border-[var(--border-gold)] bg-[var(--gold-soft)] p-3 text-sm text-[var(--text-soft)]">
             <p className="font-semibold text-[var(--text)]">Acesso do paciente</p>
+            <p>Site: <b>{SITE_URL}/</b></p>
             <p>Login (CPF): <b>{done.cpf.replace(/\D/g, "")}</b></p>
-            <p>Senha inicial: <b>123456</b> — o paciente pode trocar depois de entrar.</p>
+            <p>Senha provisória: <b>123456</b> — no 1º acesso o paciente cria uma senha pessoal.</p>
           </div>
         ) : (
-          <p className="rounded-2xl border border-[var(--border)] bg-[var(--bg-soft)] p-3 text-xs text-[var(--text-muted)]">
-            Sem CPF cadastrado: o paciente poderá entrar pelo e-mail. Informe o CPF para habilitar o login com senha.
+          <p className="rounded-2xl border border-[var(--border)] bg-[var(--bg)] p-3 text-xs text-[var(--text-muted)]">
+            Sem CPF cadastrado: informe o CPF para habilitar o login do paciente com senha.
           </p>
         )}
-        <div className="flex flex-wrap gap-2">
-          {done.phone.replace(/\D/g, "").length >= 10 && (
-            <a href={inviteLink()} target="_blank" rel="noopener noreferrer" className="btn-gold">
-              Enviar convite no WhatsApp
-            </a>
-          )}
-          <button
-            type="button"
-            className="btn-ghost"
-            onClick={() => {
-              setDone(null);
-              setForm((f) => ({ ...f, name: "", cpf: "", phone: "", email: "" }));
-            }}
-          >
-            Cadastrar outro
-          </button>
-          <button type="button" className="btn-ghost" onClick={onCreated}>
-            Concluir
-          </button>
+
+        {/* Mensagem pronta de primeiro acesso */}
+        <div className="rounded-2xl border border-[var(--border)] p-3">
+          <p className="text-xs font-bold uppercase tracking-wider text-[var(--gold)]">Mensagem de acesso</p>
+          <pre className="mt-1 whitespace-pre-wrap font-sans text-xs text-[var(--text-soft)]">{accessMessage()}</pre>
         </div>
-        {!done.phone && (
-          <p className="text-xs text-[var(--text-muted)]">
-            Sem telefone cadastrado — informe o telefone para poder enviar o convite por WhatsApp.
+
+        {!hasPhone && (
+          <p className="rounded-xl border border-[var(--warn)]/30 bg-[#fff7e8] px-3 py-2 text-xs text-[#7a5a12]">
+            Sem telefone com WhatsApp — não é possível enviar automaticamente. Use “Copiar mensagem” e envie ao paciente.
           </p>
         )}
+
+        <div className="flex flex-wrap gap-2">
+          {hasPhone && (
+            <>
+              <a href={inviteLink()} target="_blank" rel="noopener noreferrer" className="btn-gold">Enviar acesso pelo WhatsApp</a>
+              <a href={inviteLink()} target="_blank" rel="noopener noreferrer" className="btn-ghost">Reenviar acesso</a>
+            </>
+          )}
+          <button type="button" className="btn-ghost" onClick={() => copyText(accessMessage(), "Mensagem")}>Copiar mensagem</button>
+          <button type="button" className="btn-ghost" onClick={() => copyText(`${SITE_URL}/`, "Link")}>Copiar link</button>
+        </div>
+        {copyMsg && <p className="text-xs font-semibold text-[var(--green,#0d9488)]">{copyMsg}</p>}
+
+        {/* QR Code permanente — somente a URL oficial */}
+        <div className="pt-1">
+          <p className="text-xs font-bold uppercase tracking-wider text-[var(--gold)]">QR Code de acesso</p>
+          <p className="mb-2 text-xs text-[var(--text-muted)]">Aponte a câmera para {SITE_URL}/ — sem dados pessoais.</p>
+          <QrCode value={`${SITE_URL}/`} />
+        </div>
+
+        <div className="flex flex-wrap gap-2 pt-1">
+          <button type="button" className="btn-ghost" onClick={() => { setDone(null); setForm((f) => ({ ...f, name: "", cpf: "", phone: "", email: "" })); }}>Cadastrar outro</button>
+          <button type="button" className="btn-ghost" onClick={onCreated}>Concluir</button>
+        </div>
       </div>
     );
   }

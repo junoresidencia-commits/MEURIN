@@ -13,6 +13,7 @@ export async function GET() {
   if (!p) return NextResponse.json({ found: false });
   return NextResponse.json({
     found: true,
+    mustChangePassword: p.mustChangePassword === true,
     patient: { name: p.name, cpf: p.cpf ?? "", phone: p.phone ?? "", email: p.email ?? "", birthdate: p.birthdate ?? "", sex: p.sex ?? "" },
   });
 }

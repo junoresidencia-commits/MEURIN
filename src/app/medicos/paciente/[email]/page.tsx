@@ -303,12 +303,13 @@ export default function ProntuarioPage() {
         <span className="grid h-14 w-14 place-items-center rounded-2xl bg-[var(--gold-soft)] text-lg font-extrabold text-[var(--gold)]">
           {patient?.name.slice(0, 2).toUpperCase()}
         </span>
-        <div>
+        <div className="flex-1">
           <h1 className="font-display text-2xl font-extrabold text-[var(--text)]">{patient?.name}</h1>
           <p className="text-sm text-[var(--text-muted)]">
             {[patient?.city, patient?.email].filter(Boolean).join(" · ")}
           </p>
         </div>
+        <ResetAccessButton emailParam={emailParam} />
       </div>
 
       {/* Cabeçalho clínico */}
@@ -852,6 +853,30 @@ function Metric({ label, value, unit }: { label: string; value: string; unit: st
       <p className="text-[11px] uppercase tracking-wider text-[var(--text-muted)]">{label}</p>
       <p className="mt-1 text-lg font-extrabold text-[var(--text)]">{value}</p>
       <p className="text-[10px] text-[var(--text-muted)]">{unit}</p>
+    </div>
+  );
+}
+
+function ResetAccessButton({ emailParam }: { emailParam: string }) {
+  const [busy, setBusy] = useState(false);
+  const [msg, setMsg] = useState("");
+  async function reset() {
+    if (!window.confirm("Redefinir o acesso deste paciente para a senha 123456? No próximo login, ele criará uma nova senha.")) return;
+    setBusy(true); setMsg("");
+    try {
+      const res = await fetch(`/api/doctor/patients/${emailParam}/reset-access`, { method: "POST" });
+      const d = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(d.error || "Erro");
+      setMsg("Acesso redefinido para 123456.");
+    } catch (e) { setMsg(e instanceof Error ? e.message : "Erro"); }
+    finally { setBusy(false); setTimeout(() => setMsg(""), 3000); }
+  }
+  return (
+    <div className="text-right">
+      <button type="button" className="btn-ghost text-xs" onClick={reset} disabled={busy} title="Redefinir senha do paciente para 123456">
+        {busy ? "Redefinindo…" : "Redefinir acesso"}
+      </button>
+      {msg && <p className="mt-1 text-[11px] font-semibold text-[var(--green,#0d9488)]">{msg}</p>}
     </div>
   );
 }

@@ -29,6 +29,7 @@ export interface Patient {
   medications?: string | null;
   notes?: string | null;
   passwordHash?: string | null;
+  mustChangePassword?: boolean;
   status: "active" | "archived";
   createdAt: string;
 }
@@ -124,6 +125,7 @@ function mapRow(r: Record<string, unknown>): Patient {
     medications: (r.medications as string | null) ?? null,
     notes: (r.notes as string | null) ?? null,
     passwordHash: (r.password_hash as string | null) ?? null,
+    mustChangePassword: r.must_change_password === true,
     status: (String(r.status || "active") as Patient["status"]),
     createdAt: new Date(String(r.created_at)).toISOString(),
   };
@@ -160,13 +162,17 @@ export async function findByCpf(doctorId: string, cpf: string): Promise<Patient 
 }
 
 export async function createPatient(input: NewPatient): Promise<Patient> {
+  // Sem senha própria informada => usa a provisória 123456 e exige troca no 1º acesso.
+  const usedDefault = !input.passwordHash;
   const passwordHash = input.passwordHash || (await bcrypt.hash(DEFAULT_PATIENT_PASSWORD, 10));
+  const mustChangePassword = input.mustChangePassword ?? usedDefault;
   const p: Patient = {
     id: uuid(),
     createdAt: new Date().toISOString(),
     status: input.status || "active",
     ...input,
     passwordHash,
+    mustChangePassword,
   };
   if (active()) {
     const { error } = await insertPatientResilient({
@@ -185,6 +191,7 @@ export async function createPatient(input: NewPatient): Promise<Patient> {
       emergency_contact: p.emergencyContact ?? null,
       guardian_name: p.guardianName ?? null,
       guardian_phone: p.guardianPhone ?? null,
+      must_change_password: p.mustChangePassword ?? false,
       insurance: p.insurance ?? null,
       allergies: p.allergies ?? null,
       diseases: p.diseases ?? null,
@@ -350,12 +357,16 @@ export async function verifyPatientPassword(patient: Patient, password: string):
   return password === DEFAULT_PATIENT_PASSWORD;
 }
 
-/** Atualiza a senha do paciente. */
+/** Atualiza a senha do paciente e limpa a exigência de troca (1º acesso concluído). */
 export async function setPatientPassword(id: string, newPassword: string): Promise<void> {
   const hash = await bcrypt.hash(newPassword, 10);
   if (active()) {
     const supabase = getSupabaseAdmin()!;
-    const { error } = await supabase.from("patients").update({ password_hash: hash }).eq("id", id);
+    // Tenta limpar também o flag; se a coluna não existir, faz só a senha.
+    let { error } = await supabase.from("patients").update({ password_hash: hash, must_change_password: false }).eq("id", id);
+    if (error && (error.code === "PGRST204" || /must_change_password|column|schema cache/i.test(error.message || ""))) {
+      ({ error } = await supabase.from("patients").update({ password_hash: hash }).eq("id", id));
+    }
     if (error) {
       if (isMissingTableError(error)) tableMissing = true;
       else throw error;
@@ -364,5 +375,25 @@ export async function setPatientPassword(id: string, newPassword: string): Promi
     }
   }
   const list = await readFile();
-  await writeFile(list.map((p) => (p.id === id ? { ...p, passwordHash: hash } : p)));
+  await writeFile(list.map((p) => (p.id === id ? { ...p, passwordHash: hash, mustChangePassword: false } : p)));
+}
+
+/** Redefine o acesso do paciente para a senha provisória 123456 e exige troca no próximo login. */
+export async function resetPatientAccess(id: string): Promise<void> {
+  const hash = await bcrypt.hash(DEFAULT_PATIENT_PASSWORD, 10);
+  if (active()) {
+    const supabase = getSupabaseAdmin()!;
+    let { error } = await supabase.from("patients").update({ password_hash: hash, must_change_password: true }).eq("id", id);
+    if (error && (error.code === "PGRST204" || /must_change_password|column|schema cache/i.test(error.message || ""))) {
+      ({ error } = await supabase.from("patients").update({ password_hash: hash }).eq("id", id));
+    }
+    if (error) {
+      if (isMissingTableError(error)) tableMissing = true;
+      else throw error;
+    } else {
+      return;
+    }
+  }
+  const list = await readFile();
+  await writeFile(list.map((p) => (p.id === id ? { ...p, passwordHash: hash, mustChangePassword: true } : p)));
 }
