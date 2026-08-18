@@ -49,6 +49,33 @@ function isMissingTableError(error: unknown): boolean {
 function active() {
   return Boolean(getSupabaseAdmin()) && !tableMissing;
 }
+
+/** Detecta a coluna ausente numa mensagem do PostgREST (migração incompleta). */
+function missingColumnName(error: { code?: string; message?: string } | null): string | null {
+  if (!error) return null;
+  if (error.code !== "PGRST204" && error.code !== "42703" && !/column|schema cache/i.test(error.message || "")) return null;
+  const msg = error.message || "";
+  let m = msg.match(/find the '([^']+)' column/i);
+  if (m) return m[1];
+  m = msg.match(/column "?([a-z0-9_]+)"? .*does not exist/i);
+  if (m) return m[1];
+  return null;
+}
+
+/** Insere tolerando colunas ausentes: remove a coluna faltante e tenta de novo,
+ * para o cadastro não quebrar quando uma migração ainda não foi aplicada. */
+async function insertPatientResilient(row: Record<string, unknown>): Promise<{ error: { code?: string; message?: string } | null }> {
+  const supabase = getSupabaseAdmin()!;
+  const current = { ...row };
+  for (let attempt = 0; attempt < 10; attempt++) {
+    const { error } = await supabase.from("patients").insert(current);
+    if (!error) return { error: null };
+    const col = missingColumnName(error);
+    if (!col || !(col in current)) return { error };
+    delete current[col];
+  }
+  return await supabase.from("patients").insert(current);
+}
 export function normalizeCpf(cpf?: string | null): string {
   return String(cpf || "").replace(/\D/g, "");
 }
@@ -142,8 +169,7 @@ export async function createPatient(input: NewPatient): Promise<Patient> {
     passwordHash,
   };
   if (active()) {
-    const supabase = getSupabaseAdmin()!;
-    const { error } = await supabase.from("patients").insert({
+    const { error } = await insertPatientResilient({
       id: p.id,
       doctor_id: p.doctorId,
       name: p.name,
