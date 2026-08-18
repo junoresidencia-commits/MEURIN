@@ -40,6 +40,7 @@ export default function ConfiguracoesMedicoPage() {
   const [cns, setCns] = useState("");
   const [name, setName] = useState("");
   const [cpf, setCpf] = useState("");
+  const [signatureUrl, setSignatureUrl] = useState("");
 
   useEffect(() => {
     (async () => {
@@ -61,6 +62,7 @@ export default function ConfiguracoesMedicoPage() {
       setCns(d.cns || "");
       setName(d.name || "");
       setCpf(d.cpf || "");
+      setSignatureUrl(d.signatureUrl || "");
       setSupported(pushSupported());
       setSubscribed(await isSubscribed());
       setLoading(false);
@@ -77,7 +79,7 @@ export default function ConfiguracoesMedicoPage() {
     const res = await fetch("/api/availability", {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ ...prefs, cns, name, cpf }),
+      body: JSON.stringify({ ...prefs, cns, name, cpf, signatureUrl }),
     });
     setMsg(res.ok ? "Preferências salvas." : "Não foi possível salvar agora.");
   }
@@ -131,6 +133,42 @@ export default function ConfiguracoesMedicoPage() {
                 <span className="mb-1 block text-xs font-semibold text-[var(--text-muted)]">CNS (Cartão Nacional de Saúde)</span>
                 <input className="input-field" value={cns} onChange={(e) => setCns(e.target.value)} inputMode="numeric" placeholder="000 0000 0000 0000" />
               </label>
+            </div>
+            <div className="mt-4 border-t border-[var(--border)] pt-4">
+              <p className="text-sm font-semibold text-[var(--text)]">Minha assinatura</p>
+              <p className="mt-1 text-sm text-[var(--text-muted)]">
+                Envie uma imagem da sua assinatura (PNG com fundo transparente fica melhor). Ela aparece na LME oficial
+                e nos documentos. Se preferir assinar à mão, deixe em branco e assine o papel impresso.
+              </p>
+              <div className="mt-3 flex flex-wrap items-center gap-4">
+                {signatureUrl ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img src={signatureUrl} alt="Assinatura" className="h-16 max-w-[220px] rounded-lg border border-[var(--border)] bg-white object-contain p-1" />
+                ) : (
+                  <span className="grid h-16 w-[220px] place-items-center rounded-lg border border-dashed border-[var(--border)] text-xs text-[var(--text-muted)]">Sem assinatura</span>
+                )}
+                <div className="flex flex-col gap-2">
+                  <label className="btn-ghost cursor-pointer text-sm">
+                    {signatureUrl ? "Trocar imagem" : "Enviar imagem"}
+                    <input
+                      type="file"
+                      accept="image/png,image/jpeg"
+                      className="hidden"
+                      onChange={(e) => {
+                        const f = e.target.files?.[0];
+                        if (!f) return;
+                        if (f.size > 500000) { setMsg("Imagem muito grande (máx. ~500 KB)."); return; }
+                        const reader = new FileReader();
+                        reader.onload = () => setSignatureUrl(String(reader.result || ""));
+                        reader.readAsDataURL(f);
+                      }}
+                    />
+                  </label>
+                  {signatureUrl && (
+                    <button type="button" className="btn-ghost text-sm text-[var(--danger)]" onClick={() => setSignatureUrl("")}>Remover</button>
+                  )}
+                </div>
+              </div>
             </div>
           </section>
 

@@ -1,8 +1,9 @@
 import { NextResponse } from "next/server";
-import { PDFDocument } from "pdf-lib";
+import { PDFDocument, StandardFonts } from "pdf-lib";
 import { getDoctorSessionId } from "@/lib/auth";
 import { getPatientEmail } from "@/lib/patient-session";
 import { getLme } from "@/lib/lme-store";
+import { getDoctorById } from "@/lib/store";
 
 /**
  * Preenche o PDF oficial do CEAF (AcroForm) com os dados da LME e devolve para
@@ -102,11 +103,50 @@ export async function GET(
   // Medicamentos: seleciona a opção OFICIAL no dropdown (Selecao med N). Só escreve
   // no campo de texto quando o dropdown NÃO casou — assim não sobrepõe os dois textos.
   const medTextFields = ["med1", "med2", "med3", "med4", "med5", "med6"];
+  // Grade de quantidade por mês (6 colunas por linha de medicamento), mapeada por
+  // posição no PDF oficial. Preenche a quantidade mensal em todos os meses do período.
+  const qtyGrid: string[][] = [
+    ["Text6", "Text7", "Text8", "Text6a", "Text7a", "Text8a"],
+    ["Text10", "Text11", "Text12", "Text10a", "Text11a", "Text12a"],
+    ["Text14", "Text15", "Text16", "Text14a", "Text15a", "Text16a"],
+    ["Text18", "Text19", "Text20", "Text6b", "Text7b", "Text8b"],
+    ["Text22", "Text23", "Text24", "Text10b", "Text11b", "Text12b"],
+    ["Text22a", "Text23a", "Text24a", "Text14b", "Text15b", "Text16b"],
+  ];
   lme.medications.slice(0, 6).forEach((m, i) => {
     const label = m.presentation ? `${m.name} (${m.presentation})` : m.name;
     const picked = selectMed(i + 1, label);
     if (!picked) setText(medTextFields[i], label, 8);
+    const q = (m.monthlyQty ?? "").toString().trim();
+    if (q) qtyGrid[i].forEach((fn) => setText(fn, q, 8));
   });
+
+  // Assinatura visual do médico (imagem) no campo 17 (Assinatura e carimbo).
+  try {
+    const doctor = lme.doctorId ? await getDoctorById(lme.doctorId) : null;
+    const sig = doctor?.signatureUrl;
+    if (sig && sig.startsWith("data:")) {
+      const b64 = sig.split(",")[1] || "";
+      const raw = Uint8Array.from(Buffer.from(b64, "base64"));
+      const img = sig.includes("image/jpeg") || sig.includes("image/jpg")
+        ? await doc.embedJpg(raw)
+        : await doc.embedPng(raw);
+      const page = doc.getPages()[0];
+      // Caixa "17- Assinatura e carimbo do médico" (à direita do nome). Coordenadas em pt (A4).
+      const boxX = 392, boxY = 170, boxW = 166, boxH = 52;
+      const scale = Math.min(boxW / img.width, boxH / img.height);
+      const w = img.width * scale;
+      const h = img.height * scale;
+      page.drawImage(img, { x: boxX + (boxW - w) / 2, y: boxY + (boxH - h) / 2, width: w, height: h });
+    } else if (lme.doctorName) {
+      // Fallback: assinatura "manuscrita" tipografada, para o campo não ficar vazio.
+      const page = doc.getPages()[0];
+      const font = await doc.embedFont(StandardFonts.HelveticaOblique);
+      page.drawText(lme.doctorName, { x: 400, y: 190, size: 12, font });
+    }
+  } catch {
+    /* assinatura indisponível — segue sem imagem */
+  }
 
   const out = await doc.save();
   return new NextResponse(Buffer.from(out), {

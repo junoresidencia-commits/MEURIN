@@ -70,6 +70,13 @@ export async function PUT(req: Request) {
   const cns = body.cns !== undefined ? String(body.cns || "").replace(/\s+/g, "") || undefined : undefined;
   const name = body.name !== undefined ? String(body.name || "").trim() : undefined;
   const cpf = body.cpf !== undefined ? String(body.cpf || "").replace(/\D/g, "") || undefined : undefined;
+  // Assinatura visual: aceita dataURL (define) ou "" (remove). Limite defensivo de tamanho.
+  const signatureUrl =
+    body.signatureUrl !== undefined
+      ? (String(body.signatureUrl || "").startsWith("data:") && String(body.signatureUrl).length < 700000
+          ? String(body.signatureUrl)
+          : "")
+      : undefined;
 
   // Períodos avançados de agenda (local/modalidade/duração/intervalo/valor).
   let availabilityPeriods: AvailabilityPeriod[] | undefined;
@@ -138,6 +145,7 @@ export async function PUT(req: Request) {
             cns: cns !== undefined ? cns : d.cns,
             name: name && name.length > 1 ? name : d.name,
             cpf: cpf !== undefined ? cpf : d.cpf,
+            signatureUrl: signatureUrl !== undefined ? (signatureUrl || undefined) : d.signatureUrl,
             availabilityPeriods: availabilityPeriods !== undefined ? availabilityPeriods : d.availabilityPeriods,
           }
         : d

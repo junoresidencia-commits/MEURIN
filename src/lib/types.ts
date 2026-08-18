@@ -97,6 +97,7 @@ export interface Doctor {
   clinic?: string;
   cns?: string; // Cartão Nacional de Saúde do médico (SUS/CEAF). Preenchido uma vez, reutilizado nas LMEs.
   cpf?: string; // CPF do médico (para documentos/LME).
+  signatureUrl?: string; // Assinatura visual do médico (dataURL PNG/JPG). Aparece nos documentos e LME.
   adminNote?: string;
   // Logo do médico (data URL base64) exibida no cabeçalho dos documentos/PDF.
   logoUrl?: string;
