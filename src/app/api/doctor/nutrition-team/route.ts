@@ -19,6 +19,8 @@ export async function GET() {
       crn: l.nutritionist.crn,
       uf: l.nutritionist.uf,
       active: l.active,
+      permissions: l.permissions,
+      status: l.nutritionist.status,
       lastAccessAt: l.nutritionist.lastAccessAt,
     })),
   });
@@ -35,10 +37,12 @@ export async function POST(req: Request) {
   if (!cpf && !email) return NextResponse.json({ error: "Informe CPF e/ou e-mail." }, { status: 400 });
   if (cpf && normalizeCpf(cpf).length < 11) return NextResponse.json({ error: "CPF inválido." }, { status: 400 });
 
+  const permissions = (b.permissions && typeof b.permissions === "object") ? b.permissions : undefined;
+
   // Não duplicar: se já existe conta com esse CPF/e-mail, só cria o VÍNCULO.
   const existing = await findNutritionistByCpfOrEmail(cpf, email);
   if (existing) {
-    await upsertNutritionLink(existing.id, doctorId);
+    await upsertNutritionLink(existing.id, doctorId, permissions);
     return NextResponse.json({ ok: true, nutritionistId: existing.id, linked: true, message: "Nutricionista já tinha cadastro no Meu Rim — vinculada à sua equipe." });
   }
 
@@ -48,7 +52,7 @@ export async function POST(req: Request) {
     crn: b.crn ? String(b.crn) : null,
     uf: b.uf ? String(b.uf) : null,
   });
-  await upsertNutritionLink(created.id, doctorId);
+  await upsertNutritionLink(created.id, doctorId, permissions);
   return NextResponse.json({
     ok: true, nutritionistId: created.id, created: true,
     defaultPassword: DEFAULT_NUTRITIONIST_PASSWORD,
@@ -61,7 +65,10 @@ export async function PATCH(req: Request) {
   const b = await req.json().catch(() => ({}));
   const nutritionistId = String(b.nutritionistId || "");
   if (!nutritionistId) return NextResponse.json({ error: "Nutricionista inválida." }, { status: 400 });
-  const updated = await setNutritionLink(nutritionistId, doctorId, { active: typeof b.active === "boolean" ? b.active : undefined });
+  const updated = await setNutritionLink(nutritionistId, doctorId, {
+    active: typeof b.active === "boolean" ? b.active : undefined,
+    permissions: b.permissions && typeof b.permissions === "object" ? b.permissions : undefined,
+  });
   if (!updated) return NextResponse.json({ error: "Vínculo não encontrado." }, { status: 404 });
   return NextResponse.json({ ok: true });
 }

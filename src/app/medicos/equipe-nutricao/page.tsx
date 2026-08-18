@@ -6,7 +6,15 @@ import { useRouter } from "next/navigation";
 import { DoctorSidebar } from "@/components/DoctorSidebar";
 import { DoctorMobileNav } from "@/components/DoctorMobileNav";
 
-type Member = { nutritionistId: string; name: string; cpf?: string | null; email?: string | null; phone?: string | null; crn?: string | null; uf?: string | null; active: boolean; lastAccessAt?: string | null };
+type Perms = { verExames: boolean; verDiario: boolean; criarPlano: boolean; comentarDiario: boolean };
+type Member = { nutritionistId: string; name: string; cpf?: string | null; email?: string | null; phone?: string | null; crn?: string | null; uf?: string | null; active: boolean; status?: string; permissions?: Perms; lastAccessAt?: string | null };
+
+const PERM_LABELS: { key: keyof Perms; label: string }[] = [
+  { key: "verExames", label: "Ver exames" },
+  { key: "criarPlano", label: "Criar/liberar dieta" },
+  { key: "verDiario", label: "Ver diário alimentar" },
+  { key: "comentarDiario", label: "Comentar no diário" },
+];
 
 export default function EquipeNutricaoPage() {
   const router = useRouter();
@@ -47,6 +55,10 @@ export default function EquipeNutricaoPage() {
     await fetch("/api/doctor/nutrition-team", { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ nutritionistId: m.nutritionistId, active: !m.active }) });
     await load();
   }
+  async function setPerm(m: Member, key: keyof Perms, value: boolean) {
+    await fetch("/api/doctor/nutrition-team", { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ nutritionistId: m.nutritionistId, permissions: { [key]: value } }) });
+    await load();
+  }
   async function remove(m: Member) {
     if (!window.confirm(`Remover ${m.name} da sua equipe de nutrição?`)) return;
     await fetch("/api/doctor/nutrition-team", { method: "DELETE", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ nutritionistId: m.nutritionistId }) });
@@ -80,15 +92,26 @@ export default function EquipeNutricaoPage() {
             {loading && <p className="text-sm text-[var(--text-muted)]">Carregando…</p>}
             {!loading && team.length === 0 && <p className="text-sm text-[var(--text-muted)]">Nenhuma nutricionista na equipe ainda.</p>}
             {team.map((m) => (
-              <div key={m.nutritionistId} className="panel flex flex-wrap items-center justify-between gap-2">
-                <div>
-                  <p className="font-semibold text-[var(--text)]">{m.name} {m.crn && <span className="text-sm font-normal text-[var(--text-muted)]">· CRN {m.crn}{m.uf ? "-" + m.uf : ""}</span>}</p>
-                  <p className="text-xs text-[var(--text-muted)]">{[m.cpf, m.email, m.phone].filter(Boolean).join(" · ") || "—"}</p>
+              <div key={m.nutritionistId} className="panel">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <div>
+                    <p className="font-semibold text-[var(--text)]">{m.name} {m.crn && <span className="text-sm font-normal text-[var(--text-muted)]">· CRN {m.crn}{m.uf ? "-" + m.uf : ""}</span>}</p>
+                    <p className="text-xs text-[var(--text-muted)]">{[m.cpf, m.email, m.phone].filter(Boolean).join(" · ") || "—"}</p>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    {m.status && m.status !== "active" && <span className="rounded-full bg-amber-100 px-2 py-0.5 text-xs font-semibold text-amber-700">{m.status === "pending" ? "Aguardando admin" : m.status}</span>}
+                    <span className={`rounded-full px-2 py-0.5 text-xs font-semibold ${m.active ? "bg-emerald-100 text-emerald-700" : "bg-slate-100 text-slate-500"}`}>{m.active ? "Ativa" : "Inativa"}</span>
+                    <button type="button" className="btn-ghost text-sm" onClick={() => toggle(m)}>{m.active ? "Desativar" : "Ativar"}</button>
+                    <button type="button" className="btn-ghost text-sm text-[var(--danger)]" onClick={() => remove(m)}>Remover</button>
+                  </div>
                 </div>
-                <div className="flex items-center gap-2">
-                  <span className={`rounded-full px-2 py-0.5 text-xs font-semibold ${m.active ? "bg-emerald-100 text-emerald-700" : "bg-slate-100 text-slate-500"}`}>{m.active ? "Ativa" : "Inativa"}</span>
-                  <button type="button" className="btn-ghost text-sm" onClick={() => toggle(m)}>{m.active ? "Desativar" : "Ativar"}</button>
-                  <button type="button" className="btn-ghost text-sm text-[var(--danger)]" onClick={() => remove(m)}>Remover</button>
+                <div className="mt-2 flex flex-wrap gap-3 border-t border-[var(--border)] pt-2">
+                  {PERM_LABELS.map(({ key, label }) => (
+                    <label key={key} className="flex items-center gap-1.5 text-xs text-[var(--text-soft)]">
+                      <input type="checkbox" className="h-4 w-4 accent-[var(--gold)]" checked={m.permissions ? m.permissions[key] : true} onChange={(e) => setPerm(m, key, e.target.checked)} />
+                      {label}
+                    </label>
+                  ))}
                 </div>
               </div>
             ))}

@@ -911,3 +911,9 @@ grant all privileges on table public.nutritionist_links to service_role;
 grant all privileges on table public.nutrition_referrals to service_role;
 grant all privileges on table public.nutrition_consultations to service_role;
 
+-- ===== 20260818020000_nutrition_phase2.sql (auto-registro + aprovação + permissões) =====
+alter table public.nutritionists add column if not exists photo_url text;
+alter table public.nutritionists add column if not exists documents jsonb not null default '[]'::jsonb;
+alter table public.nutritionist_links add column if not exists permissions jsonb not null default
+  '{"verExames":true,"verDiario":true,"criarPlano":true,"comentarDiario":true}'::jsonb;
+

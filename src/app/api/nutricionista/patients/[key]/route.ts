@@ -1,10 +1,10 @@
 import { NextResponse } from "next/server";
-import { resolveNutritionPatientAccess } from "@/lib/nutrition-context";
+import { requireNutritionist, resolveNutritionPatientAccess } from "@/lib/nutrition-context";
 import { getLabResults } from "@/lib/patient-store";
 import { getProfile } from "@/lib/clinical-profile-store";
 import { computeImc } from "@/lib/clinical-fields";
 import { NEPHRO_LABS } from "@/lib/labs";
-import { listConsultationsForPatient } from "@/lib/nutritionists-store";
+import { listConsultationsForPatient, getNutritionLink } from "@/lib/nutritionists-store";
 
 // Exames relevantes para a avaliação nutricional renal.
 const RELEVANT = ["creatinina", "tfge", "potassio", "fosforo", "calcio", "albumina", "ureia", "glicemia", "glicemia_jejum", "hba1c", "colesterol_total", "ldl", "hdl", "triglicerideos", "proteinuria_24h", "rac"];
@@ -15,11 +15,16 @@ export async function GET(_req: Request, { params }: { params: Promise<{ key: st
   const access = await resolveNutritionPatientAccess(patientKey);
   if (!access) return NextResponse.json({ error: "Sem acesso a este paciente." }, { status: 403 });
 
-  const [labs, profile, consultations] = await Promise.all([
-    getLabResults(access.key),
+  const nut = await requireNutritionist();
+  const link = nut ? await getNutritionLink(nut.id, access.doctorId) : null;
+  const canSeeLabs = !link || link.permissions.verExames;
+
+  const [labsAll, profile, consultations] = await Promise.all([
+    canSeeLabs ? getLabResults(access.key) : Promise.resolve([]),
     getProfile(access.key),
     listConsultationsForPatient(access.key),
   ]);
+  const labs = labsAll;
 
   // Último valor por exame relevante.
   const labelByKey = new Map(NEPHRO_LABS.map((l) => [l.key, l]));
