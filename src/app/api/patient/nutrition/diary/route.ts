@@ -3,6 +3,9 @@ import { getPatientEmail } from "@/lib/patient-session";
 import { addDiaryEntry, deleteDiaryEntry, getGoals, listDiary, type DiaryNutrients } from "@/lib/nutrition-diary-store";
 import { getFood, nutrientsForGrams } from "@/lib/foods-br";
 import { computeDailyTotals, trafficLight, topContributors, educationalMessage } from "@/lib/nutrition-tracking";
+import { getLabResults } from "@/lib/patient-store";
+import { getProfile } from "@/lib/clinical-profile-store";
+import { computeAttention } from "@/lib/nutrition-attention";
 
 function today(): string {
   return new Date().toLocaleDateString("en-CA", { timeZone: "America/Bahia" });
@@ -12,9 +15,10 @@ export async function GET(req: Request) {
   const email = await getPatientEmail();
   if (!email) return NextResponse.json({ error: "Sessão de paciente não encontrada." }, { status: 401 });
   const date = new URL(req.url).searchParams.get("date") || today();
-  const [entries, goals] = await Promise.all([listDiary(email, date), getGoals(email)]);
+  const [entries, goals, labs, profile] = await Promise.all([listDiary(email, date), getGoals(email), getLabResults(email), getProfile(email)]);
   const totals = computeDailyTotals(entries);
   const tracks = trafficLight(totals, goals?.targets);
+  const attention = computeAttention(labs.map((l) => ({ testKey: l.testKey, value: l.value, measuredAt: l.measuredAt })), profile?.data as Record<string, unknown> | undefined);
   // Alertas educativos + principais contribuintes por nutriente em atenção/acima.
   const alerts = tracks
     .filter((t) => t.status === "amarelo" || t.status === "vermelho")
@@ -26,7 +30,7 @@ export async function GET(req: Request) {
         contributors: nutrientKey ? topContributors(entries, nutrientKey, 3) : [],
       };
     });
-  return NextResponse.json({ date, entries, totals, tracks, goals, alerts, hasGoals: Boolean(goals && Object.values(goals.targets).some((v) => typeof v === "number" && v > 0)) });
+  return NextResponse.json({ date, entries, totals, tracks, goals, alerts, attention, hasGoals: Boolean(goals && Object.values(goals.targets).some((v) => typeof v === "number" && v > 0)) });
 }
 
 export async function POST(req: Request) {

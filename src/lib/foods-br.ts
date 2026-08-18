@@ -68,6 +68,40 @@ export const FOODS_BR: FoodItem[] = [
   { id: "presunto", name: "Presunto", state: "processado", source: "TACO", measure: "2 fatias", measureGrams: 30, kcal: 94, protein_g: 14.4, carb_g: 3, fat_g: 2.5, sodium_mg: 1200, potassium_mg: 300, phosphorus_mg: 250, calcium_mg: 9 },
   { id: "refrigerante-cola", name: "Refrigerante cola", state: "líquido", source: "TBCA", measure: "1 lata", measureGrams: 350, kcal: 43, protein_g: 0, carb_g: 11, fat_g: 0, sodium_mg: 8, potassium_mg: 2, phosphorus_mg: 17, calcium_mg: 2 },
   { id: "miojo", name: "Macarrão instantâneo", state: "preparado", source: "TBCA", measure: "1 pacote", measureGrams: 80, kcal: 436, protein_g: 9, carb_g: 60, fat_g: 17, sodium_mg: 1800, potassium_mg: 130, phosphorus_mg: 110, calcium_mg: 20 },
+  // Frutas adicionais
+  { id: "abacaxi", name: "Abacaxi", state: "cru", source: "TACO", measure: "1 fatia", measureGrams: 100, kcal: 48, protein_g: 0.9, carb_g: 12.3, fat_g: 0.1, sodium_mg: 0, potassium_mg: 131, phosphorus_mg: 8, calcium_mg: 22 },
+  { id: "manga", name: "Manga palmer", state: "crua", source: "TACO", measure: "1 unidade pequena", measureGrams: 120, kcal: 64, protein_g: 0.4, carb_g: 16.7, fat_g: 0.2, sodium_mg: 0, potassium_mg: 138, phosphorus_mg: 11, calcium_mg: 12 },
+  { id: "abacate", name: "Abacate", state: "cru", source: "TACO", measure: "2 colheres sopa", measureGrams: 60, kcal: 96, protein_g: 1.2, carb_g: 6, fat_g: 8.4, sodium_mg: 0, potassium_mg: 206, phosphorus_mg: 21, calcium_mg: 8 },
+  { id: "morango", name: "Morango", state: "cru", source: "TACO", measure: "1 xícara", measureGrams: 150, kcal: 30, protein_g: 0.9, carb_g: 6.8, fat_g: 0.3, sodium_mg: 0, potassium_mg: 178, phosphorus_mg: 24, calcium_mg: 11 },
+  { id: "pera", name: "Pera", state: "crua", source: "TACO", measure: "1 unidade", measureGrams: 130, kcal: 53, protein_g: 0.6, carb_g: 14, fat_g: 0.1, sodium_mg: 0, potassium_mg: 116, phosphorus_mg: 11, calcium_mg: 8 },
+  { id: "caju", name: "Caju (fruta)", state: "cru", source: "TACO", measure: "1 unidade", measureGrams: 50, kcal: 43, protein_g: 1, carb_g: 10.3, fat_g: 0.3, sodium_mg: 3, potassium_mg: 145, phosphorus_mg: 17, calcium_mg: 1 },
+  // Hortaliças / legumes adicionais
+  { id: "batata-doce", name: "Batata-doce", state: "cozida", source: "TACO", measure: "1 fatia", measureGrams: 100, kcal: 77, protein_g: 0.6, carb_g: 18.4, fat_g: 0.1, sodium_mg: 3, potassium_mg: 148, phosphorus_mg: 26, calcium_mg: 19 },
+  { id: "mandioca", name: "Mandioca (aipim)", state: "cozida", source: "TACO", measure: "1 pedaço", measureGrams: 100, kcal: 125, protein_g: 0.6, carb_g: 30.1, fat_g: 0.3, sodium_mg: 1, potassium_mg: 112, phosphorus_mg: 28, calcium_mg: 17 },
+  { id: "abobrinha", name: "Abobrinha", state: "cozida", source: "TACO", measure: "2 colheres sopa", measureGrams: 60, kcal: 15, protein_g: 1, carb_g: 3, fat_g: 0.2, sodium_mg: 1, potassium_mg: 179, phosphorus_mg: 24, calcium_mg: 16 },
+  { id: "chuchu", name: "Chuchu", state: "cozido", source: "TACO", measure: "2 colheres sopa", measureGrams: 60, kcal: 19, protein_g: 0.4, carb_g: 4.8, fat_g: 0.1, sodium_mg: 1, potassium_mg: 82, phosphorus_mg: 12, calcium_mg: 12 },
+  { id: "brocolis", name: "Brócolis", state: "cozido", source: "TACO", measure: "1 porção", measureGrams: 70, kcal: 25, protein_g: 2.1, carb_g: 4.4, fat_g: 0.5, sodium_mg: 8, potassium_mg: 132, phosphorus_mg: 40, calcium_mg: 51 },
+  { id: "beterraba", name: "Beterraba", state: "cozida", source: "TACO", measure: "2 colheres sopa", measureGrams: 60, kcal: 32, protein_g: 1.3, carb_g: 7.2, fat_g: 0.1, sodium_mg: 26, potassium_mg: 218, phosphorus_mg: 25, calcium_mg: 15 },
+  { id: "couve", name: "Couve manteiga", state: "refogada", source: "TACO", measure: "1 colher servir", measureGrams: 40, kcal: 90, protein_g: 3.9, carb_g: 8.7, fat_g: 4.9, sodium_mg: 12, potassium_mg: 302, phosphorus_mg: 52, calcium_mg: 177 },
+  // Cereais / leguminosas adicionais
+  { id: "arroz-integral", name: "Arroz integral", state: "cozido", source: "TACO", measure: "1 escumadeira", measureGrams: 80, kcal: 124, protein_g: 2.6, carb_g: 25.8, fat_g: 1, sodium_mg: 1, potassium_mg: 75, phosphorus_mg: 106, calcium_mg: 5 },
+  { id: "lentilha", name: "Lentilha", state: "cozida", source: "TACO", measure: "1 concha", measureGrams: 100, kcal: 93, protein_g: 6.3, carb_g: 16.3, fat_g: 0.5, sodium_mg: 2, potassium_mg: 220, phosphorus_mg: 130, calcium_mg: 16 },
+  { id: "grao-de-bico", name: "Grão-de-bico", state: "cozido", source: "TACO", measure: "1 concha", measureGrams: 100, kcal: 130, protein_g: 8.4, carb_g: 18, fat_g: 2.1, sodium_mg: 5, potassium_mg: 290, phosphorus_mg: 168, calcium_mg: 45 },
+  { id: "milho-verde", name: "Milho verde", state: "cozido", source: "TACO", measure: "2 colheres sopa", measureGrams: 60, kcal: 98, protein_g: 3.2, carb_g: 20, fat_g: 0.9, sodium_mg: 3, potassium_mg: 173, phosphorus_mg: 79, calcium_mg: 2 },
+  { id: "tapioca", name: "Tapioca (goma)", state: "preparada", source: "TBCA", measure: "1 unidade", measureGrams: 90, kcal: 240, protein_g: 0.2, carb_g: 60, fat_g: 0, sodium_mg: 2, potassium_mg: 11, phosphorus_mg: 7, calcium_mg: 20 },
+  { id: "cuscuz", name: "Cuscuz de milho", state: "cozido", source: "TACO", measure: "1 fatia", measureGrams: 100, kcal: 113, protein_g: 2.2, carb_g: 25, fat_g: 0.6, sodium_mg: 3, potassium_mg: 60, phosphorus_mg: 50, calcium_mg: 5 },
+  // Proteínas adicionais
+  { id: "sardinha", name: "Sardinha", state: "grelhada", source: "TACO", measure: "1 unidade", measureGrams: 60, kcal: 164, protein_g: 27, carb_g: 0, fat_g: 6, sodium_mg: 250, potassium_mg: 397, phosphorus_mg: 293, calcium_mg: 79 },
+  { id: "carne-suina", name: "Carne suína (lombo)", state: "assada", source: "TACO", measure: "1 fatia", measureGrams: 100, kcal: 210, protein_g: 32, carb_g: 0, fat_g: 8.8, sodium_mg: 50, potassium_mg: 390, phosphorus_mg: 230, calcium_mg: 5 },
+  { id: "frango-coxa", name: "Coxa de frango", state: "assada", source: "TACO", measure: "1 unidade", measureGrams: 90, kcal: 215, protein_g: 28, carb_g: 0, fat_g: 11, sodium_mg: 90, potassium_mg: 220, phosphorus_mg: 160, calcium_mg: 10 },
+  { id: "ricota", name: "Ricota", state: "-", source: "TACO", measure: "1 fatia", measureGrams: 30, kcal: 140, protein_g: 12.6, carb_g: 3.8, fat_g: 8.1, sodium_mg: 20, potassium_mg: 105, phosphorus_mg: 150, calcium_mg: 253 },
+  { id: "queijo-mussarela", name: "Queijo mussarela", state: "-", source: "TACO", measure: "1 fatia", measureGrams: 20, kcal: 330, protein_g: 22.6, carb_g: 3, fat_g: 25, sodium_mg: 580, potassium_mg: 76, phosphorus_mg: 470, calcium_mg: 875 },
+  // Bebidas / outros
+  { id: "cafe", name: "Café coado (sem açúcar)", state: "líquido", source: "TBCA", measure: "1 xícara", measureGrams: 100, kcal: 2, protein_g: 0.1, carb_g: 0.3, fat_g: 0, sodium_mg: 1, potassium_mg: 66, phosphorus_mg: 3, calcium_mg: 2 },
+  { id: "suco-laranja", name: "Suco de laranja natural", state: "líquido", source: "TACO", measure: "1 copo", measureGrams: 200, kcal: 37, protein_g: 0.7, carb_g: 8.3, fat_g: 0.1, sodium_mg: 0, potassium_mg: 195, phosphorus_mg: 17, calcium_mg: 9 },
+  { id: "agua-de-coco", name: "Água de coco", state: "líquido", source: "TACO", measure: "1 copo", measureGrams: 200, kcal: 22, protein_g: 0, carb_g: 5.3, fat_g: 0, sodium_mg: 21, potassium_mg: 162, phosphorus_mg: 6, calcium_mg: 19 },
+  { id: "pao-integral", name: "Pão de forma integral", state: "assado", source: "TACO", measure: "2 fatias", measureGrams: 50, kcal: 253, protein_g: 9.4, carb_g: 49, fat_g: 3.5, sodium_mg: 507, potassium_mg: 258, phosphorus_mg: 197, calcium_mg: 90 },
+  { id: "biscoito-agua-sal", name: "Biscoito água e sal", state: "-", source: "TBCA", measure: "5 unidades", measureGrams: 30, kcal: 432, protein_g: 10, carb_g: 70, fat_g: 12, sodium_mg: 900, potassium_mg: 120, phosphorus_mg: 110, calcium_mg: 30 },
 ];
 
 const norm = (s: string) => s.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().trim();

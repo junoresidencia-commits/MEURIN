@@ -258,6 +258,7 @@ function GoalsAndDiary({ patientKey }: { patientKey: string }) {
   const [savedMsg, setSavedMsg] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [diary, setDiary] = useState<{ tracks: { key: string; label: string; unit: string; total: number; goal: number | null; status: string }[]; entries: { id: string; food: string; grams?: number | null; volumeMl?: number | null; meal?: string | null }[]; date: string } | null>(null);
+  const [timeline, setTimeline] = useState<{ at: string; type: string; label: string; by?: string | null }[]>([]);
 
   useEffect(() => {
     fetch(`/api/nutricionista/patients/${enc}/goals`).then((r) => r.json()).then((d) => {
@@ -268,6 +269,7 @@ function GoalsAndDiary({ patientKey }: { patientKey: string }) {
       setNote(d.goals?.note || "");
     }).catch(() => {});
     fetch(`/api/nutricionista/patients/${enc}/diary`).then((r) => r.json()).then((d) => setDiary(d)).catch(() => {});
+    fetch(`/api/nutricionista/patients/${enc}/timeline`).then((r) => r.json()).then((d) => setTimeline(d.timeline || [])).catch(() => {});
   }, [enc]);
 
   async function saveGoals() {
@@ -329,6 +331,20 @@ function GoalsAndDiary({ patientKey }: { patientKey: string }) {
           </>
         )}
       </section>
+
+      {timeline.length > 0 && (
+        <section className="panel mt-4">
+          <h2 className="font-display text-lg text-[var(--text)]">Linha do tempo (médico ↔ nutrição)</h2>
+          <ul className="mt-2 space-y-1">
+            {timeline.map((ev, i) => (
+              <li key={i} className="flex gap-2 text-sm text-[var(--text-soft)]">
+                <span className="text-xs text-[var(--text-muted)]">{new Date(ev.at).toLocaleDateString("pt-BR")}</span>
+                <span>{ev.label}{ev.by ? <span className="text-[var(--text-muted)]"> — {ev.by}</span> : null}</span>
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
     </>
   );
 }
