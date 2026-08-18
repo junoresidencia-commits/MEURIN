@@ -836,3 +836,6 @@ alter table public.doctors add column if not exists signature_visual jsonb;
 -- ===== 20260817030000_doctor_cpf.sql =====
 alter table public.doctors add column if not exists cpf text;
 
+-- ===== 20260817040000_doctor_signature_url.sql =====
+alter table public.doctors add column if not exists signature_url text;
+
