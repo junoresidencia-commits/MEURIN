@@ -47,6 +47,9 @@ export default function PacienteNutricaoPage() {
   const [labelBusy, setLabelBusy] = useState(false);
   const [labelFields, setLabelFields] = useState<Record<string, string | boolean> | null>(null);
   const [labelMsg, setLabelMsg] = useState("");
+  // consultas de nutrição
+  const [appts, setAppts] = useState<{ id: string; status: string; priceCents: number; slotStart?: string | null; pixCopiaCola?: string | null; modality?: string }[]>([]);
+  const [apptMsg, setApptMsg] = useState("");
   // comparar alimentos
   const [cmpOpen, setCmpOpen] = useState(false);
   const [cmpQ, setCmpQ] = useState("");
@@ -68,6 +71,24 @@ export default function PacienteNutricaoPage() {
     setLoading(false);
   }, [router]);
   useEffect(() => { load(); }, [load]);
+
+  const loadAppts = useCallback(async () => {
+    const r = await fetch("/api/patient/nutrition/appointments");
+    if (!r.ok) return;
+    const d = await r.json();
+    setAppts(d.appointments || []);
+  }, []);
+  useEffect(() => { loadAppts(); }, [loadAppts]);
+
+  async function sendProof(id: string, file: File) {
+    if (file.size > 1400000) { setApptMsg("Comprovante muito grande (máx. ~1,4 MB)."); return; }
+    setApptMsg("");
+    const dataUrl: string = await new Promise((res, rej) => { const rd = new FileReader(); rd.onload = () => res(String(rd.result || "")); rd.onerror = rej; rd.readAsDataURL(file); });
+    const resp = await fetch("/api/patient/nutrition/appointments", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id, proofUrl: dataUrl }) });
+    if (resp.ok) { setApptMsg("Comprovante enviado. A nutricionista vai confirmar."); await loadAppts(); }
+    else { const d = await resp.json().catch(() => ({})); setApptMsg(d.error || "Erro ao enviar."); }
+  }
+  function copyPix(code: string) { navigator.clipboard?.writeText(code); setApptMsg("Pix copiado!"); setTimeout(() => setApptMsg(""), 1500); }
 
   useEffect(() => {
     if (kind !== "alimento") return;
@@ -204,6 +225,36 @@ export default function PacienteNutricaoPage() {
               )}
             </div>
           ))}
+        </section>
+      )}
+
+      {/* Consultas de nutrição (pagamento por Pix direto) */}
+      {appts.length > 0 && (
+        <section className="panel mt-4">
+          <p className="text-xs font-bold uppercase tracking-wider text-[var(--gold)]">Consultas de nutrição</p>
+          {apptMsg && <p className="mt-1 text-sm font-semibold text-[var(--green,#0d9488)]">{apptMsg}</p>}
+          <div className="mt-2 grid gap-2">
+            {appts.map((a) => (
+              <div key={a.id} className="rounded-xl border border-[var(--border)] p-3">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <p className="font-semibold text-[var(--text)]">R$ {(a.priceCents / 100).toFixed(2)} <span className="text-xs font-normal text-[var(--text-muted)]">· {a.modality || "teleconsulta"}{a.slotStart ? " · " + new Date(a.slotStart).toLocaleString("pt-BR") : ""}</span></p>
+                  <span className={`rounded-full px-2 py-0.5 text-xs font-semibold ${a.status === "confirmada" || a.status === "realizada" ? "bg-emerald-100 text-emerald-700" : a.status === "cancelada" ? "bg-slate-100 text-slate-500" : "bg-amber-100 text-amber-700"}`}>
+                    {a.status === "aguardando_pagamento" ? "Pague via Pix" : a.status === "aguardando_confirmacao" ? "Aguardando confirmação" : a.status === "confirmada" ? "Confirmada" : a.status === "realizada" ? "Realizada" : "Cancelada"}
+                  </span>
+                </div>
+                {a.status === "aguardando_pagamento" && a.pixCopiaCola && (
+                  <div className="mt-2">
+                    <p className="break-all rounded-lg bg-[var(--bg)] p-2 text-xs text-[var(--text-soft)]">{a.pixCopiaCola}</p>
+                    <div className="mt-2 flex flex-wrap gap-2">
+                      <button type="button" className="btn-ghost text-sm" onClick={() => copyPix(a.pixCopiaCola!)}>Copiar Pix</button>
+                      <label className="btn-gold cursor-pointer text-sm">Enviar comprovante<input type="file" accept="image/*" className="hidden" onChange={(e) => { const f = e.target.files?.[0]; if (f) sendProof(a.id, f); }} /></label>
+                    </div>
+                  </div>
+                )}
+                {a.status === "aguardando_pagamento" && !a.pixCopiaCola && <p className="mt-1 text-xs text-[var(--text-muted)]">A nutricionista ainda não configurou a chave Pix. Combine o pagamento com ela.</p>}
+              </div>
+            ))}
+          </div>
         </section>
       )}
 

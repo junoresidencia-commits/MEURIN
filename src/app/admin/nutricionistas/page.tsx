@@ -8,6 +8,7 @@ type Nut = {
   id: string; name: string; cpf?: string | null; email?: string | null; phone?: string | null;
   crn?: string | null; uf?: string | null; specialty?: string | null; bio?: string | null;
   photoUrl?: string | null; documents?: { name: string; url: string }[]; status: string; createdAt: string;
+  commissionPercent?: number | null; payoutStatus?: string; consultationPriceCents?: number | null;
 };
 
 const STATUS_LABEL: Record<string, string> = {
@@ -34,6 +35,10 @@ export default function AdminNutricionistasPage() {
 
   async function setStatus(id: string, status: string) {
     await fetch("/api/admin/nutritionists", { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id, status }) });
+    await load();
+  }
+  async function setFinance(id: string, patch: { commissionPercent?: number; payoutStatus?: string }) {
+    await fetch("/api/admin/nutritionists", { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id, ...patch }) });
     await load();
   }
 
@@ -82,6 +87,21 @@ export default function AdminNutricionistasPage() {
               {n.status !== "rejected" && <button type="button" className="btn-ghost text-sm" onClick={() => setStatus(n.id, "rejected")}>Recusar</button>}
               {n.status === "active" && <button type="button" className="btn-ghost text-sm" onClick={() => setStatus(n.id, "suspended")}>Suspender</button>}
             </div>
+            {n.status === "active" && (
+              <div className="mt-3 flex flex-wrap items-end gap-3 border-t border-[var(--border)] pt-3">
+                <label className="block">
+                  <span className="mb-1 block text-xs font-semibold text-[var(--text-muted)]">Comissão da plataforma (%)</span>
+                  <input type="number" min="0" max="100" defaultValue={n.commissionPercent ?? 0} className="input-field w-28" onBlur={(e) => setFinance(n.id, { commissionPercent: Number(e.target.value) })} />
+                </label>
+                <label className="block">
+                  <span className="mb-1 block text-xs font-semibold text-[var(--text-muted)]">Recebimento</span>
+                  <select className="input-field w-40" defaultValue={n.payoutStatus || "active"} onChange={(e) => setFinance(n.id, { payoutStatus: e.target.value })}>
+                    <option value="active">Liberado</option><option value="pending">Em análise</option><option value="blocked">Bloqueado</option>
+                  </select>
+                </label>
+                {n.consultationPriceCents != null && <span className="text-xs text-[var(--text-muted)]">Consulta: R$ {(n.consultationPriceCents / 100).toFixed(2)}</span>}
+              </div>
+            )}
           </div>
         ))}
       </div>

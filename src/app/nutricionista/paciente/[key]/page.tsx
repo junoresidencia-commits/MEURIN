@@ -241,6 +241,54 @@ export default function NutriPacientePage() {
   );
 }
 
+function ScheduleBox({ patientKey }: { patientKey: string }) {
+  const enc = encodeURIComponent(patientKey);
+  const [modality, setModality] = useState("teleconsulta");
+  const [slot, setSlot] = useState("");
+  const [price, setPrice] = useState("");
+  const [isReturn, setIsReturn] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [msg, setMsg] = useState<string | null>(null);
+  const [pix, setPix] = useState<string | null>(null);
+
+  async function schedule() {
+    setSaving(true); setMsg(null); setPix(null);
+    try {
+      const res = await fetch(`/api/nutricionista/patients/${enc}/appointment`, {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ modality, slotStart: slot ? new Date(slot).toISOString() : null, price: price || undefined, isReturn }),
+      });
+      const d = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(d.error || "Erro");
+      const a = d.appointment;
+      setMsg(`Consulta criada (R$ ${(a.priceCents / 100).toFixed(2)}). O paciente vê o Pix na área dele e envia o comprovante.`);
+      setPix(a.pixCopiaCola || null);
+      setSlot(""); setPrice("");
+    } catch (e) { setMsg(e instanceof Error ? e.message : "Erro"); }
+    finally { setSaving(false); }
+  }
+
+  return (
+    <section className="panel mt-4">
+      <h2 className="font-display text-lg text-[var(--text)]">Agendar consulta nutricional</h2>
+      <p className="mt-1 text-sm text-[var(--text-muted)]">Cria a consulta e o cobrança por Pix direto. Configure seu valor e chave em <Link href="/nutricionista/configuracoes" className="font-semibold text-[var(--gold)]">Recebimentos</Link>.</p>
+      <div className="mt-2 grid gap-3 sm:grid-cols-3">
+        <label className="block"><span className="mb-1 block text-xs font-semibold text-[var(--text-muted)]">Modalidade</span>
+          <select className="input-field" value={modality} onChange={(e) => setModality(e.target.value)}>
+            <option value="teleconsulta">Teleconsulta</option><option value="presencial">Presencial</option>
+          </select>
+        </label>
+        <label className="block"><span className="mb-1 block text-xs font-semibold text-[var(--text-muted)]">Data e hora</span><input type="datetime-local" className="input-field" value={slot} onChange={(e) => setSlot(e.target.value)} /></label>
+        <label className="block"><span className="mb-1 block text-xs font-semibold text-[var(--text-muted)]">Valor (R$) — opcional</span><input className="input-field" inputMode="decimal" value={price} onChange={(e) => setPrice(e.target.value)} placeholder="usa seu padrão" /></label>
+      </div>
+      <label className="mt-2 flex items-center gap-2 text-sm text-[var(--text-soft)]"><input type="checkbox" className="h-4 w-4 accent-[var(--gold)]" checked={isReturn} onChange={(e) => setIsReturn(e.target.checked)} /> É um retorno (usa valor do retorno)</label>
+      <button type="button" className="btn-gold mt-3" onClick={schedule} disabled={saving}>{saving ? "Agendando…" : "Agendar consulta"}</button>
+      {msg && <p className="mt-2 text-sm font-semibold text-[var(--text-soft)]">{msg}</p>}
+      {pix && <p className="mt-1 break-all rounded-lg bg-[var(--bg)] p-2 text-xs text-[var(--text-soft)]">Pix: {pix}</p>}
+    </section>
+  );
+}
+
 const GOAL_FIELDS: { key: string; label: string; unit: string }[] = [
   { key: "kcal", label: "Calorias", unit: "kcal" },
   { key: "protein_g", label: "Proteína", unit: "g" },
@@ -331,6 +379,8 @@ function GoalsAndDiary({ patientKey }: { patientKey: string }) {
           </>
         )}
       </section>
+
+      <ScheduleBox patientKey={patientKey} />
 
       {timeline.length > 0 && (
         <section className="panel mt-4">

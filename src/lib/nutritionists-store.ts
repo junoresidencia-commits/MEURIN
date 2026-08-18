@@ -4,6 +4,7 @@ import path from "path";
 import { v4 as uuid } from "uuid";
 import bcrypt from "bcryptjs";
 import { getSupabaseAdmin } from "./supabase-admin";
+import type { PixProfile } from "./types";
 
 export const DEFAULT_NUTRITIONIST_PASSWORD = "123456";
 
@@ -26,6 +27,12 @@ export interface Nutritionist {
   passwordHash?: string | null;
   signatureUrl?: string | null;
   status: NutritionistStatus;
+  // Financeiro / agenda próprios
+  consultationPriceCents?: number | null;
+  returnPriceCents?: number | null;
+  pixProfile?: PixProfile | null;
+  commissionPercent?: number | null; // % da plataforma (admin)
+  payoutStatus?: "active" | "pending" | "blocked";
   createdAt: string;
   lastAccessAt?: string | null;
 }
@@ -117,6 +124,11 @@ function mapNut(r: Record<string, unknown>): Nutritionist {
     documents: Array.isArray(r.documents) ? (r.documents as NutritionistDocument[]) : [],
     passwordHash: (r.password_hash as string) ?? null, signatureUrl: (r.signature_url as string) ?? null,
     status: (r.status as NutritionistStatus) ?? "active",
+    consultationPriceCents: r.consultation_price_cents != null ? Number(r.consultation_price_cents) : null,
+    returnPriceCents: r.return_price_cents != null ? Number(r.return_price_cents) : null,
+    pixProfile: (r.pix_profile as PixProfile) ?? null,
+    commissionPercent: r.commission_percent != null ? Number(r.commission_percent) : null,
+    payoutStatus: (r.payout_status as "active" | "pending" | "blocked") ?? "active",
     createdAt: String(r.created_at ?? new Date().toISOString()),
     lastAccessAt: (r.last_access_at as string) ?? null,
   };
@@ -222,6 +234,68 @@ export async function updateNutritionistStatus(id: string, status: NutritionistS
   const db = await readLocal();
   const n = db.nutritionists.find((x) => x.id === id);
   if (n) { n.status = status; await writeLocal(db); }
+}
+
+function missingCol(error: { code?: string; message?: string } | null): string | null {
+  if (!error) return null;
+  if (error.code !== "PGRST204" && error.code !== "42703" && !/column|schema cache/i.test(error.message || "")) return null;
+  const msg = error.message || "";
+  let m = msg.match(/find the '([^']+)' column/i); if (m) return m[1];
+  m = msg.match(/column "?([a-z0-9_]+)"? .*does not exist/i); if (m) return m[1];
+  return null;
+}
+
+/** Update resiliente a coluna ausente (migração pendente). */
+async function updateNutritionistRow(id: string, patch: Record<string, unknown>): Promise<boolean> {
+  if (!active()) return false;
+  const s = getSupabaseAdmin()!;
+  const current = { ...patch };
+  for (let i = 0; i < 8; i++) {
+    const { error } = await s.from("nutritionists").update(current).eq("id", id);
+    if (!error) return true;
+    if (isMissing(error)) { tableMissing = true; return false; }
+    const col = missingCol(error);
+    if (!col || !(col in current)) throw error;
+    delete current[col];
+    if (Object.keys(current).length === 0) return true;
+  }
+  return true;
+}
+
+export async function updateNutritionistSettings(id: string, patch: { consultationPriceCents?: number | null; returnPriceCents?: number | null; pixProfile?: PixProfile | null; signatureUrl?: string | null }): Promise<void> {
+  const row: Record<string, unknown> = {};
+  if (patch.consultationPriceCents !== undefined) row.consultation_price_cents = patch.consultationPriceCents;
+  if (patch.returnPriceCents !== undefined) row.return_price_cents = patch.returnPriceCents;
+  if (patch.pixProfile !== undefined) row.pix_profile = patch.pixProfile;
+  if (patch.signatureUrl !== undefined) row.signature_url = patch.signatureUrl;
+  if (Object.keys(row).length === 0) return;
+  const done = await updateNutritionistRow(id, row);
+  if (done) return;
+  const db = await readLocal();
+  const n = db.nutritionists.find((x) => x.id === id);
+  if (n) {
+    if (patch.consultationPriceCents !== undefined) n.consultationPriceCents = patch.consultationPriceCents;
+    if (patch.returnPriceCents !== undefined) n.returnPriceCents = patch.returnPriceCents;
+    if (patch.pixProfile !== undefined) n.pixProfile = patch.pixProfile;
+    if (patch.signatureUrl !== undefined) n.signatureUrl = patch.signatureUrl;
+    await writeLocal(db);
+  }
+}
+
+export async function updateNutritionistFinance(id: string, patch: { commissionPercent?: number | null; payoutStatus?: "active" | "pending" | "blocked" }): Promise<void> {
+  const row: Record<string, unknown> = {};
+  if (patch.commissionPercent !== undefined) row.commission_percent = patch.commissionPercent;
+  if (patch.payoutStatus !== undefined) row.payout_status = patch.payoutStatus;
+  if (Object.keys(row).length === 0) return;
+  const done = await updateNutritionistRow(id, row);
+  if (done) return;
+  const db = await readLocal();
+  const n = db.nutritionists.find((x) => x.id === id);
+  if (n) {
+    if (patch.commissionPercent !== undefined) n.commissionPercent = patch.commissionPercent;
+    if (patch.payoutStatus !== undefined) n.payoutStatus = patch.payoutStatus;
+    await writeLocal(db);
+  }
 }
 
 export async function listAllNutritionists(): Promise<Nutritionist[]> {
