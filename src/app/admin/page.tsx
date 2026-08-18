@@ -191,6 +191,7 @@ export default function AdminPage() {
           <a href="/admin/empresa" className="btn-ghost">Dados da empresa</a>
           <a href="/admin/protocolos" className="btn-ghost">Protocolos CEAF</a>
           <a href="/admin/nutricionistas" className="btn-ghost">Nutricionistas</a>
+          <a href="/admin/integracoes/whatsapp" className="btn-ghost">Integração WhatsApp</a>
           <button type="button" className="btn-ghost" onClick={logout}>Sair</button>
         </div>
       </div>

@@ -842,6 +842,17 @@ alter table public.doctors add column if not exists signature_url text;
 -- ===== 20260818050000_patient_must_change_password.sql =====
 alter table public.patients add column if not exists must_change_password boolean not null default false;
 
+-- ===== 20260818060000_whatsapp_messages.sql (histórico de envios WhatsApp) =====
+create table if not exists public.whatsapp_messages (
+  id uuid primary key default gen_random_uuid(),
+  sender_role text, sender_name text, recipient text, recipient_phone text,
+  method text not null default 'wame', status text not null default 'assistido', detail text,
+  created_at timestamptz not null default now()
+);
+create index if not exists whatsapp_messages_created_idx on public.whatsapp_messages (created_at desc);
+alter table public.whatsapp_messages enable row level security;
+grant all privileges on table public.whatsapp_messages to service_role;
+
 -- ===== 20260818010000_nutrition.sql (Módulo Nutrição Renal — Fase 1) =====
 create table if not exists public.nutritionists (
   id uuid primary key default gen_random_uuid(),
