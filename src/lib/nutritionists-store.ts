@@ -7,6 +7,10 @@ import { getSupabaseAdmin } from "./supabase-admin";
 
 export const DEFAULT_NUTRITIONIST_PASSWORD = "123456";
 
+export type NutritionistStatus = "pending" | "active" | "inactive" | "rejected" | "suspended";
+
+export interface NutritionistDocument { name: string; url: string }
+
 export interface Nutritionist {
   id: string;
   name: string;
@@ -17,17 +21,31 @@ export interface Nutritionist {
   uf?: string | null;
   specialty?: string | null;
   bio?: string | null;
+  photoUrl?: string | null;
+  documents?: NutritionistDocument[];
   passwordHash?: string | null;
   signatureUrl?: string | null;
-  status: "active" | "inactive";
+  status: NutritionistStatus;
   createdAt: string;
   lastAccessAt?: string | null;
 }
+
+export interface NutritionPermissions {
+  verExames: boolean;
+  verDiario: boolean;
+  criarPlano: boolean;
+  comentarDiario: boolean;
+}
+export const DEFAULT_NUTRITION_PERMISSIONS: NutritionPermissions = {
+  verExames: true, verDiario: true, criarPlano: true, comentarDiario: true,
+};
+
 export interface NutritionistLink {
   id: string;
   nutritionistId: string;
   doctorId: string;
   active: boolean;
+  permissions: NutritionPermissions;
   createdAt: string;
   updatedAt: string;
 }
@@ -95,8 +113,10 @@ function mapNut(r: Record<string, unknown>): Nutritionist {
     cpf: (r.cpf as string) ?? null, email: (r.email as string) ?? null,
     phone: (r.phone as string) ?? null, crn: (r.crn as string) ?? null, uf: (r.uf as string) ?? null,
     specialty: (r.specialty as string) ?? null, bio: (r.bio as string) ?? null,
+    photoUrl: (r.photo_url as string) ?? null,
+    documents: Array.isArray(r.documents) ? (r.documents as NutritionistDocument[]) : [],
     passwordHash: (r.password_hash as string) ?? null, signatureUrl: (r.signature_url as string) ?? null,
-    status: (r.status as "active" | "inactive") ?? "active",
+    status: (r.status as NutritionistStatus) ?? "active",
     createdAt: String(r.created_at ?? new Date().toISOString()),
     lastAccessAt: (r.last_access_at as string) ?? null,
   };
@@ -105,6 +125,7 @@ function mapLink(r: Record<string, unknown>): NutritionistLink {
   return {
     id: String(r.id), nutritionistId: String(r.nutritionist_id), doctorId: String(r.doctor_id),
     active: r.active !== false,
+    permissions: { ...DEFAULT_NUTRITION_PERMISSIONS, ...((r.permissions as object) ?? {}) } as NutritionPermissions,
     createdAt: String(r.created_at ?? new Date().toISOString()),
     updatedAt: String(r.updated_at ?? new Date().toISOString()),
   };
@@ -164,20 +185,22 @@ export async function findNutritionistByCpfOrEmail(cpf?: string | null, email?: 
   return db.nutritionists.find((a) => (nrm && normalizeCpf(a.cpf) === nrm) || (mail && (a.email || "").toLowerCase() === mail)) ?? null;
 }
 
-export async function createNutritionist(input: { name: string; cpf?: string | null; email?: string | null; phone?: string | null; crn?: string | null; uf?: string | null; specialty?: string | null; password?: string }): Promise<Nutritionist> {
+export async function createNutritionist(input: { name: string; cpf?: string | null; email?: string | null; phone?: string | null; crn?: string | null; uf?: string | null; specialty?: string | null; bio?: string | null; password?: string; status?: NutritionistStatus; photoUrl?: string | null; documents?: NutritionistDocument[] }): Promise<Nutritionist> {
   const passwordHash = await bcrypt.hash(input.password || DEFAULT_NUTRITIONIST_PASSWORD, 10);
   const nut: Nutritionist = {
     id: uuid(), name: input.name,
     cpf: input.cpf || null, email: input.email ? input.email.toLowerCase().trim() : null,
     phone: input.phone || null, crn: input.crn || null, uf: input.uf || null,
-    specialty: input.specialty || "Nutrição", bio: null,
-    passwordHash, signatureUrl: null, status: "active", createdAt: new Date().toISOString(), lastAccessAt: null,
+    specialty: input.specialty || "Nutrição", bio: input.bio || null,
+    photoUrl: input.photoUrl || null, documents: input.documents || [],
+    passwordHash, signatureUrl: null, status: input.status || "active", createdAt: new Date().toISOString(), lastAccessAt: null,
   };
   if (active()) {
     const s = getSupabaseAdmin()!;
     const { error } = await s.from("nutritionists").insert({
       id: nut.id, name: nut.name, cpf: nut.cpf, cpf_normalized: normalizeCpf(nut.cpf),
-      email: nut.email, phone: nut.phone, crn: nut.crn, uf: nut.uf, specialty: nut.specialty,
+      email: nut.email, phone: nut.phone, crn: nut.crn, uf: nut.uf, specialty: nut.specialty, bio: nut.bio,
+      photo_url: nut.photoUrl, documents: nut.documents,
       password_hash: nut.passwordHash, status: nut.status, created_at: nut.createdAt,
     });
     if (!isMissing(error)) { if (error) throw error; return nut; }
@@ -187,6 +210,29 @@ export async function createNutritionist(input: { name: string; cpf?: string | n
   db.nutritionists.push(nut);
   await writeLocal(db);
   return nut;
+}
+
+export async function updateNutritionistStatus(id: string, status: NutritionistStatus): Promise<void> {
+  if (active()) {
+    const s = getSupabaseAdmin()!;
+    const { error } = await s.from("nutritionists").update({ status }).eq("id", id);
+    if (!isMissing(error)) { if (error) throw error; return; }
+    tableMissing = true;
+  }
+  const db = await readLocal();
+  const n = db.nutritionists.find((x) => x.id === id);
+  if (n) { n.status = status; await writeLocal(db); }
+}
+
+export async function listAllNutritionists(): Promise<Nutritionist[]> {
+  if (active()) {
+    const s = getSupabaseAdmin()!;
+    const { data, error } = await s.from("nutritionists").select("*").order("created_at", { ascending: false });
+    if (!isMissing(error) && !error) return (data ?? []).map(mapNut);
+    if (isMissing(error)) tableMissing = true;
+  }
+  const db = await readLocal();
+  return [...db.nutritionists].sort((a, b) => b.createdAt.localeCompare(a.createdAt));
 }
 
 export async function verifyNutritionistPassword(nut: Nutritionist, password: string): Promise<boolean> {
@@ -219,16 +265,17 @@ export async function getNutritionLink(nutritionistId: string, doctorId: string)
   return db.links.find((l) => l.nutritionistId === nutritionistId && l.doctorId === doctorId) ?? null;
 }
 
-export async function upsertNutritionLink(nutritionistId: string, doctorId: string): Promise<NutritionistLink> {
+export async function upsertNutritionLink(nutritionistId: string, doctorId: string, permissions?: Partial<NutritionPermissions>): Promise<NutritionistLink> {
   const existing = await getNutritionLink(nutritionistId, doctorId);
   const now = new Date().toISOString();
+  const perms = { ...DEFAULT_NUTRITION_PERMISSIONS, ...(existing?.permissions ?? {}), ...(permissions ?? {}) };
   const link: NutritionistLink = existing
-    ? { ...existing, active: true, updatedAt: now }
-    : { id: uuid(), nutritionistId, doctorId, active: true, createdAt: now, updatedAt: now };
+    ? { ...existing, active: true, permissions: perms, updatedAt: now }
+    : { id: uuid(), nutritionistId, doctorId, active: true, permissions: perms, createdAt: now, updatedAt: now };
   if (active()) {
     const s = getSupabaseAdmin()!;
     const { error } = await s.from("nutritionist_links").upsert(
-      { id: link.id, nutritionist_id: nutritionistId, doctor_id: doctorId, active: link.active, updated_at: now, created_at: link.createdAt },
+      { id: link.id, nutritionist_id: nutritionistId, doctor_id: doctorId, active: link.active, permissions: link.permissions, updated_at: now, created_at: link.createdAt },
       { onConflict: "nutritionist_id,doctor_id" }
     );
     if (!isMissing(error)) { if (error) throw error; return link; }
@@ -241,14 +288,19 @@ export async function upsertNutritionLink(nutritionistId: string, doctorId: stri
   return link;
 }
 
-export async function setNutritionLink(nutritionistId: string, doctorId: string, patch: { active?: boolean }): Promise<NutritionistLink | null> {
+export async function setNutritionLink(nutritionistId: string, doctorId: string, patch: { active?: boolean; permissions?: Partial<NutritionPermissions> }): Promise<NutritionistLink | null> {
   const existing = await getNutritionLink(nutritionistId, doctorId);
   if (!existing) return null;
   const now = new Date().toISOString();
-  const updated: NutritionistLink = { ...existing, active: patch.active !== undefined ? patch.active : existing.active, updatedAt: now };
+  const updated: NutritionistLink = {
+    ...existing,
+    active: patch.active !== undefined ? patch.active : existing.active,
+    permissions: patch.permissions ? { ...existing.permissions, ...patch.permissions } : existing.permissions,
+    updatedAt: now,
+  };
   if (active()) {
     const s = getSupabaseAdmin()!;
-    const { error } = await s.from("nutritionist_links").update({ active: updated.active, updated_at: now }).eq("nutritionist_id", nutritionistId).eq("doctor_id", doctorId);
+    const { error } = await s.from("nutritionist_links").update({ active: updated.active, permissions: updated.permissions, updated_at: now }).eq("nutritionist_id", nutritionistId).eq("doctor_id", doctorId);
     if (!isMissing(error)) { if (error) throw error; return updated; }
     tableMissing = true;
   }

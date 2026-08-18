@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { v4 as uuid } from "uuid";
 import { requireNutritionist, resolveNutritionPatientAccess } from "@/lib/nutrition-context";
-import { addConsultation, setReferralStatus } from "@/lib/nutritionists-store";
+import { addConsultation, setReferralStatus, getNutritionLink } from "@/lib/nutritionists-store";
 import { addDocument } from "@/lib/patient-store";
 import { DOCPDF_BUCKET, saveFile } from "@/lib/doc-storage";
 import { buildDocumentPdf } from "@/lib/document-engine";
@@ -62,6 +62,11 @@ export async function POST(req: Request, { params }: { params: Promise<{ key: st
   const patientKey = decodeURIComponent(key);
   const access = await resolveNutritionPatientAccess(patientKey);
   if (!access) return NextResponse.json({ error: "Sem acesso a este paciente." }, { status: 403 });
+
+  const link = await getNutritionLink(nut.id, access.doctorId);
+  if (link && !link.permissions.criarPlano) {
+    return NextResponse.json({ error: "Você não tem permissão para criar/liberar plano para os pacientes deste médico." }, { status: 403 });
+  }
 
   try {
     const b = await req.json().catch(() => ({}));

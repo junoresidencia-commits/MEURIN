@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { NUTRITIONIST_COOKIE, NUTRITIONIST_MAX_AGE, createNutritionistToken } from "@/lib/nutrition-session";
-import { findNutritionistByCpfOrEmail, listNutritionLinksForNutritionist, touchNutritionistAccess, verifyNutritionistPassword } from "@/lib/nutritionists-store";
+import { findNutritionistByCpfOrEmail, touchNutritionistAccess, verifyNutritionistPassword } from "@/lib/nutritionists-store";
 
 export async function POST(req: Request) {
   try {
@@ -10,12 +10,18 @@ export async function POST(req: Request) {
     if (!identifier || !password) return NextResponse.json({ error: "Informe CPF ou e-mail e a senha." }, { status: 400 });
 
     const nut = await findNutritionistByCpfOrEmail(identifier, identifier);
-    if (!nut || nut.status !== "active" || !(await verifyNutritionistPassword(nut, password))) {
+    if (!nut || !(await verifyNutritionistPassword(nut, password))) {
       return NextResponse.json({ error: "CPF/e-mail ou senha inválidos." }, { status: 401 });
     }
-    const links = await listNutritionLinksForNutritionist(nut.id);
-    if (links.length === 0) {
-      return NextResponse.json({ error: "Sua conta não está vinculada a nenhum médico. Peça para o médico adicionar você à equipe de nutrição." }, { status: 403 });
+    if (nut.status !== "active") {
+      const msg = nut.status === "pending"
+        ? "Seu cadastro está em análise pelo administrador. Você receberá acesso após a aprovação."
+        : nut.status === "rejected"
+          ? "Seu cadastro não foi aprovado. Entre em contato com o administrador."
+          : nut.status === "suspended"
+            ? "Seu acesso está suspenso. Entre em contato com o administrador."
+            : "Sua conta está inativa.";
+      return NextResponse.json({ error: msg }, { status: 403 });
     }
     await touchNutritionistAccess(nut.id);
 

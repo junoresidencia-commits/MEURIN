@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 
 export default function NutricionistaLoginPage() {
@@ -48,7 +49,7 @@ export default function NutricionistaLoginPage() {
         </label>
         {error && <p className="text-sm font-semibold text-[var(--danger)]">{error}</p>}
         <button type="submit" className="btn-gold w-full" disabled={loading}>{loading ? "Entrando…" : "Entrar"}</button>
-        <p className="text-xs text-[var(--text-muted)]">Primeiro acesso: a senha padrão é <b>123456</b> (troque depois). Se ainda não tem vínculo, peça para o médico adicionar você em “Equipe de Nutrição”.</p>
+        <p className="text-xs text-[var(--text-muted)]">Ainda não tem conta? <Link href="/nutricionista/cadastro" className="font-semibold text-[var(--gold)]">Criar cadastro</Link>. Se foi adicionada por um médico, a senha inicial é <b>123456</b>.</p>
       </form>
     </div>
   );
