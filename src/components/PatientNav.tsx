@@ -46,7 +46,7 @@ const ITEMS = [
   { href: "/paciente/inicio", label: "Início", icon: HomeIcon },
   { href: "/paciente/registrar", label: "Dados", icon: ActivityIcon },
   { href: "/paciente/exames", label: "Exames", icon: FileIcon },
-  { href: "/paciente/alimentacao", label: "Alimentação", icon: UtensilsIcon },
+  { href: "/paciente/nutricao", label: "Nutrição", icon: UtensilsIcon },
   { href: "/paciente/entender", label: "Entender", icon: BookIcon },
 ];
 

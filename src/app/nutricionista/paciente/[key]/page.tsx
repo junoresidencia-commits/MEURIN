@@ -141,6 +141,8 @@ export default function NutriPacientePage() {
         <p className="mt-2 text-[11px] text-[var(--text-muted)]">Não é possível alterar diagnóstico, prescrição ou evolução médica.</p>
       </section>
 
+      <GoalsAndDiary patientKey={key} />
+
       {/* Avaliação nutricional */}
       <section className="panel mt-4">
         <h2 className="font-display text-lg text-[var(--text)]">Consulta nutricional</h2>
@@ -236,5 +238,97 @@ export default function NutriPacientePage() {
       {okMsg && <p className="mt-2 text-sm font-semibold text-[var(--green,#0d9488)]">{okMsg}</p>}
       {pdfUrl && <a className="btn-ghost mt-2 inline-block" href={pdfUrl} target="_blank" rel="noopener noreferrer">Abrir plano em PDF</a>}
     </div>
+  );
+}
+
+const GOAL_FIELDS: { key: string; label: string; unit: string }[] = [
+  { key: "kcal", label: "Calorias", unit: "kcal" },
+  { key: "protein_g", label: "Proteína", unit: "g" },
+  { key: "sodium_mg", label: "Sódio", unit: "mg" },
+  { key: "potassium_mg", label: "Potássio", unit: "mg" },
+  { key: "phosphorus_mg", label: "Fósforo", unit: "mg" },
+  { key: "liquids_ml", label: "Líquidos", unit: "mL" },
+];
+const LIGHT_DOT: Record<string, string> = { verde: "bg-emerald-500", amarelo: "bg-amber-500", vermelho: "bg-red-500", estimativa: "bg-slate-400" };
+
+function GoalsAndDiary({ patientKey }: { patientKey: string }) {
+  const enc = encodeURIComponent(patientKey);
+  const [targets, setTargets] = useState<Record<string, string>>({});
+  const [note, setNote] = useState("");
+  const [savedMsg, setSavedMsg] = useState<string | null>(null);
+  const [saving, setSaving] = useState(false);
+  const [diary, setDiary] = useState<{ tracks: { key: string; label: string; unit: string; total: number; goal: number | null; status: string }[]; entries: { id: string; food: string; grams?: number | null; volumeMl?: number | null; meal?: string | null }[]; date: string } | null>(null);
+
+  useEffect(() => {
+    fetch(`/api/nutricionista/patients/${enc}/goals`).then((r) => r.json()).then((d) => {
+      const t = d.goals?.targets || {};
+      const obj: Record<string, string> = {};
+      for (const f of GOAL_FIELDS) obj[f.key] = t[f.key] != null ? String(t[f.key]) : "";
+      setTargets(obj);
+      setNote(d.goals?.note || "");
+    }).catch(() => {});
+    fetch(`/api/nutricionista/patients/${enc}/diary`).then((r) => r.json()).then((d) => setDiary(d)).catch(() => {});
+  }, [enc]);
+
+  async function saveGoals() {
+    setSaving(true); setSavedMsg(null);
+    try {
+      const res = await fetch(`/api/nutricionista/patients/${enc}/goals`, {
+        method: "PUT", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ targets, note }),
+      });
+      const d = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(d.error || "Erro");
+      setSavedMsg("Metas salvas. O paciente já vê o acompanhamento com semáforo.");
+    } catch (e) { setSavedMsg(e instanceof Error ? e.message : "Erro"); }
+    finally { setSaving(false); }
+  }
+
+  return (
+    <>
+      <section className="panel mt-4">
+        <h2 className="font-display text-lg text-[var(--text)]">Metas nutricionais individualizadas</h2>
+        <p className="mt-1 text-sm text-[var(--text-muted)]">Defina as metas diárias conforme diagnóstico, estágio, exames, diálise e peso. Deixe em branco o que não quiser limitar (o app não inventa restrição).</p>
+        <div className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-3">
+          {GOAL_FIELDS.map((f) => (
+            <label key={f.key} className="block">
+              <span className="mb-1 block text-xs font-semibold text-[var(--text-muted)]">{f.label} ({f.unit})</span>
+              <input className="input-field" inputMode="numeric" value={targets[f.key] || ""} onChange={(e) => setTargets({ ...targets, [f.key]: e.target.value })} placeholder="—" />
+            </label>
+          ))}
+        </div>
+        <label className="mt-2 block"><span className="mb-1 block text-xs font-semibold text-[var(--text-muted)]">Orientação ao paciente (aparece no diário)</span><input className="input-field" value={note} onChange={(e) => setNote(e.target.value)} placeholder="Ex.: priorize temperos naturais; evite embutidos." /></label>
+        <div className="mt-3 flex items-center gap-3">
+          <button type="button" className="btn-gold" onClick={saveGoals} disabled={saving}>{saving ? "Salvando…" : "Salvar metas"}</button>
+          {savedMsg && <span className="text-sm font-semibold text-[var(--text-soft)]">{savedMsg}</span>}
+        </div>
+      </section>
+
+      <section className="panel mt-4">
+        <h2 className="font-display text-lg text-[var(--text)]">Diário alimentar do paciente {diary?.date ? `(${diary.date.split("-").reverse().join("/")})` : ""}</h2>
+        {!diary || diary.entries.length === 0 ? (
+          <p className="mt-1 text-sm text-[var(--text-muted)]">Sem registros do paciente hoje.</p>
+        ) : (
+          <>
+            <div className="mt-2 grid grid-cols-2 gap-2 sm:grid-cols-3">
+              {diary.tracks.map((t) => (
+                <div key={t.key} className="rounded-xl border border-[var(--border)] p-2">
+                  <div className="flex items-center gap-1.5">
+                    <span className={`h-2 w-2 rounded-full ${LIGHT_DOT[t.status]}`} />
+                    <span className="text-[11px] font-semibold uppercase tracking-wider text-[var(--text-muted)]">{t.label}</span>
+                  </div>
+                  <p className="text-sm font-bold text-[var(--text)]">{t.total} {t.unit}{t.goal != null ? <span className="text-xs font-normal text-[var(--text-muted)]"> / {t.goal}</span> : null}</p>
+                </div>
+              ))}
+            </div>
+            <div className="mt-2 grid gap-1 text-sm">
+              {diary.entries.map((e) => (
+                <p key={e.id} className="text-[var(--text-soft)]">• {e.food} {e.grams ? `(${e.grams} g)` : e.volumeMl ? `(${e.volumeMl} mL)` : ""} {e.meal ? <span className="text-xs text-[var(--text-muted)]">— {e.meal}</span> : null}</p>
+              ))}
+            </div>
+          </>
+        )}
+      </section>
+    </>
   );
 }
