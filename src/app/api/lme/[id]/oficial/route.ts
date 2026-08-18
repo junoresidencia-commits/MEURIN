@@ -15,6 +15,8 @@ export async function GET(
   { params }: { params: Promise<{ id: string }> }
 ) {
   const { id } = await params;
+  // flatten=1: baixa como anexo (download) para assinatura digital, em vez de exibir inline.
+  const forSigning = new URL(req.url).searchParams.get("flatten") === "1";
   const lme = await getLme(id);
   if (!lme) return NextResponse.json({ error: "LME não encontrada." }, { status: 404 });
 
@@ -152,11 +154,14 @@ export async function GET(
   }
 
   const out = await doc.save();
+  const disposition = forSigning
+    ? `attachment; filename="lme-para-assinar.pdf"`
+    : `inline; filename="lme-oficial-preenchida.pdf"`;
   return new NextResponse(Buffer.from(out), {
     status: 200,
     headers: {
       "Content-Type": "application/pdf",
-      "Content-Disposition": `inline; filename="lme-oficial-preenchida.pdf"`,
+      "Content-Disposition": disposition,
       "Cache-Control": "no-store",
     },
   });
