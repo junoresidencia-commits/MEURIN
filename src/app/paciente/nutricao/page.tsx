@@ -9,7 +9,7 @@ type Track = { key: string; label: string; unit: string; total: number; goal: nu
 type Entry = { id: string; kind: "alimento" | "liquido"; meal?: string | null; timeLabel?: string | null; food: string; grams?: number | null; volumeMl?: number | null; household?: string | null; nutrients: Record<string, number>; note?: string | null; photoUrl?: string | null };
 type Alert = { key: string; status: string; label: string; message: string | null; contributors: { food: string; value: number }[] };
 type Goals = { targets: Record<string, number | null>; note?: string | null; nutritionistName?: string | null } | null;
-type Food = { id: string; name: string; state?: string; source: string; measure?: string; measureGrams?: number; potassium_mg: number; phosphorus_mg: number; sodium_mg: number };
+type Food = { id: string; name: string; state?: string; source: string; measure?: string; measureGrams?: number; kcal: number; protein_g: number; potassium_mg: number; phosphorus_mg: number; sodium_mg: number };
 
 const LIGHT: Record<string, { bg: string; text: string; dot: string; label: string }> = {
   verde: { bg: "bg-emerald-50", text: "text-emerald-700", dot: "bg-emerald-500", label: "Dentro da meta" },
@@ -24,6 +24,7 @@ export default function PacienteNutricaoPage() {
   const [entries, setEntries] = useState<Entry[]>([]);
   const [tracks, setTracks] = useState<Track[]>([]);
   const [alerts, setAlerts] = useState<Alert[]>([]);
+  const [attention, setAttention] = useState<{ key: string; level: string; title: string; message: string }[]>([]);
   const [goals, setGoals] = useState<Goals>(null);
   const [hasGoals, setHasGoals] = useState(false);
   const [date, setDate] = useState("");
@@ -42,6 +43,16 @@ export default function PacienteNutricaoPage() {
   const [photo, setPhoto] = useState("");
   const [saving, setSaving] = useState(false);
   const [err, setErr] = useState("");
+  // leitor de rótulo
+  const [labelBusy, setLabelBusy] = useState(false);
+  const [labelFields, setLabelFields] = useState<Record<string, string | boolean> | null>(null);
+  const [labelMsg, setLabelMsg] = useState("");
+  // comparar alimentos
+  const [cmpOpen, setCmpOpen] = useState(false);
+  const [cmpQ, setCmpQ] = useState("");
+  const [cmpFoods, setCmpFoods] = useState<Food[]>([]);
+  const [cmpA, setCmpA] = useState<Food | null>(null);
+  const [cmpB, setCmpB] = useState<Food | null>(null);
 
   const load = useCallback(async () => {
     const res = await fetch("/api/patient/nutrition/diary");
@@ -50,6 +61,7 @@ export default function PacienteNutricaoPage() {
     setEntries(d.entries || []);
     setTracks(d.tracks || []);
     setAlerts(d.alerts || []);
+    setAttention(d.attention || []);
     setGoals(d.goals || null);
     setHasGoals(Boolean(d.hasGoals));
     setDate(d.date || "");
@@ -64,6 +76,14 @@ export default function PacienteNutricaoPage() {
     }, 200);
     return () => clearTimeout(t);
   }, [foodQ, kind]);
+
+  useEffect(() => {
+    if (!cmpOpen) return;
+    const t = setTimeout(() => {
+      fetch(`/api/nutrition/foods?q=${encodeURIComponent(cmpQ)}`).then((r) => r.json()).then((d) => setCmpFoods(d.foods || [])).catch(() => {});
+    }, 200);
+    return () => clearTimeout(t);
+  }, [cmpQ, cmpOpen]);
 
   function pick(f: Food) {
     setPicked(f); setFoodName(f.name + (f.state ? ` (${f.state})` : "")); setGrams(String(f.measureGrams || 100)); setFoodQ("");
@@ -92,6 +112,43 @@ export default function PacienteNutricaoPage() {
   async function del(id: string) {
     await fetch(`/api/patient/nutrition/diary?id=${id}`, { method: "DELETE" });
     await load();
+  }
+  async function readLabel(e: React.ChangeEvent<HTMLInputElement>) {
+    const f = e.target.files?.[0];
+    if (!f) return;
+    if (f.size > 2000000) { setLabelMsg("Foto muito grande (máx. ~2 MB)."); return; }
+    setLabelBusy(true); setLabelMsg("");
+    try {
+      const dataUrl: string = await new Promise((res, rej) => { const r = new FileReader(); r.onload = () => res(String(r.result || "")); r.onerror = rej; r.readAsDataURL(f); });
+      const resp = await fetch("/api/patient/nutrition/label", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ image: dataUrl }) });
+      const d = await resp.json().catch(() => ({}));
+      if (!resp.ok) throw new Error(d.error || "Erro ao ler rótulo.");
+      setLabelFields(d.fields || {});
+      setLabelMsg(d.note || (d.manual ? "Confira e preencha os dados do rótulo." : "Confira os dados lidos antes de adicionar."));
+    } catch (er) { setLabelMsg(er instanceof Error ? er.message : "Erro"); }
+    finally { setLabelBusy(false); }
+  }
+  function setLF(k: string, v: string | boolean) { setLabelFields((f) => ({ ...(f || {}), [k]: v })); }
+  async function saveLabel() {
+    if (!labelFields) return;
+    const f = labelFields;
+    const num = (v: unknown) => { const n = Number(v); return Number.isFinite(n) && n > 0 ? n : undefined; };
+    const nutrients: Record<string, number> = {};
+    for (const [src, dst] of [["sodium_mg", "sodium_mg"], ["protein_g", "protein_g"], ["carb_g", "carb_g"], ["fat_g", "fat_g"], ["potassium_mg", "potassium_mg"], ["phosphorus_mg", "phosphorus_mg"]] as const) {
+      const val = num(f[src]); if (val !== undefined) nutrients[dst] = val;
+    }
+    const noteBits = [f.additivesPhosphorus ? "aditivo de fósforo" : "", f.additivesPotassium ? "sal de potássio" : ""].filter(Boolean).join("; ");
+    setSaving(true); setErr("");
+    try {
+      const res = await fetch("/api/patient/nutrition/diary", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ kind: "alimento", food: String(f.food || "Produto (rótulo)"), grams: num(f.portion_g) || 100, nutrients, note: `via rótulo${noteBits ? " — " + noteBits : ""}` }),
+      });
+      if (!res.ok) { const d = await res.json().catch(() => ({})); throw new Error(d.error || "Erro"); }
+      setLabelFields(null); setLabelMsg("");
+      await load();
+    } catch (er) { setErr(er instanceof Error ? er.message : "Erro"); }
+    finally { setSaving(false); }
   }
 
   if (loading) return <div className="mx-auto max-w-2xl px-5 py-20 text-[var(--text-muted)]">Carregando…</div>;
@@ -145,6 +202,18 @@ export default function PacienteNutricaoPage() {
               {a.contributors.length > 0 && (
                 <p className="mt-1 text-xs opacity-90">Mais contribuíram hoje: {a.contributors.map((c) => c.food).join(", ")}.</p>
               )}
+            </div>
+          ))}
+        </section>
+      )}
+
+      {/* Nível de atenção pelos exames/estágio (educativo) */}
+      {attention.length > 0 && (
+        <section className="mt-4 space-y-2">
+          {attention.map((a) => (
+            <div key={a.key} className={`rounded-xl border px-3 py-2 text-sm ${a.level === "alerta" ? "border-orange-200 bg-orange-50 text-orange-800" : "border-sky-200 bg-sky-50 text-sky-800"}`}>
+              <p className="font-semibold">{a.title}</p>
+              <p className="text-xs opacity-90">{a.message}</p>
             </div>
           ))}
         </section>
@@ -205,8 +274,34 @@ export default function PacienteNutricaoPage() {
           )}
         </div>
         {err && <p className="mt-2 text-sm font-semibold text-[var(--danger)]">{err}</p>}
-        <button type="button" className="btn-gold mt-3" onClick={add} disabled={saving}>{saving ? "Registrando…" : "Registrar"}</button>
+        <div className="mt-3 flex flex-wrap items-center gap-3">
+          <button type="button" className="btn-gold" onClick={add} disabled={saving}>{saving ? "Registrando…" : "Registrar"}</button>
+          <label className="btn-ghost cursor-pointer text-sm">{labelBusy ? "Lendo rótulo…" : "Ler rótulo (foto)"}<input type="file" accept="image/*" className="hidden" onChange={readLabel} disabled={labelBusy} /></label>
+        </div>
+        {labelMsg && <p className="mt-2 text-xs text-[var(--text-muted)]">{labelMsg}</p>}
       </section>
+
+      {/* Confirmação do rótulo */}
+      {labelFields && (
+        <section className="panel mt-3 border-[var(--border-gold)]">
+          <p className="font-semibold text-[var(--text)]">Confirme os dados do rótulo</p>
+          <p className="text-xs text-[var(--text-muted)]">Revise/edite antes de adicionar ao diário. Nada é salvo sem sua confirmação.</p>
+          <div className="mt-2 grid gap-2 sm:grid-cols-3">
+            <label className="block sm:col-span-3"><span className="mb-1 block text-xs font-semibold text-[var(--text-muted)]">Produto</span><input className="input-field" value={String(labelFields.food || "")} onChange={(e) => setLF("food", e.target.value)} /></label>
+            {([["portion_g", "Porção (g)"], ["sodium_mg", "Sódio (mg)"], ["protein_g", "Proteína (g)"], ["carb_g", "Carboidrato (g)"], ["fat_g", "Gordura (g)"], ["potassium_mg", "Potássio (mg)"], ["phosphorus_mg", "Fósforo (mg)"]] as const).map(([k, lbl]) => (
+              <label key={k} className="block"><span className="mb-1 block text-xs font-semibold text-[var(--text-muted)]">{lbl}</span><input className="input-field" inputMode="decimal" value={String(labelFields[k] || "")} onChange={(e) => setLF(k, e.target.value)} /></label>
+            ))}
+          </div>
+          <div className="mt-2 flex flex-wrap gap-4">
+            <label className="flex items-center gap-2 text-sm text-[var(--text-soft)]"><input type="checkbox" className="h-4 w-4 accent-[var(--gold)]" checked={Boolean(labelFields.additivesPhosphorus)} onChange={(e) => setLF("additivesPhosphorus", e.target.checked)} /> Aditivo de fósforo</label>
+            <label className="flex items-center gap-2 text-sm text-[var(--text-soft)]"><input type="checkbox" className="h-4 w-4 accent-[var(--gold)]" checked={Boolean(labelFields.additivesPotassium)} onChange={(e) => setLF("additivesPotassium", e.target.checked)} /> Sal de potássio</label>
+          </div>
+          <div className="mt-3 flex gap-2">
+            <button type="button" className="btn-gold" onClick={saveLabel} disabled={saving}>Adicionar ao diário</button>
+            <button type="button" className="btn-ghost" onClick={() => setLabelFields(null)}>Cancelar</button>
+          </div>
+        </section>
+      )}
 
       {/* Lista do dia */}
       <section className="mt-5">
@@ -229,6 +324,51 @@ export default function PacienteNutricaoPage() {
             </div>
           ))}
         </div>
+      </section>
+
+      {/* Comparar alimentos */}
+      <section className="panel mt-5">
+        <button type="button" className="flex w-full items-center justify-between" onClick={() => setCmpOpen((v) => !v)}>
+          <span className="font-semibold text-[var(--text)]">Comparar alimentos</span>
+          <span className="text-[var(--gold)]">{cmpOpen ? "−" : "+"}</span>
+        </button>
+        {cmpOpen && (
+          <div className="mt-3">
+            <input className="input-field" placeholder="Buscar alimento para comparar…" value={cmpQ} onChange={(e) => setCmpQ(e.target.value)} />
+            {cmpFoods.length > 0 && cmpQ && (
+              <div className="mt-1 grid gap-1">
+                {cmpFoods.slice(0, 6).map((f) => (
+                  <div key={f.id} className="flex items-center justify-between rounded-lg border border-[var(--border)] px-3 py-1.5 text-sm">
+                    <span>{f.name} {f.state ? <span className="text-xs text-[var(--text-muted)]">· {f.state}</span> : null}</span>
+                    <span className="flex gap-2">
+                      <button type="button" className="text-xs font-semibold text-[var(--gold)]" onClick={() => { setCmpA(f); setCmpQ(""); }}>A</button>
+                      <button type="button" className="text-xs font-semibold text-[var(--gold)]" onClick={() => { setCmpB(f); setCmpQ(""); }}>B</button>
+                    </span>
+                  </div>
+                ))}
+              </div>
+            )}
+            {(cmpA || cmpB) && (
+              <div className="mt-3 overflow-hidden rounded-xl border border-[var(--border)]">
+                <table className="w-full text-sm">
+                  <thead className="bg-[var(--bg)] text-[var(--text-muted)]">
+                    <tr><th className="p-2 text-left">Por 100 g</th><th className="p-2 text-left">{cmpA?.name || "A"}</th><th className="p-2 text-left">{cmpB?.name || "B"}</th></tr>
+                  </thead>
+                  <tbody>
+                    {([["kcal", "Calorias (kcal)"], ["protein_g", "Proteína (g)"], ["sodium_mg", "Sódio (mg)"], ["potassium_mg", "Potássio (mg)"], ["phosphorus_mg", "Fósforo (mg)"]] as const).map(([k, lbl]) => (
+                      <tr key={k} className="border-t border-[var(--border)]">
+                        <td className="p-2 text-[var(--text-muted)]">{lbl}</td>
+                        <td className="p-2 font-semibold text-[var(--text)]">{cmpA ? (cmpA as unknown as Record<string, number>)[k] : "—"}</td>
+                        <td className="p-2 font-semibold text-[var(--text)]">{cmpB ? (cmpB as unknown as Record<string, number>)[k] : "—"}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+            <p className="mt-2 text-[11px] text-[var(--text-muted)]">Use os botões A/B para escolher os dois alimentos. Valores por 100 g (TBCA/TACO).</p>
+          </div>
+        )}
       </section>
 
       <p className="mt-6 text-center text-[11px] text-[var(--text-muted)]">Os valores são estimativas com base em tabelas nutricionais (TBCA/TACO). Não substituem a avaliação da sua equipe.</p>

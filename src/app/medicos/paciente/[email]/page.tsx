@@ -913,6 +913,7 @@ function DoctorNutritionView({ emailParam }: { emailParam: string }) {
     tracksToday: { key: string; label: string; unit: string; total: number; goal: number | null; status: string }[];
     entriesToday: number;
     consultations: { id: string; createdAt: string; nutritionistName?: string | null; documentId?: string | null }[];
+    timeline?: { at: string; type: string; label: string; by?: string | null }[];
   } | null>(null);
 
   useEffect(() => {
@@ -947,8 +948,17 @@ function DoctorNutritionView({ emailParam }: { emailParam: string }) {
       ) : (
         <p className="mt-1 text-sm text-[var(--text-muted)]">Sem registros do paciente hoje.</p>
       )}
-      {data.consultations.length > 0 && (
-        <p className="mt-2 text-xs text-[var(--text-muted)]">Consultas nutricionais: {data.consultations.length} (última em {new Date(data.consultations[0].createdAt).toLocaleDateString("pt-BR")}).</p>
+      {data.timeline && data.timeline.length > 0 && (
+        <div className="mt-3 border-t border-[var(--border)] pt-2">
+          <p className="text-[11px] font-bold uppercase tracking-wider text-[var(--gold)]">Linha do tempo</p>
+          <ul className="mt-1 space-y-1">
+            {data.timeline.slice(0, 8).map((ev, i) => (
+              <li key={i} className="text-xs text-[var(--text-soft)]">
+                <span className="text-[var(--text-muted)]">{new Date(ev.at).toLocaleDateString("pt-BR")}</span> · {ev.label}{ev.by ? ` — ${ev.by}` : ""}
+              </li>
+            ))}
+          </ul>
+        </div>
       )}
       <p className="mt-2 text-[11px] text-[var(--text-muted)]">A conduta nutricional é responsabilidade da nutricionista. Esta visão é apenas para acompanhamento.</p>
     </div>
