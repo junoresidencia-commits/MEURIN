@@ -148,6 +148,27 @@ export default function LmePage() {
         <iframe ref={frameRef} title="LME oficial preenchida" src={officialUrl} className="h-[82vh] w-full" />
       </div>
 
+      {/* Assinatura digital (ICP-Brasil / gov.br) */}
+      <section className="mt-6 rounded-[16px] border border-[var(--border)] bg-white p-5 shadow-[var(--shadow)] print:hidden">
+        <h2 className="font-display text-lg font-extrabold text-[var(--text)]">Assinatura digital</h2>
+        <p className="mt-1 text-sm text-[var(--text-soft)]">
+          O campo <b>17 — Assinatura e carimbo do médico</b> fica em branco de propósito. Assine de um destes jeitos:
+        </p>
+        <ol className="mt-2 list-decimal space-y-1 pl-5 text-sm text-[var(--text-soft)]">
+          <li><b>Assinatura digital (recomendado)</b>: baixe o PDF final abaixo e assine com o seu certificado ICP‑Brasil pelo <b>gov.br</b> (Assinador do gov.br) ou pela ferramenta do seu certificado. A assinatura vale juridicamente e pode ser conferida no <b>validar.iti.gov.br</b>.</li>
+          <li><b>À mão</b>: imprima e assine/carimbe no campo 17.</li>
+        </ol>
+        <div className="mt-3 flex flex-wrap gap-2">
+          <a className="btn-gold" href={`${officialUrl}?flatten=1`} target="_blank" rel="noopener noreferrer">Baixar PDF para assinar digitalmente</a>
+          <a className="btn-ghost" href="https://assinador.iti.br/" target="_blank" rel="noopener noreferrer">Abrir Assinador gov.br</a>
+          <a className="btn-ghost" href="https://validar.iti.gov.br/" target="_blank" rel="noopener noreferrer">Validar assinatura</a>
+        </div>
+        <p className="mt-3 rounded-xl border border-[var(--border)] bg-[var(--bg)] px-3 py-2 text-xs text-[var(--text-muted)]">
+          O PDF baixado para assinatura é a versão <b>final e não editável</b> (campos “achatados”), para a assinatura cobrir o documento inteiro.
+          Assinatura automática em nuvem (certificado ICP‑Brasil integrado ao app) fica disponível quando um provedor de certificado em nuvem for contratado e configurado.
+        </p>
+      </section>
+
       {/* Resumo dos dados — uso interno, NÃO é a LME oficial */}
       <details className="mt-6">
         <summary className="cursor-pointer text-sm font-semibold text-[var(--text-muted)] print:hidden">
