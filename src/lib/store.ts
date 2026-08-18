@@ -699,10 +699,47 @@ async function writeSupabaseDb(db: Database): Promise<void> {
   // a tabela inteira com a visão de uma única requisição.
   for (const table of tables) {
     if (table.rows.length > 0) {
-      const { error } = await supabase.from(table.name).upsert(table.rows, {
-        onConflict: "id",
-      });
-      if (error) throw error;
+      await resilientUpsert(supabase, table.name, table.rows);
     }
   }
+}
+
+/** Detecta o nome da coluna ausente numa mensagem de erro do PostgREST. */
+function missingColumn(error: { code?: string; message?: string } | null): string | null {
+  if (!error) return null;
+  const msg = error.message || "";
+  // "Could not find the 'cpf' column of 'doctors' in the schema cache"
+  let m = msg.match(/find the '([^']+)' column/i);
+  if (m) return m[1];
+  // "column \"cpf\" of relation \"doctors\" does not exist"
+  m = msg.match(/column "?([a-z0-9_]+)"? .*does not exist/i);
+  if (m) return m[1];
+  return null;
+}
+
+/**
+ * Upsert tolerante a colunas ausentes: se o banco ainda não tem uma coluna nova
+ * (ex.: cpf/signature_url quando a migração não foi aplicada), remove essa coluna
+ * e tenta de novo — assim cadastros e edições não quebram por migração pendente.
+ */
+async function resilientUpsert(
+  supabase: NonNullable<ReturnType<typeof getSupabaseAdmin>>,
+  table: string,
+  rows: Record<string, unknown>[]
+): Promise<void> {
+  let current = rows;
+  for (let attempt = 0; attempt < 10; attempt++) {
+    const { error } = await supabase.from(table).upsert(current, { onConflict: "id" });
+    if (!error) return;
+    const col = (error.code === "PGRST204" || /column|schema cache/i.test(error.message || "")) ? missingColumn(error) : null;
+    if (!col) throw error;
+    current = current.map((r) => {
+      const copy = { ...r };
+      delete copy[col];
+      return copy;
+    });
+  }
+  // Última tentativa: se ainda falhar, propaga.
+  const { error } = await supabase.from(table).upsert(current, { onConflict: "id" });
+  if (error) throw error;
 }

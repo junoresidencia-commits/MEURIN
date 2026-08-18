@@ -73,13 +73,13 @@ export default function CadastroMedicoPage() {
 
   const fields = [
     ["name", "Nome completo", "text", true],
-    ["email", "E-mail", "email", true],
+    ["email", "E-mail", "text", true],
     ["password", "Senha", "password", true],
-    ["phone", "Telefone", "tel", true],
+    ["phone", "Telefone", "tel", false],
     ["crm", "CRM", "text", true],
     ["crmState", "Estado do CRM (UF)", "text", true],
-    ["cpf", "CPF", "text", true],
-    ["cns", "CNS (Cartão Nacional de Saúde)", "text", true],
+    ["cpf", "CPF", "text", false],
+    ["cns", "CNS (Cartão Nacional de Saúde)", "text", false],
     ["rqe", "RQE (se houver)", "text", false],
     ["specialty", "Especialidade", "text", true],
     ["clinic", "Clínica / local de atendimento", "text", false],
@@ -97,7 +97,7 @@ export default function CadastroMedicoPage() {
         organizados em um só lugar. O acesso é liberado após aprovação do administrador.
       </p>
 
-      <form onSubmit={onSubmit} className="panel mt-8 space-y-4">
+      <form onSubmit={onSubmit} className="panel mt-8 space-y-4" noValidate>
         {fields.map(([key, label, type, required]) => (
           <label key={key} className="block">
             <span className="mb-2 block text-xs font-bold uppercase tracking-wider text-[var(--gold)]">
@@ -105,6 +105,8 @@ export default function CadastroMedicoPage() {
             </span>
             <input
               type={type}
+              inputMode={key === "email" ? "email" : key === "phone" ? "tel" : key === "cpf" || key === "cns" ? "numeric" : undefined}
+              autoCapitalize={key === "email" ? "none" : undefined}
               className="input-field"
               value={form[key]}
               onChange={(e) => set(key, e.target.value)}
