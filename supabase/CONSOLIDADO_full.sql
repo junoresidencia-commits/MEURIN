@@ -917,3 +917,35 @@ alter table public.nutritionists add column if not exists documents jsonb not nu
 alter table public.nutritionist_links add column if not exists permissions jsonb not null default
   '{"verExames":true,"verDiario":true,"criarPlano":true,"comentarDiario":true}'::jsonb;
 
+-- ===== 20260818030000_nutrition_diary_goals.sql (metas + diário do paciente) =====
+create table if not exists public.nutrition_goals (
+  id uuid primary key default gen_random_uuid(),
+  patient_key text not null unique,
+  nutritionist_id uuid,
+  nutritionist_name text,
+  targets jsonb not null default '{}'::jsonb,
+  note text,
+  updated_at timestamptz not null default now()
+);
+create table if not exists public.nutrition_diary_entries (
+  id uuid primary key default gen_random_uuid(),
+  patient_key text not null,
+  entry_date date not null default (now() at time zone 'America/Bahia')::date,
+  kind text not null default 'alimento',
+  meal text,
+  time_label text,
+  food text not null,
+  grams numeric,
+  volume_ml numeric,
+  household text,
+  nutrients jsonb not null default '{}'::jsonb,
+  note text,
+  photo_url text,
+  created_at timestamptz not null default now()
+);
+create index if not exists nutrition_diary_patient_date_idx on public.nutrition_diary_entries (patient_key, entry_date);
+alter table public.nutrition_goals enable row level security;
+alter table public.nutrition_diary_entries enable row level security;
+grant all privileges on table public.nutrition_goals to service_role;
+grant all privileges on table public.nutrition_diary_entries to service_role;
+

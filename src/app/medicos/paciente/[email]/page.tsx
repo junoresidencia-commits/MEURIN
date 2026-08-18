@@ -641,6 +641,7 @@ export default function ProntuarioPage() {
         {tab === "alimentacao" && (
           <div className="space-y-3">
             <NutritionReferralBox emailParam={emailParam} />
+            <DoctorNutritionView emailParam={emailParam} />
             <p className="text-xs font-bold uppercase tracking-wider text-[var(--gold)]">Diário alimentar do paciente</p>
             {food.length === 0 && <p className="text-[var(--text-muted)]">Nenhum alimento registrado.</p>}
             {food.map((f) => (
@@ -900,6 +901,56 @@ function NutritionReferralBox({ emailParam }: { emailParam: string }) {
         </div>
       )}
       {msg && <p className="mt-2 text-sm font-semibold text-[var(--text-soft)]">{msg}</p>}
+    </div>
+  );
+}
+
+const NUT_LIGHT_DOT: Record<string, string> = { verde: "bg-emerald-500", amarelo: "bg-amber-500", vermelho: "bg-red-500", estimativa: "bg-slate-400" };
+
+function DoctorNutritionView({ emailParam }: { emailParam: string }) {
+  const [data, setData] = useState<{
+    goals: { targets: Record<string, number | null>; note?: string | null; nutritionistName?: string | null } | null;
+    tracksToday: { key: string; label: string; unit: string; total: number; goal: number | null; status: string }[];
+    entriesToday: number;
+    consultations: { id: string; createdAt: string; nutritionistName?: string | null; documentId?: string | null }[];
+  } | null>(null);
+
+  useEffect(() => {
+    fetch(`/api/doctor/patients/${emailParam}/nutrition`).then((r) => (r.ok ? r.json() : null)).then(setData).catch(() => {});
+  }, [emailParam]);
+
+  if (!data) return null;
+  const hasAny = data.goals || data.consultations.length > 0 || data.entriesToday > 0;
+  if (!hasAny) return null;
+
+  return (
+    <div className="panel">
+      <p className="text-xs font-bold uppercase tracking-wider text-[var(--gold)]">Nutrição (acompanhamento — somente leitura)</p>
+      {data.goals && (
+        <p className="mt-1 text-sm text-[var(--text-soft)]">
+          Metas definidas{data.goals.nutritionistName ? ` por ${data.goals.nutritionistName}` : ""}.
+          {data.goals.note ? ` Orientação: ${data.goals.note}` : ""}
+        </p>
+      )}
+      {data.entriesToday > 0 ? (
+        <div className="mt-2 grid grid-cols-2 gap-2 sm:grid-cols-3">
+          {data.tracksToday.map((t) => (
+            <div key={t.key} className="rounded-xl border border-[var(--border)] p-2">
+              <div className="flex items-center gap-1.5">
+                <span className={`h-2 w-2 rounded-full ${NUT_LIGHT_DOT[t.status]}`} />
+                <span className="text-[11px] font-semibold uppercase tracking-wider text-[var(--text-muted)]">{t.label}</span>
+              </div>
+              <p className="text-sm font-bold text-[var(--text)]">{t.total} {t.unit}{t.goal != null ? <span className="text-xs font-normal text-[var(--text-muted)]"> / {t.goal}</span> : null}</p>
+            </div>
+          ))}
+        </div>
+      ) : (
+        <p className="mt-1 text-sm text-[var(--text-muted)]">Sem registros do paciente hoje.</p>
+      )}
+      {data.consultations.length > 0 && (
+        <p className="mt-2 text-xs text-[var(--text-muted)]">Consultas nutricionais: {data.consultations.length} (última em {new Date(data.consultations[0].createdAt).toLocaleDateString("pt-BR")}).</p>
+      )}
+      <p className="mt-2 text-[11px] text-[var(--text-muted)]">A conduta nutricional é responsabilidade da nutricionista. Esta visão é apenas para acompanhamento.</p>
     </div>
   );
 }
