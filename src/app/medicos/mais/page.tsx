@@ -41,6 +41,7 @@ export default function MedicoMaisPage() {
       items: [
         { href: "/medicos/agenda/configurar", label: "Clínicas e horários", desc: "Locais de atendimento e períodos da agenda." },
         { href: "/medicos/equipe", label: "Atendentes", desc: "Sua equipe administrativa e permissões." },
+        { href: "/medicos/equipe-nutricao", label: "Equipe de Nutrição", desc: "Nutricionistas vinculadas aos seus pacientes." },
       ],
     },
     {

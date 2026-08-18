@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { getDoctorSessionId } from "@/lib/auth";
 import { getPatientEmail } from "@/lib/patient-session";
+import { getNutritionistId } from "@/lib/nutrition-session";
 import { getDocumentById, markPatientViewed } from "@/lib/patient-store";
 import { DOCPDF_BUCKET, readFile } from "@/lib/doc-storage";
 
@@ -12,9 +13,12 @@ export async function GET(_req: Request, ctx: { params: Promise<{ id: string }> 
 
   const doctorId = await getDoctorSessionId();
   const patientEmail = await getPatientEmail();
+  const nutritionistId = await getNutritionistId();
   const isOwnerDoctor = doctorId && doctorId === doc.doctorId;
+  // Nutricionista autora do documento (documentos de nutrição usam doctorId = id da nutricionista).
+  const isAuthorNutritionist = nutritionistId && nutritionistId === doc.doctorId;
   const isPatientAllowed = patientEmail && patientEmail.toLowerCase() === doc.patientEmail.toLowerCase() && doc.sharedWithPatient;
-  if (!isOwnerDoctor && !isPatientAllowed) {
+  if (!isOwnerDoctor && !isAuthorNutritionist && !isPatientAllowed) {
     return NextResponse.json({ error: "Sem acesso a este documento." }, { status: 403 });
   }
 
