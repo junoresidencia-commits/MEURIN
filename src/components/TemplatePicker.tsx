@@ -64,8 +64,13 @@ export function TemplatePicker({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ type, title: title.trim(), body: currentText }),
       });
-      if (res.ok) await loadCustom();
-      else window.alert("Não foi possível salvar o modelo.");
+      if (res.ok) { await loadCustom(); setOpen(true); }
+      else {
+        const d = await res.json().catch(() => ({}));
+        window.alert(d.error || "Não foi possível salvar o modelo. Tente novamente.");
+      }
+    } catch {
+      window.alert("Não foi possível salvar o modelo agora. Verifique sua conexão e tente de novo.");
     } finally {
       setBusy(false);
     }

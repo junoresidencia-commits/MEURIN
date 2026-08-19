@@ -3,6 +3,10 @@
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
+import { TemplatePicker } from "@/components/TemplatePicker";
+import type { TemplateType } from "@/lib/document-templates";
+
+const TEMPLATE_TYPES = ["receita", "exame", "relatorio"];
 
 type Letterhead = { id: string; name: string; kind: string; isDefault: boolean; active: boolean };
 
@@ -132,6 +136,18 @@ export default function ComporDocumentoPage() {
             <span className="mb-1 block text-xs font-semibold text-[var(--text-muted)]">Título</span>
             <input className="input-field" value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Ex.: Relatório médico" />
           </label>
+          {TEMPLATE_TYPES.includes(type) && (
+            <div className="mt-3">
+              <TemplatePicker
+                type={type as TemplateType}
+                currentText={content}
+                onApply={(t) => setContent(t)}
+              />
+              <p className="mt-1 text-xs text-[var(--text-muted)]">
+                Use um modelo pronto (ex.: exames de DRC, glomerulopatia) ou salve o conteúdo atual como <b>modelo favorito</b> para reutilizar.
+              </p>
+            </div>
+          )}
           <label className="mt-3 block">
             <span className="mb-1 block text-xs font-semibold text-[var(--text-muted)]">Conteúdo</span>
             <textarea className="input-field min-h-[280px]" value={content} onChange={(e) => setContent(e.target.value)}
