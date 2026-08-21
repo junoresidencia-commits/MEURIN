@@ -104,6 +104,12 @@ export default function ProntuarioPage() {
   const [uploads, setUploads] = useState<Upload[]>([]);
   const [lmeList, setLmeList] = useState<Lme[]>([]);
   const [tab, setTab] = useState<Tab>("evolucao");
+  // Abre direto numa aba quando vier ?tab= (ex.: link de "corrigir" da Pesquisa).
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const t = new URLSearchParams(window.location.search).get("tab");
+    if (t && TABS.some((x) => x.id === t)) setTab(t as Tab);
+  }, []);
 
   // Formulário de exame
   const [labTest, setLabTest] = useState<string>("creatinina");
