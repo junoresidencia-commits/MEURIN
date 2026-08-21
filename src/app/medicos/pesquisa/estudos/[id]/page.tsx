@@ -18,6 +18,9 @@ type TableRow =
   | { key: string; label: string; type: "cat" | "text"; cat: Record<string, number> };
 type Quality = { key: string; label: string; type: string; available: number; total: number; pct: number };
 type Analysis = { n: number; total: number; variables: string[]; table1: TableRow[]; quality: Quality[]; results: string; patients: Record<string, unknown>[] };
+type MissingVar = { key: string; label: string; type: string; fixTab: string; missing: number };
+type MissingPatient = { id: string; name: string; sexo: string; missing: { key: string; label: string; fixTab: string }[] };
+type Missing = { total: number; variables: MissingVar[]; patients: MissingPatient[] };
 
 const num = (x: number) => String(x).replace(".", ",");
 
@@ -31,6 +34,7 @@ export default function EstudoDetailPage() {
   const [filters, setFilters] = useState<Filter[]>([]);
   const [variables, setVariables] = useState<string[]>([]);
   const [analysis, setAnalysis] = useState<Analysis | null>(null);
+  const [missing, setMissing] = useState<Missing | null>(null);
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [pickVars, setPickVars] = useState(false);
@@ -59,9 +63,27 @@ export default function EstudoDetailPage() {
     try {
       const res = await fetch(`/api/pesquisa/studies/${id}/analysis`);
       if (res.ok) setAnalysis(await res.json());
+      await loadMissing();
     } finally {
       setLoading(false);
     }
+  }
+  async function loadMissing() {
+    try {
+      const res = await fetch(`/api/pesquisa/studies/${id}/missing`);
+      if (res.ok) setMissing(await res.json());
+    } catch { /* ignore */ }
+  }
+  function fixHref(patientId: string, fixTab: string) {
+    const tab = fixTab === "cadastro" ? "perfil" : fixTab;
+    return `/medicos/paciente/${encodeURIComponent(patientId)}?tab=${tab}`;
+  }
+  async function setSex(patientId: string, sex: "masculino" | "feminino") {
+    await fetch(`/api/doctor/patients/${encodeURIComponent(patientId)}/demographics`, {
+      method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ sex }),
+    });
+    await loadMissing();
+    await fetch(`/api/pesquisa/studies/${id}/analysis`).then((r) => (r.ok ? r.json() : null)).then((a) => a && setAnalysis(a));
   }
   async function save(patch: Record<string, unknown>, recompute = false) {
     setSaving(true);
@@ -244,6 +266,56 @@ export default function EstudoDetailPage() {
                   ))}
                 </div>
               </div>
+
+              {/* Dados faltantes — para corrigir */}
+              {missing && (
+                <div className="panel mt-4">
+                  <p className="text-xs font-bold uppercase tracking-wider text-[var(--gold)]">Dados faltantes (para corrigir)</p>
+                  {missing.patients.length === 0 ? (
+                    <p className="mt-2 text-sm text-[var(--text-soft)]">Tudo preenchido para as variáveis deste estudo. 🎉</p>
+                  ) : (
+                    <>
+                      <p className="mt-1 text-sm text-[var(--text-muted)]">
+                        {missing.patients.length} paciente(s) com informação faltando nas variáveis do estudo. Clique para completar (ou deixe como <b>desconhecido</b> se não se aplica).
+                      </p>
+                      {/* Resumo por variável */}
+                      <div className="mt-2 flex flex-wrap gap-2">
+                        {missing.variables.filter((v) => v.missing > 0).map((v) => (
+                          <span key={v.key} className="rounded-full bg-[var(--gold-soft)] px-2 py-0.5 text-xs font-semibold text-[var(--text-soft)]">
+                            {v.label}: falta {v.missing}
+                          </span>
+                        ))}
+                      </div>
+                      {/* Lista por paciente */}
+                      <div className="mt-3 grid gap-2">
+                        {missing.patients.map((p) => (
+                          <div key={p.id} className="rounded-xl border border-[var(--border)] p-3">
+                            <div className="flex flex-wrap items-center justify-between gap-2">
+                              <p className="font-semibold text-[var(--text)]">{p.name}</p>
+                              <span className="text-xs text-[var(--text-muted)]">{p.missing.length} campo(s) faltando</span>
+                            </div>
+                            <div className="mt-2 flex flex-wrap gap-1.5">
+                              {p.missing.map((m) => (
+                                m.key === "sexo" ? (
+                                  <span key={m.key} className="inline-flex items-center gap-1 rounded-lg border border-[var(--border-gold)] bg-white px-2 py-1 text-xs">
+                                    <span className="font-semibold text-[var(--danger)]">Falta sexo:</span>
+                                    <button type="button" className="rounded bg-[var(--gold-soft)] px-2 py-0.5 font-semibold text-[var(--gold)]" onClick={() => setSex(p.id, "feminino")}>Feminino</button>
+                                    <button type="button" className="rounded bg-[var(--gold-soft)] px-2 py-0.5 font-semibold text-[var(--gold)]" onClick={() => setSex(p.id, "masculino")}>Masculino</button>
+                                  </span>
+                                ) : (
+                                  <Link key={m.key} href={fixHref(p.id, m.fixTab)} className="rounded-lg border border-[var(--border)] bg-white px-2 py-1 text-xs font-semibold text-[var(--text-soft)] transition hover:border-[var(--gold)] hover:text-[var(--gold)]">
+                                    {m.label} <span className="text-[var(--text-muted)]">· corrigir →</span>
+                                  </Link>
+                                )
+                              ))}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </>
+                  )}
+                </div>
+              )}
 
               {/* Tabela 1 */}
               <div className="panel mt-4">
