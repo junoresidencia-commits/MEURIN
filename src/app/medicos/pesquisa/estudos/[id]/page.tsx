@@ -10,6 +10,7 @@ import {
   OPERATORS_CAT, OPERATORS_NUM, type Operator,
 } from "@/lib/research-fields";
 import { STUDY_TYPE_LABEL, STUDY_STATUS_LABEL, STUDY_STATUSES, type StudyLite } from "../../studyMeta";
+import { guessSexFromName } from "@/lib/sex-guess";
 
 type Filter = { field: string; op: Operator; value: string; value2?: string };
 type NumStats = { n: number; mean: number; sd: number; median: number; q1: number; q3: number; min: number; max: number };
@@ -298,9 +299,9 @@ export default function EstudoDetailPage() {
                               {p.missing.map((m) => (
                                 m.key === "sexo" ? (
                                   <span key={m.key} className="inline-flex items-center gap-1 rounded-lg border border-[var(--border-gold)] bg-white px-2 py-1 text-xs">
-                                    <span className="font-semibold text-[var(--danger)]">Falta sexo:</span>
-                                    <button type="button" className="rounded bg-[var(--gold-soft)] px-2 py-0.5 font-semibold text-[var(--gold)]" onClick={() => setSex(p.id, "feminino")}>Feminino</button>
-                                    <button type="button" className="rounded bg-[var(--gold-soft)] px-2 py-0.5 font-semibold text-[var(--gold)]" onClick={() => setSex(p.id, "masculino")}>Masculino</button>
+                                    <span className="font-semibold text-[var(--danger)]">Falta sexo{guessSexFromName(p.name) ? ` (provável: ${guessSexFromName(p.name) === "feminino" ? "F" : "M"})` : ""}:</span>
+                                    <button type="button" className={`rounded px-2 py-0.5 font-semibold ${guessSexFromName(p.name) === "feminino" ? "bg-[var(--gold)] text-white" : "bg-[var(--gold-soft)] text-[var(--gold)]"}`} onClick={() => setSex(p.id, "feminino")}>Feminino</button>
+                                    <button type="button" className={`rounded px-2 py-0.5 font-semibold ${guessSexFromName(p.name) === "masculino" ? "bg-[var(--gold)] text-white" : "bg-[var(--gold-soft)] text-[var(--gold)]"}`} onClick={() => setSex(p.id, "masculino")}>Masculino</button>
                                   </span>
                                 ) : (
                                   <Link key={m.key} href={fixHref(p.id, m.fixTab)} className="rounded-lg border border-[var(--border)] bg-white px-2 py-1 text-xs font-semibold text-[var(--text-soft)] transition hover:border-[var(--gold)] hover:text-[var(--gold)]">

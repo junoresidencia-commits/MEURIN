@@ -739,10 +739,10 @@ function CreatePatient({ onCreated }: { onCreated: () => void }) {
   }
 
   async function submit() {
-    if (!form.name.trim()) {
-      setError("Informe o nome completo.");
-      return;
-    }
+    if (!form.name.trim()) { setError("Informe o nome completo."); return; }
+    if (!form.birthdate) { setError("Informe a data de nascimento (necessária para calcular idade e TFGe)."); return; }
+    if (!form.sex) { setError("Selecione o sexo (feminino ou masculino)."); return; }
+    if (!form.address.trim()) { setError("Informe a cidade / região."); return; }
     setSaving(true);
     setError("");
     try {
@@ -838,19 +838,19 @@ function CreatePatient({ onCreated }: { onCreated: () => void }) {
   }
 
   const fields = [
-    ["name", "Nome completo", "text"],
-    ["cpf", "CPF", "text"],
-    ["cns", "CNS (Cartão SUS)", "text"],
-    ["motherName", "Nome da mãe", "text"],
-    ["birthdate", "Data de nascimento", "date"],
-    ["sex", "Sexo", "text"],
-    ["phone", "Telefone", "tel"],
-    ["email", "E-mail", "email"],
-    ["address", "Endereço / cidade", "text"],
-    ["emergencyContact", "Contato de emergência", "text"],
-    ["guardianName", "Responsável legal (se menor)", "text"],
-    ["guardianPhone", "Telefone do responsável", "tel"],
-    ["insurance", "Convênio / particular", "text"],
+    ["name", "Nome completo", "text", true],
+    ["cpf", "CPF", "text", false],
+    ["birthdate", "Data de nascimento", "date", true],
+    ["sex", "Sexo", "select", true],
+    ["address", "Cidade / região", "text", true],
+    ["cns", "CNS (Cartão SUS)", "text", false],
+    ["motherName", "Nome da mãe", "text", false],
+    ["phone", "Telefone", "tel", false],
+    ["email", "E-mail", "email", false],
+    ["emergencyContact", "Contato de emergência", "text", false],
+    ["guardianName", "Responsável legal (se menor)", "text", false],
+    ["guardianPhone", "Telefone do responsável", "tel", false],
+    ["insurance", "Convênio / particular", "text", false],
   ] as const;
 
   const longFields = [
@@ -863,11 +863,20 @@ function CreatePatient({ onCreated }: { onCreated: () => void }) {
   return (
     <div className="panel mt-4 space-y-3">
       <p className="text-xs font-bold uppercase tracking-wider text-[var(--gold)]">Novo paciente</p>
+      <p className="text-xs text-[var(--text-muted)]">Campos com <span className="text-[var(--danger)]">*</span> são obrigatórios (idade, sexo e cidade são necessários para cálculos e pesquisa).</p>
       <div className="grid gap-3 sm:grid-cols-2">
-        {fields.map(([k, label, type]) => (
+        {fields.map(([k, label, type, required]) => (
           <label key={k} className="block">
-            <span className="mb-1 block text-xs font-semibold text-[var(--text-muted)]">{label}</span>
-            <input type={type} className="input-field" value={form[k]} onChange={(e) => set(k, e.target.value)} />
+            <span className="mb-1 block text-xs font-semibold text-[var(--text-muted)]">{label}{required ? <span className="text-[var(--danger)]"> *</span> : null}</span>
+            {type === "select" ? (
+              <select className="input-field" value={form[k]} onChange={(e) => set(k, e.target.value)}>
+                <option value="">Selecione</option>
+                <option value="feminino">Feminino</option>
+                <option value="masculino">Masculino</option>
+              </select>
+            ) : (
+              <input type={type} className="input-field" value={form[k]} onChange={(e) => set(k, e.target.value)} />
+            )}
           </label>
         ))}
       </div>

@@ -33,7 +33,7 @@ export const ETIOLOGIAS: { value: string; label: string }[] = [
   { value: "outras", label: "Outras" },
 ];
 
-export type FieldKind = "tri" | "enumG" | "enumA" | "etiologia" | "etiologiaMulti" | "number";
+export type FieldKind = "tri" | "enumG" | "enumA" | "etiologia" | "etiologiaMulti" | "number" | "text";
 
 export interface FieldDef {
   key: string;
@@ -65,6 +65,7 @@ export const CLINICAL_FIELDS: FieldDef[] = [
   { key: "estagio_g", label: "Estágio (G)", kind: "enumG", group: "Doença renal" },
   { key: "categoria_a", label: "Categoria de albuminúria (A)", kind: "enumA", group: "Doença renal" },
   { key: "etiologia_principal", label: "Etiologia principal", kind: "etiologia", group: "Doença renal" },
+  { key: "etiologia_outra", label: "Outra etiologia (especificar)", kind: "text", group: "Doença renal", description: "Nome da etiologia quando não está na lista (ex.: nefropatia por IgA, doença de Fabry)." },
   { key: "etiologias_associadas", label: "Etiologias associadas", kind: "etiologiaMulti", group: "Doença renal" },
   { key: "ira_previa", label: "IRA prévia", kind: "tri", group: "Doença renal" },
   { key: "rim_unico", label: "Rim único", kind: "tri", group: "Doença renal" },
@@ -76,9 +77,11 @@ export const CLINICAL_FIELDS: FieldDef[] = [
   { key: "transplante", label: "Transplante renal", kind: "tri", group: "Doença renal" },
   { key: "hemodialise", label: "Hemodiálise", kind: "tri", group: "Doença renal" },
   { key: "dialise_peritoneal", label: "Diálise peritoneal", kind: "tri", group: "Doença renal" },
+  // Resumo clínico (texto livre) — usado como variável "resumo" na pesquisa.
+  { key: "resumo", label: "Resumo clínico", kind: "text", group: "Resumo", description: "Resumo da situação clínica do paciente (texto livre). Usado como variável de pesquisa 'resumo'." },
 ];
 
-export const CLINICAL_GROUPS = ["Dados gerais", "Comorbidades", "Doença renal"];
+export const CLINICAL_GROUPS = ["Dados gerais", "Comorbidades", "Doença renal", "Resumo"];
 
 export function etiologiaLabel(v?: string | null): string {
   return ETIOLOGIAS.find((e) => e.value === v)?.label || v || "";

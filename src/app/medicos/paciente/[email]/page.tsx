@@ -12,6 +12,7 @@ import { extractClinicalFields, type DetectedField } from "@/lib/clinical-extrac
 import { ExamReviewModal } from "@/components/ExamReviewModal";
 import { parseLabGroups, type ParsedLabGroup } from "@/lib/lab-parser";
 import { TemplatePicker } from "@/components/TemplatePicker";
+import { guessSexFromName } from "@/lib/sex-guess";
 
 type Lab = { id: string; testKey: string; value: number; unit?: string | null; measuredAt: string };
 type Upload = { id: string; name: string; category?: string | null; examDate?: string | null; signedUrl?: string | null };
@@ -61,9 +62,9 @@ const REASON: Record<string, string> = {
 
 const TABS = [
   { id: "evolucao", label: "Evolução clínica" },
-  { id: "perfil", label: "Perfil clínico" },
-  { id: "resumo", label: "Resumo" },
   { id: "exames", label: "Exames" },
+  { id: "resumo", label: "Resumo" },
+  { id: "perfil", label: "Perfil clínico" },
   { id: "documentos", label: "Documentos" },
   { id: "lme", label: "LME / CEAF" },
   { id: "enviados", label: "Enviados" },
@@ -430,7 +431,7 @@ export default function ProntuarioPage() {
 
         {tab === "exames" && (
           <div className="space-y-4">
-            <EgfrReadinessBanner emailParam={emailParam} birthdate={patient?.birthdate} sex={patient?.sex} onFixed={load} />
+            <EgfrReadinessBanner emailParam={emailParam} birthdate={patient?.birthdate} sex={patient?.sex} patientName={patient?.name} onFixed={load} />
             <div className="panel space-y-3">
               <p className="text-xs font-bold uppercase tracking-wider text-[var(--gold)]">
                 Adicionar resultado de exame
@@ -871,13 +872,21 @@ function Metric({ label, value, unit }: { label: string; value: string; unit: st
   );
 }
 
-function EgfrReadinessBanner({ emailParam, birthdate, sex, onFixed }: { emailParam: string; birthdate?: string | null; sex?: string | null; onFixed: () => Promise<void> | void }) {
+function EgfrReadinessBanner({ emailParam, birthdate, sex, patientName, onFixed }: { emailParam: string; birthdate?: string | null; sex?: string | null; patientName?: string | null; onFixed: () => Promise<void> | void }) {
   const hasBirth = Boolean(birthdate);
   const hasSex = Boolean(sex && /^(m|masc|homem|f|fem|mulher)/i.test(String(sex)));
   const [bd, setBd] = useState("");
+  const [ageInput, setAgeInput] = useState("");
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState("");
+  const guessed = guessSexFromName(patientName);
   if (hasBirth && hasSex) return null;
+
+  // Idade -> data de nascimento aproximada (1º de julho do ano estimado).
+  function birthdateFromAge(age: number): string {
+    const y = new Date().getFullYear() - Math.round(age);
+    return `${y}-07-01`;
+  }
 
   async function saveDemographics(patch: { sex?: string; birthdate?: string }) {
     setBusy(true); setMsg("");
@@ -900,20 +909,29 @@ function EgfrReadinessBanner({ emailParam, birthdate, sex, onFixed }: { emailPar
       <p className="mt-1 text-xs text-[#7a5a12]">A equação CKD‑EPI usa idade e sexo. Complete abaixo — vale para creatinina e cistatina C.</p>
       <div className="mt-2 flex flex-wrap items-end gap-3">
         {!hasBirth && (
-          <label className="block">
-            <span className="mb-1 block text-xs font-semibold text-[var(--text-muted)]">Data de nascimento</span>
-            <div className="flex items-center gap-2">
-              <input type="date" className="input-field" value={bd} onChange={(e) => setBd(e.target.value)} />
-              <button type="button" className="btn-ghost text-sm" disabled={busy || !bd} onClick={() => saveDemographics({ birthdate: bd })}>Salvar</button>
-            </div>
-          </label>
+          <>
+            <label className="block">
+              <span className="mb-1 block text-xs font-semibold text-[var(--text-muted)]">Data de nascimento</span>
+              <div className="flex items-center gap-2">
+                <input type="date" className="input-field" value={bd} onChange={(e) => setBd(e.target.value)} />
+                <button type="button" className="btn-ghost text-sm" disabled={busy || !bd} onClick={() => saveDemographics({ birthdate: bd })}>Salvar</button>
+              </div>
+            </label>
+            <label className="block">
+              <span className="mb-1 block text-xs font-semibold text-[var(--text-muted)]">…ou só a idade (anos)</span>
+              <div className="flex items-center gap-2">
+                <input inputMode="numeric" className="input-field w-24" value={ageInput} onChange={(e) => setAgeInput(e.target.value)} placeholder="Ex.: 62" />
+                <button type="button" className="btn-ghost text-sm" disabled={busy || !ageInput} onClick={() => { const a = Number(ageInput); if (a > 0 && a < 130) saveDemographics({ birthdate: birthdateFromAge(a) }); }}>Usar idade</button>
+              </div>
+            </label>
+          </>
         )}
         {!hasSex && (
           <div>
-            <span className="mb-1 block text-xs font-semibold text-[var(--text-muted)]">Sexo</span>
+            <span className="mb-1 block text-xs font-semibold text-[var(--text-muted)]">Sexo{guessed ? ` · provável: ${guessed === "feminino" ? "Feminino" : "Masculino"}` : ""}</span>
             <div className="flex gap-2">
-              <button type="button" className="btn-ghost text-sm" disabled={busy} onClick={() => saveDemographics({ sex: "feminino" })}>Feminino</button>
-              <button type="button" className="btn-ghost text-sm" disabled={busy} onClick={() => saveDemographics({ sex: "masculino" })}>Masculino</button>
+              <button type="button" className={`btn-ghost text-sm ${guessed === "feminino" ? "border-[var(--gold)] text-[var(--gold)]" : ""}`} disabled={busy} onClick={() => saveDemographics({ sex: "feminino" })}>Feminino</button>
+              <button type="button" className={`btn-ghost text-sm ${guessed === "masculino" ? "border-[var(--gold)] text-[var(--gold)]" : ""}`} disabled={busy} onClick={() => saveDemographics({ sex: "masculino" })}>Masculino</button>
             </div>
           </div>
         )}

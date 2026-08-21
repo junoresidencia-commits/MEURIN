@@ -115,6 +115,19 @@ export function ClinicalProfileEditor({ emailParam }: { emailParam: string }) {
                   </label>
                 );
               }
+              if (f.kind === "text") {
+                const isResumo = f.key === "resumo";
+                return (
+                  <div key={f.key} className={isResumo ? "sm:col-span-2" : "block"}>
+                    <span className="mb-1 block text-xs font-semibold text-[var(--text-muted)]">{f.label}{srcOf(f.key)}</span>
+                    {isResumo ? (
+                      <textarea className="input-field min-h-[70px]" value={String(data[f.key] ?? "")} onChange={(e) => set(f.key, e.target.value)} placeholder="Resumo da situação clínica (texto livre)." />
+                    ) : (
+                      <input className="input-field" value={String(data[f.key] ?? "")} onChange={(e) => set(f.key, e.target.value)} placeholder="Especifique…" />
+                    )}
+                  </div>
+                );
+              }
               if (f.kind === "etiologiaMulti") {
                 const arr = Array.isArray(data[f.key]) ? (data[f.key] as string[]) : [];
                 return (
