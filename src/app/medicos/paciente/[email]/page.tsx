@@ -33,7 +33,7 @@ type HomeRecord = {
 };
 type FoodLog = { id: string; food: string; meal?: string | null; quantity?: string | null; loggedAt: string };
 type Booking = { id: string; status: string; slotStart: string; careReason: string; meetingRoomId: string };
-type Patient = { email: string; name: string; city: string; phone: string };
+type Patient = { email: string; name: string; city: string; phone: string; birthdate?: string | null; sex?: string | null };
 type Note = {
   id: string;
   doctorName: string;
@@ -104,6 +104,7 @@ export default function ProntuarioPage() {
   const [uploads, setUploads] = useState<Upload[]>([]);
   const [lmeList, setLmeList] = useState<Lme[]>([]);
   const [tab, setTab] = useState<Tab>("evolucao");
+  const [egfrInfo, setEgfrInfo] = useState("");
   // Abre direto numa aba quando vier ?tab= (ex.: link de "corrigir" da Pesquisa).
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -211,6 +212,10 @@ export default function ProntuarioPage() {
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Não foi possível salvar.");
+      // TFGe automática (CKD-EPI): confirma o cálculo ou avisa que falta idade/sexo.
+      if (data.egfr && data.egfr.value != null) setEgfrInfo(`TFGe calculada automaticamente: ${String(data.egfr.value).replace(".", ",")} mL/min/1,73m² (CKD-EPI).`);
+      else if (data.egfrSkipped) setEgfrInfo(data.egfrSkipped);
+      else setEgfrInfo("");
       setLabValue("");
       setLabDate("");
       await load();
@@ -425,10 +430,12 @@ export default function ProntuarioPage() {
 
         {tab === "exames" && (
           <div className="space-y-4">
+            <EgfrReadinessBanner emailParam={emailParam} birthdate={patient?.birthdate} sex={patient?.sex} onFixed={load} />
             <div className="panel space-y-3">
               <p className="text-xs font-bold uppercase tracking-wider text-[var(--gold)]">
                 Adicionar resultado de exame
               </p>
+              <p className="text-xs text-[var(--text-muted)]">Ao lançar a <b>creatinina</b> (ou <b>cistatina C</b>), a <b>TFGe é calculada automaticamente</b> (CKD‑EPI) e entra no gráfico.</p>
               <div className="grid gap-3 sm:grid-cols-3">
                 <label className="block sm:col-span-1">
                   <span className="mb-1 block text-xs font-semibold text-[var(--text-muted)]">Exame</span>
@@ -448,6 +455,7 @@ export default function ProntuarioPage() {
                 </label>
               </div>
               {labErr && <p className="text-sm text-[var(--danger)]">{labErr}</p>}
+              {egfrInfo && <p className="rounded-xl border border-[var(--border-gold)] bg-[var(--gold-soft)] px-3 py-2 text-sm text-[var(--text-soft)]">{egfrInfo}</p>}
               <button type="button" className="btn-gold" onClick={saveLab} disabled={labSaving || !labValue.trim()}>
                 {labSaving ? "Salvando…" : "Adicionar exame"}
               </button>
@@ -859,6 +867,58 @@ function Metric({ label, value, unit }: { label: string; value: string; unit: st
       <p className="text-[11px] uppercase tracking-wider text-[var(--text-muted)]">{label}</p>
       <p className="mt-1 text-lg font-extrabold text-[var(--text)]">{value}</p>
       <p className="text-[10px] text-[var(--text-muted)]">{unit}</p>
+    </div>
+  );
+}
+
+function EgfrReadinessBanner({ emailParam, birthdate, sex, onFixed }: { emailParam: string; birthdate?: string | null; sex?: string | null; onFixed: () => Promise<void> | void }) {
+  const hasBirth = Boolean(birthdate);
+  const hasSex = Boolean(sex && /^(m|masc|homem|f|fem|mulher)/i.test(String(sex)));
+  const [bd, setBd] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [msg, setMsg] = useState("");
+  if (hasBirth && hasSex) return null;
+
+  async function saveDemographics(patch: { sex?: string; birthdate?: string }) {
+    setBusy(true); setMsg("");
+    try {
+      const res = await fetch(`/api/doctor/patients/${emailParam}/demographics`, {
+        method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(patch),
+      });
+      if (!res.ok) { const d = await res.json().catch(() => ({})); throw new Error(d.error || "Erro"); }
+      // Recalcula a TFGe para creatinina/cistatina já lançadas.
+      await fetch(`/api/doctor/patients/${emailParam}/labs/recompute-egfr`, { method: "POST" });
+      setMsg("Dados salvos. TFGe recalculada quando havia creatinina.");
+      await onFixed();
+    } catch (e) { setMsg(e instanceof Error ? e.message : "Erro"); }
+    finally { setBusy(false); }
+  }
+
+  return (
+    <div className="panel border-[var(--warn)]/40 bg-[#fff7e8]">
+      <p className="text-sm font-semibold text-[#7a5a12]">Para calcular a TFGe automaticamente, informe idade e sexo</p>
+      <p className="mt-1 text-xs text-[#7a5a12]">A equação CKD‑EPI usa idade e sexo. Complete abaixo — vale para creatinina e cistatina C.</p>
+      <div className="mt-2 flex flex-wrap items-end gap-3">
+        {!hasBirth && (
+          <label className="block">
+            <span className="mb-1 block text-xs font-semibold text-[var(--text-muted)]">Data de nascimento</span>
+            <div className="flex items-center gap-2">
+              <input type="date" className="input-field" value={bd} onChange={(e) => setBd(e.target.value)} />
+              <button type="button" className="btn-ghost text-sm" disabled={busy || !bd} onClick={() => saveDemographics({ birthdate: bd })}>Salvar</button>
+            </div>
+          </label>
+        )}
+        {!hasSex && (
+          <div>
+            <span className="mb-1 block text-xs font-semibold text-[var(--text-muted)]">Sexo</span>
+            <div className="flex gap-2">
+              <button type="button" className="btn-ghost text-sm" disabled={busy} onClick={() => saveDemographics({ sex: "feminino" })}>Feminino</button>
+              <button type="button" className="btn-ghost text-sm" disabled={busy} onClick={() => saveDemographics({ sex: "masculino" })}>Masculino</button>
+            </div>
+          </div>
+        )}
+      </div>
+      {msg && <p className="mt-2 text-xs font-semibold text-[var(--green,#0d9488)]">{msg}</p>}
     </div>
   );
 }

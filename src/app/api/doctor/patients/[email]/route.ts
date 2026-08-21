@@ -32,6 +32,8 @@ export async function GET(
       city: access.city,
       phone: access.phone,
       isCreated: access.isCreated,
+      birthdate: access.birthdate,
+      sex: access.sex,
     },
     bookings: access.bookings,
     records,
