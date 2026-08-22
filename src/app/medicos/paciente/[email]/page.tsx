@@ -12,6 +12,7 @@ import { extractClinicalFields, type DetectedField } from "@/lib/clinical-extrac
 import { ExamReviewModal } from "@/components/ExamReviewModal";
 import { parseLabGroups, type ParsedLabGroup } from "@/lib/lab-parser";
 import { TemplatePicker } from "@/components/TemplatePicker";
+import { AttendanceControl } from "@/components/AttendanceControl";
 import { guessSexFromName } from "@/lib/sex-guess";
 
 type Lab = { id: string; testKey: string; value: number; unit?: string | null; measuredAt: string };
@@ -322,6 +323,10 @@ export default function ProntuarioPage() {
           </p>
         </div>
         <ResetAccessButton emailParam={emailParam} />
+      </div>
+
+      <div className="mt-3">
+        <AttendanceControl patientKey={emailParam} />
       </div>
 
       {/* Cabeçalho clínico */}

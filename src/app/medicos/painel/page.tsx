@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import type { Booking, Doctor, WeeklySlot } from "@/lib/types";
+import type { Booking, Doctor } from "@/lib/types";
 import { formatBRL, formatSlotLabel } from "@/lib/scheduling-client";
 import { DoctorSidebar } from "@/components/DoctorSidebar";
 import { DoctorMobileNav } from "@/components/DoctorMobileNav";
@@ -14,15 +14,6 @@ import { PatientQuickSheet } from "@/components/PatientQuickSheet";
 import { QrCode } from "@/components/QrCode";
 import { SITE_URL, patientAccessMessage } from "@/lib/site";
 
-const DAYS = [
-  { id: 1, label: "Seg" },
-  { id: 2, label: "Ter" },
-  { id: 3, label: "Qua" },
-  { id: 4, label: "Qui" },
-  { id: 5, label: "Sex" },
-  { id: 6, label: "Sáb" },
-];
-
 function consultaStatus(b: Booking): { emoji: string; label: string; color: string } {
   if (b.stage === "proposto_novo_horario") return { emoji: "🟠", label: "Novo horário proposto", color: "#e08a2e" };
   if (b.status === "confirmed") return { emoji: "🟢", label: "Confirmado", color: "#1a9a78" };
@@ -31,6 +22,13 @@ function consultaStatus(b: Booking): { emoji: string; label: string; color: stri
   if (b.status === "pending_payment") return { emoji: "🟡", label: "Aguardando pagamento", color: "#e4a32e" };
   return { emoji: "🔵", label: "Agendado", color: "#2b7fb0" };
 }
+
+type Dashboard = {
+  counts: { pacientes: number; consultasHoje: number; retornosPendentes: number; novosExames: number; aguardando: number; pendencias: number };
+  continuar: { patientKey: string; patientName: string; startedAt: string } | null;
+  recentExams: { patientKey: string; patientName: string; testKey: string; testLabel: string; value: number; unit: string | null; measuredAt: string; createdAt: string }[];
+  pendencias: { label: string; count: number; href: string }[];
+};
 
 type PatientRow = {
   key: string;
@@ -48,18 +46,9 @@ export default function PainelMedicoPage() {
   const [patients, setPatients] = useState<PatientRow[]>([]);
   const [showCreate, setShowCreate] = useState(false);
   const [patientFilter, setPatientFilter] = useState("");
-  const [price, setPrice] = useState("350");
-  const [bio, setBio] = useState("");
-  const [weekly, setWeekly] = useState<WeeklySlot[]>([]);
-  const [message, setMessage] = useState("");
   const [loading, setLoading] = useState(true);
-  const [notifyWa, setNotifyWa] = useState("");
-  const [patientWa, setPatientWa] = useState("");
-  const [allowPatientWa, setAllowPatientWa] = useState(false);
-  const [notifNew, setNotifNew] = useState(true);
-  const [notifPay, setNotifPay] = useState(true);
-  const [notifResched, setNotifResched] = useState(true);
   const [quickKey, setQuickKey] = useState<string | null>(null);
+  const [dash, setDash] = useState<Dashboard | null>(null);
 
   useEffect(() => {
     Promise.all([
@@ -72,19 +61,12 @@ export default function PainelMedicoPage() {
         return;
       }
       setDoctor(auth.doctor);
-      setPrice(String(auth.doctor.consultationPriceCents / 100));
-      setBio(auth.doctor.bio || "");
-      setWeekly(auth.doctor.weeklyAvailability || []);
-      setNotifyWa(auth.doctor.notifyWhatsapp || "");
-      setPatientWa(auth.doctor.patientContactWhatsapp || "");
-      setAllowPatientWa(Boolean(auth.doctor.allowPatientContact));
-      setNotifNew(auth.doctor.notifyNewBookings !== false);
-      setNotifPay(auth.doctor.notifyPayments !== false);
-      setNotifResched(auth.doctor.notifyReschedules !== false);
       setBookings(books.bookings || []);
       setPatients(pats.patients || []);
       setLoading(false);
     });
+    // Painel premium: contagens reais e listas (retornos, novos exames, pendências, "continuar").
+    fetch("/api/doctor/dashboard").then((r) => (r.ok ? r.json() : null)).then((d) => { if (d) setDash(d); }).catch(() => {});
   }, [router]);
 
   const earnings = useMemo(() => {
@@ -92,40 +74,6 @@ export default function PainelMedicoPage() {
       .filter((b) => ["paid", "confirmed", "completed"].includes(b.status))
       .reduce((sum, b) => sum + Math.round(b.priceCents * 0.95), 0);
   }, [bookings]);
-
-  function toggleDay(dayOfWeek: number) {
-    const has = weekly.some((w) => w.dayOfWeek === dayOfWeek);
-    if (has) {
-      setWeekly((w) => w.filter((x) => x.dayOfWeek !== dayOfWeek));
-    } else {
-      setWeekly((w) => [
-        ...w,
-        { dayOfWeek, start: "08:00", end: "12:00" },
-        { dayOfWeek, start: "14:00", end: "18:00" },
-      ]);
-    }
-  }
-
-  async function saveProfile() {
-    setMessage("");
-    const res = await fetch("/api/availability", {
-      method: "PUT",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        weeklyAvailability: weekly,
-        consultationPriceCents: Math.round(Number(price) * 100),
-        bio,
-        notifyWhatsapp: notifyWa,
-        patientContactWhatsapp: patientWa,
-        allowPatientContact: allowPatientWa,
-        notifyNewBookings: notifNew,
-        notifyPayments: notifPay,
-        notifyReschedules: notifResched,
-      }),
-    });
-    if (res.ok) setMessage("Agenda e valor salvos.");
-    else setMessage("Não foi possível salvar.");
-  }
 
   async function reloadBookings() {
     const res = await fetch("/api/bookings");
@@ -262,24 +210,43 @@ export default function PainelMedicoPage() {
       </div>
       <EnableNotifications />
 
-      <div className="mt-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+      {dash?.continuar && (
+        <Link href={`/medicos/paciente/${encodeURIComponent(dash.continuar.patientKey)}`} className="mt-6 flex items-center justify-between gap-3 rounded-2xl border border-[var(--border-gold)] bg-[var(--gold-soft)] p-4 transition hover:border-[var(--gold)]">
+          <div>
+            <p className="text-xs font-semibold uppercase tracking-wide text-[var(--gold)]">Continuar de onde parou</p>
+            <p className="font-display text-lg text-[var(--text)]">{dash.continuar.patientName}</p>
+            <p className="text-xs text-[var(--text-muted)]">Atendimento em andamento · iniciado {new Date(dash.continuar.startedAt).toLocaleString("pt-BR", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" })}</p>
+          </div>
+          <span className="btn-gold text-sm">Continuar atendimento →</span>
+        </Link>
+      )}
+
+      <div className="mt-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
         <a href="#pacientes" className="panel transition hover:-translate-y-0.5 hover:border-[var(--border-gold)]">
           <span className="grid h-10 w-10 place-items-center rounded-xl bg-[var(--gold-soft)] text-[var(--gold)]">P</span>
           <p className="mt-3 text-xs uppercase tracking-wider text-[var(--text-muted)]">Pacientes</p>
-          <p className="font-display text-3xl text-[var(--text)]">{patients.length}</p>
+          <p className="font-display text-3xl text-[var(--text)]">{dash?.counts.pacientes ?? patients.length}</p>
         </a>
         <Link href="/medicos/agenda" className="panel transition hover:-translate-y-0.5 hover:border-[var(--border-gold)]">
           <span className="grid h-10 w-10 place-items-center rounded-xl bg-[var(--gold-soft)] text-[var(--gold)]">A</span>
-          <p className="mt-3 text-xs uppercase tracking-wider text-[var(--text-muted)]">Agenda hoje</p>
-          <p className="font-display text-3xl text-[var(--text)]">{agendaHoje}</p>
+          <p className="mt-3 text-xs uppercase tracking-wider text-[var(--text-muted)]">Consultas hoje</p>
+          <p className="font-display text-3xl text-[var(--text)]">{dash?.counts.consultasHoje ?? agendaHoje}</p>
         </Link>
-        <Link href="/medicos/agenda" className="panel transition hover:-translate-y-0.5 hover:border-[var(--border-gold)]">
-          <span className="grid h-10 w-10 place-items-center rounded-xl bg-[#eaf8f2] text-[#1c8c70]">✓</span>
-          <p className="mt-3 text-xs uppercase tracking-wider text-[var(--text-muted)]">Consultas liberadas</p>
-          <p className="font-display text-3xl text-[var(--green)]">
-            {bookings.filter((b) => b.status === "confirmed").length}
-          </p>
+        <Link href="/medicos/retornos" className="panel transition hover:-translate-y-0.5 hover:border-[var(--border-gold)]">
+          <span className="grid h-10 w-10 place-items-center rounded-xl bg-[#fff3e2] text-[#e08a2e]">↩</span>
+          <p className="mt-3 text-xs uppercase tracking-wider text-[var(--text-muted)]">Retornos pendentes</p>
+          <p className="font-display text-3xl" style={{ color: (dash?.counts.retornosPendentes ?? 0) > 0 ? "#e08a2e" : "var(--text)" }}>{dash?.counts.retornosPendentes ?? 0}</p>
         </Link>
+        <a href="#novos-exames" className="panel transition hover:-translate-y-0.5 hover:border-[var(--border-gold)]">
+          <span className="grid h-10 w-10 place-items-center rounded-xl bg-[#e8f1fb] text-[#2b7fb0]">🧪</span>
+          <p className="mt-3 text-xs uppercase tracking-wider text-[var(--text-muted)]">Novos exames</p>
+          <p className="font-display text-3xl text-[var(--text)]">{dash?.counts.novosExames ?? 0}</p>
+        </a>
+        <a href="#pendencias" className="panel transition hover:-translate-y-0.5 hover:border-[var(--border-gold)]">
+          <span className="grid h-10 w-10 place-items-center rounded-xl bg-[var(--gold-soft)] text-[var(--gold)]">!</span>
+          <p className="mt-3 text-xs uppercase tracking-wider text-[var(--text-muted)]">Pendências</p>
+          <p className="font-display text-3xl text-[var(--text)]">{dash?.counts.pendencias ?? 0}</p>
+        </a>
         <a href="#financeiro" className="panel transition hover:-translate-y-0.5 hover:border-[var(--border-gold)]">
           <span className="grid h-10 w-10 place-items-center rounded-xl bg-[var(--gold-soft)] text-[var(--gold)]">R$</span>
           <p className="mt-3 text-xs uppercase tracking-wider text-[var(--text-muted)]">Na sua conta (estimado)</p>
@@ -324,103 +291,54 @@ export default function PainelMedicoPage() {
         )}
       </section>
 
+      <section id="novos-exames" className="panel mt-8 scroll-mt-4">
+        <h2 className="font-display text-xl text-[var(--text)]">Novos exames</h2>
+        {(!dash || dash.recentExams.length === 0) ? (
+          <p className="mt-3 text-sm text-[var(--text-muted)]">Nenhum exame novo nos últimos 7 dias.</p>
+        ) : (
+          <ul className="mt-3 divide-y divide-[var(--border)]">
+            {dash.recentExams.slice(0, 8).map((e, i) => (
+              <li key={i}>
+                <button type="button" onClick={() => setQuickKey(e.patientKey)} className="flex w-full items-center justify-between gap-3 py-2.5 text-left transition hover:bg-[var(--gold-soft)]">
+                  <span>
+                    <span className="block text-sm font-semibold text-[var(--text)]">{e.patientName}</span>
+                    <span className="block text-xs text-[var(--text-muted)]">{e.testLabel}: {e.value}{e.unit ? ` ${e.unit}` : ""} · {new Date(e.measuredAt).toLocaleDateString("pt-BR")}</span>
+                  </span>
+                  <span className="whitespace-nowrap rounded-full bg-[#e8f1fb] px-2 py-0.5 text-xs font-semibold text-[#2b7fb0]">Novo</span>
+                </button>
+              </li>
+            ))}
+          </ul>
+        )}
+      </section>
+
+      {dash && dash.pendencias.length > 0 && (
+        <section id="pendencias" className="panel mt-8 scroll-mt-4">
+          <h2 className="font-display text-xl text-[var(--text)]">Pendências</h2>
+          <ul className="mt-3 space-y-2">
+            {dash.pendencias.map((p, i) => (
+              <li key={i}>
+                <Link href={p.href} className="flex items-center justify-between gap-3 rounded-xl border border-[var(--border)] px-3 py-2.5 transition hover:border-[var(--border-gold)]">
+                  <span className="text-sm font-semibold text-[var(--text)]">{p.count} {p.label}</span>
+                  <span className="text-[var(--gold)]">→</span>
+                </Link>
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
+
       <section id="agenda" className="panel mt-8 scroll-mt-4">
-        <h2 className="font-display text-2xl text-[var(--text)]">Agenda semanal</h2>
-        <p className="mt-2 text-sm text-[var(--text-muted)]">
-          Marque os dias em que você atende. Pacientes só veem esses horários.
-        </p>
-        <p className="mt-2 rounded-xl border border-[var(--border-gold)] bg-[var(--gold-soft)] px-3 py-2 text-sm text-[var(--text-soft)]">
-          Quer atender em <strong>clínicas diferentes por dia</strong> (ex.: Clínica Mãe na segunda de manhã) ou por teleconsulta?{" "}
-          <Link href="/medicos/agenda/configurar" className="font-semibold text-[var(--gold)] underline">Abrir a Agenda por local/horário</Link>.
-        </p>
-        <div className="mt-4 flex flex-wrap gap-2">
-          {DAYS.map((d) => {
-            const on = weekly.some((w) => w.dayOfWeek === d.id);
-            return (
-              <button
-                key={d.id}
-                type="button"
-                onClick={() => toggleDay(d.id)}
-                className={`rounded-full px-4 py-2 text-sm font-bold ${
-                  on ? "bg-[var(--gold)] text-white" : "border border-[var(--border)]"
-                }`}
-              >
-                {d.label}
-              </button>
-            );
-          })}
-        </div>
-        <label className="mt-6 block">
-          <span className="mb-2 block text-xs font-bold uppercase tracking-wider text-[var(--gold-light)]">
-            Valor da consulta (R$)
-          </span>
-          <input
-            type="number"
-            className="input-field max-w-xs"
-            value={price}
-            onChange={(e) => setPrice(e.target.value)}
-          />
-        </label>
-        <label className="mt-4 block">
-          <span className="mb-2 block text-xs font-bold uppercase tracking-wider text-[var(--gold-light)]">
-            Bio pública
-          </span>
-          <textarea
-            className="input-field min-h-[90px]"
-            value={bio}
-            onChange={(e) => setBio(e.target.value)}
-          />
-        </label>
-        <div className="mt-5 rounded-2xl border border-[var(--border)] bg-[var(--bg-soft,#f8fafc)] p-4">
-          <p className="text-xs font-bold uppercase tracking-wider text-[var(--gold)]">WhatsApp e comunicação</p>
-          <p className="mt-1 text-xs text-[var(--text-muted)]">
-            Você escolhe os números. O número de <strong>notificações é só seu</strong> — nunca é mostrado ao paciente.
-          </p>
-          <label className="mt-3 block">
-            <span className="mb-1 block text-xs font-semibold text-[var(--text-muted)]">
-              Número para receber notificações (privado — só você vê)
-            </span>
-            <input
-              className="input-field"
-              inputMode="tel"
-              value={notifyWa}
-              onChange={(e) => setNotifyWa(e.target.value)}
-              placeholder="Seu WhatsApp pessoal/profissional"
-            />
-          </label>
-          <label className="mt-3 block">
-            <span className="mb-1 block text-xs font-semibold text-[var(--text-muted)]">
-              Número para contato dos pacientes (pode ser secretária/clínica)
-            </span>
-            <input
-              className="input-field"
-              inputMode="tel"
-              value={patientWa}
-              onChange={(e) => setPatientWa(e.target.value)}
-              placeholder="Número que o paciente pode usar"
-            />
-          </label>
-          <label className="mt-3 flex items-center gap-2 text-sm text-[var(--text-soft)]">
-            <input type="checkbox" checked={allowPatientWa} onChange={(e) => setAllowPatientWa(e.target.checked)} />
-            Permitir que pacientes falem sobre a consulta pelo WhatsApp (usa o número de contato acima)
-          </label>
-          <p className="mt-3 text-xs font-semibold text-[var(--text-muted)]">Quero receber notificações de:</p>
-          <div className="mt-1 flex flex-col gap-1.5">
-            <label className="flex items-center gap-2 text-sm text-[var(--text-soft)]">
-              <input type="checkbox" checked={notifNew} onChange={(e) => setNotifNew(e.target.checked)} /> Novas consultas
-            </label>
-            <label className="flex items-center gap-2 text-sm text-[var(--text-soft)]">
-              <input type="checkbox" checked={notifPay} onChange={(e) => setNotifPay(e.target.checked)} /> Pagamentos
-            </label>
-            <label className="flex items-center gap-2 text-sm text-[var(--text-soft)]">
-              <input type="checkbox" checked={notifResched} onChange={(e) => setNotifResched(e.target.checked)} /> Remarcações e cancelamentos
-            </label>
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <h2 className="font-display text-xl text-[var(--text)]">Agenda e atendimento</h2>
+            <p className="mt-1 text-sm text-[var(--text-muted)]">Dias de atendimento, valor da consulta, bio e WhatsApp ficam em Configurações.</p>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            <Link href="/medicos/configuracoes#agenda" className="btn-ghost text-sm">Configurar agenda e valores</Link>
+            <Link href="/medicos/agenda/configurar" className="btn-ghost text-sm">Clínicas e horários</Link>
           </div>
         </div>
-        <button type="button" className="btn-gold mt-5" onClick={saveProfile}>
-          Salvar
-        </button>
-        {message && <p className="mt-3 text-sm text-[var(--green)]">{message}</p>}
       </section>
 
       <section id="pacientes" className="mt-8 scroll-mt-4">

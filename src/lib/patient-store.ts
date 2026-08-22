@@ -650,6 +650,38 @@ export async function getLatestLabsByEmails(
   return out;
 }
 
+/**
+ * Exames importados/cadastrados recentemente (por createdAt) de vários pacientes.
+ * Usado no card "Novos exames" do Painel. Retorna os mais recentes primeiro.
+ */
+export async function getRecentLabsByEmails(emails: string[], sinceMs: number, limit = 30): Promise<LabResult[]> {
+  const keys = Array.from(new Set(emails.map((e) => e.toLowerCase().trim()).filter(Boolean)));
+  if (keys.length === 0) return [];
+  const sinceIso = new Date(sinceMs).toISOString();
+  if (supabaseActive("lab_results")) {
+    const supabase = getSupabaseAdmin()!;
+    const { data, error } = await supabase
+      .from("lab_results")
+      .select("*")
+      .in("patient_email", keys)
+      .gte("created_at", sinceIso)
+      .order("created_at", { ascending: false })
+      .limit(limit);
+    if (error) {
+      if (isMissingTableError(error)) missingTables.add("lab_results");
+      else throw error;
+    } else {
+      return (data ?? []).map((r) => mapLabRow(r as Record<string, unknown>));
+    }
+  }
+  const data = await readFile();
+  const keySet = new Set(keys);
+  return data.labs
+    .filter((l) => keySet.has(l.patientEmail) && l.createdAt >= sinceIso)
+    .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
+    .slice(0, limit);
+}
+
 /** Remove um resultado de exame (usado ao "atualizar" um exame já existente na mesma data). */
 export async function deleteLabResult(id: string): Promise<void> {
   if (supabaseActive("lab_results")) {
