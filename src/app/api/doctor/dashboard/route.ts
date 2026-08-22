@@ -40,7 +40,9 @@ export async function GET() {
     if (new Date(b.slotStart).getTime() > now) futureByPatient.add(b.patientEmail.toLowerCase());
   }
   const in7 = now + 7 * 86400000;
-  const retornosPendentes = returns.filter((r) => !futureByPatient.has(r.patientKey.toLowerCase()) && new Date(r.dueAt).getTime() <= in7).length;
+  const pendingReturns = returns.filter((r) => !futureByPatient.has(r.patientKey.toLowerCase()));
+  const retornosAtrasados = pendingReturns.filter((r) => new Date(r.dueAt).getTime() < now).length;
+  const retornosPendentes = pendingReturns.filter((r) => new Date(r.dueAt).getTime() <= in7).length;
 
   // Novos exames (importados nos últimos 7 dias).
   const labelByKey = new Map(NEPHRO_LABS.map((l) => [l.key, l.label]));
@@ -82,6 +84,45 @@ export async function GET() {
     ? { patientKey: open[0].patientKey, patientName: open[0].patientName || nameByKey.get(open[0].patientKey) || open[0].patientKey, startedAt: open[0].startedAt }
     : null;
 
+  // Resumo da clínica — últimos 7 dias vs. 7 dias anteriores (variação real).
+  const d7 = 7 * 86400000;
+  const last7Start = now - d7;
+  const prev7Start = now - 2 * d7;
+  const inLast = (ts: number) => ts >= last7Start && ts <= now;
+  const inPrev = (ts: number) => ts >= prev7Start && ts < last7Start;
+  const delta = (a: number, b: number): number | null => (b > 0 ? Math.round(((a - b) / b) * 100) : a > 0 ? 100 : null);
+  const pair = (last: number, prev: number) => ({ v: last, delta: delta(last, prev) });
+
+  const mine = db.bookings.filter((b) => b.doctorId === doctorId);
+  const isDone = (b: (typeof mine)[number]) => b.status === "completed" || b.stage === "realizada";
+  const doneLast = mine.filter((b) => isDone(b) && inLast(new Date(b.slotStart).getTime()));
+  const donePrev = mine.filter((b) => isDone(b) && inPrev(new Date(b.slotStart).getTime()));
+  const isRetorno = (b: (typeof mine)[number]) => b.careReason === "acompanhamento";
+  const revenue = (list: typeof mine) => list.filter((b) => ["paid", "confirmed", "completed"].includes(b.status)).reduce((s, b) => s + Math.round(b.priceCents * 0.95), 0);
+  const paidTs = (b: (typeof mine)[number]) => new Date(b.paidAt || b.slotStart).getTime();
+
+  const patsLast = created.filter((p) => inLast(new Date(p.createdAt).getTime())).length;
+  const patsPrev = created.filter((p) => inPrev(new Date(p.createdAt).getTime())).length;
+
+  const labs14 = await getRecentLabsByEmails(allKeys, prev7Start, 2000);
+  const examesLast = labs14.filter((l) => inLast(new Date(l.createdAt).getTime())).length;
+  const examesPrev = labs14.filter((l) => inPrev(new Date(l.createdAt).getTime())).length;
+
+  const lmeLast = lmeList.filter((l) => inLast(new Date(l.createdAt).getTime())).length;
+  const lmePrev = lmeList.filter((l) => inPrev(new Date(l.createdAt).getTime())).length;
+
+  const resumo = {
+    consultasRealizadas: pair(doneLast.length, donePrev.length),
+    novosPacientes: pair(patsLast, patsPrev),
+    retornosRealizados: pair(doneLast.filter(isRetorno).length, donePrev.filter(isRetorno).length),
+    examesImportados: pair(examesLast, examesPrev),
+    lmeEmitidas: pair(lmeLast, lmePrev),
+    receitaCents: pair(
+      revenue(mine.filter((b) => inLast(paidTs(b)))),
+      revenue(mine.filter((b) => inPrev(paidTs(b))))
+    ),
+  };
+
   // Pendências acionáveis (sem inventar — só o que existe).
   const pendencias: { label: string; count: number; href: string }[] = [];
   if (retornosPendentes > 0) pendencias.push({ label: retornosPendentes === 1 ? "Retorno para organizar" : "Retornos para organizar", count: retornosPendentes, href: "/medicos/retornos" });
@@ -93,7 +134,8 @@ export async function GET() {
       pacientes: nameByKey.size,
       consultasHoje,
       retornosPendentes,
-      novosExames: recentExams.length,
+      retornosAtrasados,
+      novosExames: examesLast,
       alertas: alertas.length,
       lmeParaAssinar,
       aguardando,
@@ -103,5 +145,6 @@ export async function GET() {
     recentExams,
     alertas: alertas.slice(0, 12),
     pendencias,
+    resumo,
   });
 }
