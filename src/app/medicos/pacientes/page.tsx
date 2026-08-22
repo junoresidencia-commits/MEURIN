@@ -1,12 +1,13 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { Suspense, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { DoctorSidebar } from "@/components/DoctorSidebar";
 import { DoctorMobileNav } from "@/components/DoctorMobileNav";
 import { GlobalPatientSearch } from "@/components/GlobalPatientSearch";
 import { PatientQuickSheet } from "@/components/PatientQuickSheet";
+import { CreatePatient } from "@/components/CreatePatient";
 
 type LabVal = { value: number; unit: string | null; date: string } | null;
 type Row = {
@@ -60,13 +61,19 @@ function Chip({ children }: { children: React.ReactNode }) {
   return <span className="rounded-full border border-[var(--border-gold)] bg-white px-2 py-0.5 text-[11px] font-semibold text-[var(--gold)]">{children}</span>;
 }
 
-export default function PacientesPage() {
+function PacientesInner() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const [rows, setRows] = useState<Row[] | null>(null);
   const [error, setError] = useState("");
   const [q, setQ] = useState("");
   const [filter, setFilter] = useState<FilterId>("todos");
   const [quickKey, setQuickKey] = useState<string | null>(null);
+  const [showCreate, setShowCreate] = useState(false);
+
+  useEffect(() => {
+    if (searchParams.get("novo")) setShowCreate(true);
+  }, [searchParams]);
 
   function load() {
     setError("");
@@ -114,6 +121,10 @@ export default function PacientesPage() {
   };
   const qn = q.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().trim();
   const visible = (rows || []).filter((r) => matchesFilter(r) && (!qn || r.name.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().includes(qn)));
+  // Busca-primeiro: sem busca e sem filtro específico, mostramos só os recentes
+  // (acesso rápido) — o médico procura o paciente, em vez de rolar uma lista enorme.
+  const searching = qn !== "" || filter !== "todos";
+  const list = searching ? visible : (rows || []).slice(0, 6);
 
   return (
     <div className="flex min-h-screen bg-[var(--bg)]">
@@ -122,8 +133,11 @@ export default function PacientesPage() {
         <div className="mx-auto max-w-5xl px-5 pb-28 pt-8 lg:pb-8">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <h1 className="font-display text-2xl font-extrabold text-[var(--text)] sm:text-3xl">Pacientes</h1>
-            <Link href="/medicos/painel#pacientes" className="btn-gold">+ Novo paciente</Link>
+            <button type="button" className="btn-gold" onClick={() => setShowCreate((v) => !v)}>{showCreate ? "Fechar" : "+ Novo paciente"}</button>
           </div>
+          <p className="mt-1 text-sm text-[var(--text-muted)]">Busque o paciente por nome, CPF ou telefone. Use os filtros para ver grupos (DRC, diálise, retornos, alertas).</p>
+
+          {showCreate && <CreatePatient onCreated={() => { setShowCreate(false); load(); }} />}
 
           <div className="mt-4">
             <GlobalPatientSearch />
@@ -169,13 +183,21 @@ export default function PacientesPage() {
             </div>
           )}
 
-          {rows && visible.length === 0 && !error && (
-            <p className="mt-8 text-sm text-[var(--text-muted)]">Nenhum paciente neste filtro.</p>
+          {rows && (
+            <p className="mt-5 text-xs font-semibold uppercase tracking-wider text-[var(--text-muted)]">
+              {searching ? `Resultados (${list.length})` : "Pacientes recentes"}
+            </p>
           )}
 
-          {rows && visible.length > 0 && (
-            <ul className="mt-4 space-y-3">
-              {visible.map((r) => (
+          {rows && list.length === 0 && !error && (
+            <p className="mt-2 text-sm text-[var(--text-muted)]">
+              {searching ? "Nenhum paciente encontrado. Ajuste a busca ou o filtro." : "Nenhum paciente ainda. Use “+ Novo paciente” para cadastrar."}
+            </p>
+          )}
+
+          {rows && list.length > 0 && (
+            <ul className="mt-2 space-y-3">
+              {list.map((r) => (
                 <li key={r.key} className="panel !p-4">
                   <div className="flex flex-wrap items-start justify-between gap-3">
                     <div className="min-w-0">
@@ -234,5 +256,13 @@ export default function PacientesPage() {
       <DoctorMobileNav />
       {quickKey && <PatientQuickSheet patientKey={quickKey} onClose={() => setQuickKey(null)} />}
     </div>
+  );
+}
+
+export default function PacientesPage() {
+  return (
+    <Suspense fallback={<div className="mx-auto max-w-5xl px-5 py-20 text-[var(--text-muted)]">Carregando…</div>}>
+      <PacientesInner />
+    </Suspense>
   );
 }

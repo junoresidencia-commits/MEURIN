@@ -28,11 +28,13 @@ const PRIMARY: { href: string; label: string; icon: keyof typeof PATHS }[] = [
   { href: "/medicos/painel", label: "Painel", icon: "home" },
   { href: "/medicos/pacientes", label: "Pacientes", icon: "users" },
   { href: "/medicos/agenda", label: "Agenda", icon: "cal" },
+  { href: "/medicos/atendimentos", label: "Atendimentos", icon: "file" },
   { href: "/medicos/retornos", label: "Retornos", icon: "file" },
   { href: "/medicos/links", label: "Links", icon: "link" },
 ];
 const MORE: { href: string; label: string; icon: keyof typeof PATHS }[] = [
   { href: "/medicos/lme", label: "Documentos / LME", icon: "file" },
+  { href: "/medicos/mensagens", label: "Mensagens", icon: "link" },
   { href: "/medicos/equipe-nutricao", label: "Nutrição", icon: "heart" },
   { href: "/medicos/painel#financeiro", label: "Financeiro", icon: "chart" },
   { href: "/medicos/pesquisa", label: "Estudos e Pesquisa", icon: "chart" },
