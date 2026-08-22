@@ -14,7 +14,7 @@ import { parseLabGroups, type ParsedLabGroup } from "@/lib/lab-parser";
 import { TemplatePicker } from "@/components/TemplatePicker";
 import { AttendanceControl } from "@/components/AttendanceControl";
 import { ReturnPicker } from "@/components/ReturnPicker";
-import { PatientCnsField } from "@/components/PatientCnsField";
+import { PatientLmeField } from "@/components/PatientCnsField";
 import { guessSexFromName } from "@/lib/sex-guess";
 
 type Lab = { id: string; testKey: string; value: number; unit?: string | null; measuredAt: string };
@@ -543,8 +543,9 @@ export default function ProntuarioPage() {
 
         {tab === "lme" && (
           <div className="space-y-4">
-            {/* CNS do paciente — necessário para a LME/CEAF (avisa quando falta) */}
-            <PatientCnsField emailParam={emailParam} cns={patient?.cns} onSaved={load} />
+            {/* Dados da LME (CNS e Nome da mãe) — avisam quando faltam; auto-preenchem a LME. */}
+            <PatientLmeField emailParam={emailParam} field="cns" label="CNS (Cartão SUS)" value={patient?.cns} numeric placeholder="000 0000 0000 0000" note="Necessário para a LME/CEAF. Se este paciente precisar, cadastre agora — senão, pode deixar em branco." onSaved={load} />
+            <PatientLmeField emailParam={emailParam} field="motherName" label="Nome da mãe" value={patient?.motherName} placeholder="Nome completo da mãe" note="Aparece no formulário oficial da LME. Cadastre para já sair preenchido nas próximas LMEs." onSaved={load} />
 
             {/* Kit CEAF — checklist */}
             <div className="panel">
