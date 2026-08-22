@@ -530,7 +530,9 @@ export default function PainelMedicoPage() {
                           ? "Aguardando pagamento"
                           : b.status === "cancelled"
                             ? "Cancelada"
-                            : b.status}
+                            : b.status === "completed"
+                              ? "Concluída"
+                              : b.status}
                 </p>
               </div>
               <div className="flex flex-wrap items-center gap-2">

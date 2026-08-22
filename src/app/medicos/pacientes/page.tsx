@@ -121,10 +121,10 @@ function PacientesInner() {
   };
   const qn = q.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().trim();
   const visible = (rows || []).filter((r) => matchesFilter(r) && (!qn || r.name.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().includes(qn)));
-  // Busca-primeiro: sem busca e sem filtro específico, mostramos só os recentes
-  // (acesso rápido) — o médico procura o paciente, em vez de rolar uma lista enorme.
+  // Busca-primeiro: sem busca e sem filtro específico NÃO despejamos a lista —
+  // o médico procura o paciente (busca no topo) ou escolhe um filtro (grupos).
   const searching = qn !== "" || filter !== "todos";
-  const list = searching ? visible : (rows || []).slice(0, 6);
+  const list = searching ? visible : [];
 
   return (
     <div className="flex min-h-screen bg-[var(--bg)]">
@@ -183,16 +183,20 @@ function PacientesInner() {
             </div>
           )}
 
-          {rows && (
-            <p className="mt-5 text-xs font-semibold uppercase tracking-wider text-[var(--text-muted)]">
-              {searching ? `Resultados (${list.length})` : "Pacientes recentes"}
-            </p>
+          {rows && searching && (
+            <p className="mt-5 text-xs font-semibold uppercase tracking-wider text-[var(--text-muted)]">Resultados ({list.length})</p>
           )}
 
-          {rows && list.length === 0 && !error && (
-            <p className="mt-2 text-sm text-[var(--text-muted)]">
-              {searching ? "Nenhum paciente encontrado. Ajuste a busca ou o filtro." : "Nenhum paciente ainda. Use “+ Novo paciente” para cadastrar."}
-            </p>
+          {rows && !searching && !error && (
+            <div className="mt-6 rounded-2xl border border-dashed border-[var(--border-gold)] bg-[var(--gold-soft)]/40 p-6 text-center">
+              <p className="text-3xl">🔍</p>
+              <p className="mt-2 font-display text-lg text-[var(--text)]">Encontre um paciente</p>
+              <p className="mx-auto mt-1 max-w-sm text-sm text-[var(--text-muted)]">Use a busca acima (nome, CPF ou telefone) ou escolha um filtro (DRC, diálise, retornos, alertas) para ver um grupo. Você tem <strong>{counts.todos}</strong> paciente{counts.todos === 1 ? "" : "s"}.</p>
+            </div>
+          )}
+
+          {rows && searching && list.length === 0 && !error && (
+            <p className="mt-2 text-sm text-[var(--text-muted)]">Nenhum paciente encontrado. Ajuste a busca ou o filtro.</p>
           )}
 
           {rows && list.length > 0 && (
