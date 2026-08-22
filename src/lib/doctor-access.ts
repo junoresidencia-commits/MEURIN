@@ -77,8 +77,9 @@ export async function resolvePatientAccess(param: string): Promise<PatientAccess
     };
   }
 
-  // Paciente criado pelo médico (param = id)
-  const patient = await getPatient(decoded);
+  // Paciente criado pelo médico (param = id ou chave clínica "pid:<id>")
+  const patientId = decoded.startsWith("pid:") ? decoded.slice(4) : decoded;
+  const patient = await getPatient(patientId);
   if (!patient || patient.doctorId !== doctorId) {
     return { allowed: false, key: "", name: "", city: "", phone: "", email: "", birthdate: null, sex: null, cpf: null, cns: null, motherName: null, isCreated: true, bookings: [] };
   }

@@ -8,6 +8,16 @@ import { DoctorMobileNav } from "@/components/DoctorMobileNav";
 import { disablePush, enablePush, isSubscribed, notificationPermission, pushSupported } from "@/lib/push-client";
 import { DoctorPaymentSettings } from "@/components/DoctorPaymentSettings";
 import { DoctorPixSettings } from "@/components/DoctorPixSettings";
+import type { WeeklySlot } from "@/lib/types";
+
+const DAYS = [
+  { id: 1, label: "Seg" },
+  { id: 2, label: "Ter" },
+  { id: 3, label: "Qua" },
+  { id: 4, label: "Qui" },
+  { id: 5, label: "Sex" },
+  { id: 6, label: "Sáb" },
+];
 
 type Prefs = {
   notifyPush: boolean;
@@ -41,6 +51,12 @@ export default function ConfiguracoesMedicoPage() {
   const [name, setName] = useState("");
   const [cpf, setCpf] = useState("");
   const [signatureUrl, setSignatureUrl] = useState("");
+  const [weekly, setWeekly] = useState<WeeklySlot[]>([]);
+  const [price, setPrice] = useState("350");
+  const [bio, setBio] = useState("");
+  const [notifyWa, setNotifyWa] = useState("");
+  const [patientWa, setPatientWa] = useState("");
+  const [allowPatientWa, setAllowPatientWa] = useState(false);
 
   useEffect(() => {
     (async () => {
@@ -63,6 +79,12 @@ export default function ConfiguracoesMedicoPage() {
       setName(d.name || "");
       setCpf(d.cpf || "");
       setSignatureUrl(d.signatureUrl || "");
+      setWeekly(d.weeklyAvailability || []);
+      setPrice(String((d.consultationPriceCents ?? 35000) / 100));
+      setBio(d.bio || "");
+      setNotifyWa(d.notifyWhatsapp || "");
+      setPatientWa(d.patientContactWhatsapp || "");
+      setAllowPatientWa(Boolean(d.allowPatientContact));
       setSupported(pushSupported());
       setSubscribed(await isSubscribed());
       setLoading(false);
@@ -74,12 +96,32 @@ export default function ConfiguracoesMedicoPage() {
     setPrefs((p) => ({ ...p, [k]: v }));
   }
 
+  function toggleDay(dayOfWeek: number) {
+    setWeekly((w) =>
+      w.some((x) => x.dayOfWeek === dayOfWeek)
+        ? w.filter((x) => x.dayOfWeek !== dayOfWeek)
+        : [...w, { dayOfWeek, start: "08:00", end: "12:00" }, { dayOfWeek, start: "14:00", end: "18:00" }]
+    );
+  }
+
   async function save() {
     setMsg("");
     const res = await fetch("/api/availability", {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ ...prefs, cns, name, cpf, signatureUrl }),
+      body: JSON.stringify({
+        ...prefs,
+        cns,
+        name,
+        cpf,
+        signatureUrl,
+        weeklyAvailability: weekly,
+        consultationPriceCents: Math.round(Number(String(price).replace(",", ".")) * 100),
+        bio,
+        notifyWhatsapp: notifyWa,
+        patientContactWhatsapp: patientWa,
+        allowPatientContact: allowPatientWa,
+      }),
     });
     setMsg(res.ok ? "Preferências salvas." : "Não foi possível salvar agora.");
   }
@@ -116,6 +158,51 @@ export default function ConfiguracoesMedicoPage() {
           <Link href="/medicos/painel" className="text-sm font-semibold text-[var(--gold)]">← Painel</Link>
           <h1 className="font-display text-3xl font-extrabold text-[var(--text)]">Configurações</h1>
           <p className="mt-1 text-[var(--text-muted)]">Notificações no celular, lembretes, calendário, documentos e dados SUS/CEAF.</p>
+
+          <section id="agenda" className="panel mt-6 scroll-mt-4">
+            <h2 className="font-display text-xl text-[var(--text)]">Agenda e atendimento</h2>
+            <p className="mt-1 text-sm text-[var(--text-muted)]">Dias em que você atende (os pacientes só veem esses horários), valor da consulta e bio pública.</p>
+            <p className="mt-2 rounded-xl border border-[var(--border-gold)] bg-[var(--gold-soft)] px-3 py-2 text-sm text-[var(--text-soft)]">
+              Precisa de <strong>clínicas diferentes por dia</strong> ou teleconsulta?{" "}
+              <Link href="/medicos/agenda/configurar" className="font-semibold text-[var(--gold)] underline">Abrir a Agenda por local/horário</Link>.
+            </p>
+            <div className="mt-4 flex flex-wrap gap-2">
+              {DAYS.map((d) => {
+                const on = weekly.some((w) => w.dayOfWeek === d.id);
+                return (
+                  <button key={d.id} type="button" onClick={() => toggleDay(d.id)} className={`rounded-full px-4 py-2 text-sm font-bold ${on ? "bg-[var(--gold)] text-white" : "border border-[var(--border)]"}`}>
+                    {d.label}
+                  </button>
+                );
+              })}
+            </div>
+            <div className="mt-4 grid gap-3 sm:grid-cols-2">
+              <label className="block">
+                <span className="mb-1 block text-xs font-semibold text-[var(--text-muted)]">Valor da consulta (R$)</span>
+                <input type="number" className="input-field" value={price} onChange={(e) => setPrice(e.target.value)} />
+              </label>
+            </div>
+            <label className="mt-3 block">
+              <span className="mb-1 block text-xs font-semibold text-[var(--text-muted)]">Bio pública</span>
+              <textarea className="input-field min-h-[80px]" value={bio} onChange={(e) => setBio(e.target.value)} />
+            </label>
+            <div className="mt-4 rounded-2xl border border-[var(--border)] bg-[var(--bg-soft,#f8fafc)] p-4">
+              <p className="text-xs font-bold uppercase tracking-wider text-[var(--gold)]">WhatsApp e comunicação</p>
+              <p className="mt-1 text-xs text-[var(--text-muted)]">O número de <strong>notificações é só seu</strong> — nunca é mostrado ao paciente.</p>
+              <label className="mt-3 block">
+                <span className="mb-1 block text-xs font-semibold text-[var(--text-muted)]">Número para receber notificações (privado)</span>
+                <input className="input-field" inputMode="tel" value={notifyWa} onChange={(e) => setNotifyWa(e.target.value)} placeholder="Seu WhatsApp pessoal/profissional" />
+              </label>
+              <label className="mt-3 block">
+                <span className="mb-1 block text-xs font-semibold text-[var(--text-muted)]">Número para contato dos pacientes (pode ser secretária/clínica)</span>
+                <input className="input-field" inputMode="tel" value={patientWa} onChange={(e) => setPatientWa(e.target.value)} placeholder="Número que o paciente pode usar" />
+              </label>
+              <label className="mt-3 flex items-center gap-2 text-sm text-[var(--text-soft)]">
+                <input type="checkbox" checked={allowPatientWa} onChange={(e) => setAllowPatientWa(e.target.checked)} />
+                Permitir que pacientes falem sobre a consulta pelo WhatsApp
+              </label>
+            </div>
+          </section>
 
           <section className="panel mt-6">
             <h2 className="font-display text-xl text-[var(--text)]">Meus dados (documentos, LME e receitas)</h2>

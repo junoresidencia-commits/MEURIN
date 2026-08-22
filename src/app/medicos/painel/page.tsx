@@ -1,9 +1,9 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import type { Booking, Doctor, WeeklySlot } from "@/lib/types";
+import type { Booking, Doctor } from "@/lib/types";
 import { formatBRL, formatSlotLabel } from "@/lib/scheduling-client";
 import { DoctorSidebar } from "@/components/DoctorSidebar";
 import { DoctorMobileNav } from "@/components/DoctorMobileNav";
@@ -11,25 +11,54 @@ import { NotificationBell } from "@/components/NotificationBell";
 import { EnableNotifications } from "@/components/EnableNotifications";
 import { GlobalPatientSearch } from "@/components/GlobalPatientSearch";
 import { PatientQuickSheet } from "@/components/PatientQuickSheet";
-import { QrCode } from "@/components/QrCode";
-import { SITE_URL, patientAccessMessage } from "@/lib/site";
-
-const DAYS = [
-  { id: 1, label: "Seg" },
-  { id: 2, label: "Ter" },
-  { id: 3, label: "Qua" },
-  { id: 4, label: "Qui" },
-  { id: 5, label: "Sex" },
-  { id: 6, label: "Sáb" },
-];
-
 function consultaStatus(b: Booking): { emoji: string; label: string; color: string } {
   if (b.stage === "proposto_novo_horario") return { emoji: "🟠", label: "Novo horário proposto", color: "#e08a2e" };
   if (b.status === "confirmed") return { emoji: "🟢", label: "Confirmado", color: "#1a9a78" };
   if (b.status === "completed") return { emoji: "🟢", label: "Concluído", color: "#1a9a78" };
-  if (b.status === "paid") return { emoji: "🟡", label: "Aguardando confirmação", color: "#e4a32e" };
-  if (b.status === "pending_payment") return { emoji: "🟡", label: "Aguardando pagamento", color: "#e4a32e" };
+  if (b.status === "paid") return { emoji: "🟡", label: "Aguardando", color: "#e4a32e" };
+  if (b.status === "pending_payment") return { emoji: "🟡", label: "Aguardando pgto.", color: "#e4a32e" };
   return { emoji: "🔵", label: "Agendado", color: "#2b7fb0" };
+}
+
+type Pair = { v: number; delta: number | null };
+type Dashboard = {
+  counts: { pacientes: number; consultasHoje: number; retornosPendentes: number; retornosAtrasados: number; novosExames: number; alertas: number; lmeParaAssinar: number; aguardando: number; pendencias: number };
+  continuar: { patientKey: string; patientName: string; startedAt: string } | null;
+  recentExams: { patientKey: string; patientName: string; testKey: string; testLabel: string; value: number; unit: string | null; measuredAt: string; createdAt: string }[];
+  alertas: { patientKey: string; patientName: string; level: "urgente" | "importante"; text: string; date: string }[];
+  pendencias: { label: string; count: number; href: string }[];
+  resumo: { consultasRealizadas: Pair; novosPacientes: Pair; retornosRealizados: Pair; examesImportados: Pair; lmeEmitidas: Pair; receitaCents: Pair };
+};
+
+type ReturnItem = { id: string; patientKey: string; patientName: string; dueAt: string; eff: string; daysLate: number; nextConsultation: string | null; phone: string | null };
+type ReturnsBuckets = { atrasados: ReturnItem[]; prox7: ReturnItem[]; prox30: ReturnItem[]; agendados: ReturnItem[] };
+
+function fmtDay(iso?: string | null) {
+  if (!iso) return "";
+  const d = new Date(iso);
+  return Number.isNaN(d.getTime()) ? "" : d.toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit", year: "numeric" });
+}
+function DeltaTag({ delta }: { delta: number | null }) {
+  if (delta == null) return <span className="text-[11px] text-[var(--text-muted)]">vs. 7 dias anteriores</span>;
+  const up = delta >= 0;
+  return (
+    <span className="text-[11px] font-semibold" style={{ color: up ? "#1a9a78" : "#e86761" }}>
+      {up ? "↑" : "↓"} {Math.abs(delta)}% <span className="font-normal text-[var(--text-muted)]">vs. 7 dias ant.</span>
+    </span>
+  );
+}
+function MetricCard({ href, onClick, icon, iconBg, iconColor, label, value, sub, valueColor }: { href?: string; onClick?: () => void; icon: string; iconBg: string; iconColor: string; label: string; value: React.ReactNode; sub?: string; valueColor?: string }) {
+  const inner = (
+    <>
+      <span className="grid h-10 w-10 place-items-center rounded-xl text-lg" style={{ background: iconBg, color: iconColor }}>{icon}</span>
+      <p className="mt-3 text-[11px] font-semibold uppercase tracking-wider text-[var(--text-muted)]">{label}</p>
+      <p className="font-display text-3xl leading-tight" style={{ color: valueColor || "var(--text)" }}>{value}</p>
+      {sub && <p className="text-[11px] text-[var(--text-muted)]">{sub}</p>}
+    </>
+  );
+  const cls = "panel !p-4 text-left transition hover:-translate-y-0.5 hover:border-[var(--border-gold)]";
+  if (href) return <Link href={href} className={cls}>{inner}</Link>;
+  return <button type="button" onClick={onClick} className={cls}>{inner}</button>;
 }
 
 type PatientRow = {
@@ -46,20 +75,11 @@ export default function PainelMedicoPage() {
   const [doctor, setDoctor] = useState<Omit<Doctor, "passwordHash"> | null>(null);
   const [bookings, setBookings] = useState<Booking[]>([]);
   const [patients, setPatients] = useState<PatientRow[]>([]);
-  const [showCreate, setShowCreate] = useState(false);
-  const [patientFilter, setPatientFilter] = useState("");
-  const [price, setPrice] = useState("350");
-  const [bio, setBio] = useState("");
-  const [weekly, setWeekly] = useState<WeeklySlot[]>([]);
-  const [message, setMessage] = useState("");
   const [loading, setLoading] = useState(true);
-  const [notifyWa, setNotifyWa] = useState("");
-  const [patientWa, setPatientWa] = useState("");
-  const [allowPatientWa, setAllowPatientWa] = useState(false);
-  const [notifNew, setNotifNew] = useState(true);
-  const [notifPay, setNotifPay] = useState(true);
-  const [notifResched, setNotifResched] = useState(true);
   const [quickKey, setQuickKey] = useState<string | null>(null);
+  const [dash, setDash] = useState<Dashboard | null>(null);
+  const [returns, setReturns] = useState<ReturnsBuckets | null>(null);
+  const [retTab, setRetTab] = useState<keyof ReturnsBuckets>("atrasados");
 
   useEffect(() => {
     Promise.all([
@@ -72,60 +92,14 @@ export default function PainelMedicoPage() {
         return;
       }
       setDoctor(auth.doctor);
-      setPrice(String(auth.doctor.consultationPriceCents / 100));
-      setBio(auth.doctor.bio || "");
-      setWeekly(auth.doctor.weeklyAvailability || []);
-      setNotifyWa(auth.doctor.notifyWhatsapp || "");
-      setPatientWa(auth.doctor.patientContactWhatsapp || "");
-      setAllowPatientWa(Boolean(auth.doctor.allowPatientContact));
-      setNotifNew(auth.doctor.notifyNewBookings !== false);
-      setNotifPay(auth.doctor.notifyPayments !== false);
-      setNotifResched(auth.doctor.notifyReschedules !== false);
       setBookings(books.bookings || []);
       setPatients(pats.patients || []);
       setLoading(false);
     });
+    // Painel premium: contagens reais e listas (retornos, novos exames, pendências, "continuar").
+    fetch("/api/doctor/dashboard").then((r) => (r.ok ? r.json() : null)).then((d) => { if (d) setDash(d); }).catch(() => {});
+    fetch("/api/doctor/returns").then((r) => (r.ok ? r.json() : null)).then((d) => { if (d) setReturns(d.buckets); }).catch(() => {});
   }, [router]);
-
-  const earnings = useMemo(() => {
-    return bookings
-      .filter((b) => ["paid", "confirmed", "completed"].includes(b.status))
-      .reduce((sum, b) => sum + Math.round(b.priceCents * 0.95), 0);
-  }, [bookings]);
-
-  function toggleDay(dayOfWeek: number) {
-    const has = weekly.some((w) => w.dayOfWeek === dayOfWeek);
-    if (has) {
-      setWeekly((w) => w.filter((x) => x.dayOfWeek !== dayOfWeek));
-    } else {
-      setWeekly((w) => [
-        ...w,
-        { dayOfWeek, start: "08:00", end: "12:00" },
-        { dayOfWeek, start: "14:00", end: "18:00" },
-      ]);
-    }
-  }
-
-  async function saveProfile() {
-    setMessage("");
-    const res = await fetch("/api/availability", {
-      method: "PUT",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        weeklyAvailability: weekly,
-        consultationPriceCents: Math.round(Number(price) * 100),
-        bio,
-        notifyWhatsapp: notifyWa,
-        patientContactWhatsapp: patientWa,
-        allowPatientContact: allowPatientWa,
-        notifyNewBookings: notifNew,
-        notifyPayments: notifPay,
-        notifyReschedules: notifResched,
-      }),
-    });
-    if (res.ok) setMessage("Agenda e valor salvos.");
-    else setMessage("Não foi possível salvar.");
-  }
 
   async function reloadBookings() {
     const res = await fetch("/api/bookings");
@@ -185,13 +159,6 @@ export default function PainelMedicoPage() {
     window.open(url, "_blank", "noopener,noreferrer");
   }
 
-  async function reloadPatients() {
-    const res = await fetch("/api/doctor/patients");
-    const data = await res.json();
-    setPatients(data.patients || []);
-    setShowCreate(false);
-  }
-
   async function removeBooking(id: string) {
     if (!window.confirm("Excluir esta consulta? Esta ação não pode ser desfeita.")) return;
     const res = await fetch("/api/bookings", {
@@ -201,17 +168,6 @@ export default function PainelMedicoPage() {
     });
     if (res.ok) setBookings((bs) => bs.filter((b) => b.id !== id));
     else window.alert("Não foi possível excluir a consulta.");
-  }
-
-  async function removePatient(key: string, name: string) {
-    if (!window.confirm(`Excluir o paciente ${name}? Esta ação não pode ser desfeita.`)) return;
-    const res = await fetch("/api/doctor/patients", {
-      method: "DELETE",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ id: key }),
-    });
-    if (res.ok) setPatients((ps) => ps.filter((p) => p.key !== key));
-    else window.alert("Não foi possível excluir o paciente.");
   }
 
   function remindWhatsApp(b: Booking) {
@@ -244,7 +200,7 @@ export default function PainelMedicoPage() {
     <div className="flex min-h-screen bg-[var(--bg)]">
       <DoctorSidebar />
       <div className="min-w-0 flex-1">
-        <div className="mx-auto max-w-5xl px-5 pb-28 pt-8 lg:pb-8">
+        <div className="mx-auto max-w-7xl px-5 pb-28 pt-8 lg:pb-8">
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div>
           <h1 className="font-display text-2xl font-extrabold text-[var(--text)] sm:text-3xl">
@@ -253,6 +209,9 @@ export default function PainelMedicoPage() {
           <p className="mt-1 text-sm text-[var(--text-muted)]">Resumo da sua clínica hoje</p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
+          <span className="hidden items-center gap-1.5 rounded-full border border-[var(--border)] bg-white px-3 py-1.5 text-sm text-[var(--text-soft)] sm:inline-flex">
+            <span aria-hidden>📅</span> Hoje, {new Date().toLocaleDateString("pt-BR", { day: "2-digit", month: "long", year: "numeric" })}
+          </span>
           <NotificationBell />
           <Link href="/medicos/mais" className="btn-ghost">Mais</Link>
         </div>
@@ -262,246 +221,232 @@ export default function PainelMedicoPage() {
       </div>
       <EnableNotifications />
 
-      <div className="mt-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        <a href="#pacientes" className="panel transition hover:-translate-y-0.5 hover:border-[var(--border-gold)]">
-          <span className="grid h-10 w-10 place-items-center rounded-xl bg-[var(--gold-soft)] text-[var(--gold)]">P</span>
-          <p className="mt-3 text-xs uppercase tracking-wider text-[var(--text-muted)]">Pacientes</p>
-          <p className="font-display text-3xl text-[var(--text)]">{patients.length}</p>
-        </a>
-        <Link href="/medicos/agenda" className="panel transition hover:-translate-y-0.5 hover:border-[var(--border-gold)]">
-          <span className="grid h-10 w-10 place-items-center rounded-xl bg-[var(--gold-soft)] text-[var(--gold)]">A</span>
-          <p className="mt-3 text-xs uppercase tracking-wider text-[var(--text-muted)]">Agenda hoje</p>
-          <p className="font-display text-3xl text-[var(--text)]">{agendaHoje}</p>
-        </Link>
-        <Link href="/medicos/agenda" className="panel transition hover:-translate-y-0.5 hover:border-[var(--border-gold)]">
-          <span className="grid h-10 w-10 place-items-center rounded-xl bg-[#eaf8f2] text-[#1c8c70]">✓</span>
-          <p className="mt-3 text-xs uppercase tracking-wider text-[var(--text-muted)]">Consultas liberadas</p>
-          <p className="font-display text-3xl text-[var(--green)]">
-            {bookings.filter((b) => b.status === "confirmed").length}
-          </p>
-        </Link>
-        <a href="#financeiro" className="panel transition hover:-translate-y-0.5 hover:border-[var(--border-gold)]">
-          <span className="grid h-10 w-10 place-items-center rounded-xl bg-[var(--gold-soft)] text-[var(--gold)]">R$</span>
-          <p className="mt-3 text-xs uppercase tracking-wider text-[var(--text-muted)]">Na sua conta (estimado)</p>
-          <p className="font-display text-3xl text-[var(--gold)]">{formatBRL(earnings)}</p>
-        </a>
+      {/* Cards de resumo do dia */}
+      <div className="mt-6 grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
+        <MetricCard href="/medicos/pacientes" icon="👥" iconBg="var(--gold-soft)" iconColor="var(--gold)" label="Pacientes" value={dash?.counts.pacientes ?? patients.length} sub="Todos ativos" />
+        <MetricCard href="/medicos/agenda" icon="📅" iconBg="#e8f5ee" iconColor="#1a9a78" label="Consultas hoje" value={dash?.counts.consultasHoje ?? agendaHoje} sub={dash && dash.counts.aguardando > 0 ? `${dash.counts.aguardando} aguardando` : "no seu dia"} />
+        <MetricCard href="/medicos/retornos" icon="↩" iconBg="#fff3e2" iconColor="#e08a2e" label="Retornos pendentes" value={dash?.counts.retornosPendentes ?? 0} valueColor={(dash?.counts.retornosPendentes ?? 0) > 0 ? "#e08a2e" : undefined} sub={dash && dash.counts.retornosAtrasados > 0 ? `${dash.counts.retornosAtrasados} atrasados` : "em dia"} />
+        <MetricCard onClick={() => document.getElementById("alertas")?.scrollIntoView({ behavior: "smooth" })} icon="⚠" iconBg="#fdecea" iconColor="#e86761" label="Alertas clínicos" value={dash?.counts.alertas ?? 0} valueColor={(dash?.counts.alertas ?? 0) > 0 ? "#e86761" : undefined} sub="Atenção necessária" />
+        <MetricCard onClick={() => document.getElementById("novos-exames")?.scrollIntoView({ behavior: "smooth" })} icon="🧪" iconBg="#e8f1fb" iconColor="#2b7fb0" label="Novos exames" value={dash?.counts.novosExames ?? 0} sub="Últimos 7 dias" />
+        <MetricCard onClick={() => document.getElementById("pendencias")?.scrollIntoView({ behavior: "smooth" })} icon="🗂" iconBg="var(--gold-soft)" iconColor="var(--gold)" label="Pendências" value={dash?.counts.pendencias ?? 0} sub="Itens para resolver" />
       </div>
 
-      <section className="panel mt-8">
-        <div className="flex items-center justify-between gap-3">
-          <h2 className="font-display text-xl text-[var(--text)]">Consultas de hoje</h2>
-          <Link href="/medicos/agenda" className="text-sm font-semibold text-[var(--gold)]">Ver agenda completa →</Link>
-        </div>
-        {todaysBookings.length === 0 ? (
-          <p className="mt-3 text-sm text-[var(--text-muted)]">Nenhuma consulta agendada para hoje.</p>
-        ) : (
-          <ul className="mt-3 divide-y divide-[var(--border)]">
-            {todaysBookings.slice(0, 8).map((b) => {
-              const st = consultaStatus(b);
-              const time = new Date(b.slotStart).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
-              return (
-                <li key={b.id}>
-                  <button
-                    type="button"
-                    onClick={() => setQuickKey(b.patientEmail)}
-                    className="flex w-full items-center justify-between gap-3 py-2.5 text-left transition hover:bg-[var(--gold-soft)]"
-                  >
-                    <span className="flex items-center gap-3">
-                      <span className="font-display text-lg text-[var(--text)]">{time}</span>
-                      <span>
-                        <span className="block text-sm font-semibold text-[var(--text)]">{b.patientName}</span>
-                        <span className="block text-xs text-[var(--text-muted)]">
-                          {[b.locationName || (b.modality === "teleconsulta" ? "Teleconsulta" : null), b.careReason === "acompanhamento" ? "Retorno" : "Consulta"].filter(Boolean).join(" • ")}
-                        </span>
+      {dash?.continuar && (
+        <Link href={`/medicos/paciente/${encodeURIComponent(dash.continuar.patientKey)}`} className="mt-5 flex items-center justify-between gap-3 rounded-2xl border border-[var(--border-gold)] bg-[var(--gold-soft)] p-4 transition hover:border-[var(--gold)]">
+          <div className="flex items-center gap-3">
+            <span className="grid h-10 w-10 place-items-center rounded-full bg-white text-[var(--gold)]">↻</span>
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-wide text-[var(--gold)]">Continuar de onde parou</p>
+              <p className="font-display text-lg text-[var(--text)]">{dash.continuar.patientName}</p>
+              <p className="text-xs text-[var(--text-muted)]">Atendimento em andamento · iniciado {new Date(dash.continuar.startedAt).toLocaleString("pt-BR", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" })}</p>
+            </div>
+          </div>
+          <span className="btn-gold text-sm">Continuar atendimento →</span>
+        </Link>
+      )}
+
+      {/* Bento premium: consultas | alertas+exames | retornos+pendências */}
+      <div className="mt-6 grid gap-6 lg:grid-cols-3">
+        {/* Coluna 1 — Consultas de hoje */}
+        <section className="panel !p-5">
+          <div className="flex items-center justify-between gap-3">
+            <h2 className="font-display text-xl text-[var(--text)]">Consultar de hoje</h2>
+            <Link href="/medicos/agenda" className="text-sm font-semibold text-[var(--gold)]">Ver agenda completa</Link>
+          </div>
+          {todaysBookings.length === 0 ? (
+            <p className="mt-3 text-sm text-[var(--text-muted)]">Nenhuma consulta agendada para hoje.</p>
+          ) : (
+            <ul className="mt-3 space-y-1">
+              {todaysBookings.slice(0, 6).map((b) => {
+                const st = consultaStatus(b);
+                const time = new Date(b.slotStart).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
+                return (
+                  <li key={b.id}>
+                    <button type="button" onClick={() => setQuickKey(b.patientEmail)} className="flex w-full items-center gap-3 rounded-xl px-2 py-2 text-left transition hover:bg-[var(--gold-soft)]">
+                      <span className="font-display w-12 shrink-0 text-base text-[var(--text)]">{time}</span>
+                      <span className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-[var(--gold-soft)] text-xs font-bold text-[var(--gold)]">{b.patientName.slice(0, 2).toUpperCase()}</span>
+                      <span className="min-w-0 flex-1">
+                        <span className="block truncate text-sm font-semibold text-[var(--text)]">{b.patientName}</span>
+                        <span className="block truncate text-xs text-[var(--text-muted)]">{[b.locationName || (b.modality === "teleconsulta" ? "Teleconsulta" : null), b.careReason === "acompanhamento" ? "Retorno" : "Primeira consulta"].filter(Boolean).join(" • ")}</span>
                       </span>
-                    </span>
-                    <span className="whitespace-nowrap text-xs font-semibold" style={{ color: st.color }}>{st.emoji} {st.label}</span>
-                  </button>
-                </li>
-              );
-            })}
-          </ul>
-        )}
-      </section>
+                      <span className="shrink-0 whitespace-nowrap rounded-full px-2 py-0.5 text-[11px] font-semibold" style={{ color: st.color, background: `${st.color}1a` }}>{st.label}</span>
+                    </button>
+                  </li>
+                );
+              })}
+            </ul>
+          )}
+          <Link href="/medicos/agenda" className="btn-gold mt-4 block text-center">+ Nova consulta</Link>
+        </section>
+
+        {/* Coluna 2 — Alertas + Exames recentes */}
+        <div className="flex flex-col gap-6">
+          <section id="alertas" className="panel !p-5 scroll-mt-4">
+            <div className="flex items-center justify-between gap-3">
+              <h2 className="font-display text-xl text-[var(--text)]">Alertas clínicos</h2>
+              {dash && dash.counts.alertas > 0 && <span className="text-sm font-semibold text-[var(--gold)]">{dash.counts.alertas}</span>}
+            </div>
+            {(!dash || dash.alertas.length === 0) ? (
+              <p className="mt-3 text-sm text-[var(--text-muted)]">✓ Nenhum alerta ativo.</p>
+            ) : (
+              <ul className="mt-3 space-y-2">
+                {dash.alertas.slice(0, 5).map((a, i) => (
+                  <li key={i}>
+                    <button type="button" onClick={() => setQuickKey(a.patientKey)} className="flex w-full items-center justify-between gap-2 rounded-xl border-l-4 bg-[var(--bg)] px-3 py-2 text-left transition hover:bg-[var(--gold-soft)]" style={{ borderColor: a.level === "urgente" ? "#e86761" : "#e08a2e" }}>
+                      <span className="min-w-0">
+                        <span className="block truncate text-sm font-semibold text-[var(--text)]">{a.patientName}</span>
+                        <span className="block truncate text-xs text-[var(--text-muted)]">{a.text}</span>
+                      </span>
+                      <span className="whitespace-nowrap rounded-full px-2 py-0.5 text-[11px] font-semibold" style={{ color: a.level === "urgente" ? "#e86761" : "#e08a2e", background: a.level === "urgente" ? "#fdecea" : "#fff3e2" }}>{a.level === "urgente" ? "Urgente" : "Importante"}</span>
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </section>
+
+          <section id="novos-exames" className="panel !p-5 scroll-mt-4">
+            <div className="flex items-center justify-between gap-3">
+              <h2 className="font-display text-xl text-[var(--text)]">Exames mais recentes</h2>
+              <Link href="/medicos/pacientes" className="text-sm font-semibold text-[var(--gold)]">Ver todos</Link>
+            </div>
+            {(!dash || dash.recentExams.length === 0) ? (
+              <p className="mt-3 text-sm text-[var(--text-muted)]">Nenhum exame novo nos últimos 7 dias.</p>
+            ) : (
+              <ul className="mt-3 space-y-1">
+                {dash.recentExams.slice(0, 5).map((e, i) => (
+                  <li key={i}>
+                    <button type="button" onClick={() => setQuickKey(e.patientKey)} className="flex w-full items-center justify-between gap-2 rounded-xl px-2 py-2 text-left transition hover:bg-[var(--gold-soft)]">
+                      <span className="min-w-0">
+                        <span className="block truncate text-sm font-semibold text-[var(--text)]">{e.patientName}</span>
+                        <span className="block truncate text-xs text-[var(--text-muted)]">{e.testLabel} · {new Date(e.measuredAt).toLocaleDateString("pt-BR")}</span>
+                      </span>
+                      <span className="whitespace-nowrap rounded-full bg-[#e8f1fb] px-2 py-0.5 text-[11px] font-semibold text-[#2b7fb0]">Novo</span>
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </section>
+        </div>
+
+        {/* Coluna 3 — Retornos pendentes + Pendências */}
+        <div className="flex flex-col gap-6">
+          <section className="panel !p-5">
+            <div className="flex items-center justify-between gap-3">
+              <h2 className="font-display text-xl text-[var(--text)]">Retornos pendentes</h2>
+              <Link href="/medicos/retornos" className="text-sm font-semibold text-[var(--gold)]">Ver todos</Link>
+            </div>
+            <div className="mt-3 -mx-1 flex gap-1 overflow-x-auto px-1">
+              {([["atrasados", "Atrasados"], ["prox7", "Próx. 7"], ["prox30", "Próx. 30"], ["agendados", "Agendados"]] as [keyof ReturnsBuckets, string][]).map(([id, label]) => (
+                <button key={id} type="button" onClick={() => setRetTab(id)} className={`whitespace-nowrap rounded-full px-2.5 py-1 text-xs font-semibold transition ${retTab === id ? "bg-[var(--gold)] text-white" : "border border-[var(--border)] text-[var(--text-soft)]"}`}>
+                  {label}{returns ? <span className={retTab === id ? "text-white/80" : "text-[var(--text-muted)]"}> {returns[id].length}</span> : null}
+                </button>
+              ))}
+            </div>
+            {!returns ? (
+              <p className="mt-3 text-sm text-[var(--text-muted)]">Carregando…</p>
+            ) : returns[retTab].length === 0 ? (
+              <p className="mt-3 text-sm text-[var(--text-muted)]">{retTab === "atrasados" ? "✓ Nenhum retorno atrasado." : "Nenhum retorno neste período."}</p>
+            ) : (
+              <ul className="mt-3 space-y-2">
+                {returns[retTab].slice(0, 4).map((it) => (
+                  <li key={it.id} className="rounded-xl border border-[var(--border)] p-2.5">
+                    <div className="flex items-center gap-2">
+                      <span className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-[var(--gold-soft)] text-xs font-bold text-[var(--gold)]">{it.patientName.slice(0, 2).toUpperCase()}</span>
+                      <div className="min-w-0 flex-1">
+                        <p className="truncate text-sm font-semibold text-[var(--text)]">{it.patientName}</p>
+                        <p className="text-xs text-[var(--text-muted)]">Previsto: {fmtDay(it.dueAt)}{it.eff === "atrasado" ? ` · ${it.daysLate}d atrasado` : ""}{it.eff === "agendado" && it.nextConsultation ? ` · consulta ${fmtDay(it.nextConsultation)}` : ""}</p>
+                      </div>
+                    </div>
+                    <div className="mt-2 flex gap-2">
+                      <Link href={`/medicos/paciente/${encodeURIComponent(it.patientKey)}`} className="rounded-lg bg-[var(--gold-soft)] px-2 py-1 text-xs font-semibold text-[var(--gold)]">Abrir</Link>
+                      <Link href="/medicos/retornos" className="rounded-lg border border-[var(--border)] px-2 py-1 text-xs font-semibold text-[var(--text-soft)]">Central</Link>
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </section>
+
+          <section id="pendencias" className="panel !p-5 scroll-mt-4">
+            <h2 className="font-display text-xl text-[var(--text)]">Pendências</h2>
+            {(!dash || dash.pendencias.length === 0) ? (
+              <p className="mt-3 text-sm text-[var(--text-muted)]">✓ Nada pendente.</p>
+            ) : (
+              <ul className="mt-3 space-y-2">
+                {dash.pendencias.map((p, i) => (
+                  <li key={i}>
+                    <Link href={p.href} className="flex items-center justify-between gap-3 rounded-xl border border-[var(--border)] px-3 py-2.5 transition hover:border-[var(--border-gold)]">
+                      <span className="text-sm text-[var(--text)]"><strong>{p.count}</strong> {p.label}</span>
+                      <span className="text-[var(--gold)]">›</span>
+                    </Link>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </section>
+        </div>
+      </div>
+
+      {/* Resumo da clínica + Ações rápidas */}
+      <div className="mt-6 grid gap-6 lg:grid-cols-3">
+        <section className="panel !p-5 lg:col-span-2">
+          <div className="flex items-center justify-between gap-3">
+            <h2 className="font-display text-xl text-[var(--text)]">Resumo da clínica</h2>
+            <span className="text-xs text-[var(--text-muted)]">Últimos 7 dias</span>
+          </div>
+          {!dash ? (
+            <p className="mt-3 text-sm text-[var(--text-muted)]">Carregando…</p>
+          ) : (
+            <div className="mt-4 grid gap-4 sm:grid-cols-3">
+              {([
+                ["Consultas realizadas", dash.resumo.consultasRealizadas, (v: number) => String(v)],
+                ["Novos pacientes", dash.resumo.novosPacientes, (v: number) => String(v)],
+                ["Retornos realizados", dash.resumo.retornosRealizados, (v: number) => String(v)],
+                ["Exames importados", dash.resumo.examesImportados, (v: number) => String(v)],
+                ["LME emitidas", dash.resumo.lmeEmitidas, (v: number) => String(v)],
+                ["Receita líquida", dash.resumo.receitaCents, (v: number) => formatBRL(v)],
+              ] as [string, Pair, (v: number) => string][]).map(([label, pair, fmt]) => (
+                <div key={label}>
+                  <p className="text-xs text-[var(--text-muted)]">{label}</p>
+                  <p className="font-display text-2xl text-[var(--text)]">{fmt(pair.v)}</p>
+                  <DeltaTag delta={pair.delta} />
+                </div>
+              ))}
+            </div>
+          )}
+        </section>
+
+        <section className="panel !p-5">
+          <h2 className="font-display text-xl text-[var(--text)]">Ações rápidas</h2>
+          <div className="mt-4 grid grid-cols-2 gap-3">
+            <Link href="/medicos/pacientes?novo=1" className="flex flex-col items-center gap-1 rounded-2xl border border-[var(--border)] py-4 transition hover:border-[var(--border-gold)] hover:bg-[var(--gold-soft)]">
+              <span className="text-xl">🧑‍⚕️</span><span className="text-xs font-semibold text-[var(--text-soft)]">Novo paciente</span>
+            </Link>
+            <Link href="/medicos/pacientes" className="flex flex-col items-center gap-1 rounded-2xl border border-[var(--border)] py-4 transition hover:border-[var(--border-gold)] hover:bg-[var(--gold-soft)]">
+              <span className="text-xl">🧪</span><span className="text-xs font-semibold text-[var(--text-soft)]">Novo exame</span>
+            </Link>
+            <Link href="/medicos/lme" className="flex flex-col items-center gap-1 rounded-2xl border border-[var(--border)] py-4 transition hover:border-[var(--border-gold)] hover:bg-[var(--gold-soft)]">
+              <span className="text-xl">📄</span><span className="text-xs font-semibold text-[var(--text-soft)]">LME / CEAF</span>
+            </Link>
+            <Link href="/medicos/documentos" className="flex flex-col items-center gap-1 rounded-2xl border border-[var(--border)] py-4 transition hover:border-[var(--border-gold)] hover:bg-[var(--gold-soft)]">
+              <span className="text-xl">℞</span><span className="text-xs font-semibold text-[var(--text-soft)]">Nova receita</span>
+            </Link>
+          </div>
+        </section>
+      </div>
 
       <section id="agenda" className="panel mt-8 scroll-mt-4">
-        <h2 className="font-display text-2xl text-[var(--text)]">Agenda semanal</h2>
-        <p className="mt-2 text-sm text-[var(--text-muted)]">
-          Marque os dias em que você atende. Pacientes só veem esses horários.
-        </p>
-        <p className="mt-2 rounded-xl border border-[var(--border-gold)] bg-[var(--gold-soft)] px-3 py-2 text-sm text-[var(--text-soft)]">
-          Quer atender em <strong>clínicas diferentes por dia</strong> (ex.: Clínica Mãe na segunda de manhã) ou por teleconsulta?{" "}
-          <Link href="/medicos/agenda/configurar" className="font-semibold text-[var(--gold)] underline">Abrir a Agenda por local/horário</Link>.
-        </p>
-        <div className="mt-4 flex flex-wrap gap-2">
-          {DAYS.map((d) => {
-            const on = weekly.some((w) => w.dayOfWeek === d.id);
-            return (
-              <button
-                key={d.id}
-                type="button"
-                onClick={() => toggleDay(d.id)}
-                className={`rounded-full px-4 py-2 text-sm font-bold ${
-                  on ? "bg-[var(--gold)] text-white" : "border border-[var(--border)]"
-                }`}
-              >
-                {d.label}
-              </button>
-            );
-          })}
-        </div>
-        <label className="mt-6 block">
-          <span className="mb-2 block text-xs font-bold uppercase tracking-wider text-[var(--gold-light)]">
-            Valor da consulta (R$)
-          </span>
-          <input
-            type="number"
-            className="input-field max-w-xs"
-            value={price}
-            onChange={(e) => setPrice(e.target.value)}
-          />
-        </label>
-        <label className="mt-4 block">
-          <span className="mb-2 block text-xs font-bold uppercase tracking-wider text-[var(--gold-light)]">
-            Bio pública
-          </span>
-          <textarea
-            className="input-field min-h-[90px]"
-            value={bio}
-            onChange={(e) => setBio(e.target.value)}
-          />
-        </label>
-        <div className="mt-5 rounded-2xl border border-[var(--border)] bg-[var(--bg-soft,#f8fafc)] p-4">
-          <p className="text-xs font-bold uppercase tracking-wider text-[var(--gold)]">WhatsApp e comunicação</p>
-          <p className="mt-1 text-xs text-[var(--text-muted)]">
-            Você escolhe os números. O número de <strong>notificações é só seu</strong> — nunca é mostrado ao paciente.
-          </p>
-          <label className="mt-3 block">
-            <span className="mb-1 block text-xs font-semibold text-[var(--text-muted)]">
-              Número para receber notificações (privado — só você vê)
-            </span>
-            <input
-              className="input-field"
-              inputMode="tel"
-              value={notifyWa}
-              onChange={(e) => setNotifyWa(e.target.value)}
-              placeholder="Seu WhatsApp pessoal/profissional"
-            />
-          </label>
-          <label className="mt-3 block">
-            <span className="mb-1 block text-xs font-semibold text-[var(--text-muted)]">
-              Número para contato dos pacientes (pode ser secretária/clínica)
-            </span>
-            <input
-              className="input-field"
-              inputMode="tel"
-              value={patientWa}
-              onChange={(e) => setPatientWa(e.target.value)}
-              placeholder="Número que o paciente pode usar"
-            />
-          </label>
-          <label className="mt-3 flex items-center gap-2 text-sm text-[var(--text-soft)]">
-            <input type="checkbox" checked={allowPatientWa} onChange={(e) => setAllowPatientWa(e.target.checked)} />
-            Permitir que pacientes falem sobre a consulta pelo WhatsApp (usa o número de contato acima)
-          </label>
-          <p className="mt-3 text-xs font-semibold text-[var(--text-muted)]">Quero receber notificações de:</p>
-          <div className="mt-1 flex flex-col gap-1.5">
-            <label className="flex items-center gap-2 text-sm text-[var(--text-soft)]">
-              <input type="checkbox" checked={notifNew} onChange={(e) => setNotifNew(e.target.checked)} /> Novas consultas
-            </label>
-            <label className="flex items-center gap-2 text-sm text-[var(--text-soft)]">
-              <input type="checkbox" checked={notifPay} onChange={(e) => setNotifPay(e.target.checked)} /> Pagamentos
-            </label>
-            <label className="flex items-center gap-2 text-sm text-[var(--text-soft)]">
-              <input type="checkbox" checked={notifResched} onChange={(e) => setNotifResched(e.target.checked)} /> Remarcações e cancelamentos
-            </label>
-          </div>
-        </div>
-        <button type="button" className="btn-gold mt-5" onClick={saveProfile}>
-          Salvar
-        </button>
-        {message && <p className="mt-3 text-sm text-[var(--green)]">{message}</p>}
-      </section>
-
-      <section id="pacientes" className="mt-8 scroll-mt-4">
         <div className="flex flex-wrap items-center justify-between gap-3">
-          <h2 className="font-display text-2xl text-[var(--text)]">Meus pacientes</h2>
-          <button type="button" className="btn-gold" onClick={() => setShowCreate((v) => !v)}>
-            {showCreate ? "Fechar" : "+ Criar paciente"}
-          </button>
-        </div>
-        <p className="mt-2 text-sm text-[var(--text-muted)]">
-          Crie o paciente e abra o prontuário para registrar evolução, emitir
-          receitas, pedidos de exame e relatórios.
-        </p>
-
-        {showCreate && <CreatePatient onCreated={reloadPatients} />}
-
-        <div className="mt-4">
-          <input
-            className="input-field"
-            placeholder="Buscar paciente por nome ou cidade…"
-            value={patientFilter}
-            onChange={(e) => setPatientFilter(e.target.value)}
-          />
-        </div>
-
-        <div className="mt-4 grid gap-3">
-          {patients.length === 0 && (
-            <p className="text-[var(--text-muted)]">Nenhum paciente ainda.</p>
-          )}
-          {patients
-            .filter((p) => {
-              const q = patientFilter.toLowerCase().trim();
-              if (!q) return true;
-              return `${p.name} ${p.city}`.toLowerCase().includes(q);
-            })
-            .map((p) => (
-            <div
-              key={p.key}
-              className="panel flex items-center justify-between gap-2 transition hover:border-[var(--border-gold)]"
-            >
-              <Link
-                href={`/medicos/paciente/${encodeURIComponent(p.key)}`}
-                className="flex min-w-0 flex-1 items-center gap-3"
-              >
-                <span className="grid h-11 w-11 shrink-0 place-items-center rounded-2xl bg-[var(--gold-soft)] text-sm font-extrabold text-[var(--gold)]">
-                  {p.name.slice(0, 2).toUpperCase()}
-                </span>
-                <div className="min-w-0">
-                  <p className="truncate font-semibold text-[var(--text)]">{p.name}</p>
-                  <p className="text-sm text-[var(--text-muted)]">
-                    {[
-                      p.city,
-                      p.isCreated ? "Cadastrado por você" : `${p.total} consulta${p.total > 1 ? "s" : ""}`,
-                    ]
-                      .filter(Boolean)
-                      .join(" · ")}
-                  </p>
-                </div>
-              </Link>
-              <div className="flex shrink-0 items-center gap-1">
-                {p.isCreated && (
-                  <button
-                    type="button"
-                    onClick={() => removePatient(p.key, p.name)}
-                    className="grid h-9 w-9 place-items-center rounded-full text-[var(--text-muted)] transition hover:bg-[var(--danger)]/10 hover:text-[var(--danger)]"
-                    title="Excluir paciente"
-                    aria-label={`Excluir paciente ${p.name}`}
-                  >
-                    <TrashIcon />
-                  </button>
-                )}
-                <Link
-                  href={`/medicos/paciente/${encodeURIComponent(p.key)}`}
-                  className="grid h-9 w-9 place-items-center text-xl text-[var(--gold)]"
-                  aria-label={`Abrir prontuário de ${p.name}`}
-                >
-                  ›
-                </Link>
-              </div>
-            </div>
-          ))}
+          <div>
+            <h2 className="font-display text-xl text-[var(--text)]">Agenda e atendimento</h2>
+            <p className="mt-1 text-sm text-[var(--text-muted)]">Dias de atendimento, valor da consulta, bio e WhatsApp ficam em Configurações.</p>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            <Link href="/medicos/configuracoes#agenda" className="btn-ghost text-sm">Configurar agenda e valores</Link>
+            <Link href="/medicos/agenda/configurar" className="btn-ghost text-sm">Clínicas e horários</Link>
+          </div>
         </div>
       </section>
 
@@ -585,7 +530,9 @@ export default function PainelMedicoPage() {
                           ? "Aguardando pagamento"
                           : b.status === "cancelled"
                             ? "Cancelada"
-                            : b.status}
+                            : b.status === "completed"
+                              ? "Concluída"
+                              : b.status}
                 </p>
               </div>
               <div className="flex flex-wrap items-center gap-2">
@@ -760,207 +707,3 @@ function FinanceCard() {
   );
 }
 
-function CreatePatient({ onCreated }: { onCreated: () => void }) {
-  const [form, setForm] = useState({
-    name: "",
-    cpf: "",
-    cns: "",
-    motherName: "",
-    birthdate: "",
-    sex: "",
-    phone: "",
-    email: "",
-    address: "",
-    emergencyContact: "",
-    guardianName: "",
-    guardianPhone: "",
-    insurance: "",
-    allergies: "",
-    diseases: "",
-    medications: "",
-    notes: "",
-  });
-  const [saving, setSaving] = useState(false);
-  const [error, setError] = useState("");
-  const [done, setDone] = useState<{ name: string; phone: string; email: string; cpf: string } | null>(null);
-  const [copyMsg, setCopyMsg] = useState("");
-  const [dup, setDup] = useState<{ id: string; name: string; cpf?: string | null } | null>(null);
-  function copyText(text: string, label: string) { navigator.clipboard?.writeText(text); setCopyMsg(`${label} copiado!`); setTimeout(() => setCopyMsg(""), 1500); }
-
-  function set<K extends keyof typeof form>(k: K, v: string) {
-    setForm((f) => ({ ...f, [k]: v }));
-    setError("");
-  }
-
-  async function submit(force = false) {
-    if (!form.name.trim()) { setError("Informe o nome completo."); return; }
-    if (!form.birthdate) { setError("Informe a data de nascimento (necessária para calcular idade e TFGe)."); return; }
-    if (!form.sex) { setError("Selecione o sexo (feminino ou masculino)."); return; }
-    if (!form.address.trim()) { setError("Informe a cidade / região."); return; }
-    setSaving(true);
-    setError("");
-    if (force) setDup(null);
-    try {
-      const res = await fetch("/api/doctor/patients", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ ...form, force }),
-      });
-      const data = await res.json();
-      if (data.possibleDuplicate) {
-        setDup(data.existing);
-        setSaving(false);
-        return;
-      }
-      if (res.status === 409) {
-        throw new Error(
-          data.existingIsMine
-            ? "Você já tem um paciente com este CPF."
-            : "Já existe um paciente com este CPF em outro médico. Solicite vínculo."
-        );
-      }
-      if (!res.ok) throw new Error(data.error || "Não foi possível criar.");
-      setDone({ name: form.name, phone: form.phone, email: form.email, cpf: form.cpf });
-      if (data.linkedExisting) {
-        setError(""); // sucesso: conta do paciente vinculada ao prontuário deste médico
-      }
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "Erro inesperado.");
-    } finally {
-      setSaving(false);
-    }
-  }
-
-  function accessMessage() {
-    return patientAccessMessage(done!.name);
-  }
-  function inviteLink() {
-    const digits = done!.phone.replace(/\D/g, "");
-    const withCountry = digits.length >= 12 ? digits : `55${digits}`;
-    return `https://wa.me/${withCountry}?text=${encodeURIComponent(accessMessage())}`;
-  }
-
-  if (done) {
-    const hasPhone = done.phone.replace(/\D/g, "").length >= 10;
-    return (
-      <div className="panel mt-4 space-y-3">
-        <p className="text-sm font-semibold text-[var(--green)]">Paciente cadastrado ✅</p>
-        {done.cpf.replace(/\D/g, "") ? (
-          <div className="rounded-2xl border border-[var(--border-gold)] bg-[var(--gold-soft)] p-3 text-sm text-[var(--text-soft)]">
-            <p className="font-semibold text-[var(--text)]">Acesso do paciente</p>
-            <p>Site: <b>{SITE_URL}/</b></p>
-            <p>Login (CPF): <b>{done.cpf.replace(/\D/g, "")}</b></p>
-            <p>Senha provisória: <b>123456</b> — no 1º acesso o paciente cria uma senha pessoal.</p>
-          </div>
-        ) : (
-          <p className="rounded-2xl border border-[var(--border)] bg-[var(--bg)] p-3 text-xs text-[var(--text-muted)]">
-            Sem CPF cadastrado: informe o CPF para habilitar o login do paciente com senha.
-          </p>
-        )}
-
-        {/* Mensagem pronta de primeiro acesso */}
-        <div className="rounded-2xl border border-[var(--border)] p-3">
-          <p className="text-xs font-bold uppercase tracking-wider text-[var(--gold)]">Mensagem de acesso</p>
-          <pre className="mt-1 whitespace-pre-wrap font-sans text-xs text-[var(--text-soft)]">{accessMessage()}</pre>
-        </div>
-
-        {!hasPhone && (
-          <p className="rounded-xl border border-[var(--warn)]/30 bg-[#fff7e8] px-3 py-2 text-xs text-[#7a5a12]">
-            Sem telefone com WhatsApp — não é possível enviar automaticamente. Use “Copiar mensagem” e envie ao paciente.
-          </p>
-        )}
-
-        <div className="flex flex-wrap gap-2">
-          {hasPhone && (
-            <>
-              <a href={inviteLink()} target="_blank" rel="noopener noreferrer" className="btn-gold">Enviar acesso pelo WhatsApp</a>
-              <a href={inviteLink()} target="_blank" rel="noopener noreferrer" className="btn-ghost">Reenviar acesso</a>
-            </>
-          )}
-          <button type="button" className="btn-ghost" onClick={() => copyText(accessMessage(), "Mensagem")}>Copiar mensagem</button>
-          <button type="button" className="btn-ghost" onClick={() => copyText(`${SITE_URL}/`, "Link")}>Copiar link</button>
-        </div>
-        {copyMsg && <p className="text-xs font-semibold text-[var(--green,#0d9488)]">{copyMsg}</p>}
-
-        {/* QR Code permanente — somente a URL oficial */}
-        <div className="pt-1">
-          <p className="text-xs font-bold uppercase tracking-wider text-[var(--gold)]">QR Code de acesso</p>
-          <p className="mb-2 text-xs text-[var(--text-muted)]">Aponte a câmera para {SITE_URL}/ — sem dados pessoais.</p>
-          <QrCode value={`${SITE_URL}/`} />
-        </div>
-
-        <div className="flex flex-wrap gap-2 pt-1">
-          <button type="button" className="btn-ghost" onClick={() => { setDone(null); setForm((f) => ({ ...f, name: "", cpf: "", phone: "", email: "" })); }}>Cadastrar outro</button>
-          <button type="button" className="btn-ghost" onClick={onCreated}>Concluir</button>
-        </div>
-      </div>
-    );
-  }
-
-  const fields = [
-    ["name", "Nome completo", "text", true],
-    ["cpf", "CPF", "text", false],
-    ["birthdate", "Data de nascimento", "date", true],
-    ["sex", "Sexo", "select", true],
-    ["address", "Cidade / região", "text", true],
-    ["cns", "CNS (Cartão SUS)", "text", false],
-    ["motherName", "Nome da mãe", "text", false],
-    ["phone", "Telefone", "tel", false],
-    ["email", "E-mail", "email", false],
-    ["emergencyContact", "Contato de emergência", "text", false],
-    ["guardianName", "Responsável legal (se menor)", "text", false],
-    ["guardianPhone", "Telefone do responsável", "tel", false],
-    ["insurance", "Convênio / particular", "text", false],
-  ] as const;
-
-  const longFields = [
-    ["allergies", "Alergias"],
-    ["diseases", "Doenças"],
-    ["medications", "Medicamentos em uso"],
-    ["notes", "Observações"],
-  ] as const;
-
-  return (
-    <div className="panel mt-4 space-y-3">
-      <p className="text-xs font-bold uppercase tracking-wider text-[var(--gold)]">Novo paciente</p>
-      <p className="text-xs text-[var(--text-muted)]">Campos com <span className="text-[var(--danger)]">*</span> são obrigatórios (idade, sexo e cidade são necessários para cálculos e pesquisa).</p>
-      <div className="grid gap-3 sm:grid-cols-2">
-        {fields.map(([k, label, type, required]) => (
-          <label key={k} className="block">
-            <span className="mb-1 block text-xs font-semibold text-[var(--text-muted)]">{label}{required ? <span className="text-[var(--danger)]"> *</span> : null}</span>
-            {type === "select" ? (
-              <select className="input-field" value={form[k]} onChange={(e) => set(k, e.target.value)}>
-                <option value="">Selecione</option>
-                <option value="feminino">Feminino</option>
-                <option value="masculino">Masculino</option>
-              </select>
-            ) : (
-              <input type={type} className="input-field" value={form[k]} onChange={(e) => set(k, e.target.value)} />
-            )}
-          </label>
-        ))}
-      </div>
-      {longFields.map(([k, label]) => (
-        <label key={k} className="block">
-          <span className="mb-1 block text-xs font-semibold text-[var(--text-muted)]">{label}</span>
-          <textarea className="input-field min-h-[60px]" value={form[k]} onChange={(e) => set(k, e.target.value)} />
-        </label>
-      ))}
-      {dup && (
-        <div className="rounded-xl border border-[var(--warn)]/40 bg-[#fff7e8] p-3 text-sm text-[#7a5a12]">
-          <p className="font-semibold">Já existe um paciente com nome parecido: {dup.name}{dup.cpf ? ` (CPF ${dup.cpf})` : ""}.</p>
-          <p className="mt-1">É a mesma pessoa? Abra o cadastro existente. Se for outra pessoa, crie mesmo assim.</p>
-          <div className="mt-2 flex flex-wrap gap-2">
-            <Link href={`/medicos/paciente/${encodeURIComponent(dup.id)}`} className="btn-ghost text-sm">Abrir existente</Link>
-            <button type="button" className="btn-gold text-sm" onClick={() => submit(true)} disabled={saving}>Criar mesmo assim</button>
-            <button type="button" className="btn-ghost text-sm" onClick={() => setDup(null)}>Cancelar</button>
-          </div>
-        </div>
-      )}
-      {error && <p className="text-sm text-[var(--danger)]">{error}</p>}
-      <button type="button" className="btn-gold" onClick={() => submit(false)} disabled={saving || !form.name.trim()}>
-        {saving ? "Criando…" : "Criar paciente e abrir prontuário"}
-      </button>
-    </div>
-  );
-}

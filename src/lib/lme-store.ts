@@ -37,6 +37,9 @@ export interface LmeRequest {
   responsibleName?: string | null;
   medications: LmeMedication[];
   status: string;
+  /** Preenchido quando o médico marca a LME como assinada (à mão ou digital). */
+  signedAt?: string | null;
+  signedBy?: string | null;
   createdAt: string;
 }
 
@@ -93,6 +96,8 @@ function mapRow(r: Record<string, unknown>): LmeRequest {
     responsibleName: (r.responsible_name as string | null) ?? null,
     medications: Array.isArray(r.medications) ? (r.medications as LmeMedication[]) : [],
     status: String(r.status || "rascunho"),
+    signedAt: r.signed_at ? new Date(String(r.signed_at)).toISOString() : null,
+    signedBy: (r.signed_by as string | null) ?? null,
     createdAt: new Date(String(r.created_at)).toISOString(),
   };
 }
@@ -166,6 +171,49 @@ export async function listLme(email: string): Promise<LmeRequest[]> {
   }
   const list = await readFile();
   return list.filter((l) => l.patientEmail === normalized).sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+}
+
+/** Lista as LME de um médico (para "LME para assinar" e a lista de LME). */
+export async function listLmeByDoctor(doctorId: string): Promise<LmeRequest[]> {
+  if (active()) {
+    const supabase = getSupabaseAdmin()!;
+    const { data, error } = await supabase
+      .from("lme_requests")
+      .select("*")
+      .eq("doctor_id", doctorId)
+      .order("created_at", { ascending: false });
+    if (error) {
+      if (isMissing(error)) tableMissing = true;
+      else throw error;
+    } else {
+      return (data ?? []).map((r) => mapRow(r as Record<string, unknown>));
+    }
+  }
+  const list = await readFile();
+  return list.filter((l) => l.doctorId === doctorId).sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+}
+
+/** Marca uma LME como assinada (ou desfaz). Retorna a LME atualizada ou null. */
+export async function markLmeSigned(id: string, signed: boolean, by?: string | null): Promise<LmeRequest | null> {
+  const signedAt = signed ? new Date().toISOString() : null;
+  const signedBy = signed ? (by ?? null) : null;
+  const status = signed ? "assinada" : "rascunho";
+  if (active()) {
+    const supabase = getSupabaseAdmin()!;
+    const { error } = await supabase.from("lme_requests").update({ signed_at: signedAt, signed_by: signedBy, status }).eq("id", id);
+    if (error) {
+      if (isMissing(error)) tableMissing = true;
+      else throw error;
+    } else {
+      return getLme(id);
+    }
+  }
+  const list = await readFile();
+  const idx = list.findIndex((l) => l.id === id);
+  if (idx < 0) return null;
+  list[idx] = { ...list[idx], signedAt, signedBy, status };
+  await writeFile(list);
+  return list[idx];
 }
 
 export async function getLme(id: string): Promise<LmeRequest | null> {

@@ -995,3 +995,43 @@ create index if not exists nutrition_appointments_patient_idx on public.nutritio
 alter table public.nutrition_appointments enable row level security;
 grant all privileges on table public.nutrition_appointments to service_role;
 
+
+-- ============================================================
+-- Care: atendimento em andamento + retornos programados (Painel premium)
+-- ============================================================
+create table if not exists public.care_attendance (
+  id uuid primary key,
+  doctor_id uuid not null,
+  patient_key text not null,
+  patient_name text,
+  booking_id text,
+  started_at timestamptz not null default now(),
+  finished_at timestamptz,
+  created_at timestamptz not null default now()
+);
+create index if not exists care_attendance_doctor_idx on public.care_attendance (doctor_id);
+create index if not exists care_attendance_open_idx on public.care_attendance (doctor_id, patient_key) where finished_at is null;
+alter table public.care_attendance enable row level security;
+grant all privileges on table public.care_attendance to service_role;
+
+create table if not exists public.care_returns (
+  id uuid primary key,
+  doctor_id uuid not null,
+  patient_key text not null,
+  patient_name text,
+  due_at timestamptz not null,
+  interval_label text,
+  source_booking_id text,
+  status text not null default 'open',
+  created_by text,
+  created_at timestamptz not null default now()
+);
+create index if not exists care_returns_doctor_idx on public.care_returns (doctor_id);
+create index if not exists care_returns_open_idx on public.care_returns (doctor_id, patient_key) where status = 'open';
+alter table public.care_returns enable row level security;
+grant all privileges on table public.care_returns to service_role;
+
+-- LME: rastreio de assinatura ("LME para assinar")
+alter table public.lme_requests add column if not exists signed_at timestamptz;
+alter table public.lme_requests add column if not exists signed_by text;
+create index if not exists lme_requests_doctor_idx on public.lme_requests (doctor_id, created_at desc);

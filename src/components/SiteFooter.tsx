@@ -6,7 +6,14 @@ import { COMPANY } from "@/lib/company";
 
 export function SiteFooter() {
   const pathname = usePathname();
-  if (pathname?.startsWith("/paciente") || pathname?.startsWith("/admin") || pathname?.startsWith("/atendente")) {
+  if (
+    pathname?.startsWith("/paciente") ||
+    pathname?.startsWith("/admin") ||
+    pathname?.startsWith("/atendente") ||
+    pathname?.startsWith("/medicos") ||
+    pathname?.startsWith("/nutricionista") ||
+    pathname?.startsWith("/consulta")
+  ) {
     return null;
   }
 
