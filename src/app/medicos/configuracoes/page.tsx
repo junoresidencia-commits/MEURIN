@@ -8,6 +8,7 @@ import { DoctorMobileNav } from "@/components/DoctorMobileNav";
 import { disablePush, enablePush, isSubscribed, notificationPermission, pushSupported } from "@/lib/push-client";
 import { DoctorPaymentSettings } from "@/components/DoctorPaymentSettings";
 import { DoctorPixSettings } from "@/components/DoctorPixSettings";
+import { LogoUploader } from "@/components/LogoUploader";
 import type { WeeklySlot } from "@/lib/types";
 
 const DAYS = [
@@ -50,6 +51,8 @@ export default function ConfiguracoesMedicoPage() {
   const [cns, setCns] = useState("");
   const [name, setName] = useState("");
   const [cpf, setCpf] = useState("");
+  const [specialty, setSpecialty] = useState("");
+  const [rqe, setRqe] = useState("");
   const [signatureUrl, setSignatureUrl] = useState("");
   const [weekly, setWeekly] = useState<WeeklySlot[]>([]);
   const [price, setPrice] = useState("350");
@@ -78,6 +81,8 @@ export default function ConfiguracoesMedicoPage() {
       setCns(d.cns || "");
       setName(d.name || "");
       setCpf(d.cpf || "");
+      setSpecialty(d.specialty || "");
+      setRqe(d.rqe || "");
       setSignatureUrl(d.signatureUrl || "");
       setWeekly(d.weeklyAvailability || []);
       setPrice(String((d.consultationPriceCents ?? 35000) / 100));
@@ -114,6 +119,8 @@ export default function ConfiguracoesMedicoPage() {
         cns,
         name,
         cpf,
+        specialty,
+        rqe,
         signatureUrl,
         weeklyAvailability: weekly,
         consultationPriceCents: Math.round(Number(String(price).replace(",", ".")) * 100),
@@ -213,6 +220,14 @@ export default function ConfiguracoesMedicoPage() {
                 <input className="input-field" value={name} onChange={(e) => setName(e.target.value)} placeholder="Ex.: Juno Damacena Barbosa" />
               </label>
               <label className="block">
+                <span className="mb-1 block text-xs font-semibold text-[var(--text-muted)]">Especialidade</span>
+                <input className="input-field" value={specialty} onChange={(e) => setSpecialty(e.target.value)} placeholder="Ex.: Nefrologista" />
+              </label>
+              <label className="block">
+                <span className="mb-1 block text-xs font-semibold text-[var(--text-muted)]">RQE (opcional)</span>
+                <input className="input-field" value={rqe} onChange={(e) => setRqe(e.target.value)} inputMode="numeric" placeholder="Ex.: 25129" />
+              </label>
+              <label className="block">
                 <span className="mb-1 block text-xs font-semibold text-[var(--text-muted)]">CPF do médico</span>
                 <input className="input-field" value={cpf} onChange={(e) => setCpf(e.target.value)} inputMode="numeric" placeholder="000.000.000-00" />
               </label>
@@ -221,6 +236,7 @@ export default function ConfiguracoesMedicoPage() {
                 <input className="input-field" value={cns} onChange={(e) => setCns(e.target.value)} inputMode="numeric" placeholder="000 0000 0000 0000" />
               </label>
             </div>
+            <p className="mt-2 text-xs text-[var(--text-muted)]">Nome, especialidade e RQE aparecem nas receitas, relatórios e na LME.</p>
             <div className="mt-4 border-t border-[var(--border)] pt-4">
               <p className="text-sm font-semibold text-[var(--text)]">Minha assinatura</p>
               <p className="mt-1 text-sm text-[var(--text-muted)]">
@@ -258,6 +274,10 @@ export default function ConfiguracoesMedicoPage() {
               </div>
             </div>
           </section>
+
+          <div className="mt-6">
+            <LogoUploader />
+          </div>
 
           <section id="recebimentos" className="mt-6 scroll-mt-4">
             <h2 className="font-display text-xl text-[var(--text)]">Recebimentos</h2>

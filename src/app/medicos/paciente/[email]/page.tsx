@@ -14,6 +14,7 @@ import { parseLabGroups, type ParsedLabGroup } from "@/lib/lab-parser";
 import { TemplatePicker } from "@/components/TemplatePicker";
 import { AttendanceControl } from "@/components/AttendanceControl";
 import { ReturnPicker } from "@/components/ReturnPicker";
+import { PatientCnsField } from "@/components/PatientCnsField";
 import { guessSexFromName } from "@/lib/sex-guess";
 
 type Lab = { id: string; testKey: string; value: number; unit?: string | null; measuredAt: string };
@@ -36,7 +37,7 @@ type HomeRecord = {
 };
 type FoodLog = { id: string; food: string; meal?: string | null; quantity?: string | null; loggedAt: string };
 type Booking = { id: string; status: string; slotStart: string; careReason: string; meetingRoomId: string };
-type Patient = { email: string; name: string; city: string; phone: string; birthdate?: string | null; sex?: string | null };
+type Patient = { email: string; name: string; city: string; phone: string; birthdate?: string | null; sex?: string | null; cns?: string | null; cpf?: string | null; motherName?: string | null };
 type Note = {
   id: string;
   doctorName: string;
@@ -542,6 +543,9 @@ export default function ProntuarioPage() {
 
         {tab === "lme" && (
           <div className="space-y-4">
+            {/* CNS do paciente — necessário para a LME/CEAF (avisa quando falta) */}
+            <PatientCnsField emailParam={emailParam} cns={patient?.cns} onSaved={load} />
+
             {/* Kit CEAF — checklist */}
             <div className="panel">
               <p className="text-xs font-bold uppercase tracking-wider text-[var(--gold)]">Kit CEAF — checklist</p>

@@ -70,6 +70,8 @@ export async function PUT(req: Request) {
   const cns = body.cns !== undefined ? String(body.cns || "").replace(/\s+/g, "") || undefined : undefined;
   const name = body.name !== undefined ? String(body.name || "").trim() : undefined;
   const cpf = body.cpf !== undefined ? String(body.cpf || "").replace(/\D/g, "") || undefined : undefined;
+  const specialty = body.specialty !== undefined ? String(body.specialty || "").trim() : undefined;
+  const rqe = body.rqe !== undefined ? String(body.rqe || "").trim() || undefined : undefined;
   // Assinatura visual: aceita dataURL (define) ou "" (remove). Limite defensivo de tamanho.
   const signatureUrl =
     body.signatureUrl !== undefined
@@ -145,6 +147,8 @@ export async function PUT(req: Request) {
             cns: cns !== undefined ? cns : d.cns,
             name: name && name.length > 1 ? name : d.name,
             cpf: cpf !== undefined ? cpf : d.cpf,
+            specialty: specialty && specialty.length > 1 ? specialty : d.specialty,
+            rqe: rqe !== undefined ? rqe : d.rqe,
             signatureUrl: signatureUrl !== undefined ? (signatureUrl || undefined) : d.signatureUrl,
             availabilityPeriods: availabilityPeriods !== undefined ? availabilityPeriods : d.availabilityPeriods,
           }
