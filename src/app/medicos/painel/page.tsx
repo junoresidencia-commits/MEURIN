@@ -731,6 +731,7 @@ function CreatePatient({ onCreated }: { onCreated: () => void }) {
   const [error, setError] = useState("");
   const [done, setDone] = useState<{ name: string; phone: string; email: string; cpf: string } | null>(null);
   const [copyMsg, setCopyMsg] = useState("");
+  const [dup, setDup] = useState<{ id: string; name: string; cpf?: string | null } | null>(null);
   function copyText(text: string, label: string) { navigator.clipboard?.writeText(text); setCopyMsg(`${label} copiado!`); setTimeout(() => setCopyMsg(""), 1500); }
 
   function set<K extends keyof typeof form>(k: K, v: string) {
@@ -738,20 +739,26 @@ function CreatePatient({ onCreated }: { onCreated: () => void }) {
     setError("");
   }
 
-  async function submit() {
+  async function submit(force = false) {
     if (!form.name.trim()) { setError("Informe o nome completo."); return; }
     if (!form.birthdate) { setError("Informe a data de nascimento (necessária para calcular idade e TFGe)."); return; }
     if (!form.sex) { setError("Selecione o sexo (feminino ou masculino)."); return; }
     if (!form.address.trim()) { setError("Informe a cidade / região."); return; }
     setSaving(true);
     setError("");
+    if (force) setDup(null);
     try {
       const res = await fetch("/api/doctor/patients", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(form),
+        body: JSON.stringify({ ...form, force }),
       });
       const data = await res.json();
+      if (data.possibleDuplicate) {
+        setDup(data.existing);
+        setSaving(false);
+        return;
+      }
       if (res.status === 409) {
         throw new Error(
           data.existingIsMine
@@ -886,8 +893,19 @@ function CreatePatient({ onCreated }: { onCreated: () => void }) {
           <textarea className="input-field min-h-[60px]" value={form[k]} onChange={(e) => set(k, e.target.value)} />
         </label>
       ))}
+      {dup && (
+        <div className="rounded-xl border border-[var(--warn)]/40 bg-[#fff7e8] p-3 text-sm text-[#7a5a12]">
+          <p className="font-semibold">Já existe um paciente com nome parecido: {dup.name}{dup.cpf ? ` (CPF ${dup.cpf})` : ""}.</p>
+          <p className="mt-1">É a mesma pessoa? Abra o cadastro existente. Se for outra pessoa, crie mesmo assim.</p>
+          <div className="mt-2 flex flex-wrap gap-2">
+            <Link href={`/medicos/paciente/${encodeURIComponent(dup.id)}`} className="btn-ghost text-sm">Abrir existente</Link>
+            <button type="button" className="btn-gold text-sm" onClick={() => submit(true)} disabled={saving}>Criar mesmo assim</button>
+            <button type="button" className="btn-ghost text-sm" onClick={() => setDup(null)}>Cancelar</button>
+          </div>
+        </div>
+      )}
       {error && <p className="text-sm text-[var(--danger)]">{error}</p>}
-      <button type="button" className="btn-gold" onClick={submit} disabled={saving || !form.name.trim()}>
+      <button type="button" className="btn-gold" onClick={() => submit(false)} disabled={saving || !form.name.trim()}>
         {saving ? "Criando…" : "Criar paciente e abrir prontuário"}
       </button>
     </div>

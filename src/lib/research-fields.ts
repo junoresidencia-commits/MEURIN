@@ -38,6 +38,9 @@ function profileVar(): ResearchVar[] {
     if (f.kind === "text") {
       return { key: f.key, label: f.label, type: "text" as const, group: f.group, source: "informado" as const, description: f.description };
     }
+    if (f.kind === "select") {
+      return { key: f.key, label: f.label, type: "cat" as const, group: f.group, source: "estruturado" as const, options: f.options || [], description: f.description };
+    }
     // tri
     return { key: f.key, label: f.label, type: "cat" as const, group: f.group, source: "estruturado" as const, options: TRI_OPTS };
   });

@@ -33,7 +33,17 @@ export const ETIOLOGIAS: { value: string; label: string }[] = [
   { value: "outras", label: "Outras" },
 ];
 
-export type FieldKind = "tri" | "enumG" | "enumA" | "etiologia" | "etiologiaMulti" | "number" | "text";
+export type FieldKind = "tri" | "enumG" | "enumA" | "etiologia" | "etiologiaMulti" | "number" | "text" | "select";
+
+// Achados de fita de urina (dipstick) — em cruzes.
+export const FITA_OPTIONS: { value: string; label: string }[] = [
+  { value: "negativo", label: "Negativo" },
+  { value: "tracos", label: "Traços" },
+  { value: "1+", label: "1+" },
+  { value: "2+", label: "2+" },
+  { value: "3+", label: "3+" },
+  { value: "4+", label: "4+" },
+];
 
 export interface FieldDef {
   key: string;
@@ -41,6 +51,8 @@ export interface FieldDef {
   kind: FieldKind;
   group: string;
   unit?: string;
+  /** Opções para kind "select". */
+  options?: { value: string; label: string }[];
   /** Descrição para o Dicionário de dados. */
   description?: string;
 }
@@ -77,11 +89,15 @@ export const CLINICAL_FIELDS: FieldDef[] = [
   { key: "transplante", label: "Transplante renal", kind: "tri", group: "Doença renal" },
   { key: "hemodialise", label: "Hemodiálise", kind: "tri", group: "Doença renal" },
   { key: "dialise_peritoneal", label: "Diálise peritoneal", kind: "tri", group: "Doença renal" },
+  // Achados de urina (fita) — muitas vezes só constam no resumo/laudo.
+  { key: "proteinuria_fita", label: "Proteinúria (fita)", kind: "select", group: "Exame de urina (fita)", options: FITA_OPTIONS, description: "Achado de proteinúria na fita reagente (em cruzes)." },
+  { key: "hematuria_fita", label: "Hematúria (fita)", kind: "select", group: "Exame de urina (fita)", options: FITA_OPTIONS, description: "Achado de hematúria na fita reagente (em cruzes)." },
+  { key: "glicosuria_fita", label: "Glicosúria (fita)", kind: "select", group: "Exame de urina (fita)", options: FITA_OPTIONS, description: "Achado de glicose na urina na fita reagente (em cruzes)." },
   // Resumo clínico (texto livre) — usado como variável "resumo" na pesquisa.
   { key: "resumo", label: "Resumo clínico", kind: "text", group: "Resumo", description: "Resumo da situação clínica do paciente (texto livre). Usado como variável de pesquisa 'resumo'." },
 ];
 
-export const CLINICAL_GROUPS = ["Dados gerais", "Comorbidades", "Doença renal", "Resumo"];
+export const CLINICAL_GROUPS = ["Dados gerais", "Comorbidades", "Doença renal", "Exame de urina (fita)", "Resumo"];
 
 export function etiologiaLabel(v?: string | null): string {
   return ETIOLOGIAS.find((e) => e.value === v)?.label || v || "";
