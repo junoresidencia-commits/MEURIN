@@ -84,9 +84,9 @@ export async function GET() {
 
   // Pendências acionáveis (sem inventar — só o que existe).
   const pendencias: { label: string; count: number; href: string }[] = [];
-  if (retornosPendentes > 0) pendencias.push({ label: "Retornos para organizar", count: retornosPendentes, href: "/medicos/retornos" });
+  if (retornosPendentes > 0) pendencias.push({ label: retornosPendentes === 1 ? "Retorno para organizar" : "Retornos para organizar", count: retornosPendentes, href: "/medicos/retornos" });
   if (lmeParaAssinar > 0) pendencias.push({ label: "LME para assinar", count: lmeParaAssinar, href: "/medicos/lme" });
-  if (aguardando > 0) pendencias.push({ label: "Consultas aguardando confirmação", count: aguardando, href: "/medicos/agenda" });
+  if (aguardando > 0) pendencias.push({ label: aguardando === 1 ? "Consulta aguardando confirmação" : "Consultas aguardando confirmação", count: aguardando, href: "/medicos/agenda" });
 
   return NextResponse.json({
     counts: {
