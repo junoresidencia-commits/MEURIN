@@ -9,6 +9,8 @@ import { DoctorSidebar } from "@/components/DoctorSidebar";
 import { DoctorMobileNav } from "@/components/DoctorMobileNav";
 import { NotificationBell } from "@/components/NotificationBell";
 import { EnableNotifications } from "@/components/EnableNotifications";
+import { GlobalPatientSearch } from "@/components/GlobalPatientSearch";
+import { PatientQuickSheet } from "@/components/PatientQuickSheet";
 import { QrCode } from "@/components/QrCode";
 import { SITE_URL, patientAccessMessage } from "@/lib/site";
 
@@ -20,6 +22,15 @@ const DAYS = [
   { id: 5, label: "Sex" },
   { id: 6, label: "Sáb" },
 ];
+
+function consultaStatus(b: Booking): { emoji: string; label: string; color: string } {
+  if (b.stage === "proposto_novo_horario") return { emoji: "🟠", label: "Novo horário proposto", color: "#e08a2e" };
+  if (b.status === "confirmed") return { emoji: "🟢", label: "Confirmado", color: "#1a9a78" };
+  if (b.status === "completed") return { emoji: "🟢", label: "Concluído", color: "#1a9a78" };
+  if (b.status === "paid") return { emoji: "🟡", label: "Aguardando confirmação", color: "#e4a32e" };
+  if (b.status === "pending_payment") return { emoji: "🟡", label: "Aguardando pagamento", color: "#e4a32e" };
+  return { emoji: "🔵", label: "Agendado", color: "#2b7fb0" };
+}
 
 type PatientRow = {
   key: string;
@@ -48,6 +59,7 @@ export default function PainelMedicoPage() {
   const [notifNew, setNotifNew] = useState(true);
   const [notifPay, setNotifPay] = useState(true);
   const [notifResched, setNotifResched] = useState(true);
+  const [quickKey, setQuickKey] = useState<string | null>(null);
 
   useEffect(() => {
     Promise.all([
@@ -223,7 +235,10 @@ export default function PainelMedicoPage() {
   }
 
   const todayStr = new Date().toDateString();
-  const agendaHoje = bookings.filter((b) => new Date(b.slotStart).toDateString() === todayStr).length;
+  const todaysBookings = bookings
+    .filter((b) => new Date(b.slotStart).toDateString() === todayStr && b.status !== "cancelled")
+    .sort((a, b) => a.slotStart.localeCompare(b.slotStart));
+  const agendaHoje = todaysBookings.length;
 
   return (
     <div className="flex min-h-screen bg-[var(--bg)]">
@@ -232,18 +247,18 @@ export default function PainelMedicoPage() {
         <div className="mx-auto max-w-5xl px-5 pb-28 pt-8 lg:pb-8">
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div>
-          <p className="text-sm font-semibold text-[var(--gold)]">Painel do médico</p>
-          <h1 className="font-display mt-1 text-3xl font-extrabold text-[var(--text)]">
-            Bem-vindo, {doctor.name} 👋
+          <h1 className="font-display text-2xl font-extrabold text-[var(--text)] sm:text-3xl">
+            Olá, {(() => { const p = doctor.name.trim().split(/\s+/); return /^dr/i.test(p[0]) ? p.slice(0, 2).join(" ") : p[0]; })()} 👋
           </h1>
-          <p className="mt-1 text-sm text-[var(--text-muted)]">
-            {doctor.crm} · {doctor.specialty} — resumo da sua clínica hoje
-          </p>
+          <p className="mt-1 text-sm text-[var(--text-muted)]">Resumo da sua clínica hoje</p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
           <NotificationBell />
           <Link href="/medicos/mais" className="btn-ghost">Mais</Link>
         </div>
+      </div>
+      <div className="mt-4">
+        <GlobalPatientSearch />
       </div>
       <EnableNotifications />
 
@@ -271,6 +286,43 @@ export default function PainelMedicoPage() {
           <p className="font-display text-3xl text-[var(--gold)]">{formatBRL(earnings)}</p>
         </a>
       </div>
+
+      <section className="panel mt-8">
+        <div className="flex items-center justify-between gap-3">
+          <h2 className="font-display text-xl text-[var(--text)]">Consultas de hoje</h2>
+          <Link href="/medicos/agenda" className="text-sm font-semibold text-[var(--gold)]">Ver agenda completa →</Link>
+        </div>
+        {todaysBookings.length === 0 ? (
+          <p className="mt-3 text-sm text-[var(--text-muted)]">Nenhuma consulta agendada para hoje.</p>
+        ) : (
+          <ul className="mt-3 divide-y divide-[var(--border)]">
+            {todaysBookings.slice(0, 8).map((b) => {
+              const st = consultaStatus(b);
+              const time = new Date(b.slotStart).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
+              return (
+                <li key={b.id}>
+                  <button
+                    type="button"
+                    onClick={() => setQuickKey(b.patientEmail)}
+                    className="flex w-full items-center justify-between gap-3 py-2.5 text-left transition hover:bg-[var(--gold-soft)]"
+                  >
+                    <span className="flex items-center gap-3">
+                      <span className="font-display text-lg text-[var(--text)]">{time}</span>
+                      <span>
+                        <span className="block text-sm font-semibold text-[var(--text)]">{b.patientName}</span>
+                        <span className="block text-xs text-[var(--text-muted)]">
+                          {[b.locationName || (b.modality === "teleconsulta" ? "Teleconsulta" : null), b.careReason === "acompanhamento" ? "Retorno" : "Consulta"].filter(Boolean).join(" • ")}
+                        </span>
+                      </span>
+                    </span>
+                    <span className="whitespace-nowrap text-xs font-semibold" style={{ color: st.color }}>{st.emoji} {st.label}</span>
+                  </button>
+                </li>
+              );
+            })}
+          </ul>
+        )}
+      </section>
 
       <section id="agenda" className="panel mt-8 scroll-mt-4">
         <h2 className="font-display text-2xl text-[var(--text)]">Agenda semanal</h2>
@@ -575,6 +627,7 @@ export default function PainelMedicoPage() {
         </div>
       </div>
       <DoctorMobileNav />
+      {quickKey && <PatientQuickSheet patientKey={quickKey} onClose={() => setQuickKey(null)} />}
     </div>
   );
 }
@@ -731,6 +784,7 @@ function CreatePatient({ onCreated }: { onCreated: () => void }) {
   const [error, setError] = useState("");
   const [done, setDone] = useState<{ name: string; phone: string; email: string; cpf: string } | null>(null);
   const [copyMsg, setCopyMsg] = useState("");
+  const [dup, setDup] = useState<{ id: string; name: string; cpf?: string | null } | null>(null);
   function copyText(text: string, label: string) { navigator.clipboard?.writeText(text); setCopyMsg(`${label} copiado!`); setTimeout(() => setCopyMsg(""), 1500); }
 
   function set<K extends keyof typeof form>(k: K, v: string) {
@@ -738,20 +792,26 @@ function CreatePatient({ onCreated }: { onCreated: () => void }) {
     setError("");
   }
 
-  async function submit() {
+  async function submit(force = false) {
     if (!form.name.trim()) { setError("Informe o nome completo."); return; }
     if (!form.birthdate) { setError("Informe a data de nascimento (necessária para calcular idade e TFGe)."); return; }
     if (!form.sex) { setError("Selecione o sexo (feminino ou masculino)."); return; }
     if (!form.address.trim()) { setError("Informe a cidade / região."); return; }
     setSaving(true);
     setError("");
+    if (force) setDup(null);
     try {
       const res = await fetch("/api/doctor/patients", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(form),
+        body: JSON.stringify({ ...form, force }),
       });
       const data = await res.json();
+      if (data.possibleDuplicate) {
+        setDup(data.existing);
+        setSaving(false);
+        return;
+      }
       if (res.status === 409) {
         throw new Error(
           data.existingIsMine
@@ -886,8 +946,19 @@ function CreatePatient({ onCreated }: { onCreated: () => void }) {
           <textarea className="input-field min-h-[60px]" value={form[k]} onChange={(e) => set(k, e.target.value)} />
         </label>
       ))}
+      {dup && (
+        <div className="rounded-xl border border-[var(--warn)]/40 bg-[#fff7e8] p-3 text-sm text-[#7a5a12]">
+          <p className="font-semibold">Já existe um paciente com nome parecido: {dup.name}{dup.cpf ? ` (CPF ${dup.cpf})` : ""}.</p>
+          <p className="mt-1">É a mesma pessoa? Abra o cadastro existente. Se for outra pessoa, crie mesmo assim.</p>
+          <div className="mt-2 flex flex-wrap gap-2">
+            <Link href={`/medicos/paciente/${encodeURIComponent(dup.id)}`} className="btn-ghost text-sm">Abrir existente</Link>
+            <button type="button" className="btn-gold text-sm" onClick={() => submit(true)} disabled={saving}>Criar mesmo assim</button>
+            <button type="button" className="btn-ghost text-sm" onClick={() => setDup(null)}>Cancelar</button>
+          </div>
+        </div>
+      )}
       {error && <p className="text-sm text-[var(--danger)]">{error}</p>}
-      <button type="button" className="btn-gold" onClick={submit} disabled={saving || !form.name.trim()}>
+      <button type="button" className="btn-gold" onClick={() => submit(false)} disabled={saving || !form.name.trim()}>
         {saving ? "Criando…" : "Criar paciente e abrir prontuário"}
       </button>
     </div>

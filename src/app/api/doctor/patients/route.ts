@@ -125,6 +125,29 @@ export async function POST(req: Request) {
     }
   }
 
+  // Alerta de possível duplicado por nome parecido (quando não travou por CPF).
+  // Não bloqueia: o médico pode confirmar que é a mesma pessoa (abrir) ou criar mesmo assim (force).
+  if (b.force !== true) {
+    const norm = (s: string) => s.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/\s+/g, " ").trim();
+    const n = norm(name);
+    const tokens = n.split(" ");
+    const first = tokens[0];
+    const last = tokens[tokens.length - 1];
+    const mine = await listPatientsByDoctor(doctorId);
+    const dup = mine.find((p) => {
+      const pn = norm(p.name);
+      if (pn === n) return true;
+      const pt = pn.split(" ");
+      return tokens.length > 1 && pt.length > 1 && pt[0] === first && pt[pt.length - 1] === last;
+    });
+    if (dup) {
+      return NextResponse.json(
+        { possibleDuplicate: true, existing: { id: dup.id, name: dup.name, cpf: dup.cpf || null } },
+        { status: 200 }
+      );
+    }
+  }
+
   const patient = await createPatient({
     doctorId,
     name,

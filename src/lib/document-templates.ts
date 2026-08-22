@@ -267,6 +267,39 @@ export const BUILTIN_TEMPLATES: DocTemplate[] = [
     "Exames relevantes: ",
     "Agradeço a avaliação e retorno.",
   ].join("\n")),
+  // Relatórios-base por doença (CEAF) — critérios comuns, edite antes de assinar.
+  L("rel_anemia_drc", "Base — Anemia na DRC (CEAF)", [
+    "RELATÓRIO MÉDICO",
+    "Paciente: {{paciente}}",
+    "Diagnóstico: Doença renal crônica, estágio ____ (CID N18.__), com anemia associada.",
+    "",
+    "Critérios (CEAF/SESAB):",
+    "- Hemoglobina: ____ g/dL",
+    "- Ferritina: ____ ng/mL (alvo conforme protocolo)",
+    "- Saturação de transferrina (IST): ____ %",
+    "",
+    "Conduta: solicito ____ (alfaepoetina / sacarato de hidróxido férrico) conforme PCDT.",
+    "Declaro que o(a) paciente preenche os critérios do protocolo.",
+  ].join("\n")),
+  L("rel_dmo_drc", "Base — DMO-DRC (CEAF)", [
+    "RELATÓRIO MÉDICO",
+    "Paciente: {{paciente}}",
+    "Diagnóstico: Distúrbio mineral e ósseo da DRC (CID ____).",
+    "",
+    "Critérios/exames: PTH ____ pg/mL; Cálcio ____; Fósforo ____; Vitamina D ____.",
+    "Conduta: solicito ____ conforme PCDT/SESAB.",
+    "Declaro que o(a) paciente preenche os critérios do protocolo.",
+  ].join("\n")),
+  L("rel_sindrome_nefrotica", "Base — Síndrome nefrótica (CEAF)", [
+    "RELATÓRIO MÉDICO",
+    "Paciente: {{paciente}}",
+    "Diagnóstico: Síndrome nefrótica (CID N04.__).",
+    "",
+    "Quadro: proteinúria ____ g/24h, albumina ____ g/dL, edema.",
+    "Tratamento prévio: ____.",
+    "Conduta: solicito ____ conforme PCDT.",
+    "Declaro que o(a) paciente preenche os critérios do protocolo.",
+  ].join("\n")),
 ];
 
 export function builtinByType(type: TemplateType): DocTemplate[] {

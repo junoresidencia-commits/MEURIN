@@ -115,6 +115,19 @@ export function ClinicalProfileEditor({ emailParam }: { emailParam: string }) {
                   </label>
                 );
               }
+              if (f.kind === "select") {
+                return (
+                  <label key={f.key} className="block">
+                    <span className="mb-1 block text-xs font-semibold text-[var(--text-muted)]">{f.label}{srcOf(f.key)}</span>
+                    <select className="input-field" value={String(data[f.key] ?? "")} onChange={(e) => set(f.key, e.target.value)}>
+                      <option value="">Desconhecido</option>
+                      {(f.options || []).map((o) => (
+                        <option key={o.value} value={o.value}>{o.label}</option>
+                      ))}
+                    </select>
+                  </label>
+                );
+              }
               if (f.kind === "text") {
                 const isResumo = f.key === "resumo";
                 return (
