@@ -1,7 +1,7 @@
 import "server-only";
 import { getDoctorSessionId } from "./auth";
 import { readDb } from "./store";
-import { clinicalKey, getPatient } from "./patients-store";
+import { clinicalKey, getPatient, findByEmailAny } from "./patients-store";
 
 export interface PatientAccess {
   allowed: boolean;
@@ -54,27 +54,50 @@ export async function resolvePatientAccess(param: string): Promise<PatientAccess
   if (decoded.includes("@")) {
     const email = decoded.toLowerCase();
     const bks = bookingsForEmail(email);
-    if (bks.length === 0) {
-      return { allowed: false, key: email, name: "", city: "", phone: "", email, birthdate: null, sex: null, cpf: null, cns: null, motherName: null, isCreated: false, bookings: [] };
+    if (bks.length > 0) {
+      const latest = db.bookings
+        .filter((b) => b.doctorId === doctorId && b.patientEmail.toLowerCase() === email)
+        .sort((a, b) => b.slotStart.localeCompare(a.slotStart))[0];
+      // Se o médico também tem o CADASTRO desse e-mail, enriquece com os dados do prontuário.
+      const owned = await findByEmailAny(email);
+      const mine = owned && owned.doctorId === doctorId ? owned : null;
+      return {
+        allowed: true,
+        key: email,
+        name: mine?.name || latest.patientName,
+        city: mine?.address || latest.patientCity,
+        phone: mine?.phone || latest.patientPhone,
+        email,
+        birthdate: mine?.birthdate || null,
+        sex: mine?.sex || null,
+        cpf: mine?.cpf || null,
+        cns: mine?.cns || null,
+        motherName: mine?.motherName || null,
+        isCreated: Boolean(mine),
+        bookings: bks,
+      };
     }
-    const latest = db.bookings
-      .filter((b) => b.doctorId === doctorId && b.patientEmail.toLowerCase() === email)
-      .sort((a, b) => b.slotStart.localeCompare(a.slotStart))[0];
-    return {
-      allowed: true,
-      key: email,
-      name: latest.patientName,
-      city: latest.patientCity,
-      phone: latest.patientPhone,
-      email,
-      birthdate: null,
-      sex: null,
-      cpf: null,
-      cns: null,
-      motherName: null,
-      isCreated: false,
-      bookings: bks,
-    };
+    // Sem consultas: autoriza se o médico é DONO de um cadastro com esse e-mail
+    // (paciente criado pelo médico que ainda não tem agendamento).
+    const owned = await findByEmailAny(email);
+    if (owned && owned.doctorId === doctorId) {
+      return {
+        allowed: true,
+        key: clinicalKey(owned),
+        name: owned.name,
+        city: owned.address || "",
+        phone: owned.phone || "",
+        email,
+        birthdate: owned.birthdate || null,
+        sex: owned.sex || null,
+        cpf: owned.cpf || null,
+        cns: owned.cns || null,
+        motherName: owned.motherName || null,
+        isCreated: true,
+        bookings: [],
+      };
+    }
+    return { allowed: false, key: email, name: "", city: "", phone: "", email, birthdate: null, sex: null, cpf: null, cns: null, motherName: null, isCreated: false, bookings: [] };
   }
 
   // Paciente criado pelo médico (param = id ou chave clínica "pid:<id>")
