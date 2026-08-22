@@ -604,6 +604,52 @@ export async function getLabResults(email: string): Promise<LabResult[]> {
     .sort((a, b) => a.measuredAt.localeCompare(b.measuredAt));
 }
 
+/**
+ * Últimos exames (por testKey) de vários pacientes em UMA consulta.
+ * Retorna Map<patientKey, Map<testKey, {value, unit, measuredAt}>>.
+ * Evita N requisições ao montar listas/painéis.
+ */
+export async function getLatestLabsByEmails(
+  emails: string[]
+): Promise<Map<string, Map<string, { value: number; unit: string | null; measuredAt: string }>>> {
+  const keys = Array.from(new Set(emails.map((e) => e.toLowerCase().trim()).filter(Boolean)));
+  const out = new Map<string, Map<string, { value: number; unit: string | null; measuredAt: string }>>();
+  if (keys.length === 0) return out;
+
+  const ingest = (rows: LabResult[]) => {
+    // rows em ordem crescente por data → o último de cada (email,testKey) é o mais recente.
+    for (const r of rows) {
+      const pm = out.get(r.patientEmail) || new Map();
+      pm.set(r.testKey, { value: r.value, unit: r.unit || null, measuredAt: r.measuredAt });
+      out.set(r.patientEmail, pm);
+    }
+  };
+
+  if (supabaseActive("lab_results")) {
+    const supabase = getSupabaseAdmin()!;
+    const { data, error } = await supabase
+      .from("lab_results")
+      .select("*")
+      .in("patient_email", keys)
+      .order("measured_at", { ascending: true });
+    if (error) {
+      if (isMissingTableError(error)) missingTables.add("lab_results");
+      else throw error;
+    } else {
+      ingest((data ?? []).map((r) => mapLabRow(r as Record<string, unknown>)));
+      return out;
+    }
+  }
+  const data = await readFile();
+  const keySet = new Set(keys);
+  ingest(
+    data.labs
+      .filter((l) => keySet.has(l.patientEmail))
+      .sort((a, b) => a.measuredAt.localeCompare(b.measuredAt))
+  );
+  return out;
+}
+
 /** Remove um resultado de exame (usado ao "atualizar" um exame já existente na mesma data). */
 export async function deleteLabResult(id: string): Promise<void> {
   if (supabaseActive("lab_results")) {
