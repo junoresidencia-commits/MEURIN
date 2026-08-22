@@ -27,8 +27,16 @@ export function SiteHeader() {
   const pathname = usePathname();
   const [open, setOpen] = useState(false);
 
-  // Área do paciente e administração têm cara de app próprio, sem o header de marketing.
-  if (pathname?.startsWith("/paciente") || pathname?.startsWith("/admin") || pathname?.startsWith("/atendente")) {
+  // Áreas logadas (médico, paciente, nutricionista, atendente, admin, consulta) têm
+  // cara de app próprio, com navegação própria — sem o header de marketing.
+  if (
+    pathname?.startsWith("/paciente") ||
+    pathname?.startsWith("/admin") ||
+    pathname?.startsWith("/atendente") ||
+    pathname?.startsWith("/medicos") ||
+    pathname?.startsWith("/nutricionista") ||
+    pathname?.startsWith("/consulta")
+  ) {
     return null;
   }
 

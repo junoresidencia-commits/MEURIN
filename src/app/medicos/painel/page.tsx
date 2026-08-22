@@ -18,8 +18,8 @@ function consultaStatus(b: Booking): { emoji: string; label: string; color: stri
   if (b.stage === "proposto_novo_horario") return { emoji: "🟠", label: "Novo horário proposto", color: "#e08a2e" };
   if (b.status === "confirmed") return { emoji: "🟢", label: "Confirmado", color: "#1a9a78" };
   if (b.status === "completed") return { emoji: "🟢", label: "Concluído", color: "#1a9a78" };
-  if (b.status === "paid") return { emoji: "🟡", label: "Aguardando confirmação", color: "#e4a32e" };
-  if (b.status === "pending_payment") return { emoji: "🟡", label: "Aguardando pagamento", color: "#e4a32e" };
+  if (b.status === "paid") return { emoji: "🟡", label: "Aguardando", color: "#e4a32e" };
+  if (b.status === "pending_payment") return { emoji: "🟡", label: "Aguardando pgto.", color: "#e4a32e" };
   return { emoji: "🔵", label: "Agendado", color: "#2b7fb0" };
 }
 
@@ -292,7 +292,7 @@ export default function PainelMedicoPage() {
                         <span className="block truncate text-sm font-semibold text-[var(--text)]">{b.patientName}</span>
                         <span className="block truncate text-xs text-[var(--text-muted)]">{[b.locationName || (b.modality === "teleconsulta" ? "Teleconsulta" : null), b.careReason === "acompanhamento" ? "Retorno" : "Primeira consulta"].filter(Boolean).join(" • ")}</span>
                       </span>
-                      <span className="whitespace-nowrap rounded-full px-2 py-0.5 text-[11px] font-semibold" style={{ color: st.color, background: `${st.color}1a` }}>{st.label}</span>
+                      <span className="shrink-0 whitespace-nowrap rounded-full px-2 py-0.5 text-[11px] font-semibold" style={{ color: st.color, background: `${st.color}1a` }}>{st.label}</span>
                     </button>
                   </li>
                 );
