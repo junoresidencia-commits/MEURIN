@@ -1,8 +1,8 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { Suspense, useCallback, useEffect, useState } from "react";
 import Link from "next/link";
-import { useParams } from "next/navigation";
+import { useParams, useSearchParams } from "next/navigation";
 import { TemplatePicker } from "@/components/TemplatePicker";
 import type { TemplateType } from "@/lib/document-templates";
 
@@ -23,15 +23,18 @@ const TYPES = [
   { id: "laudo", label: "Laudo" },
 ];
 
-export default function ComporDocumentoPage() {
+function ComporDocumentoInner() {
   const params = useParams<{ email: string }>();
   const patientParam = decodeURIComponent(params.email);
+  const sp = useSearchParams();
+  const prefType = sp.get("type");
+  const initialType = prefType && TYPES.some((t) => t.id === prefType) ? prefType : "livre";
 
   const [letterheads, setLetterheads] = useState<Letterhead[]>([]);
   const [letterheadId, setLetterheadId] = useState<string>("");
-  const [type, setType] = useState("livre");
-  const [title, setTitle] = useState("");
-  const [content, setContent] = useState("");
+  const [type, setType] = useState(initialType);
+  const [title, setTitle] = useState(sp.get("title") || "");
+  const [content, setContent] = useState(sp.get("body") || "");
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState("");
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
@@ -189,5 +192,13 @@ export default function ComporDocumentoPage() {
         </div>
       </div>
     </div>
+  );
+}
+
+export default function ComporDocumentoPage() {
+  return (
+    <Suspense fallback={<div className="mx-auto max-w-6xl px-5 py-20 text-[var(--text-muted)]">Carregando…</div>}>
+      <ComporDocumentoInner />
+    </Suspense>
   );
 }

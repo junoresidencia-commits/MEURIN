@@ -1,11 +1,14 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import Link from "next/link";
 import { useParams } from "next/navigation";
+import { receitaFromLme, relatorioFromLme, composerHref } from "@/lib/complementary-docs";
 
 type Med = { name: string; presentation?: string; monthlyQty?: string };
 type Lme = {
   id: string;
+  patientEmail?: string | null;
   doctorName?: string | null;
   doctorCrm?: string | null;
   doctorCns?: string | null;
@@ -36,6 +39,7 @@ export default function LmePage() {
   const [lme, setLme] = useState<Lme | null>(null);
   const [error, setError] = useState("");
   const [copied, setCopied] = useState(false);
+  const [isDoctor, setIsDoctor] = useState(false);
   const frameRef = useRef<HTMLIFrameElement>(null);
 
   const officialUrl = `/api/lme/${id}/oficial`;
@@ -68,6 +72,8 @@ export default function LmePage() {
         setLme(data.lme);
       })
       .catch((e) => setError(e.message));
+    // Só o médico logado vê os "Documentos complementares" (ações do médico).
+    fetch("/api/auth").then((r) => r.json()).then((d) => setIsDoctor(Boolean(d?.doctor))).catch(() => {});
   }, [id]);
 
   if (error) return <div className="mx-auto max-w-2xl px-5 py-20 text-[var(--danger)]">{error}</div>;
@@ -147,6 +153,24 @@ export default function LmePage() {
       <div className="overflow-hidden rounded-[16px] border border-[var(--border)] bg-white shadow-[var(--shadow)] print:hidden">
         <iframe ref={frameRef} title="LME oficial preenchida" src={officialUrl} className="h-[82vh] w-full" />
       </div>
+
+      {/* Documentos complementares — só para o médico logado. NÃO altera a LME. */}
+      {isDoctor && lme.patientEmail && (
+        <section className="mt-6 rounded-[16px] border border-[var(--border-gold)] bg-[var(--gold-soft)] p-5 shadow-[var(--shadow)] print:hidden">
+          <h2 className="font-display text-lg font-extrabold text-[var(--text)]">Documentos complementares</h2>
+          <p className="mt-1 text-sm text-[var(--text-soft)]">
+            A partir desta LME, gere a <b>Receita</b> e o <b>Relatório médico</b> já pré-preenchidos com os dados do paciente e do medicamento.
+            Você edita o texto, confere no papel timbrado e assina — a LME oficial <b>não é alterada</b>.
+          </p>
+          <div className="mt-3 flex flex-wrap gap-2">
+            <Link href={composerHref(lme.patientEmail, receitaFromLme(lme), lme.id)} className="btn-gold">Gerar Receita</Link>
+            <Link href={composerHref(lme.patientEmail, relatorioFromLme(lme), lme.id)} className="btn-ghost">Gerar Relatório Médico</Link>
+          </div>
+          <p className="mt-2 text-xs text-[var(--text-muted)]">
+            Dica: no compositor você pode salvar prescrições/relatórios como <b>modelo</b> e reutilizar nas próximas LME (padrões do médico).
+          </p>
+        </section>
+      )}
 
       {/* Assinatura digital (ICP-Brasil / gov.br) */}
       <section className="mt-6 rounded-[16px] border border-[var(--border)] bg-white p-5 shadow-[var(--shadow)] print:hidden">
