@@ -1030,3 +1030,8 @@ create index if not exists care_returns_doctor_idx on public.care_returns (docto
 create index if not exists care_returns_open_idx on public.care_returns (doctor_id, patient_key) where status = 'open';
 alter table public.care_returns enable row level security;
 grant all privileges on table public.care_returns to service_role;
+
+-- LME: rastreio de assinatura ("LME para assinar")
+alter table public.lme_requests add column if not exists signed_at timestamptz;
+alter table public.lme_requests add column if not exists signed_by text;
+create index if not exists lme_requests_doctor_idx on public.lme_requests (doctor_id, created_at desc);

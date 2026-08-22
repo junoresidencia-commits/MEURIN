@@ -24,9 +24,10 @@ function consultaStatus(b: Booking): { emoji: string; label: string; color: stri
 }
 
 type Dashboard = {
-  counts: { pacientes: number; consultasHoje: number; retornosPendentes: number; novosExames: number; aguardando: number; pendencias: number };
+  counts: { pacientes: number; consultasHoje: number; retornosPendentes: number; novosExames: number; alertas: number; lmeParaAssinar: number; aguardando: number; pendencias: number };
   continuar: { patientKey: string; patientName: string; startedAt: string } | null;
   recentExams: { patientKey: string; patientName: string; testKey: string; testLabel: string; value: number; unit: string | null; measuredAt: string; createdAt: string }[];
+  alertas: { patientKey: string; patientName: string; level: "urgente" | "importante"; text: string; date: string }[];
   pendencias: { label: string; count: number; href: string }[];
 };
 
@@ -237,6 +238,11 @@ export default function PainelMedicoPage() {
           <p className="mt-3 text-xs uppercase tracking-wider text-[var(--text-muted)]">Retornos pendentes</p>
           <p className="font-display text-3xl" style={{ color: (dash?.counts.retornosPendentes ?? 0) > 0 ? "#e08a2e" : "var(--text)" }}>{dash?.counts.retornosPendentes ?? 0}</p>
         </Link>
+        <a href="#alertas" className="panel transition hover:-translate-y-0.5 hover:border-[var(--border-gold)]">
+          <span className="grid h-10 w-10 place-items-center rounded-xl bg-[#fdecea] text-[#e86761]">⚠</span>
+          <p className="mt-3 text-xs uppercase tracking-wider text-[var(--text-muted)]">Alertas clínicos</p>
+          <p className="font-display text-3xl" style={{ color: (dash?.counts.alertas ?? 0) > 0 ? "#e86761" : "var(--text)" }}>{dash?.counts.alertas ?? 0}</p>
+        </a>
         <a href="#novos-exames" className="panel transition hover:-translate-y-0.5 hover:border-[var(--border-gold)]">
           <span className="grid h-10 w-10 place-items-center rounded-xl bg-[#e8f1fb] text-[#2b7fb0]">🧪</span>
           <p className="mt-3 text-xs uppercase tracking-wider text-[var(--text-muted)]">Novos exames</p>
@@ -287,6 +293,27 @@ export default function PainelMedicoPage() {
                 </li>
               );
             })}
+          </ul>
+        )}
+      </section>
+
+      <section id="alertas" className="panel mt-8 scroll-mt-4">
+        <h2 className="font-display text-xl text-[var(--text)]">Alertas clínicos</h2>
+        {(!dash || dash.alertas.length === 0) ? (
+          <p className="mt-3 text-sm text-[var(--text-muted)]">✓ Nenhum alerta ativo.</p>
+        ) : (
+          <ul className="mt-3 space-y-2">
+            {dash.alertas.map((a, i) => (
+              <li key={i}>
+                <button type="button" onClick={() => setQuickKey(a.patientKey)} className="flex w-full items-center justify-between gap-3 rounded-xl border px-3 py-2.5 text-left transition hover:bg-[var(--gold-soft)]" style={{ borderColor: a.level === "urgente" ? "#e86761" : "#e08a2e" }}>
+                  <span className="min-w-0">
+                    <span className="block text-sm font-semibold text-[var(--text)]">{a.patientName}</span>
+                    <span className="block text-xs text-[var(--text-muted)]">{a.text} · {new Date(a.date).toLocaleDateString("pt-BR")}</span>
+                  </span>
+                  <span className="whitespace-nowrap text-xs font-semibold" style={{ color: a.level === "urgente" ? "#e86761" : "#e08a2e" }}>{a.level === "urgente" ? "🔴 Urgente" : "🟠 Importante"}</span>
+                </button>
+              </li>
+            ))}
           </ul>
         )}
       </section>

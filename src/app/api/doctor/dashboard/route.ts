@@ -2,8 +2,9 @@ import { NextResponse } from "next/server";
 import { getDoctorSessionId } from "@/lib/auth";
 import { readDb } from "@/lib/store";
 import { clinicalKey, listPatientsByDoctor } from "@/lib/patients-store";
-import { getRecentLabsByEmails } from "@/lib/patient-store";
+import { getLatestLabsByEmails, getRecentLabsByEmails } from "@/lib/patient-store";
 import { listOpenAttendance, listReturnsByDoctor } from "@/lib/care-store";
+import { listLmeByDoctor } from "@/lib/lme-store";
 import { NEPHRO_LABS } from "@/lib/labs";
 
 export async function GET() {
@@ -55,6 +56,26 @@ export async function GET() {
     createdAt: l.createdAt,
   }));
 
+  // Alertas clínicos agregados (últimos exames de todos os pacientes, em lote).
+  const latestByKey = await getLatestLabsByEmails(allKeys);
+  const alertas: { patientKey: string; patientName: string; level: "urgente" | "importante"; text: string; date: string }[] = [];
+  for (const [key, labs] of latestByKey.entries()) {
+    const name = nameByKey.get(key) || key;
+    const k = labs.get("potassio");
+    const tfge = labs.get("tfge") || labs.get("tfge_cistatina");
+    const hb = labs.get("hemoglobina");
+    if (k && k.value >= 6.0) alertas.push({ patientKey: key, patientName: name, level: "urgente", text: `Potássio ${k.value} mEq/L (hipercalemia grave)`, date: k.measuredAt });
+    else if (tfge && tfge.value < 15) alertas.push({ patientKey: key, patientName: name, level: "urgente", text: `TFGe ${tfge.value} mL/min/1,73m²`, date: tfge.measuredAt });
+    else if (k && k.value >= 5.5) alertas.push({ patientKey: key, patientName: name, level: "importante", text: `Potássio ${k.value} mEq/L (hipercalemia)`, date: k.measuredAt });
+    else if (k && k.value <= 3.0) alertas.push({ patientKey: key, patientName: name, level: "importante", text: `Potássio ${k.value} mEq/L (hipocalemia)`, date: k.measuredAt });
+    else if (hb && hb.value < 8) alertas.push({ patientKey: key, patientName: name, level: "importante", text: `Hemoglobina ${hb.value} g/dL (anemia importante)`, date: hb.measuredAt });
+  }
+  alertas.sort((a, b) => (a.level === b.level ? b.date.localeCompare(a.date) : a.level === "urgente" ? -1 : 1));
+
+  // LME para assinar (criadas por este médico e ainda não assinadas).
+  const lmeList = await listLmeByDoctor(doctorId).catch(() => []);
+  const lmeParaAssinar = lmeList.filter((l) => !l.signedAt).length;
+
   // Continuar de onde parou (atendimento em andamento mais recente).
   const open = await listOpenAttendance(doctorId);
   const continuar = open[0]
@@ -64,6 +85,7 @@ export async function GET() {
   // Pendências acionáveis (sem inventar — só o que existe).
   const pendencias: { label: string; count: number; href: string }[] = [];
   if (retornosPendentes > 0) pendencias.push({ label: "Retornos para organizar", count: retornosPendentes, href: "/medicos/retornos" });
+  if (lmeParaAssinar > 0) pendencias.push({ label: "LME para assinar", count: lmeParaAssinar, href: "/medicos/lme" });
   if (aguardando > 0) pendencias.push({ label: "Consultas aguardando confirmação", count: aguardando, href: "/medicos/agenda" });
 
   return NextResponse.json({
@@ -72,11 +94,14 @@ export async function GET() {
       consultasHoje,
       retornosPendentes,
       novosExames: recentExams.length,
+      alertas: alertas.length,
+      lmeParaAssinar,
       aguardando,
       pendencias: pendencias.reduce((s, p) => s + p.count, 0),
     },
     continuar,
     recentExams,
+    alertas: alertas.slice(0, 12),
     pendencias,
   });
 }
