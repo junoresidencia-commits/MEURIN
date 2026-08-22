@@ -248,7 +248,7 @@ export default function PainelMedicoPage() {
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div>
           <h1 className="font-display text-2xl font-extrabold text-[var(--text)] sm:text-3xl">
-            Olá, {doctor.name.split(" ")[0]} 👋
+            Olá, {(() => { const p = doctor.name.trim().split(/\s+/); return /^dr/i.test(p[0]) ? p.slice(0, 2).join(" ") : p[0]; })()} 👋
           </h1>
           <p className="mt-1 text-sm text-[var(--text-muted)]">Resumo da sua clínica hoje</p>
         </div>
