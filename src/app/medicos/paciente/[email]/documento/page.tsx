@@ -4,6 +4,7 @@ import { Suspense, useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { useParams, useSearchParams } from "next/navigation";
 import { TemplatePicker } from "@/components/TemplatePicker";
+import { PosologyBuilder } from "@/components/PosologyBuilder";
 import type { TemplateType } from "@/lib/document-templates";
 
 const TEMPLATE_TYPES = ["receita", "exame", "relatorio"];
@@ -149,6 +150,11 @@ function ComporDocumentoInner() {
               <p className="mt-1 text-xs text-[var(--text-muted)]">
                 Use um modelo pronto (ex.: exames de DRC, glomerulopatia) ou salve o conteúdo atual como <b>modelo favorito</b> para reutilizar.
               </p>
+            </div>
+          )}
+          {type === "receita" && (
+            <div className="mt-3">
+              <PosologyBuilder onAdd={(t) => setContent((c) => (c.trim() ? `${c.trim()}\n\n${t}` : t))} />
             </div>
           )}
           <label className="mt-3 block">
