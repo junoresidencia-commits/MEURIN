@@ -13,6 +13,7 @@ import { ExamReviewModal } from "@/components/ExamReviewModal";
 import { parseLabGroups, type ParsedLabGroup } from "@/lib/lab-parser";
 import { TemplatePicker } from "@/components/TemplatePicker";
 import { AttendanceControl } from "@/components/AttendanceControl";
+import { ReturnPicker } from "@/components/ReturnPicker";
 import { guessSexFromName } from "@/lib/sex-guess";
 
 type Lab = { id: string; testKey: string; value: number; unit?: string | null; measuredAt: string };
@@ -413,6 +414,8 @@ export default function ProntuarioPage() {
               <button type="button" className="btn-gold w-full" onClick={saveNote} disabled={saving}>
                 {saving ? "Salvando…" : "Salvar evolução"}
               </button>
+
+              <ReturnPicker patientKey={emailParam} />
             </div>
 
             <p className="text-xs font-bold uppercase tracking-wider text-[var(--gold)]">Evoluções anteriores</p>
