@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { getPatientEmail } from "@/lib/patient-session";
-import { listConsultationsForPatient } from "@/lib/nutritionists-store";
+import { listConsultationsForPatient, getNutritionist } from "@/lib/nutritionists-store";
 
 type PlanShape = {
   meals?: { name?: string; time?: string; items?: { food?: string; grams?: number | string; household?: string; note?: string }[] }[];
@@ -24,6 +24,7 @@ export async function GET() {
   if (!chosen) return NextResponse.json({ plan: null });
 
   const plan = chosen.plan as PlanShape;
+  const nut = chosen.nutritionistId ? await getNutritionist(chosen.nutritionistId) : null;
   return NextResponse.json({
     plan: {
       meals: Array.isArray(plan.meals) ? plan.meals : [],
@@ -33,6 +34,7 @@ export async function GET() {
       totals: plan.totals ?? null,
     },
     nutritionistName: chosen.nutritionistName ?? null,
+    nutritionistPhotoUrl: nut?.photoUrl ?? null,
     createdAt: chosen.createdAt,
     documentId: chosen.documentId ?? null,
     pdfUrl: chosen.documentId ? `/api/documents/${chosen.documentId}/pdf` : null,

@@ -10,6 +10,7 @@ type LabVal = { value: number; unit: string | null; date: string } | null;
 type Row = {
   key: string;
   name: string;
+  photoUrl: string | null;
   city: string;
   age: number | null;
   sex: string | null;
@@ -38,12 +39,12 @@ export async function GET() {
   const createdEmails = new Set(created.map((p) => (p.email || "").toLowerCase()).filter(Boolean));
 
   // Chave clínica por linha (email ou pid:<id>) — usada para casar exames/perfil.
-  type Base = { key: string; clinicalKey: string; name: string; city: string; birthdate: string | null; sex: string | null; isCreated: boolean };
+  type Base = { key: string; clinicalKey: string; name: string; photoUrl: string | null; city: string; birthdate: string | null; sex: string | null; isCreated: boolean };
   const bases: Base[] = [];
 
   for (const p of created) {
     if (p.status === "archived") continue;
-    bases.push({ key: p.id, clinicalKey: clinicalKey(p), name: p.name, city: p.address || "", birthdate: p.birthdate || null, sex: p.sex || null, isCreated: true });
+    bases.push({ key: p.id, clinicalKey: clinicalKey(p), name: p.name, photoUrl: p.photoUrl ?? null, city: p.address || "", birthdate: p.birthdate || null, sex: p.sex || null, isCreated: true });
   }
   const byEmail = new Map<string, Base & { lastSlot: string }>();
   for (const b of db.bookings) {
@@ -52,7 +53,7 @@ export async function GET() {
     if (createdEmails.has(email)) continue;
     const cur = byEmail.get(email);
     if (!cur || b.slotStart > cur.lastSlot) {
-      byEmail.set(email, { key: email, clinicalKey: email, name: b.patientName, city: b.patientCity, birthdate: null, sex: null, isCreated: false, lastSlot: b.slotStart });
+      byEmail.set(email, { key: email, clinicalKey: email, name: b.patientName, photoUrl: null, city: b.patientCity, birthdate: null, sex: null, isCreated: false, lastSlot: b.slotStart });
     }
   }
   for (const v of byEmail.values()) bases.push(v);
@@ -98,6 +99,7 @@ export async function GET() {
     return {
       key: b.key,
       name: b.name,
+      photoUrl: b.photoUrl ?? null,
       city: b.city,
       age,
       sex: b.sex,
