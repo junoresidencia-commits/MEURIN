@@ -375,6 +375,25 @@ export async function setDoctorLogo(id: string, logoUrl: string | null): Promise
   });
 }
 
+/** Define (ou remove, com null) a foto de perfil do médico. Tolera a coluna
+ * ausente (antes da migração) fazendo fallback para o arquivo local. */
+export async function setDoctorPhoto(id: string, photoUrl: string | null): Promise<void> {
+  const supabase = getSupabaseAdmin();
+  if (supabase) {
+    const { error } = await supabase.from("doctors").update({ photo_url: photoUrl }).eq("id", id);
+    if (!error) return;
+    const missingColumn = error.code === "PGRST204" || error.code === "42703" || /column|schema cache/i.test(error.message || "");
+    if (!missingColumn) throw error;
+    // Coluna ainda não migrada: cai para persistência local para não quebrar.
+  }
+  await updateDb((db) => {
+    db.doctors = db.doctors.map((d) =>
+      d.id === id ? { ...d, photoUrl: photoUrl ?? undefined } : d
+    );
+    return db;
+  });
+}
+
 /** Atualiza campos de uma consulta (confirmação, proposta, remarcação, timeline). */
 export async function updateBooking(id: string, patch: Partial<Booking>): Promise<Booking | null> {
   const result = await updateDb((db) => {
@@ -440,6 +459,7 @@ function mapDoctorRow(row: Record<string, unknown>): Doctor {
     signatureUrl: row.signature_url ? String(row.signature_url) : undefined,
     adminNote: row.admin_note ? String(row.admin_note) : undefined,
     logoUrl: row.logo_url ? String(row.logo_url) : undefined,
+    photoUrl: row.photo_url ? String(row.photo_url) : undefined,
     mpAccessToken: row.mp_access_token ? String(row.mp_access_token) : undefined,
     notifyWhatsapp: row.notify_whatsapp ? String(row.notify_whatsapp) : undefined,
     useWhatsappNotifications: Boolean(row.use_whatsapp_notifications),
@@ -615,6 +635,7 @@ async function writeSupabaseDb(db: Database): Promise<void> {
     signature_url: doctor.signatureUrl ?? null,
     admin_note: doctor.adminNote ?? null,
     logo_url: doctor.logoUrl ?? null,
+    photo_url: doctor.photoUrl ?? null,
     mp_access_token: doctor.mpAccessToken ?? null,
     commission_percent: doctor.commissionPercent ?? null,
     payout_status: doctor.payoutStatus ?? "active",

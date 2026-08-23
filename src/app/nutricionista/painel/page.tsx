@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 
-type Me = { nutritionist: { name: string; crn?: string | null; uf?: string | null; specialty?: string | null }; doctors: { id: string; name: string }[] };
+type Me = { nutritionist: { name: string; crn?: string | null; uf?: string | null; specialty?: string | null; photoUrl?: string | null }; doctors: { id: string; name: string }[] };
 type Patient = { key: string; name: string; cpf: string | null; doctorId: string };
 type Referral = { id: string; patientKey: string; patientName?: string | null; reason?: string | null; objective?: string | null; priority: string; status: string; doctorName?: string | null; createdAt: string };
 
@@ -45,16 +45,24 @@ export default function NutricionistaPainelPage() {
   return (
     <div className="mx-auto max-w-4xl px-5 py-8">
       <div className="flex flex-wrap items-start justify-between gap-3">
-        <div>
+        <div className="flex items-center gap-3">
+          {me?.nutritionist.photoUrl ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img src={me.nutritionist.photoUrl} alt="Sua foto" className="h-14 w-14 shrink-0 rounded-full border border-[var(--border)] object-cover" />
+          ) : (
+            <span className="grid h-14 w-14 shrink-0 place-items-center rounded-full bg-[var(--gold-soft)] text-lg font-bold text-[var(--gold)]">{(me?.nutritionist.name || "Nu").slice(0, 2).toUpperCase()}</span>
+          )}
+          <div>
           <p className="text-xs font-bold uppercase tracking-wide text-[var(--gold)]">Nutrição Renal</p>
           <h1 className="font-display text-3xl font-extrabold text-[var(--text)]">Olá, {me?.nutritionist.name?.split(" ")[0]} 🥗</h1>
           <p className="mt-1 text-sm text-[var(--text-muted)]">
             {me?.nutritionist.crn ? `CRN ${me.nutritionist.crn}${me.nutritionist.uf ? "-" + me.nutritionist.uf : ""} · ` : ""}
             Vinculada a {me?.doctors.length || 0} médico(s): {me?.doctors.map((d) => d.name).join(", ") || "—"}
           </p>
+          </div>
         </div>
         <div className="flex gap-2">
-          <Link href="/nutricionista/configuracoes" className="btn-ghost">Recebimentos</Link>
+          <Link href="/nutricionista/configuracoes" className="btn-ghost">Perfil e recebimentos</Link>
           <button type="button" className="btn-ghost" onClick={logout}>Sair</button>
         </div>
       </div>

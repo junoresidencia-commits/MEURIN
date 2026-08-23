@@ -110,6 +110,8 @@ export interface Doctor {
   adminNote?: string;
   // Logo do médico (data URL base64) exibida no cabeçalho dos documentos/PDF.
   logoUrl?: string;
+  // Foto de perfil do médico (data URL). Aparece na sidebar/área do médico.
+  photoUrl?: string;
   // WhatsApp e comunicação (privacidade):
   // - notifyWhatsapp: número INTERNO do médico p/ receber avisos (NUNCA exposto ao paciente).
   // - patientContactWhatsapp: número para o paciente falar (pode ser secretária/clínica).

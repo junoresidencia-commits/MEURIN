@@ -9,6 +9,7 @@ import { disablePush, enablePush, isSubscribed, notificationPermission, pushSupp
 import { DoctorPaymentSettings } from "@/components/DoctorPaymentSettings";
 import { DoctorPixSettings } from "@/components/DoctorPixSettings";
 import { LogoUploader } from "@/components/LogoUploader";
+import { ProfilePhotoUploader } from "@/components/ProfilePhotoUploader";
 import type { WeeklySlot } from "@/lib/types";
 
 const DAYS = [
@@ -274,6 +275,15 @@ export default function ConfiguracoesMedicoPage() {
               </div>
             </div>
           </section>
+
+          <div className="mt-6">
+            <ProfilePhotoUploader
+              endpoint="/api/doctor/photo"
+              label="Foto de perfil"
+              hint="Sua foto aparece na sua área do médico. Não é usada nos documentos (para isso, use a logo abaixo)."
+              fallback="Dr"
+            />
+          </div>
 
           <div className="mt-6">
             <LogoUploader />

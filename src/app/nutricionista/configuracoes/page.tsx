@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { ProfilePhotoUploader } from "@/components/ProfilePhotoUploader";
 
 const KEY_TYPES = [
   { v: "cpf", l: "CPF" }, { v: "cnpj", l: "CNPJ" }, { v: "email", l: "E-mail" }, { v: "telefone", l: "Telefone" }, { v: "aleatoria", l: "Aleatória" },
@@ -53,10 +54,14 @@ export default function NutriConfigPage() {
   return (
     <div className="mx-auto max-w-2xl px-5 py-8">
       <Link href="/nutricionista/painel" className="text-sm font-semibold text-[var(--gold)]">← Painel</Link>
-      <h1 className="font-display mt-2 text-2xl font-extrabold text-[var(--text)]">Recebimentos e valores</h1>
-      <p className="mt-1 text-sm text-[var(--text-muted)]">Defina o valor da consulta/retorno e a sua chave Pix para receber diretamente. O paciente paga e envia o comprovante; você confirma o recebimento.</p>
+      <h1 className="font-display mt-2 text-2xl font-extrabold text-[var(--text)]">Meu perfil e recebimentos</h1>
+      <p className="mt-1 text-sm text-[var(--text-muted)]">Atualize sua foto de perfil, o valor da consulta/retorno e a sua chave Pix para receber diretamente. O paciente paga e envia o comprovante; você confirma o recebimento.</p>
 
-      <section className="panel mt-5 grid gap-3 sm:grid-cols-2">
+      <div className="mt-5">
+        <ProfilePhotoUploader endpoint="/api/nutricionista/photo" label="Foto de perfil" hint="Sua foto aparece na sua área e para a equipe." fallback="Nu" />
+      </div>
+
+      <section className="panel mt-4 grid gap-3 sm:grid-cols-2">
         <label className="block"><span className="mb-1 block text-xs font-semibold text-[var(--text-muted)]">Valor da consulta (R$)</span><input className="input-field" inputMode="decimal" value={price} onChange={(e) => setPrice(e.target.value)} /></label>
         <label className="block"><span className="mb-1 block text-xs font-semibold text-[var(--text-muted)]">Valor do retorno (R$)</span><input className="input-field" inputMode="decimal" value={returnPrice} onChange={(e) => setReturnPrice(e.target.value)} /></label>
       </section>
