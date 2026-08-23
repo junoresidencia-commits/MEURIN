@@ -383,8 +383,9 @@ export async function setDoctorPhoto(id: string, photoUrl: string | null): Promi
     const { error } = await supabase.from("doctors").update({ photo_url: photoUrl }).eq("id", id);
     if (!error) return;
     const missingColumn = error.code === "PGRST204" || error.code === "42703" || /column|schema cache/i.test(error.message || "");
-    if (!missingColumn) throw error;
-    // Coluna ainda não migrada: cai para persistência local para não quebrar.
+    // Coluna ainda não migrada: não persiste, mas não quebra nem reescreve toda a tabela.
+    if (missingColumn) return;
+    throw error;
   }
   await updateDb((db) => {
     db.doctors = db.doctors.map((d) =>

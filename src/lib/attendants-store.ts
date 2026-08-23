@@ -170,11 +170,14 @@ export async function setAttendantPhoto(id: string, photoUrl: string | null): Pr
     const s = getSupabaseAdmin()!;
     const { error } = await s.from("attendants").update({ photo_url: photoUrl }).eq("id", id);
     if (!error) return;
-    if (isMissing(error)) { tableMissing = true; }
-    else {
+    if (isMissing(error)) {
+      tableMissing = true;
+    } else {
       const missingColumn = error.code === "PGRST204" || error.code === "42703" || /column|schema cache/i.test(error.message || "");
-      if (!missingColumn) throw error;
-      // Coluna ainda não migrada: cai para persistência local.
+      // Coluna ainda não migrada (ex.: produção antes da migração): não persiste,
+      // mas não quebra o upload nem tenta escrever no FS somente-leitura da Vercel.
+      if (missingColumn) return;
+      throw error;
     }
   }
   const db = await readLocal();
