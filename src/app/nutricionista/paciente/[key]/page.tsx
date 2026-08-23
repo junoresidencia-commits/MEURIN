@@ -9,7 +9,7 @@ type Summary = {
   patient: { key: string; name: string; birthdate: string | null; sex: string | null; cpf: string | null };
   renal: { drc: unknown; estagioG: unknown; categoriaA: unknown; etiologia: unknown; pesoKg: unknown; alturaCm: unknown; imc: number | null };
   labs: Lab[];
-  consultations: { id: string; createdAt: string; nutritionistName?: string | null; sharedWithPatient: boolean; documentId?: string | null }[];
+  consultations: { id: string; createdAt: string; nutritionistName?: string | null; sharedWithPatient: boolean; documentId?: string | null; plan?: Record<string, unknown>; assessment?: Record<string, unknown> }[];
 };
 type Food = { id: string; name: string; state?: string; source: string; measure?: string; measureGrams?: number; kcal: number; protein_g: number; carb_g: number; fat_g: number; sodium_mg: number; potassium_mg: number; phosphorus_mg: number; calcium_mg: number };
 type Item = { food: string; grams: number; household?: string; per100: { kcal: number; protein_g: number; sodium_mg: number; potassium_mg: number; phosphorus_mg: number } };
@@ -40,6 +40,7 @@ export default function NutriPacientePage() {
   const [foodQ, setFoodQ] = useState("");
   const [foods, setFoods] = useState<Food[]>([]);
   const [activeMeal, setActiveMeal] = useState(0);
+  const [loadedFromPrevious, setLoadedFromPrevious] = useState(false);
 
   useEffect(() => {
     fetch(`/api/nutricionista/patients/${encodeURIComponent(key)}`).then(async (r) => {
@@ -47,8 +48,36 @@ export default function NutriPacientePage() {
       const d = await r.json();
       if (!r.ok) throw new Error(d.error || "Erro");
       setSum(d);
+      // Pré-carrega o último plano/avaliação para permitir editar/atualizar em vez de recomeçar do zero.
+      const last = Array.isArray(d.consultations) ? d.consultations[0] : null;
+      const p = last?.plan as { meals?: Meal[]; waterMl?: unknown; notes?: unknown; validUntil?: unknown } | undefined;
+      if (p && Array.isArray(p.meals) && p.meals.length > 0) {
+        setMeals(p.meals as Meal[]);
+        setWaterMl(p.waterMl != null ? String(p.waterMl) : "");
+        setNotes(p.notes != null ? String(p.notes) : "");
+        setValidUntil(p.validUntil != null ? String(p.validUntil) : "");
+        setLoadedFromPrevious(true);
+      }
+      const a = last?.assessment as Record<string, string> | undefined;
+      if (a && Object.keys(a).length > 0) {
+        setAssessment((prev) => ({
+          pesoAtual: a.pesoAtual ?? prev.pesoAtual,
+          altura: a.altura ?? prev.altura,
+          apetite: a.apetite ?? prev.apetite,
+          diagnostico: a.diagnostico ?? prev.diagnostico,
+          metas: a.metas ?? prev.metas,
+          conduta: a.conduta ?? prev.conduta,
+          retorno: prev.retorno,
+        }));
+      }
     }).catch((e) => setError(e.message));
   }, [key, router]);
+
+  function startBlank() {
+    setMeals([{ name: "Café da manhã", time: "07:00", items: [] }]);
+    setWaterMl(""); setNotes(""); setValidUntil("");
+    setLoadedFromPrevious(false);
+  }
 
   useEffect(() => {
     const t = setTimeout(() => {
@@ -167,6 +196,12 @@ export default function NutriPacientePage() {
           <h2 className="font-display text-lg text-[var(--text)]">Plano alimentar</h2>
           <button type="button" className="btn-ghost text-sm" onClick={addMeal}>+ Refeição</button>
         </div>
+        {loadedFromPrevious && (
+          <div className="mt-2 flex flex-wrap items-center justify-between gap-2 rounded-xl border border-[var(--border-gold)] bg-[var(--gold-soft)] px-3 py-2 text-sm text-[var(--text-soft)]">
+            <span>Carregamos o <b>plano vigente</b> para você editar/atualizar. Ao salvar, gera uma nova versão para o paciente.</span>
+            <button type="button" className="font-semibold text-[var(--gold)]" onClick={startBlank}>Começar do zero</button>
+          </div>
+        )}
 
         {/* Busca de alimentos */}
         <div className="mt-3 rounded-xl border border-[var(--border)] p-3">

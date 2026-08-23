@@ -10,6 +10,10 @@ type Entry = { id: string; kind: "alimento" | "liquido"; meal?: string | null; t
 type Alert = { key: string; status: string; label: string; message: string | null; contributors: { food: string; value: number }[] };
 type Goals = { targets: Record<string, number | null>; note?: string | null; nutritionistName?: string | null } | null;
 type Food = { id: string; name: string; state?: string; source: string; measure?: string; measureGrams?: number; kcal: number; protein_g: number; potassium_mg: number; phosphorus_mg: number; sodium_mg: number };
+type PlanItem = { food?: string; grams?: number | string; household?: string; note?: string };
+type PlanMeal = { name?: string; time?: string; items?: PlanItem[] };
+type Plan = { meals: PlanMeal[]; waterMl?: number | string | null; notes?: string | null; validUntil?: string | null; totals?: Record<string, number> | null } | null;
+type PlanResp = { plan: Plan; nutritionistName?: string | null; createdAt?: string; pdfUrl?: string | null };
 
 const LIGHT: Record<string, { bg: string; text: string; dot: string; label: string }> = {
   verde: { bg: "bg-emerald-50", text: "text-emerald-700", dot: "bg-emerald-500", label: "Dentro da meta" },
@@ -28,6 +32,7 @@ export default function PacienteNutricaoPage() {
   const [goals, setGoals] = useState<Goals>(null);
   const [hasGoals, setHasGoals] = useState(false);
   const [date, setDate] = useState("");
+  const [plan, setPlan] = useState<PlanResp | null>(null);
 
   // formulário
   const [kind, setKind] = useState<"alimento" | "liquido">("alimento");
@@ -71,6 +76,13 @@ export default function PacienteNutricaoPage() {
     setLoading(false);
   }, [router]);
   useEffect(() => { load(); }, [load]);
+
+  useEffect(() => {
+    fetch("/api/patient/nutrition/plan")
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => { if (d && d.plan) setPlan(d); })
+      .catch(() => {});
+  }, []);
 
   const loadAppts = useCallback(async () => {
     const r = await fetch("/api/patient/nutrition/appointments");
@@ -183,6 +195,73 @@ export default function PacienteNutricaoPage() {
         </div>
         <Link href="/paciente/nutricao/educacao" className="btn-ghost text-sm">Entenda sua alimentação →</Link>
       </div>
+
+      {/* Plano alimentar da nutricionista (interativo) */}
+      {plan?.plan && (
+        <section className="mt-5 overflow-hidden rounded-[24px] border border-[var(--border-gold)] bg-gradient-to-br from-[var(--gold-soft)] to-white shadow-[var(--shadow)]">
+          <div className="flex flex-wrap items-center justify-between gap-2 px-5 pt-5">
+            <div>
+              <p className="text-xs font-bold uppercase tracking-wider text-[var(--gold)]">Seu plano alimentar</p>
+              <h2 className="font-display text-xl font-extrabold text-[var(--text)]">Prescrito pela sua nutricionista</h2>
+              <p className="mt-0.5 text-xs text-[var(--text-muted)]">
+                {plan.nutritionistName ? `Por ${plan.nutritionistName}` : "Plano individualizado"}
+                {plan.createdAt ? ` · ${new Date(plan.createdAt).toLocaleDateString("pt-BR")}` : ""}
+                {plan.plan.validUntil ? ` · revisão: ${plan.plan.validUntil}` : ""}
+              </p>
+            </div>
+            {plan.pdfUrl && (
+              <a href={plan.pdfUrl} target="_blank" rel="noopener noreferrer" className="btn-ghost text-sm">Ver PDF</a>
+            )}
+          </div>
+
+          <div className="mt-3 grid gap-2 px-5">
+            {plan.plan.meals.length === 0 && (
+              <p className="text-sm text-[var(--text-muted)]">O plano foi liberado. Toque em “Ver PDF” para os detalhes.</p>
+            )}
+            {plan.plan.meals.map((m, i) => (
+              <div key={i} className="rounded-2xl border border-[var(--border)] bg-white p-3">
+                <p className="flex items-center gap-2 text-sm font-bold text-[var(--text)]">
+                  {m.time && <span className="rounded-full bg-[var(--gold-soft)] px-2 py-0.5 text-xs font-bold text-[var(--gold)]">{m.time}</span>}
+                  {m.name || `Refeição ${i + 1}`}
+                </p>
+                {Array.isArray(m.items) && m.items.length > 0 ? (
+                  <ul className="mt-2 grid gap-1">
+                    {m.items.map((it, j) => (
+                      <li key={j} className="flex items-baseline justify-between gap-3 text-sm text-[var(--text-soft)]">
+                        <span>• {it.food}{it.note ? <span className="text-xs text-[var(--text-muted)]"> — {it.note}</span> : null}</span>
+                        <span className="shrink-0 text-xs text-[var(--text-muted)]">{it.grams ? `${it.grams} g` : ""}{it.household ? ` · ${it.household}` : ""}</span>
+                      </li>
+                    ))}
+                  </ul>
+                ) : (
+                  <p className="mt-1 text-xs text-[var(--text-muted)]">—</p>
+                )}
+              </div>
+            ))}
+          </div>
+
+          {(plan.plan.waterMl || plan.plan.totals || plan.plan.notes) && (
+            <div className="mt-3 px-5 pb-5">
+              {plan.plan.waterMl ? (
+                <p className="text-sm text-[var(--text-soft)]"><b>Líquidos:</b> {plan.plan.waterMl} mL/dia</p>
+              ) : null}
+              {plan.plan.totals && Object.keys(plan.plan.totals).length > 0 && (
+                <p className="mt-1 text-xs text-[var(--text-muted)]">
+                  Estimativa diária: {plan.plan.totals.kcal ? `${plan.plan.totals.kcal} kcal · ` : ""}
+                  {plan.plan.totals.protein_g ? `Proteína ${plan.plan.totals.protein_g} g · ` : ""}
+                  {plan.plan.totals.sodium_mg ? `Sódio ${plan.plan.totals.sodium_mg} mg · ` : ""}
+                  {plan.plan.totals.potassium_mg ? `Potássio ${plan.plan.totals.potassium_mg} mg · ` : ""}
+                  {plan.plan.totals.phosphorus_mg ? `Fósforo ${plan.plan.totals.phosphorus_mg} mg` : ""}
+                </p>
+              )}
+              {plan.plan.notes ? (
+                <p className="mt-2 rounded-xl bg-white/70 px-3 py-2 text-sm text-[var(--text)]"><b>Observações:</b> {plan.plan.notes}</p>
+              ) : null}
+              <p className="mt-3 text-[11px] text-[var(--text-muted)]">Registre abaixo o que você comeu para acompanhar se está seguindo o plano e as metas.</p>
+            </div>
+          )}
+        </section>
+      )}
 
       {/* Acompanhamento (semáforo) */}
       <section className="mt-4">
