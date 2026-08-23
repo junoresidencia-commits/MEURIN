@@ -86,6 +86,7 @@ export default function CriarContaPacientePage() {
 
   return (
     <div className="mx-auto max-w-md px-5 py-12">
+      <Link href="/paciente/entrar" className="mb-4 inline-flex items-center gap-1 text-sm font-semibold text-[var(--gold)]">← Voltar</Link>
       <p className="text-sm font-semibold text-[var(--gold)]">Área do paciente</p>
       <h1 className="font-display mt-2 text-3xl font-extrabold text-[var(--text)]">
         {claim ? "Conectar ao cadastro" : "Criar minha conta"}

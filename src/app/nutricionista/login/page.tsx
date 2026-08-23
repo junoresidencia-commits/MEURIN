@@ -33,6 +33,7 @@ export default function NutricionistaLoginPage() {
 
   return (
     <div className="mx-auto max-w-md px-5 py-16">
+      <Link href="/" className="mb-4 inline-flex items-center gap-1 text-sm font-semibold text-[var(--gold)]">← Voltar</Link>
       <p className="text-sm font-semibold text-[var(--gold)]">Área da nutricionista</p>
       <h1 className="font-display mt-2 text-3xl font-extrabold text-[var(--text)]">Entrar</h1>
       <p className="mt-2 text-sm text-[var(--text-muted)]">
