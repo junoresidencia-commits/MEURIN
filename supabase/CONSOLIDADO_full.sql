@@ -1042,3 +1042,12 @@ alter table public.patients add column if not exists photo_url text;
 -- Foto de perfil de medico e atendente
 alter table public.doctors add column if not exists photo_url text;
 alter table public.attendants add column if not exists photo_url text;
+
+-- Aderência ao plano alimentar (refeições cumpridas por paciente/dia)
+create table if not exists public.nutrition_plan_checkins (
+  patient_key text not null,
+  date text not null,
+  meals jsonb not null default '[]'::jsonb,
+  updated_at timestamptz not null default now(),
+  primary key (patient_key, date)
+);
