@@ -23,6 +23,7 @@ type Row = {
   alert: { level: "urgente" | "importante" | null; text: string | null; date: string | null };
   retornoPendente: boolean;
   active: boolean;
+  isCreated: boolean;
   lastConsultation: string | null;
   nextConsultation: string | null;
 };
@@ -89,6 +90,15 @@ function PacientesInner() {
     load();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  async function removePatient(key: string, name: string) {
+    if (!window.confirm(`Excluir o paciente ${name}? Esta ação não pode ser desfeita.`)) return;
+    const res = await fetch("/api/doctor/patients", {
+      method: "DELETE", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id: key }),
+    });
+    if (res.ok) setRows((rs) => (rs || []).filter((r) => r.key !== key));
+    else window.alert("Não foi possível excluir o paciente.");
+  }
 
   const counts = useMemo(() => {
     const c: Record<FilterId, number> = { todos: 0, ativos: 0, drc: 0, dialise: 0, glomerulopatias: 0, transplante: 0, pediatria: 0, retorno: 0, alertas: 0 };
@@ -249,6 +259,9 @@ function PacientesInner() {
                     <span className="flex gap-3">
                       <button type="button" className="font-semibold text-[var(--gold)]" onClick={() => setQuickKey(r.key)}>Resumo rápido</button>
                       <Link href={`/medicos/paciente/${encodeURIComponent(r.key)}`} className="font-semibold text-[var(--gold)]">Abrir prontuário →</Link>
+                      {r.isCreated && (
+                        <button type="button" className="font-semibold text-[var(--text-muted)] hover:text-[var(--danger)]" onClick={() => removePatient(r.key, r.name)}>Excluir</button>
+                      )}
                     </span>
                   </div>
                 </li>
