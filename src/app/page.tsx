@@ -121,35 +121,45 @@ export default function HomePage() {
   return (
     <>
       <section className="mx-auto max-w-5xl px-5 pb-4 pt-10 sm:pt-14">
-        <p className="animate-fade-up text-sm font-semibold text-[var(--gold)]">
-          Meu Rim
-        </p>
-        <h1 className="animate-fade-up font-display mt-2 max-w-[18ch] text-4xl font-extrabold leading-[1.05] text-[var(--text)] sm:text-5xl">
-          Cuidado renal onde você estiver.
+        <div className="flex items-center gap-2">
+          <span className="grid h-10 w-10 place-items-center rounded-2xl bg-gradient-to-br from-[var(--gold)] to-[var(--gold-dark)] text-sm font-extrabold text-white shadow-[var(--shadow-gold)]">MR</span>
+          <span className="font-display text-xl font-extrabold text-[var(--text)]">meu <span className="text-[var(--gold)]">rim</span></span>
+        </div>
+        <p className="animate-fade-up mt-6 text-sm font-semibold text-[var(--gold)]">Fala para o seu rim.</p>
+        <h1 className="animate-fade-up font-display mt-2 max-w-[16ch] text-4xl font-extrabold leading-[1.05] text-[var(--text)] sm:text-5xl">
+          Cuidado renal que acompanha você.
         </h1>
         <p className="animate-fade-up-delay mt-4 max-w-xl text-lg leading-relaxed text-[var(--text-soft)]">
-          Consulte um nefrologista, acompanhe seus exames e mantenha sua saúde
-          renal organizada em um só lugar — prontuário, consulta e acompanhamento
-          conectando médico e paciente.
+          Consultas, exames, evolução e orientação em um só lugar.
         </p>
-        <div className="animate-fade-up-delay mt-6 flex flex-wrap gap-3">
-          <Link
-            href="/agendar"
-            className="btn-gold"
-            onClick={() => trackEvent("cta_agendar_home")}
-          >
+        <div className="animate-fade-up-delay mt-6 flex max-w-md flex-col gap-3">
+          <Link href="/agendar" className="btn-gold w-full" onClick={() => trackEvent("cta_agendar_home")}>
             Agendar consulta
           </Link>
-          <Link href="/paciente/entrar" className="btn-ghost">
-            Já sou paciente
-          </Link>
-          <Link
-            href="/medicos/login"
-            className="rounded-full px-4 py-3 text-sm font-semibold text-[var(--text-soft)] transition hover:text-[var(--gold)]"
-          >
-            Sou médico
+          <Link href="/paciente/entrar" className="btn-ghost w-full">
+            Entrar
           </Link>
         </div>
+
+        {/* Portas de entrada — paciente, profissional, atendente */}
+        <div className="animate-fade-up-delay mt-8 grid max-w-md grid-cols-3 gap-3">
+          <Link href="/paciente/entrar" onClick={() => trackEvent("portal_paciente")} className="flex flex-col items-center gap-2 rounded-2xl border border-[var(--border)] bg-white py-4 text-center shadow-[var(--shadow)] transition hover:-translate-y-0.5 hover:border-[var(--border-gold)]">
+            <span className="grid h-10 w-10 place-items-center rounded-full bg-[var(--gold-soft)] text-[var(--gold)]"><UserIcon className="h-5 w-5" /></span>
+            <span className="text-xs font-bold text-[var(--text-soft)]">Sou paciente</span>
+          </Link>
+          <Link href="/medicos/login" onClick={() => trackEvent("portal_medico")} className="flex flex-col items-center gap-2 rounded-2xl border border-[var(--border)] bg-white py-4 text-center shadow-[var(--shadow)] transition hover:-translate-y-0.5 hover:border-[var(--border-gold)]">
+            <span className="grid h-10 w-10 place-items-center rounded-full bg-[var(--gold-soft)] text-[var(--gold)]"><StethoscopeIcon className="h-5 w-5" /></span>
+            <span className="text-xs font-bold text-[var(--text-soft)]">Sou profissional</span>
+          </Link>
+          <Link href="/atendente/login" className="flex flex-col items-center gap-2 rounded-2xl border border-[var(--border)] bg-white py-4 text-center shadow-[var(--shadow)] transition hover:-translate-y-0.5 hover:border-[var(--border-gold)]">
+            <span className="grid h-10 w-10 place-items-center rounded-full bg-[var(--gold-soft)] text-[var(--gold)]"><HeadsetIcon className="h-5 w-5" /></span>
+            <span className="text-xs font-bold text-[var(--text-soft)]">Sou atendente</span>
+          </Link>
+        </div>
+        <p className="mt-5 flex items-center gap-2 text-sm text-[var(--text-muted)]">
+          <LockIcon className="h-4 w-4 text-[var(--gold)]" />
+          Seus dados estão seguros e protegidos com criptografia.
+        </p>
       </section>
 
       {/* Consulta + continuidade */}
@@ -522,6 +532,16 @@ function ArrowIcon({ className }: IconProps) {
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className} aria-hidden="true">
       <circle cx="12" cy="12" r="9" opacity="0.25" />
       <path d="M10 8l4 4-4 4" />
+    </svg>
+  );
+}
+
+function HeadsetIcon({ className }: IconProps) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className} aria-hidden="true">
+      <path d="M4 14v-2a8 8 0 0 1 16 0v2" />
+      <path d="M4 14a2 2 0 0 1 2 2v2a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-2a2 2 0 0 1 2-2Zm16 0a2 2 0 0 0-2 2v2a2 2 0 0 0 2 2 2 2 0 0 0 2-2v-2a2 2 0 0 0-2-2Z" />
+      <path d="M18 19a4 4 0 0 1-4 3h-2" />
     </svg>
   );
 }

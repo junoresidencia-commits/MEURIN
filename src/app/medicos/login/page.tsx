@@ -4,6 +4,7 @@ import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { postJson, toFriendlyMessage } from "@/lib/user-errors";
+import { GoogleSignInButton } from "@/components/GoogleSignInButton";
 
 export default function LoginMedicoPage() {
   const router = useRouter();
@@ -30,6 +31,7 @@ export default function LoginMedicoPage() {
   return (
     <div className="grid min-h-screen place-items-center bg-gradient-to-b from-[var(--gold-soft)] to-[var(--bg)] px-5 py-10">
       <div className="w-full max-w-md">
+        <Link href="/" className="mb-4 inline-flex items-center gap-1 text-sm font-semibold text-[var(--gold)]">← Voltar</Link>
         <Link href="/" className="mb-6 flex items-center justify-center gap-2">
           <span className="grid h-11 w-11 place-items-center rounded-2xl bg-gradient-to-br from-[var(--gold)] to-[var(--gold-dark)] text-sm font-extrabold text-white shadow-[var(--shadow-gold)]">MR</span>
           <span className="font-display text-2xl font-extrabold text-[var(--text)]">Meu <span className="text-[var(--gold)]">Rim</span></span>
@@ -80,6 +82,8 @@ export default function LoginMedicoPage() {
               {loading ? "Entrando…" : "Entrar"}
             </button>
           </form>
+
+          <GoogleSignInButton />
 
           <div className="mt-5 border-t border-[var(--border)] pt-4 text-center text-sm text-[var(--text-muted)]">
             Ainda não possui cadastro?{" "}

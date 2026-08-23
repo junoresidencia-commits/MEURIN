@@ -70,6 +70,7 @@ export default function NutricionistaCadastroPage() {
 
   return (
     <div className="mx-auto max-w-xl px-5 py-12">
+      <Link href="/nutricionista/login" className="mb-4 inline-flex items-center gap-1 text-sm font-semibold text-[var(--gold)]">← Voltar</Link>
       <p className="text-sm font-semibold text-[var(--gold)]">Área da nutricionista</p>
       <h1 className="font-display mt-2 text-3xl font-extrabold text-[var(--text)]">Criar cadastro</h1>
       <p className="mt-2 text-[var(--text-muted)]">Cadastre-se para atender pacientes renais no Meu Rim. O acesso é liberado após aprovação do administrador.</p>

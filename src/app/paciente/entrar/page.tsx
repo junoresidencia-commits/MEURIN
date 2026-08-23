@@ -4,6 +4,7 @@ import { Suspense, useState } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { postJson, toFriendlyMessage } from "@/lib/user-errors";
+import { GoogleSignInButton } from "@/components/GoogleSignInButton";
 
 function EntrarInner() {
   const router = useRouter();
@@ -36,6 +37,7 @@ function EntrarInner() {
 
   return (
     <div className="mx-auto min-h-screen max-w-md px-5 py-10">
+      <Link href="/" className="mb-4 inline-flex items-center gap-1 text-sm font-semibold text-[var(--gold)]">← Voltar</Link>
       <Link href="/" className="mb-6 flex items-center justify-center gap-2">
         <span className="grid h-11 w-11 place-items-center rounded-2xl bg-gradient-to-br from-[var(--gold)] to-[var(--gold-dark)] text-sm font-extrabold text-white shadow-[var(--shadow-gold)]">MR</span>
         <span className="font-display text-2xl font-extrabold text-[var(--text)]">Meu <span className="text-[var(--gold)]">Rim</span></span>
@@ -136,6 +138,8 @@ function EntrarInner() {
           </p>
         </form>
       )}
+
+      <GoogleSignInButton />
 
       <div className="mt-5 rounded-2xl border border-[var(--border-gold)] bg-[var(--gold-soft)] p-4 text-center">
         <p className="text-sm font-semibold text-[var(--text)]">Ainda não tem conta?</p>

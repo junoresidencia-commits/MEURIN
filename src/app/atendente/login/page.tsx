@@ -26,6 +26,7 @@ export default function AtendenteLoginPage() {
 
   return (
     <div className="mx-auto flex min-h-[80vh] max-w-md flex-col justify-center px-5 py-12">
+      <Link href="/" className="mb-4 inline-flex items-center gap-1 text-sm font-semibold text-[var(--gold)]">← Voltar</Link>
       <p className="text-xs font-bold uppercase tracking-[0.22em] text-[var(--gold)]">Atendente / Secretária</p>
       <h1 className="font-display mt-2 text-3xl font-extrabold text-[var(--text)]">Entrar</h1>
       <p className="mt-2 text-[var(--text-muted)]">Use seu <strong>CPF ou e-mail</strong> e a senha fornecida pelo médico.</p>
