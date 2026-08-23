@@ -3,6 +3,7 @@ import { Inter } from "next/font/google";
 import { SiteFooter } from "@/components/SiteFooter";
 import { SiteHeader } from "@/components/SiteHeader";
 import { PwaBootstrap } from "@/components/PwaBootstrap";
+import { AreaTheme } from "@/components/AreaTheme";
 import "./globals.css";
 
 const display = Inter({
@@ -81,6 +82,7 @@ export default function RootLayout({
     <html lang="pt-BR">
       <body className={`${display.variable} ${body.variable} font-sans-body antialiased`}>
         <PwaBootstrap />
+        <AreaTheme />
         <SiteHeader />
         <main>{children}</main>
         <SiteFooter />
