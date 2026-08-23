@@ -13,5 +13,5 @@ export async function GET() {
     const d = await getDoctorById(l.doctorId);
     return { doctorId: l.doctorId, doctorName: d?.name || "Médico", specialty: d?.specialty || "", permissions: l.permissions };
   }));
-  return NextResponse.json({ attendant: { id: att.id, name: att.name }, doctors });
+  return NextResponse.json({ attendant: { id: att.id, name: att.name, photoUrl: att.photoUrl ?? null }, doctors });
 }

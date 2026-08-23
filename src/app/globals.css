@@ -91,6 +91,51 @@ body {
   animation: soft-pulse 5s ease-in-out infinite;
 }
 
+@keyframes float-y {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-14px); }
+}
+.animate-float { animation: float-y 6s ease-in-out infinite; }
+.animate-float-slow { animation: float-y 8.5s ease-in-out infinite; }
+
+@keyframes draw-dash {
+  to { stroke-dashoffset: 0; }
+}
+
+@keyframes node-pulse {
+  0%, 100% { opacity: 0.35; r: 2.2; }
+  50% { opacity: 1; r: 3.4; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .animate-float, .animate-float-slow, .animate-soft-pulse { animation: none; }
+}
+
+/* Glassmorphism para chips/cartões do hero */
+.glass {
+  background: rgba(255, 255, 255, 0.7);
+  backdrop-filter: blur(14px) saturate(140%);
+  -webkit-backdrop-filter: blur(14px) saturate(140%);
+  border: 1px solid rgba(255, 255, 255, 0.6);
+  box-shadow: 0 18px 50px rgba(8, 123, 130, 0.16);
+}
+
+/* Grade de pontos sutil para fundo do hero */
+.hero-dots {
+  background-image: radial-gradient(rgba(8, 123, 130, 0.14) 1px, transparent 1px);
+  background-size: 22px 22px;
+  -webkit-mask-image: radial-gradient(ellipse 70% 60% at 50% 30%, #000 30%, transparent 75%);
+  mask-image: radial-gradient(ellipse 70% 60% at 50% 30%, #000 30%, transparent 75%);
+}
+
+/* Título com leve gradiente petróleo para dar profundidade */
+.text-hero-gradient {
+  background: linear-gradient(180deg, var(--text) 0%, #0f4a5e 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
 .input-field {
   @apply w-full min-h-[52px] rounded-[14px] border-[1.5px] border-[var(--border)] bg-white px-4 py-3 text-base text-[var(--text)] outline-none transition placeholder:text-[var(--text-muted)];
 }

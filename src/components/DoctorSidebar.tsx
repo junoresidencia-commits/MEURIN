@@ -47,7 +47,7 @@ const MORE: { href: string; label: string; icon: keyof typeof PATHS }[] = [
 export function DoctorSidebar() {
   const pathname = usePathname();
   const router = useRouter();
-  const [doctor, setDoctor] = useState<{ name?: string; crm?: string; specialty?: string; logoUrl?: string } | null>(null);
+  const [doctor, setDoctor] = useState<{ name?: string; crm?: string; specialty?: string; logoUrl?: string; photoUrl?: string } | null>(null);
 
   useEffect(() => {
     fetch("/api/auth").then((r) => r.json()).then((d) => { if (d?.doctor) setDoctor(d.doctor); }).catch(() => {});
@@ -77,9 +77,9 @@ export function DoctorSidebar() {
 
         {doctor && (
           <div className="mb-4 flex items-center gap-3 rounded-2xl border border-[var(--border)] bg-[var(--bg)] p-3">
-            {doctor.logoUrl ? (
+            {doctor.photoUrl || doctor.logoUrl ? (
               // eslint-disable-next-line @next/next/no-img-element
-              <img src={doctor.logoUrl} alt="Foto" className="h-10 w-10 shrink-0 rounded-full border border-[var(--border)] object-cover" />
+              <img src={doctor.photoUrl || doctor.logoUrl} alt="Foto" className="h-10 w-10 shrink-0 rounded-full border border-[var(--border)] object-cover" />
             ) : (
               <span className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-[var(--gold-soft)] text-sm font-bold text-[var(--gold)]">{(doctor.name || "Dr").slice(0, 2).toUpperCase()}</span>
             )}

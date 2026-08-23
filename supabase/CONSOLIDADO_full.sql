@@ -1038,3 +1038,7 @@ create index if not exists lme_requests_doctor_idx on public.lme_requests (docto
 
 -- Foto de perfil do paciente
 alter table public.patients add column if not exists photo_url text;
+
+-- Foto de perfil de medico e atendente
+alter table public.doctors add column if not exists photo_url text;
+alter table public.attendants add column if not exists photo_url text;

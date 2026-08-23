@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { ShareButton } from "@/components/ShareButton";
+import { KidneyMark, KidneyPlexus } from "@/components/BrandKidney";
 import { trackEvent } from "@/lib/analytics-client";
 
 const CONSULTA_INFOS = [
@@ -120,61 +121,97 @@ export default function HomePage() {
 
   return (
     <>
-      {/* Hero premium — gradiente teal + ilustração do rim + onda */}
+      {/* Hero premium — halo + grade + ilustração renal com rede vascular */}
       <section className="relative overflow-hidden">
-        <div className="pointer-events-none absolute inset-0 bg-gradient-to-b from-[var(--gold-soft)] via-[var(--bg)] to-[var(--bg)]" aria-hidden="true" />
-        <div className="pointer-events-none absolute -right-24 -top-24 h-72 w-72 rounded-full bg-[var(--gold)]/10 blur-3xl" aria-hidden="true" />
-        <div className="relative mx-auto grid max-w-5xl items-center gap-8 px-5 pb-4 pt-10 sm:pt-14 lg:grid-cols-2">
-          <div>
-        <div className="flex items-center gap-2">
-          <KidneyMark className="h-9 w-9" />
-          <span className="font-display text-xl font-extrabold text-[var(--text)]">meu <span className="text-[var(--gold)]">rim</span></span>
-        </div>
-        <p className="animate-fade-up mt-6 text-sm font-semibold text-[var(--gold)]">Fala para o seu rim.</p>
-        <h1 className="animate-fade-up font-display mt-2 max-w-[16ch] text-4xl font-extrabold leading-[1.05] text-[var(--text)] sm:text-5xl">
-          Cuidado renal que acompanha você.
-        </h1>
-        <p className="animate-fade-up-delay mt-4 max-w-xl text-lg leading-relaxed text-[var(--text-soft)]">
-          Consultas, exames, evolução e orientação em um só lugar.
-        </p>
-        <div className="animate-fade-up-delay mt-6 flex max-w-md flex-col gap-3">
-          <Link href="/agendar" className="btn-gold w-full" onClick={() => trackEvent("cta_agendar_home")}>
-            Agendar consulta
-          </Link>
-          <Link href="/paciente/entrar" className="btn-ghost w-full">
-            Entrar
-          </Link>
+        {/* Fundo em camadas: grade de pontos + orbes desfocados */}
+        <div className="pointer-events-none absolute inset-0 -z-10" aria-hidden="true">
+          <div className="hero-dots absolute inset-0" />
+          <div className="animate-float-slow absolute -left-32 top-8 h-96 w-96 rounded-full bg-[var(--gold)]/15 blur-[120px]" />
+          <div className="animate-float absolute -right-20 -top-20 h-[30rem] w-[30rem] rounded-full bg-[#13b3bc]/15 blur-[130px]" />
+          <div className="absolute bottom-0 left-1/3 h-72 w-72 rounded-full bg-[var(--gold)]/10 blur-[110px]" />
         </div>
 
-        {/* Portas de entrada — paciente, profissional, atendente */}
-        <div className="animate-fade-up-delay mt-8 grid max-w-md grid-cols-3 gap-3">
-          <Link href="/paciente/entrar" onClick={() => trackEvent("portal_paciente")} className="flex flex-col items-center gap-2 rounded-2xl border border-[var(--border)] bg-white py-4 text-center shadow-[var(--shadow)] transition hover:-translate-y-0.5 hover:border-[var(--border-gold)]">
-            <span className="grid h-10 w-10 place-items-center rounded-full bg-[var(--gold-soft)] text-[var(--gold)]"><UserIcon className="h-5 w-5" /></span>
-            <span className="text-xs font-bold text-[var(--text-soft)]">Sou paciente</span>
-          </Link>
-          <Link href="/medicos/login" onClick={() => trackEvent("portal_medico")} className="flex flex-col items-center gap-2 rounded-2xl border border-[var(--border)] bg-white py-4 text-center shadow-[var(--shadow)] transition hover:-translate-y-0.5 hover:border-[var(--border-gold)]">
-            <span className="grid h-10 w-10 place-items-center rounded-full bg-[var(--gold-soft)] text-[var(--gold)]"><StethoscopeIcon className="h-5 w-5" /></span>
-            <span className="text-xs font-bold text-[var(--text-soft)]">Sou profissional</span>
-          </Link>
-          <Link href="/atendente/login" className="flex flex-col items-center gap-2 rounded-2xl border border-[var(--border)] bg-white py-4 text-center shadow-[var(--shadow)] transition hover:-translate-y-0.5 hover:border-[var(--border-gold)]">
-            <span className="grid h-10 w-10 place-items-center rounded-full bg-[var(--gold-soft)] text-[var(--gold)]"><HeadsetIcon className="h-5 w-5" /></span>
-            <span className="text-xs font-bold text-[var(--text-soft)]">Sou atendente</span>
-          </Link>
-        </div>
-        <p className="mt-5 flex items-center gap-2 text-sm text-[var(--text-muted)]">
-          <LockIcon className="h-4 w-4 text-[var(--gold)]" />
-          Seus dados estão seguros e protegidos com criptografia.
-        </p>
+        <div className="relative mx-auto grid max-w-6xl items-center gap-10 px-5 pb-8 pt-12 sm:pt-16 lg:grid-cols-[1.05fr_0.95fr]">
+          {/* Coluna do texto */}
+          <div className="animate-fade-up">
+            <span className="inline-flex items-center gap-2 rounded-full border border-[var(--border-gold)] bg-white/80 py-1.5 pl-2 pr-4 text-xs font-bold text-[var(--gold)] shadow-[var(--shadow)] backdrop-blur">
+              <KidneyMark className="h-5 w-5" />
+              Nefrologia que acompanha você
+            </span>
+            <h1 className="font-display mt-5 text-[2.6rem] font-extrabold leading-[1.03] tracking-tight sm:text-6xl">
+              <span className="text-hero-gradient">Cuidado renal</span>
+              <br />
+              <span className="text-[var(--text)]">que </span>
+              <span className="text-[var(--gold)]">acompanha</span>
+              <span className="text-[var(--text)]"> você.</span>
+            </h1>
+            <p className="animate-fade-up-delay mt-5 max-w-lg text-lg leading-relaxed text-[var(--text-soft)]">
+              Consultas, exames, evolução e orientação — do agendamento ao acompanhamento contínuo, num só lugar.
+            </p>
+            <div className="animate-fade-up-delay mt-7 flex flex-col gap-3 sm:flex-row">
+              <Link href="/agendar" className="btn-gold px-8 text-base sm:w-auto" onClick={() => trackEvent("cta_agendar_home")}>
+                <CalendarIcon className="h-5 w-5" /> Agendar consulta
+              </Link>
+              <Link href="/paciente/entrar" className="btn-ghost px-8 text-base sm:w-auto">
+                Entrar
+              </Link>
+            </div>
+
+            {/* Prova social / confiança */}
+            <div className="animate-fade-up-delay mt-6 flex flex-wrap items-center gap-x-5 gap-y-2 text-sm text-[var(--text-muted)]">
+              <span className="inline-flex items-center gap-1.5"><ShieldIcon className="h-4 w-4 text-[var(--gold)]" /> Dados criptografados</span>
+              <span className="inline-flex items-center gap-1.5"><CheckMini className="h-4 w-4 text-[var(--gold)]" /> Conforme a LGPD</span>
+              <span className="inline-flex items-center gap-1.5"><CheckMini className="h-4 w-4 text-[var(--gold)]" /> Online ou presencial</span>
+            </div>
+
+            {/* Portas de entrada — cartões premium */}
+            <div className="animate-fade-up-delay mt-8 grid max-w-lg grid-cols-3 gap-3">
+              {[
+                { href: "/paciente/entrar", ev: "portal_paciente", icon: UserIcon, label: "Sou paciente" },
+                { href: "/medicos/login", ev: "portal_medico", icon: StethoscopeIcon, label: "Sou profissional" },
+                { href: "/atendente/login", ev: "", icon: HeadsetIcon, label: "Sou atendente" },
+              ].map((p) => (
+                <Link
+                  key={p.label}
+                  href={p.href}
+                  onClick={() => p.ev && trackEvent(p.ev)}
+                  className="group flex flex-col items-center gap-2 rounded-2xl border border-[var(--border)] bg-white/80 py-4 text-center shadow-[var(--shadow)] backdrop-blur transition hover:-translate-y-1 hover:border-[var(--border-gold)] hover:shadow-[var(--shadow-gold)]"
+                >
+                  <span className="grid h-11 w-11 place-items-center rounded-full bg-[var(--gold-soft)] text-[var(--gold)] transition group-hover:scale-110">
+                    <p.icon className="h-5 w-5" />
+                  </span>
+                  <span className="text-xs font-bold text-[var(--text-soft)]">{p.label}</span>
+                </Link>
+              ))}
+            </div>
           </div>
-          {/* Ilustração do rim (decorativa) */}
-          <div className="relative hidden justify-self-center lg:block" aria-hidden="true">
-            <div className="absolute inset-0 -z-10 rounded-full bg-gradient-to-br from-[var(--gold)]/15 to-transparent blur-2xl" />
-            <KidneyMark className="h-64 w-64 drop-shadow-[0_20px_40px_rgba(8,123,130,0.25)]" />
+
+          {/* Coluna da ilustração renal */}
+          <div className="relative mx-auto w-full max-w-md lg:mx-0">
+            <div className="animate-float">
+              <KidneyPlexus className="w-full drop-shadow-[0_30px_60px_rgba(8,123,130,0.28)]" />
+            </div>
+            {/* Chips de vidro flutuantes */}
+            <div className="glass animate-float-slow absolute left-0 top-6 hidden items-center gap-2 rounded-2xl px-3 py-2 sm:flex">
+              <span className="grid h-8 w-8 place-items-center rounded-xl bg-[var(--gold-soft)] text-[var(--gold)]"><PulseIcon className="h-4 w-4" /></span>
+              <div className="leading-tight">
+                <p className="text-[10px] font-semibold uppercase tracking-wide text-[var(--text-muted)]">TFGe</p>
+                <p className="text-sm font-extrabold text-[var(--text)]">78 <span className="text-[var(--green)]">estável</span></p>
+              </div>
+            </div>
+            <div className="glass animate-float absolute bottom-8 right-0 hidden items-center gap-2 rounded-2xl px-3 py-2 sm:flex">
+              <span className="grid h-8 w-8 place-items-center rounded-xl bg-[var(--gold-soft)] text-[var(--gold)]"><CheckMini className="h-4 w-4" /></span>
+              <div className="leading-tight">
+                <p className="text-[10px] font-semibold uppercase tracking-wide text-[var(--text-muted)]">Creatinina</p>
+                <p className="text-sm font-extrabold text-[var(--text)]">1,1 mg/dL</p>
+              </div>
+            </div>
           </div>
         </div>
-        {/* Onda inferior */}
-        <svg className="relative block w-full" viewBox="0 0 1440 80" preserveAspectRatio="none" aria-hidden="true" style={{ height: 40 }}>
-          <path d="M0 40 C 240 90, 480 0, 720 30 C 960 60, 1200 10, 1440 40 L1440 80 L0 80 Z" fill="var(--gold-soft)" opacity="0.7" />
+
+        {/* Onda inferior suave */}
+        <svg className="relative block w-full" viewBox="0 0 1440 90" preserveAspectRatio="none" aria-hidden="true" style={{ height: 44 }}>
+          <path d="M0 45 C 240 100, 480 5, 720 35 C 960 65, 1200 12, 1440 45 L1440 90 L0 90 Z" fill="var(--gold-soft)" opacity="0.75" />
         </svg>
       </section>
 
@@ -552,19 +589,27 @@ function ArrowIcon({ className }: IconProps) {
   );
 }
 
-function KidneyMark({ className }: IconProps) {
+function ShieldIcon({ className }: IconProps) {
   return (
-    <svg viewBox="0 0 64 64" className={className} fill="none" aria-hidden="true">
-      <defs>
-        <linearGradient id="kg" x1="0" y1="0" x2="1" y2="1">
-          <stop offset="0" stopColor="var(--gold)" />
-          <stop offset="1" stopColor="var(--gold-dark)" />
-        </linearGradient>
-      </defs>
-      <path d="M25 8c-9 0-15 8-15 18 0 12 7 22 15 22 5 0 8-4 8-9V17c0-6-3-9-8-9Z" fill="url(#kg)" />
-      <path d="M39 8c9 0 15 8 15 18 0 12-7 22-15 22-5 0-8-4-8-9V17c0-6 3-9 8-9Z" fill="url(#kg)" opacity="0.88" />
-      <circle cx="22" cy="20" r="2.4" fill="#fff" opacity="0.9" />
-      <circle cx="42" cy="20" r="2.4" fill="#fff" opacity="0.9" />
+    <svg viewBox="0 0 24 24" className={className} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="M12 3l7 3v5c0 4.5-3 7.5-7 9-4-1.5-7-4.5-7-9V6l7-3Z" />
+      <path d="m9 12 2 2 4-4" />
+    </svg>
+  );
+}
+
+function CheckMini({ className }: IconProps) {
+  return (
+    <svg viewBox="0 0 24 24" className={className} fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="m5 12 4.5 4.5L19 7" />
+    </svg>
+  );
+}
+
+function PulseIcon({ className }: IconProps) {
+  return (
+    <svg viewBox="0 0 24 24" className={className} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="M3 12h4l2-6 4 12 2-6h6" />
     </svg>
   );
 }

@@ -9,6 +9,7 @@ import { disablePush, enablePush, isSubscribed, notificationPermission, pushSupp
 import { DoctorPaymentSettings } from "@/components/DoctorPaymentSettings";
 import { DoctorPixSettings } from "@/components/DoctorPixSettings";
 import { LogoUploader } from "@/components/LogoUploader";
+import { ProfilePhotoUploader } from "@/components/ProfilePhotoUploader";
 import type { WeeklySlot } from "@/lib/types";
 
 const DAYS = [
@@ -165,6 +166,19 @@ export default function ConfiguracoesMedicoPage() {
           <Link href="/medicos/painel" className="text-sm font-semibold text-[var(--gold)]">← Painel</Link>
           <h1 className="font-display text-3xl font-extrabold text-[var(--text)]">Configurações</h1>
           <p className="mt-1 text-[var(--text-muted)]">Notificações no celular, lembretes, calendário, documentos e dados SUS/CEAF.</p>
+
+          <section id="perfil" className="panel mt-6 scroll-mt-4">
+            <h2 className="font-display text-xl text-[var(--text)]">Meu perfil</h2>
+            <p className="mt-1 text-sm text-[var(--text-muted)]">Sua foto de perfil aparece na sua área do médico. Não é usada nos documentos (para isso, use a logo mais abaixo).</p>
+            <div className="mt-3">
+              <ProfilePhotoUploader
+                endpoint="/api/doctor/photo"
+                label="Foto de perfil"
+                hint="Toque em Adicionar/Trocar foto para enviar uma imagem (PNG, JPG ou WEBP)."
+                fallback="Dr"
+              />
+            </div>
+          </section>
 
           <section id="agenda" className="panel mt-6 scroll-mt-4">
             <h2 className="font-display text-xl text-[var(--text)]">Agenda e atendimento</h2>

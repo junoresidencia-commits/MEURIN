@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { ProfilePhotoUploader } from "@/components/ProfilePhotoUploader";
 
 type Perms = Record<string, boolean>;
 type DoctorLink = { doctorId: string; doctorName: string; specialty: string; permissions: Perms };
@@ -28,6 +29,8 @@ function waLink(phone: string, text: string) {
 export default function AtendentePainelPage() {
   const router = useRouter();
   const [name, setName] = useState("");
+  const [photoUrl, setPhotoUrl] = useState<string | null>(null);
+  const [showPhoto, setShowPhoto] = useState(false);
   const [doctors, setDoctors] = useState<DoctorLink[]>([]);
   const [doctorId, setDoctorId] = useState("");
   const [bookings, setBookings] = useState<Booking[]>([]);
@@ -45,6 +48,7 @@ export default function AtendentePainelPage() {
       const me = await fetch("/api/atendente/me").then((r) => r.json());
       if (!me.attendant) { router.replace("/atendente/login"); return; }
       setName(me.attendant.name);
+      setPhotoUrl(me.attendant.photoUrl ?? null);
       setDoctors(me.doctors || []);
       const first = me.doctors?.[0]?.doctorId || "";
       setDoctorId(first);
@@ -72,12 +76,28 @@ export default function AtendentePainelPage() {
   return (
     <div className="mx-auto max-w-3xl px-5 pb-16 pt-8">
       <div className="flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <p className="text-sm font-semibold text-[var(--gold)]">Painel da atendente</p>
-          <h1 className="font-display text-2xl font-extrabold text-[var(--text)]">Olá, {name}</h1>
+        <div className="flex items-center gap-3">
+          <button type="button" onClick={() => setShowPhoto((v) => !v)} className="shrink-0 rounded-full" title="Editar foto">
+            {photoUrl ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img src={photoUrl} alt="Sua foto" className="h-12 w-12 rounded-full border border-[var(--border)] object-cover" />
+            ) : (
+              <span className="grid h-12 w-12 place-items-center rounded-full bg-[var(--gold-soft)] text-base font-bold text-[var(--gold)]">{(name || "At").slice(0, 2).toUpperCase()}</span>
+            )}
+          </button>
+          <div>
+            <p className="text-sm font-semibold text-[var(--gold)]">Painel da atendente</p>
+            <h1 className="font-display text-2xl font-extrabold text-[var(--text)]">Olá, {name}</h1>
+          </div>
         </div>
         <button type="button" className="btn-ghost text-sm" onClick={logout}>Sair</button>
       </div>
+
+      {showPhoto && (
+        <div className="mt-4">
+          <ProfilePhotoUploader endpoint="/api/atendente/photo" label="Minha foto" hint="Aparece no seu painel." fallback={name || "At"} onChange={setPhotoUrl} />
+        </div>
+      )}
 
       {doctors.length > 1 && (
         <label className="mt-4 block">

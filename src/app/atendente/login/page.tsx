@@ -3,6 +3,7 @@
 import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { AuthShell } from "@/components/AuthShell";
 
 export default function AtendenteLoginPage() {
   const router = useRouter();
@@ -25,12 +26,13 @@ export default function AtendenteLoginPage() {
   }
 
   return (
-    <div className="mx-auto flex min-h-[80vh] max-w-md flex-col justify-center px-5 py-12">
-      <Link href="/" className="mb-4 inline-flex items-center gap-1 text-sm font-semibold text-[var(--gold)]">← Voltar</Link>
-      <p className="text-xs font-bold uppercase tracking-[0.22em] text-[var(--gold)]">Atendente / Secretária</p>
-      <h1 className="font-display mt-2 text-3xl font-extrabold text-[var(--text)]">Entrar</h1>
-      <p className="mt-2 text-[var(--text-muted)]">Use seu <strong>CPF ou e-mail</strong> e a senha fornecida pelo médico.</p>
-      <form onSubmit={onSubmit} noValidate className="panel mt-6 space-y-4">
+    <AuthShell
+      back={{ href: "/" }}
+      eyebrow="Atendente / Secretária"
+      title="Entrar"
+      subtitle={<>Use seu <strong>CPF ou e-mail</strong> e a senha fornecida pelo médico.</>}
+    >
+      <form onSubmit={onSubmit} noValidate className="panel space-y-4">
         <label className="block">
           <span className="mb-1 block text-xs font-bold uppercase tracking-wider text-[var(--gold)]">CPF ou e-mail</span>
           <input type="text" className="input-field" value={identifier} onChange={(e) => setIdentifier(e.target.value)} autoComplete="username" />
@@ -43,6 +45,6 @@ export default function AtendenteLoginPage() {
         <button type="submit" className="btn-gold w-full" disabled={busy}>{busy ? "Entrando…" : "Entrar"}</button>
       </form>
       <p className="mt-4 text-center text-sm text-[var(--text-muted)]">É médico? <Link href="/medicos/login" className="font-semibold text-[var(--gold)]">Entrar como médico</Link></p>
-    </div>
+    </AuthShell>
   );
 }

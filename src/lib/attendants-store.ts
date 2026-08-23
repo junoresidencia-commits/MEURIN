@@ -31,6 +31,7 @@ export interface Attendant {
   email?: string | null;
   phone?: string | null;
   whatsapp?: string | null;
+  photoUrl?: string | null;
   passwordHash?: string | null;
   status: "active" | "inactive";
   createdAt: string;
@@ -74,6 +75,7 @@ function mapAtt(r: Record<string, unknown>): Attendant {
     id: String(r.id), name: String(r.name),
     cpf: (r.cpf as string) ?? null, email: (r.email as string) ?? null,
     phone: (r.phone as string) ?? null, whatsapp: (r.whatsapp as string) ?? null,
+    photoUrl: (r.photo_url as string) ?? null,
     passwordHash: (r.password_hash as string) ?? null,
     status: (r.status as "active" | "inactive") ?? "active",
     createdAt: String(r.created_at ?? new Date().toISOString()),
@@ -161,6 +163,26 @@ export async function touchAttendantAccess(id: string): Promise<void> {
   const db = await readLocal();
   const a = db.attendants.find((x) => x.id === id);
   if (a) { a.lastAccessAt = now; await writeLocal(db); }
+}
+
+export async function setAttendantPhoto(id: string, photoUrl: string | null): Promise<void> {
+  if (active()) {
+    const s = getSupabaseAdmin()!;
+    const { error } = await s.from("attendants").update({ photo_url: photoUrl }).eq("id", id);
+    if (!error) return;
+    if (isMissing(error)) {
+      tableMissing = true;
+    } else {
+      const missingColumn = error.code === "PGRST204" || error.code === "42703" || /column|schema cache/i.test(error.message || "");
+      // Coluna ainda não migrada (ex.: produção antes da migração): não persiste,
+      // mas não quebra o upload nem tenta escrever no FS somente-leitura da Vercel.
+      if (missingColumn) return;
+      throw error;
+    }
+  }
+  const db = await readLocal();
+  const a = db.attendants.find((x) => x.id === id);
+  if (a) { a.photoUrl = photoUrl; await writeLocal(db); }
 }
 
 // ---------- Links ----------
