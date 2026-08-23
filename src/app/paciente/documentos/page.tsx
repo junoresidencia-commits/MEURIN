@@ -13,7 +13,7 @@ type Doc = {
 const TYPE_LABEL: Record<string, string> = {
   receita: "Receita", exame: "Pedido de exames", relatorio: "Relatório", atestado: "Atestado",
   declaracao: "Declaração", encaminhamento: "Encaminhamento", parecer: "Parecer",
-  orientacao: "Orientações", laudo: "Laudo", livre: "Documento",
+  orientacao: "Orientações", laudo: "Laudo", livre: "Documento", plano_alimentar: "Plano alimentar",
 };
 
 export default function MeusDocumentosPage() {
