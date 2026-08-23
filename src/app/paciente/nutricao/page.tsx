@@ -13,7 +13,7 @@ type Food = { id: string; name: string; state?: string; source: string; measure?
 type PlanItem = { food?: string; grams?: number | string; household?: string; note?: string };
 type PlanMeal = { name?: string; time?: string; items?: PlanItem[] };
 type Plan = { meals: PlanMeal[]; waterMl?: number | string | null; notes?: string | null; validUntil?: string | null; totals?: Record<string, number> | null } | null;
-type PlanResp = { plan: Plan; nutritionistName?: string | null; createdAt?: string; pdfUrl?: string | null };
+type PlanResp = { plan: Plan; nutritionistName?: string | null; nutritionistPhotoUrl?: string | null; createdAt?: string; pdfUrl?: string | null };
 
 const LIGHT: Record<string, { bg: string; text: string; dot: string; label: string }> = {
   verde: { bg: "bg-emerald-50", text: "text-emerald-700", dot: "bg-emerald-500", label: "Dentro da meta" },
@@ -218,14 +218,22 @@ export default function PacienteNutricaoPage() {
       {plan?.plan && (
         <section className="mt-5 overflow-hidden rounded-[24px] border border-[var(--border-gold)] bg-gradient-to-br from-[var(--gold-soft)] to-white shadow-[var(--shadow)]">
           <div className="flex flex-wrap items-center justify-between gap-2 px-5 pt-5">
-            <div>
-              <p className="text-xs font-bold uppercase tracking-wider text-[var(--gold)]">Seu plano alimentar</p>
-              <h2 className="font-display text-xl font-extrabold text-[var(--text)]">Prescrito pela sua nutricionista</h2>
-              <p className="mt-0.5 text-xs text-[var(--text-muted)]">
-                {plan.nutritionistName ? `Por ${plan.nutritionistName}` : "Plano individualizado"}
-                {plan.createdAt ? ` · ${new Date(plan.createdAt).toLocaleDateString("pt-BR")}` : ""}
-                {plan.plan.validUntil ? ` · revisão: ${plan.plan.validUntil}` : ""}
-              </p>
+            <div className="flex items-center gap-3">
+              {plan.nutritionistPhotoUrl ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img src={plan.nutritionistPhotoUrl} alt="" className="h-12 w-12 shrink-0 rounded-full border border-[var(--border)] object-cover" />
+              ) : plan.nutritionistName ? (
+                <span className="grid h-12 w-12 shrink-0 place-items-center rounded-full bg-white/70 text-base font-bold text-[var(--gold)]">{plan.nutritionistName.slice(0, 2).toUpperCase()}</span>
+              ) : null}
+              <div>
+                <p className="text-xs font-bold uppercase tracking-wider text-[var(--gold)]">Seu plano alimentar</p>
+                <h2 className="font-display text-xl font-extrabold text-[var(--text)]">Prescrito pela sua nutricionista</h2>
+                <p className="mt-0.5 text-xs text-[var(--text-muted)]">
+                  {plan.nutritionistName ? `Por ${plan.nutritionistName}` : "Plano individualizado"}
+                  {plan.createdAt ? ` · ${new Date(plan.createdAt).toLocaleDateString("pt-BR")}` : ""}
+                  {plan.plan.validUntil ? ` · revisão: ${plan.plan.validUntil}` : ""}
+                </p>
+              </div>
             </div>
             {plan.pdfUrl && (
               <a href={plan.pdfUrl} target="_blank" rel="noopener noreferrer" className="btn-ghost text-sm">Ver PDF</a>

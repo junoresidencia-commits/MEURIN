@@ -13,6 +13,7 @@ type LabVal = { value: number; unit: string | null; date: string } | null;
 type Row = {
   key: string;
   name: string;
+  photoUrl?: string | null;
   city: string;
   age: number | null;
   sex: string | null;
@@ -214,7 +215,14 @@ function PacientesInner() {
               {list.map((r) => (
                 <li key={r.key} className="panel !p-4">
                   <div className="flex flex-wrap items-start justify-between gap-3">
-                    <div className="min-w-0">
+                    <div className="flex min-w-0 items-start gap-3">
+                      {r.photoUrl ? (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img src={r.photoUrl} alt="" className="h-11 w-11 shrink-0 rounded-full border border-[var(--border)] object-cover" />
+                      ) : (
+                        <span className="grid h-11 w-11 shrink-0 place-items-center rounded-full bg-[var(--gold-soft)] text-sm font-bold text-[var(--gold)]">{r.name.split(" ").filter(Boolean).slice(0, 2).map((p) => p[0]).join("").toUpperCase()}</span>
+                      )}
+                      <div className="min-w-0">
                       <button type="button" onClick={() => setQuickKey(r.key)} className="text-left">
                         <span className="font-display text-lg text-[var(--text)] hover:text-[var(--gold)]">{r.name}</span>
                         {r.age != null && <span className="ml-2 text-sm text-[var(--text-muted)]">{r.age} anos</span>}
@@ -227,6 +235,7 @@ function PacientesInner() {
                         {r.flags.transplante && <Chip>Transplante</Chip>}
                         {r.flags.glomerulopatia && <Chip>Glomerulopatia</Chip>}
                         {r.city && <span className="text-xs text-[var(--text-muted)]">{r.city}</span>}
+                      </div>
                       </div>
                     </div>
                     <div className="flex flex-col items-end gap-1">

@@ -31,6 +31,7 @@ function toPublic(d: Doctor): PublicDoctor {
     rqe: d.rqe,
     clinic: d.clinic,
     logoUrl: d.logoUrl,
+    photoUrl: d.photoUrl,
     locations: locations.map((l) => ({
       id: l.id,
       name: l.name,

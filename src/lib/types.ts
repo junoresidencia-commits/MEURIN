@@ -317,6 +317,7 @@ export type PublicDoctor = Pick<
   | "rqe"
   | "clinic"
   | "logoUrl"
+  | "photoUrl"
   | "locations"
   | "availabilityPeriods"
 > & {

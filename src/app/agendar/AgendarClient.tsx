@@ -348,10 +348,10 @@ export default function AgendarClient() {
             >
               <div className="flex items-start justify-between gap-4">
                 <div className="flex min-w-0 flex-1 gap-3">
-                  {d.logoUrl ? (
+                  {(d.photoUrl || d.logoUrl) ? (
                     // eslint-disable-next-line @next/next/no-img-element
                     <img
-                      src={d.logoUrl}
+                      src={d.photoUrl || d.logoUrl}
                       alt=""
                       className="h-14 w-14 shrink-0 rounded-2xl object-cover border border-[var(--border)]"
                     />
