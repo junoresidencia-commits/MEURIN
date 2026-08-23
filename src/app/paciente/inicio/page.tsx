@@ -7,6 +7,7 @@ import { PatientNav } from "@/components/PatientNav";
 import { ConsentGate } from "@/components/ConsentGate";
 import { NotificationBell } from "@/components/NotificationBell";
 import { EnableNotifications } from "@/components/EnableNotifications";
+import { LabChart } from "@/components/LabChart";
 import { formatSlotLabel } from "@/lib/scheduling-client";
 
 type HomeRecord = {
@@ -234,6 +235,10 @@ export default function PacienteInicioPage() {
       </div>
 
       <KidneyNumbers labs={labs} />
+
+      <EvolutionCharts labs={labs} records={records} />
+
+      <AcessosRapidos />
 
       <CareTimeline
         bookings={bookings}
@@ -559,7 +564,7 @@ function CareTimeline({
   return (
     <div className="mt-8">
       <p className="text-xs font-bold uppercase tracking-wider text-[var(--gold)]">
-        Continuidade do cuidado
+        Minha jornada renal
       </p>
       <p className="mt-1 text-xs text-[var(--text-muted)]">
         Consulta → exames → resultados → acompanhamento → retorno
@@ -594,6 +599,70 @@ function CareTimeline({
             </div>
           </div>
         )}
+      </div>
+    </div>
+  );
+}
+
+// "Minha Evolução" — gráficos a partir dos dados JÁ existentes (labs + registros).
+// Não cria dados: só desenha séries que têm 2+ pontos.
+function EvolutionCharts({ labs, records }: { labs: Lab[]; records: HomeRecord[] }) {
+  const labSeries = (key: string) =>
+    labs.filter((l) => l.testKey === key).sort((a, b) => a.measuredAt.localeCompare(b.measuredAt)).map((l) => ({ x: l.measuredAt, y: l.value }));
+  const recSeries = (kind: HomeRecord["kind"], pick: (r: HomeRecord) => number | null | undefined) =>
+    records
+      .filter((r) => r.kind === kind)
+      .slice()
+      .sort((a, b) => a.measuredAt.localeCompare(b.measuredAt))
+      .map((r) => ({ x: r.measuredAt, y: Number(pick(r)) }))
+      .filter((p) => Number.isFinite(p.y));
+
+  const charts: { title: string; unit?: string; color: string; points: { x: string; y: number }[] }[] = [
+    { title: "Função renal (TFGe)", unit: "mL/min", color: "var(--gold)", points: labSeries("tfge") },
+    { title: "RAC / Proteinúria", unit: "mg/g", color: "#1a9a78", points: labSeries("rac") },
+    { title: "Pressão arterial (sistólica)", unit: "mmHg", color: "#c04b46", points: recSeries("bp", (r) => r.systolic) },
+    { title: "Peso", unit: "kg", color: "#7758c6", points: recSeries("weight", (r) => r.weightKg) },
+    { title: "Glicemia", unit: "mg/dL", color: "#2b7fb0", points: recSeries("glucose", (r) => r.glucoseMgDl) },
+  ].filter((c) => c.points.length >= 2);
+
+  if (charts.length === 0) return null;
+
+  return (
+    <div className="mt-6">
+      <p className="text-xs font-bold uppercase tracking-wider text-[var(--gold)]">Minha evolução</p>
+      <p className="mt-1 text-xs text-[var(--text-muted)]">Como seus números vêm mudando ao longo do tempo.</p>
+      <div className="mt-3 grid gap-3 sm:grid-cols-2">
+        {charts.map((c) => (
+          <div key={c.title} className="rounded-[18px] border border-[var(--border)] bg-white p-3 shadow-[var(--shadow)]">
+            <p className="text-sm font-semibold text-[var(--text-soft)]">{c.title}</p>
+            <LabChart points={c.points} color={c.color} unit={c.unit} />
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+// "Acessos rápidos" — atalhos para áreas que JÁ existem (sem novas funções).
+function AcessosRapidos() {
+  const items: { href: string; label: string; icon: string }[] = [
+    { href: "/paciente/exames", label: "Exames", icon: "🧪" },
+    { href: "/paciente/documentos", label: "Documentos", icon: "📄" },
+    { href: "/paciente/nutricao", label: "Nutrição", icon: "🥗" },
+    { href: "/paciente/entender", label: "Entender", icon: "📖" },
+    { href: "/minhas-consultas", label: "Consultas", icon: "📅" },
+    { href: "/paciente/registrar", label: "Registrar", icon: "➕" },
+  ];
+  return (
+    <div className="mt-6">
+      <p className="text-xs font-bold uppercase tracking-wider text-[var(--gold)]">Acessos rápidos</p>
+      <div className="mt-3 grid grid-cols-3 gap-3 sm:grid-cols-6">
+        {items.map((it) => (
+          <Link key={it.href} href={it.href} className="flex flex-col items-center gap-1 rounded-2xl border border-[var(--border)] bg-white py-3 text-center transition hover:border-[var(--border-gold)] hover:bg-[var(--gold-soft)]">
+            <span className="text-xl" aria-hidden>{it.icon}</span>
+            <span className="text-[11px] font-semibold text-[var(--text-soft)]">{it.label}</span>
+          </Link>
+        ))}
       </div>
     </div>
   );
