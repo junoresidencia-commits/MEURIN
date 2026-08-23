@@ -4,6 +4,7 @@ import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { toFriendlyMessage } from "@/lib/user-errors";
+import { AuthShell } from "@/components/AuthShell";
 
 type ClaimHint = {
   maskedName: string;
@@ -85,20 +86,16 @@ export default function CriarContaPacientePage() {
   }
 
   return (
-    <div className="mx-auto max-w-md px-5 py-12">
-      <Link href="/paciente/entrar" className="mb-4 inline-flex items-center gap-1 text-sm font-semibold text-[var(--gold)]">← Voltar</Link>
-      <p className="text-sm font-semibold text-[var(--gold)]">Área do paciente</p>
-      <h1 className="font-display mt-2 text-3xl font-extrabold text-[var(--text)]">
-        {claim ? "Conectar ao cadastro" : "Criar minha conta"}
-      </h1>
-      <p className="mt-3 text-[var(--text-muted)]">
-        {claim
-          ? "Encontramos um cadastro relacionado ao seu CPF. Confirme sua identidade para acessar o acompanhamento no Meu Rim."
-          : "Preencha pelo menos o nome e o CPF. Você poderá completar ou alterar os dados depois, inclusive na consulta."}
-      </p>
-
+    <AuthShell
+      back={{ href: "/paciente/entrar" }}
+      eyebrow="Área do paciente"
+      title={claim ? "Conectar ao cadastro" : "Criar minha conta"}
+      subtitle={claim
+        ? "Encontramos um cadastro relacionado ao seu CPF. Confirme sua identidade para acessar o acompanhamento no Meu Rim."
+        : "Preencha pelo menos o nome e o CPF. Você poderá completar ou alterar os dados depois, inclusive na consulta."}
+    >
       {claim && (
-        <div className="mt-4 rounded-2xl border border-[var(--border-gold)] bg-[var(--gold-soft)] p-4 text-sm text-[var(--text-soft)]">
+        <div className="mb-4 rounded-2xl border border-[var(--border-gold)] bg-[var(--gold-soft)] p-4 text-sm text-[var(--text-soft)]">
           <p className="font-semibold text-[var(--text)]">Cadastro encontrado: {claim.maskedName}</p>
           <p className="mt-1">
             O CPF sozinho não autentica. Confirme o nome completo
@@ -185,6 +182,6 @@ export default function CriarContaPacientePage() {
           Já tem conta? <Link href="/paciente/entrar" className="font-semibold text-[var(--gold)]">Entrar</Link>
         </p>
       </form>
-    </div>
+    </AuthShell>
   );
 }

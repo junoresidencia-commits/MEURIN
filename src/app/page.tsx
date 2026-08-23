@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { ShareButton } from "@/components/ShareButton";
+import { KidneyMark, KidneyPlexus } from "@/components/BrandKidney";
 import { trackEvent } from "@/lib/analytics-client";
 
 const CONSULTA_INFOS = [
@@ -188,7 +189,7 @@ export default function HomePage() {
           {/* Coluna da ilustração renal */}
           <div className="relative mx-auto w-full max-w-md lg:mx-0">
             <div className="animate-float">
-              <KidneyHero className="w-full drop-shadow-[0_30px_60px_rgba(8,123,130,0.28)]" />
+              <KidneyPlexus className="w-full drop-shadow-[0_30px_60px_rgba(8,123,130,0.28)]" />
             </div>
             {/* Chips de vidro flutuantes */}
             <div className="glass animate-float-slow absolute left-0 top-6 hidden items-center gap-2 rounded-2xl px-3 py-2 sm:flex">
@@ -584,96 +585,6 @@ function ArrowIcon({ className }: IconProps) {
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className} aria-hidden="true">
       <circle cx="12" cy="12" r="9" opacity="0.25" />
       <path d="M10 8l4 4-4 4" />
-    </svg>
-  );
-}
-
-function KidneyMark({ className }: IconProps) {
-  return (
-    <svg viewBox="0 0 64 64" className={className} fill="none" aria-hidden="true">
-      <defs>
-        <linearGradient id="kg" x1="0" y1="0" x2="1" y2="1">
-          <stop offset="0" stopColor="var(--gold)" />
-          <stop offset="1" stopColor="var(--gold-dark)" />
-        </linearGradient>
-      </defs>
-      <path d="M25 8c-9 0-15 8-15 18 0 12 7 22 15 22 5 0 8-4 8-9V17c0-6-3-9-8-9Z" fill="url(#kg)" />
-      <path d="M39 8c9 0 15 8 15 18 0 12-7 22-15 22-5 0-8-4-8-9V17c0-6 3-9 8-9Z" fill="url(#kg)" opacity="0.88" />
-      <circle cx="22" cy="20" r="2.4" fill="#fff" opacity="0.9" />
-      <circle cx="42" cy="20" r="2.4" fill="#fff" opacity="0.9" />
-    </svg>
-  );
-}
-
-/* Ilustração premium: rim anatômico com rede vascular e nós pulsando. */
-function KidneyHero({ className }: IconProps) {
-  return (
-    <svg viewBox="0 0 440 440" className={className} fill="none" aria-hidden="true" role="img">
-      <defs>
-        <radialGradient id="halo" cx="50%" cy="42%" r="55%">
-          <stop offset="0%" stopColor="#13b3bc" stopOpacity="0.35" />
-          <stop offset="55%" stopColor="#087b82" stopOpacity="0.12" />
-          <stop offset="100%" stopColor="#087b82" stopOpacity="0" />
-        </radialGradient>
-        <linearGradient id="kidneyBody" x1="0" y1="0" x2="1" y2="1">
-          <stop offset="0%" stopColor="#0fa3ac" />
-          <stop offset="55%" stopColor="#087b82" />
-          <stop offset="100%" stopColor="#055159" />
-        </linearGradient>
-        <linearGradient id="gloss" x1="0" y1="0" x2="0" y2="1">
-          <stop offset="0%" stopColor="#ffffff" stopOpacity="0.55" />
-          <stop offset="100%" stopColor="#ffffff" stopOpacity="0" />
-        </linearGradient>
-        <filter id="soft" x="-30%" y="-30%" width="160%" height="160%">
-          <feGaussianBlur stdDeviation="4" />
-        </filter>
-      </defs>
-
-      {/* Halo suave */}
-      <circle cx="220" cy="195" r="185" fill="url(#halo)" />
-      <circle cx="220" cy="195" r="150" stroke="#13b3bc" strokeOpacity="0.14" strokeWidth="1.5" fill="none" />
-      <circle cx="220" cy="195" r="120" stroke="#13b3bc" strokeOpacity="0.1" strokeWidth="1.5" fill="none" />
-
-      {/* Corpo do rim */}
-      <path
-        d="M262 70 C 350 70 396 150 396 228 C 396 322 322 372 250 362 C 214 357 196 328 205 292 C 216 248 258 246 258 200 C 258 152 214 150 205 116 C 197 84 216 70 262 70 Z"
-        fill="url(#kidneyBody)"
-      />
-      {/* Brilho superior (glossy) */}
-      <path
-        d="M262 84 C 322 84 360 132 372 190 C 320 150 262 156 250 132 C 244 120 246 96 262 84 Z"
-        fill="url(#gloss)"
-      />
-
-      {/* Rede vascular interna */}
-      <g stroke="#e9fbfc" strokeOpacity="0.85" strokeWidth="2.4" strokeLinecap="round" fill="none">
-        <path d="M232 300 C 250 268 250 236 236 208 C 224 184 244 156 268 150" />
-        <path d="M236 208 C 262 214 292 206 312 186" />
-        <path d="M250 236 C 276 244 306 240 330 224" />
-        <path d="M250 268 C 280 276 314 272 340 254" />
-        <path d="M268 150 C 296 150 322 162 338 186" />
-      </g>
-      {/* Vasos entrando pela chanfradura (artéria/veia renal) */}
-      <g stroke="#0fa3ac" strokeWidth="7" strokeLinecap="round" fill="none">
-        <path d="M205 214 C 176 214 150 206 128 214" strokeOpacity="0.9" />
-        <path d="M212 246 C 184 250 156 260 134 254" strokeOpacity="0.6" />
-      </g>
-
-      {/* Nós luminosos pulsando */}
-      <g fill="#ffffff">
-        <circle cx="268" cy="150" r="4.2" style={{ animation: "node-pulse 2.8s ease-in-out infinite" }} />
-        <circle cx="312" cy="186" r="3.6" style={{ animation: "node-pulse 3.4s ease-in-out .3s infinite" }} />
-        <circle cx="330" cy="224" r="3.6" style={{ animation: "node-pulse 2.4s ease-in-out .6s infinite" }} />
-        <circle cx="340" cy="254" r="3.4" style={{ animation: "node-pulse 3.1s ease-in-out .9s infinite" }} />
-        <circle cx="236" cy="208" r="4" style={{ animation: "node-pulse 2.6s ease-in-out .15s infinite" }} />
-      </g>
-
-      {/* Partículas orbitais externas */}
-      <g fill="#13b3bc">
-        <circle cx="96" cy="120" r="4" className="animate-soft-pulse" />
-        <circle cx="360" cy="96" r="3" className="animate-soft-pulse" />
-        <circle cx="120" cy="320" r="3.5" className="animate-soft-pulse" />
-      </g>
     </svg>
   );
 }

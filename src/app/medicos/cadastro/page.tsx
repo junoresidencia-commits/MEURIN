@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import Link from "next/link";
+import { AuthShell } from "@/components/AuthShell";
 
 export default function CadastroMedicoPage() {
   const [form, setForm] = useState({
@@ -53,12 +54,8 @@ export default function CadastroMedicoPage() {
 
   if (done) {
     return (
-      <div className="mx-auto max-w-md px-5 py-16">
-        <p className="text-sm font-semibold text-[var(--green)]">Cadastro recebido</p>
-        <h1 className="font-display mt-2 text-3xl font-extrabold text-[var(--text)]">
-          Cadastro recebido com sucesso
-        </h1>
-        <div className="panel mt-8 space-y-4 text-[var(--text-soft)]">
+      <AuthShell eyebrow="Cadastro recebido" title="Cadastro recebido com sucesso">
+        <div className="panel space-y-4 text-[var(--text-soft)]">
           <p>
             Seus dados serão analisados pelo administrador do Meu Rim. Você
             receberá um aviso após a aprovação.
@@ -67,7 +64,7 @@ export default function CadastroMedicoPage() {
             Voltar para o login
           </Link>
         </div>
-      </div>
+      </AuthShell>
     );
   }
 
@@ -87,17 +84,14 @@ export default function CadastroMedicoPage() {
   ] as const;
 
   return (
-    <div className="mx-auto max-w-xl px-5 py-12">
-      <p className="text-sm font-semibold text-[var(--gold)]">Área médica</p>
-      <h1 className="font-display mt-2 text-3xl font-extrabold text-[var(--text)]">
-        Seu prontuário nefrológico onde você estiver
-      </h1>
-      <p className="mt-3 text-[var(--text-muted)]">
-        Atenda presencialmente ou online e mantenha pacientes, exames, documentos e evolução renal
-        organizados em um só lugar. O acesso é liberado após aprovação do administrador.
-      </p>
-
-      <form onSubmit={onSubmit} className="panel mt-8 space-y-4" noValidate>
+    <AuthShell
+      wide
+      back={{ href: "/medicos/login", label: "Login" }}
+      eyebrow="Área médica"
+      title="Seu prontuário nefrológico onde você estiver"
+      subtitle="Atenda presencialmente ou online e mantenha pacientes, exames, documentos e evolução renal organizados em um só lugar. O acesso é liberado após aprovação do administrador."
+    >
+      <form onSubmit={onSubmit} className="panel space-y-4" noValidate>
         {fields.map(([key, label, type, required]) => (
           <label key={key} className="block">
             <span className="mb-2 block text-xs font-bold uppercase tracking-wider text-[var(--gold)]">
@@ -155,6 +149,6 @@ export default function CadastroMedicoPage() {
           </Link>
         </p>
       </form>
-    </div>
+    </AuthShell>
   );
 }
