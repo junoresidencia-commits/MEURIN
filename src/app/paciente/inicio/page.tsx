@@ -199,37 +199,46 @@ export default function PacienteInicioPage() {
   return (
     <div className="mx-auto max-w-[560px] px-5 pb-28 pt-8">
       <EnableNotifications />
-      <div className="flex items-center gap-3">
-        {photoUrl ? (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img src={photoUrl} alt="Sua foto" className="h-12 w-12 shrink-0 rounded-full border border-[var(--border)] object-cover" />
-        ) : (
-          <span className="grid h-12 w-12 shrink-0 place-items-center rounded-full bg-[var(--gold-soft)] text-base font-bold text-[var(--gold)]">{(name || "P").slice(0, 2).toUpperCase()}</span>
-        )}
-        <div className="min-w-0 flex-1">
-          <h1 className="font-display truncate text-xl font-extrabold capitalize leading-tight text-[var(--text)] sm:text-2xl">
-            Olá, {name}
-          </h1>
-          <p className="text-sm text-[var(--text-muted)]">Como você está hoje?</p>
+      <header className="relative overflow-hidden rounded-[26px] border border-[var(--border-gold)] bg-gradient-to-br from-[var(--gold-soft)] via-white to-white p-4 shadow-[var(--shadow)]">
+        <div className="pointer-events-none absolute -right-10 -top-10 h-32 w-32 rounded-full bg-[var(--gold)]/10 blur-2xl" aria-hidden="true" />
+        <div className="relative flex items-center gap-3">
+          {photoUrl ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img src={photoUrl} alt="Sua foto" className="h-14 w-14 shrink-0 rounded-full border-2 border-white object-cover shadow-[var(--shadow)]" />
+          ) : (
+            <span className="grid h-14 w-14 shrink-0 place-items-center rounded-full border-2 border-white bg-[var(--gold)] text-lg font-bold text-white shadow-[var(--shadow)]">{(name || "P").slice(0, 2).toUpperCase()}</span>
+          )}
+          <div className="min-w-0 flex-1">
+            <h1 className="font-display truncate text-xl font-extrabold capitalize leading-tight text-[var(--text)] sm:text-2xl">
+              Olá, {name}
+            </h1>
+            <p className="text-sm text-[var(--text-muted)]">Como você está hoje?</p>
+          </div>
+          <div className="flex shrink-0 items-center gap-1.5">
+            <NotificationBell />
+            <button
+              type="button"
+              onClick={logout}
+              aria-label="Sair"
+              title="Sair"
+              className="grid h-9 w-9 place-items-center rounded-full border border-[var(--border)] bg-white/70 text-[var(--text-muted)] transition hover:text-[var(--gold)]"
+            >
+              <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
+                <path d="m16 17 5-5-5-5" />
+                <path d="M21 12H9" />
+              </svg>
+            </button>
+          </div>
         </div>
-        <div className="flex shrink-0 items-center gap-2">
-          <NotificationBell />
-          <button
-            type="button"
-            onClick={logout}
-            className="rounded-full border border-[var(--border)] px-3 py-1.5 text-xs font-semibold text-[var(--text-muted)]"
-          >
-            Sair
-          </button>
-        </div>
-      </div>
 
-      {/* Atalhos secundários — linha rolável no celular */}
-      <nav className="mt-3 flex gap-2 overflow-x-auto pb-1 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-        <Link href="/paciente/documentos" className="shrink-0 whitespace-nowrap rounded-full border border-[var(--border)] bg-white px-3.5 py-1.5 text-xs font-semibold text-[var(--text-soft)]">Documentos</Link>
-        <Link href="/paciente/dados" className="shrink-0 whitespace-nowrap rounded-full border border-[var(--border)] bg-white px-3.5 py-1.5 text-xs font-semibold text-[var(--text-soft)]">Meus dados</Link>
-        <Link href="/paciente/senha" className="shrink-0 whitespace-nowrap rounded-full border border-[var(--border)] bg-white px-3.5 py-1.5 text-xs font-semibold text-[var(--text-soft)]">Trocar senha</Link>
-      </nav>
+        {/* Atalhos secundários — linha rolável no celular */}
+        <nav className="relative mt-3 flex gap-2 overflow-x-auto pb-0.5 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+          <Link href="/paciente/documentos" className="shrink-0 whitespace-nowrap rounded-full border border-[var(--border)] bg-white/80 px-3.5 py-1.5 text-xs font-semibold text-[var(--text-soft)] backdrop-blur transition hover:border-[var(--border-gold)]">Documentos</Link>
+          <Link href="/paciente/dados" className="shrink-0 whitespace-nowrap rounded-full border border-[var(--border)] bg-white/80 px-3.5 py-1.5 text-xs font-semibold text-[var(--text-soft)] backdrop-blur transition hover:border-[var(--border-gold)]">Meus dados</Link>
+          <Link href="/paciente/senha" className="shrink-0 whitespace-nowrap rounded-full border border-[var(--border)] bg-white/80 px-3.5 py-1.5 text-xs font-semibold text-[var(--text-soft)] backdrop-blur transition hover:border-[var(--border-gold)]">Trocar senha</Link>
+        </nav>
+      </header>
 
       <KidneyNumbers labs={labs} />
 
