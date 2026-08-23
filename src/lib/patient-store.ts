@@ -715,6 +715,23 @@ export async function getDocumentById(id: string): Promise<ClinicalDocument | nu
   return file.documents.find((d) => d.id === id) ?? null;
 }
 
+/** Exclui um documento (registro). O PDF em storage é removido pela rota. */
+export async function deleteDocument(id: string): Promise<void> {
+  if (supabaseActive("documents")) {
+    const supabase = getSupabaseAdmin()!;
+    const { error } = await supabase.from("documents").delete().eq("id", id);
+    if (error) {
+      if (isMissingTableError(error)) missingTables.add("documents");
+      else throw error;
+      return;
+    }
+    return;
+  }
+  const file = await readFile();
+  file.documents = file.documents.filter((d) => d.id !== id);
+  await writeFile(file);
+}
+
 /** Atualiza campos de um documento (uso interno pelas rotas do motor de documentos). */
 export async function updateDocument(id: string, patch: Partial<ClinicalDocument>): Promise<ClinicalDocument | null> {
   const map: Record<string, unknown> = {};

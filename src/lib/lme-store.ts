@@ -216,6 +216,22 @@ export async function markLmeSigned(id: string, signed: boolean, by?: string | n
   return list[idx];
 }
 
+/** Exclui uma LME (registro). Não afeta o PDF oficial em /public. */
+export async function deleteLme(id: string): Promise<void> {
+  if (active()) {
+    const supabase = getSupabaseAdmin()!;
+    const { error } = await supabase.from("lme_requests").delete().eq("id", id);
+    if (error) {
+      if (isMissing(error)) tableMissing = true;
+      else throw error;
+      return;
+    }
+    return;
+  }
+  const list = await readFile();
+  await writeFile(list.filter((l) => l.id !== id));
+}
+
 export async function getLme(id: string): Promise<LmeRequest | null> {
   if (active()) {
     const supabase = getSupabaseAdmin()!;

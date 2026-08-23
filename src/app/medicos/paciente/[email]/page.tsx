@@ -264,6 +264,20 @@ export default function ProntuarioPage() {
     }
   }
 
+  async function removeLme(id: string) {
+    if (!window.confirm("Excluir esta LME? Esta ação não pode ser desfeita.")) return;
+    const res = await fetch("/api/doctor/lme", { method: "DELETE", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id }) });
+    if (res.ok) await load();
+    else window.alert("Não foi possível excluir a LME.");
+  }
+
+  async function removeDocument(id: string) {
+    if (!window.confirm("Excluir este documento? Esta ação não pode ser desfeita.")) return;
+    const res = await fetch(`/api/documents/${id}`, { method: "DELETE" });
+    if (res.ok) await load();
+    else window.alert("Não foi possível excluir o documento.");
+  }
+
   function importFromText() {
     setImportErr("");
     const groups = parseLabGroups(importText);
@@ -582,13 +596,16 @@ export default function ProntuarioPage() {
             <p className="text-xs font-bold uppercase tracking-wider text-[var(--gold)]">LMEs geradas</p>
             {lmeList.length === 0 && <p className="text-[var(--text-muted)]">Nenhuma LME ainda.</p>}
             {lmeList.map((l) => (
-              <a key={l.id} href={`/lme/${l.id}`} target="_blank" rel="noopener noreferrer" className="panel flex items-center justify-between gap-3">
-                <div>
-                  <p className="font-semibold text-[var(--text)]">{l.medications.map((m) => m.name).join(", ") || "LME"}</p>
+              <div key={l.id} className="panel flex items-center justify-between gap-3">
+                <a href={`/lme/${l.id}`} target="_blank" rel="noopener noreferrer" className="min-w-0 flex-1">
+                  <p className="truncate font-semibold text-[var(--text)]">{l.medications.map((m) => m.name).join(", ") || "LME"}</p>
                   <p className="text-xs text-[var(--text-muted)]">CID {l.cid10 || "—"} · {fmt(l.createdAt)}</p>
+                </a>
+                <div className="flex shrink-0 items-center gap-3">
+                  <a href={`/lme/${l.id}`} target="_blank" rel="noopener noreferrer" className="text-sm font-semibold text-[var(--gold)]">Abrir PDF →</a>
+                  <button type="button" className="text-sm font-semibold text-[var(--text-muted)] hover:text-[var(--danger)]" onClick={() => removeLme(l.id)}>Excluir</button>
                 </div>
-                <span className="text-sm font-semibold text-[var(--gold)]">Abrir PDF →</span>
-              </a>
+              </div>
             ))}
           </div>
         )}
@@ -623,19 +640,19 @@ export default function ProntuarioPage() {
             <p className="text-xs font-bold uppercase tracking-wider text-[var(--gold)]">Documentos emitidos</p>
             {documents.length === 0 && <p className="text-[var(--text-muted)]">Nenhum documento emitido.</p>}
             {documents.map((d) => (
-              <a
+              <div
                 key={d.id}
-                href={`/documento/${d.id}`}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="panel flex items-center justify-between gap-3 transition hover:-translate-y-0.5 hover:border-[var(--border-gold)]"
+                className="panel flex items-center justify-between gap-3 transition hover:border-[var(--border-gold)]"
               >
-                <div>
-                  <p className="font-semibold text-[var(--text)]">{d.title}</p>
+                <a href={`/documento/${d.id}`} target="_blank" rel="noopener noreferrer" className="min-w-0 flex-1">
+                  <p className="truncate font-semibold text-[var(--text)]">{d.title}</p>
                   <p className="text-xs text-[var(--text-muted)]">{DOC_TYPE_LABEL[d.type]} · {fmt(d.createdAt)}</p>
+                </a>
+                <div className="flex shrink-0 items-center gap-3">
+                  <a href={`/documento/${d.id}`} target="_blank" rel="noopener noreferrer" className="text-sm font-semibold text-[var(--gold)]">Abrir PDF →</a>
+                  <button type="button" className="text-sm font-semibold text-[var(--text-muted)] hover:text-[var(--danger)]" onClick={() => removeDocument(d.id)}>Excluir</button>
                 </div>
-                <span className="text-sm font-semibold text-[var(--gold)]">Abrir PDF →</span>
-              </a>
+              </div>
             ))}
           </div>
         )}

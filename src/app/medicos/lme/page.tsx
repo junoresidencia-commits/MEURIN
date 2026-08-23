@@ -46,6 +46,13 @@ export default function DoctorLmePage() {
     else window.alert("Não foi possível atualizar a assinatura.");
   }
 
+  async function removeLme(it: Item) {
+    if (!window.confirm(`Excluir esta LME de ${it.patientName}? Esta ação não pode ser desfeita.`)) return;
+    const res = await fetch("/api/doctor/lme", { method: "DELETE", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id: it.id }) });
+    if (res.ok) setItems((prev) => (prev || []).filter((x) => x.id !== it.id));
+    else window.alert("Não foi possível excluir a LME.");
+  }
+
   const visible = (items || []).filter((i) => (filter === "assinar" ? !i.signedAt : true));
 
   return (
@@ -85,6 +92,7 @@ export default function DoctorLmePage() {
                       <div className="flex flex-wrap justify-end gap-2">
                         <Link href={`/lme/${it.id}`} className="btn-ghost text-sm">Abrir LME</Link>
                         <button type="button" className="btn-gold text-sm" onClick={() => toggleSigned(it)}>{it.signedAt ? "Desmarcar" : "Marcar como assinada"}</button>
+                        <button type="button" className="btn-ghost text-sm text-[var(--text-muted)] hover:text-[var(--danger)]" onClick={() => removeLme(it)}>Excluir</button>
                       </div>
                     </div>
                   </div>
