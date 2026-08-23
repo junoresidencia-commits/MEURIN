@@ -199,41 +199,21 @@ export default function PacienteInicioPage() {
   return (
     <div className="mx-auto max-w-[560px] px-5 pb-28 pt-8">
       <EnableNotifications />
-      <div className="flex items-start justify-between">
-        <div className="flex items-center gap-3">
-          {photoUrl ? (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img src={photoUrl} alt="Sua foto" className="h-12 w-12 shrink-0 rounded-full border border-[var(--border)] object-cover" />
-          ) : (
-            <span className="grid h-12 w-12 shrink-0 place-items-center rounded-full bg-[var(--gold-soft)] text-base font-bold text-[var(--gold)]">{(name || "P").slice(0, 2).toUpperCase()}</span>
-          )}
-          <div>
-            <h1 className="font-display text-2xl font-extrabold capitalize text-[var(--text)]">
-              Olá, {name}
-            </h1>
-            <p className="mt-1 text-sm text-[var(--text-muted)]">Como você está hoje?</p>
-          </div>
+      <div className="flex items-center gap-3">
+        {photoUrl ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img src={photoUrl} alt="Sua foto" className="h-12 w-12 shrink-0 rounded-full border border-[var(--border)] object-cover" />
+        ) : (
+          <span className="grid h-12 w-12 shrink-0 place-items-center rounded-full bg-[var(--gold-soft)] text-base font-bold text-[var(--gold)]">{(name || "P").slice(0, 2).toUpperCase()}</span>
+        )}
+        <div className="min-w-0 flex-1">
+          <h1 className="font-display truncate text-xl font-extrabold capitalize leading-tight text-[var(--text)] sm:text-2xl">
+            Olá, {name}
+          </h1>
+          <p className="text-sm text-[var(--text-muted)]">Como você está hoje?</p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex shrink-0 items-center gap-2">
           <NotificationBell />
-          <Link
-            href="/paciente/documentos"
-            className="rounded-full border border-[var(--border)] px-3 py-1.5 text-xs font-semibold text-[var(--text-muted)]"
-          >
-            Documentos
-          </Link>
-          <Link
-            href="/paciente/dados"
-            className="rounded-full border border-[var(--border)] px-3 py-1.5 text-xs font-semibold text-[var(--text-muted)]"
-          >
-            Meus dados
-          </Link>
-          <Link
-            href="/paciente/senha"
-            className="rounded-full border border-[var(--border)] px-3 py-1.5 text-xs font-semibold text-[var(--text-muted)]"
-          >
-            Trocar senha
-          </Link>
           <button
             type="button"
             onClick={logout}
@@ -243,6 +223,13 @@ export default function PacienteInicioPage() {
           </button>
         </div>
       </div>
+
+      {/* Atalhos secundários — linha rolável no celular */}
+      <nav className="mt-3 flex gap-2 overflow-x-auto pb-1 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+        <Link href="/paciente/documentos" className="shrink-0 whitespace-nowrap rounded-full border border-[var(--border)] bg-white px-3.5 py-1.5 text-xs font-semibold text-[var(--text-soft)]">Documentos</Link>
+        <Link href="/paciente/dados" className="shrink-0 whitespace-nowrap rounded-full border border-[var(--border)] bg-white px-3.5 py-1.5 text-xs font-semibold text-[var(--text-soft)]">Meus dados</Link>
+        <Link href="/paciente/senha" className="shrink-0 whitespace-nowrap rounded-full border border-[var(--border)] bg-white px-3.5 py-1.5 text-xs font-semibold text-[var(--text-soft)]">Trocar senha</Link>
+      </nav>
 
       <KidneyNumbers labs={labs} />
 
