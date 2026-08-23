@@ -112,6 +112,34 @@ body {
   @apply rounded-[24px] border border-[var(--border)] bg-[var(--panel)] p-5 shadow-[var(--shadow)] sm:p-6;
 }
 
+/* Identidade por perfil — só re-tinge os ACENTOS (menus ativos, ícones, botões,
+   detalhes). Mantém fundo claro + cards brancos + tipografia escura.
+   Paciente/site = teal padrão (sem override). */
+[data-area="medico"] {
+  --gold: #0d5b67;         /* azul-petróleo / teal escuro */
+  --gold-light: #0d5b67;
+  --gold-dark: #08424c;
+  --gold-soft: #e8f3f4;
+  --border-gold: #c4e2e5;
+  --shadow-gold: 0 12px 26px rgba(13, 91, 103, 0.22);
+}
+[data-area="nutri"] {
+  --gold: #1a9a78;         /* verde */
+  --gold-light: #1a9a78;
+  --gold-dark: #14795f;
+  --gold-soft: #e8f7f1;
+  --border-gold: #c7ecdf;
+  --shadow-gold: 0 12px 26px rgba(26, 154, 120, 0.22);
+}
+[data-area="atendente"] {
+  --gold: #7758c6;         /* roxo/violeta */
+  --gold-light: #7758c6;
+  --gold-dark: #5f43a8;
+  --gold-soft: #f2edff;
+  --border-gold: #ddd2f5;
+  --shadow-gold: 0 12px 26px rgba(119, 88, 198, 0.22);
+}
+
 @media print {
   header,
   footer,

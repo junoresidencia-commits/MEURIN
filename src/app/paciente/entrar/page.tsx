@@ -35,13 +35,15 @@ function EntrarInner() {
   }
 
   return (
-    <div className="mx-auto max-w-md px-5 py-12">
-      <p className="text-sm font-semibold text-[var(--gold)]">Área do paciente</p>
-      <h1 className="font-display mt-2 text-3xl font-extrabold text-[var(--text)]">
-        Acompanhe sua saúde
-      </h1>
-      <p className="mt-3 text-[var(--text-muted)]">
-        Acesse pelo celular ou computador para acompanhar consultas, exames, medicamentos, documentos e a evolução da sua saúde renal.
+    <div className="mx-auto min-h-screen max-w-md px-5 py-10">
+      <Link href="/" className="mb-6 flex items-center justify-center gap-2">
+        <span className="grid h-11 w-11 place-items-center rounded-2xl bg-gradient-to-br from-[var(--gold)] to-[var(--gold-dark)] text-sm font-extrabold text-white shadow-[var(--shadow-gold)]">MR</span>
+        <span className="font-display text-2xl font-extrabold text-[var(--text)]">Meu <span className="text-[var(--gold)]">Rim</span></span>
+      </Link>
+      <p className="text-xs font-semibold uppercase tracking-wider text-[var(--gold)]">Área do paciente</p>
+      <h1 className="font-display mt-1 text-2xl font-extrabold text-[var(--text)]">Bem-vindo de volta!</h1>
+      <p className="mt-1 text-sm text-[var(--text-muted)]">
+        Acompanhe consultas, exames, documentos e a evolução da sua saúde renal.
       </p>
 
       <div className="mt-6 flex gap-2">
