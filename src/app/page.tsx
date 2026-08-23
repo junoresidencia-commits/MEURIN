@@ -120,9 +120,14 @@ export default function HomePage() {
 
   return (
     <>
-      <section className="mx-auto max-w-5xl px-5 pb-4 pt-10 sm:pt-14">
+      {/* Hero premium — gradiente teal + ilustração do rim + onda */}
+      <section className="relative overflow-hidden">
+        <div className="pointer-events-none absolute inset-0 bg-gradient-to-b from-[var(--gold-soft)] via-[var(--bg)] to-[var(--bg)]" aria-hidden="true" />
+        <div className="pointer-events-none absolute -right-24 -top-24 h-72 w-72 rounded-full bg-[var(--gold)]/10 blur-3xl" aria-hidden="true" />
+        <div className="relative mx-auto grid max-w-5xl items-center gap-8 px-5 pb-4 pt-10 sm:pt-14 lg:grid-cols-2">
+          <div>
         <div className="flex items-center gap-2">
-          <span className="grid h-10 w-10 place-items-center rounded-2xl bg-gradient-to-br from-[var(--gold)] to-[var(--gold-dark)] text-sm font-extrabold text-white shadow-[var(--shadow-gold)]">MR</span>
+          <KidneyMark className="h-9 w-9" />
           <span className="font-display text-xl font-extrabold text-[var(--text)]">meu <span className="text-[var(--gold)]">rim</span></span>
         </div>
         <p className="animate-fade-up mt-6 text-sm font-semibold text-[var(--gold)]">Fala para o seu rim.</p>
@@ -160,6 +165,17 @@ export default function HomePage() {
           <LockIcon className="h-4 w-4 text-[var(--gold)]" />
           Seus dados estão seguros e protegidos com criptografia.
         </p>
+          </div>
+          {/* Ilustração do rim (decorativa) */}
+          <div className="relative hidden justify-self-center lg:block" aria-hidden="true">
+            <div className="absolute inset-0 -z-10 rounded-full bg-gradient-to-br from-[var(--gold)]/15 to-transparent blur-2xl" />
+            <KidneyMark className="h-64 w-64 drop-shadow-[0_20px_40px_rgba(8,123,130,0.25)]" />
+          </div>
+        </div>
+        {/* Onda inferior */}
+        <svg className="relative block w-full" viewBox="0 0 1440 80" preserveAspectRatio="none" aria-hidden="true" style={{ height: 40 }}>
+          <path d="M0 40 C 240 90, 480 0, 720 30 C 960 60, 1200 10, 1440 40 L1440 80 L0 80 Z" fill="var(--gold-soft)" opacity="0.7" />
+        </svg>
       </section>
 
       {/* Consulta + continuidade */}
@@ -532,6 +548,23 @@ function ArrowIcon({ className }: IconProps) {
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className} aria-hidden="true">
       <circle cx="12" cy="12" r="9" opacity="0.25" />
       <path d="M10 8l4 4-4 4" />
+    </svg>
+  );
+}
+
+function KidneyMark({ className }: IconProps) {
+  return (
+    <svg viewBox="0 0 64 64" className={className} fill="none" aria-hidden="true">
+      <defs>
+        <linearGradient id="kg" x1="0" y1="0" x2="1" y2="1">
+          <stop offset="0" stopColor="var(--gold)" />
+          <stop offset="1" stopColor="var(--gold-dark)" />
+        </linearGradient>
+      </defs>
+      <path d="M25 8c-9 0-15 8-15 18 0 12 7 22 15 22 5 0 8-4 8-9V17c0-6-3-9-8-9Z" fill="url(#kg)" />
+      <path d="M39 8c9 0 15 8 15 18 0 12-7 22-15 22-5 0-8-4-8-9V17c0-6 3-9 8-9Z" fill="url(#kg)" opacity="0.88" />
+      <circle cx="22" cy="20" r="2.4" fill="#fff" opacity="0.9" />
+      <circle cx="42" cy="20" r="2.4" fill="#fff" opacity="0.9" />
     </svg>
   );
 }
