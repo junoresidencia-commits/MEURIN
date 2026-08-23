@@ -1035,3 +1035,6 @@ grant all privileges on table public.care_returns to service_role;
 alter table public.lme_requests add column if not exists signed_at timestamptz;
 alter table public.lme_requests add column if not exists signed_by text;
 create index if not exists lme_requests_doctor_idx on public.lme_requests (doctor_id, created_at desc);
+
+-- Foto de perfil do paciente
+alter table public.patients add column if not exists photo_url text;

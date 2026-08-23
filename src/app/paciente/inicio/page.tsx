@@ -73,6 +73,7 @@ export default function PacienteInicioPage() {
   const [documents, setDocuments] = useState<SharedDoc[]>([]);
   const [labs, setLabs] = useState<{ testKey: string; value: number; unit?: string | null; measuredAt: string }[]>([]);
   const [patientName, setPatientName] = useState("");
+  const [photoUrl, setPhotoUrl] = useState("");
   const [loading, setLoading] = useState(true);
   const [consentPending, setConsentPending] = useState(false);
 
@@ -144,6 +145,7 @@ export default function PacienteInicioPage() {
         const me = await fetch("/api/patient/me");
         const md = await me.json();
         if (md.found && md.patient?.name) setPatientName(md.patient.name);
+        if (md.found && md.patient?.photoUrl) setPhotoUrl(md.patient.photoUrl);
       } catch {
         /* ignore */
       }
@@ -198,11 +200,19 @@ export default function PacienteInicioPage() {
     <div className="mx-auto max-w-[560px] px-5 pb-28 pt-8">
       <EnableNotifications />
       <div className="flex items-start justify-between">
-        <div>
-          <h1 className="font-display text-2xl font-extrabold capitalize text-[var(--text)]">
-            Olá, {name}
-          </h1>
-          <p className="mt-1 text-sm text-[var(--text-muted)]">Como você está hoje?</p>
+        <div className="flex items-center gap-3">
+          {photoUrl ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img src={photoUrl} alt="Sua foto" className="h-12 w-12 shrink-0 rounded-full border border-[var(--border)] object-cover" />
+          ) : (
+            <span className="grid h-12 w-12 shrink-0 place-items-center rounded-full bg-[var(--gold-soft)] text-base font-bold text-[var(--gold)]">{(name || "P").slice(0, 2).toUpperCase()}</span>
+          )}
+          <div>
+            <h1 className="font-display text-2xl font-extrabold capitalize text-[var(--text)]">
+              Olá, {name}
+            </h1>
+            <p className="mt-1 text-sm text-[var(--text-muted)]">Como você está hoje?</p>
+          </div>
         </div>
         <div className="flex items-center gap-2">
           <NotificationBell />

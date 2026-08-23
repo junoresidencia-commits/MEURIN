@@ -10,7 +10,7 @@ export default function MeusDadosPage() {
   const router = useRouter();
   const [loading, setLoading] = useState(true);
   const [notFound, setNotFound] = useState(false);
-  const [form, setForm] = useState({ name: "", cpf: "", phone: "", email: "", birthdate: "", sex: "" });
+  const [form, setForm] = useState({ name: "", cpf: "", phone: "", email: "", birthdate: "", sex: "", photoUrl: "" });
   const [saving, setSaving] = useState(false);
   const [msg, setMsg] = useState("");
   const [err, setErr] = useState("");
@@ -38,6 +38,31 @@ export default function MeusDadosPage() {
     setErr("");
   }
 
+  async function onPickPhoto(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    e.target.value = "";
+    if (!file) return;
+    if (!file.type.startsWith("image/")) { setErr("Selecione uma imagem (PNG/JPG)."); return; }
+    const dataUrl: string = await new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => {
+        const img = new Image();
+        img.onload = () => {
+          const max = 320;
+          let { width, height } = img;
+          if (width > max || height > max) { const r = Math.min(max / width, max / height); width = Math.round(width * r); height = Math.round(height * r); }
+          const c = document.createElement("canvas"); c.width = width; c.height = height;
+          const ctx = c.getContext("2d"); if (!ctx) return reject(new Error("Canvas"));
+          ctx.drawImage(img, 0, 0, width, height);
+          resolve(c.toDataURL("image/jpeg", 0.85));
+        };
+        img.onerror = reject; img.src = String(reader.result);
+      };
+      reader.onerror = reject; reader.readAsDataURL(file);
+    });
+    set("photoUrl", dataUrl);
+  }
+
   async function save(e: React.FormEvent) {
     e.preventDefault();
     setSaving(true);
@@ -47,7 +72,7 @@ export default function MeusDadosPage() {
       const res = await fetch("/api/patient/me", {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name: form.name, phone: form.phone, birthdate: form.birthdate, sex: form.sex }),
+        body: JSON.stringify({ name: form.name, phone: form.phone, birthdate: form.birthdate, sex: form.sex, photoUrl: form.photoUrl }),
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(data.error || "Não foi possível salvar.");
@@ -72,6 +97,21 @@ export default function MeusDadosPage() {
         </p>
       ) : (
         <form onSubmit={save} className="panel mt-6 space-y-4">
+          <div className="flex items-center gap-4">
+            {form.photoUrl ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img src={form.photoUrl} alt="Sua foto" className="h-16 w-16 rounded-full border border-[var(--border)] object-cover" />
+            ) : (
+              <span className="grid h-16 w-16 place-items-center rounded-full bg-[var(--gold-soft)] text-lg font-bold text-[var(--gold)]">{(form.name || "P").slice(0, 2).toUpperCase()}</span>
+            )}
+            <div className="flex flex-col gap-2">
+              <label className="btn-ghost cursor-pointer text-sm">
+                {form.photoUrl ? "Trocar foto" : "Adicionar foto"}
+                <input type="file" accept="image/png,image/jpeg,image/webp" className="hidden" onChange={onPickPhoto} />
+              </label>
+              {form.photoUrl && <button type="button" className="text-xs font-semibold text-[var(--danger)]" onClick={() => set("photoUrl", "")}>Remover foto</button>}
+            </div>
+          </div>
           <label className="block">
             <span className="mb-1 block text-xs font-bold uppercase tracking-wider text-[var(--gold)]">Nome completo</span>
             <input className="input-field" value={form.name} onChange={(e) => set("name", e.target.value)} required />
