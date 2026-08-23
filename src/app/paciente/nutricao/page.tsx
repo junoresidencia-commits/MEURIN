@@ -33,6 +33,7 @@ export default function PacienteNutricaoPage() {
   const [hasGoals, setHasGoals] = useState(false);
   const [date, setDate] = useState("");
   const [plan, setPlan] = useState<PlanResp | null>(null);
+  const [planDone, setPlanDone] = useState<string[]>([]);
 
   // formulário
   const [kind, setKind] = useState<"alimento" | "liquido">("alimento");
@@ -82,7 +83,24 @@ export default function PacienteNutricaoPage() {
       .then((r) => (r.ok ? r.json() : null))
       .then((d) => { if (d && d.plan) setPlan(d); })
       .catch(() => {});
+    fetch("/api/patient/nutrition/plan/checkin")
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => { if (d && Array.isArray(d.done)) setPlanDone(d.done); })
+      .catch(() => {});
   }, []);
+
+  async function toggleMeal(mealKey: string) {
+    const done = !planDone.includes(mealKey);
+    setPlanDone((prev) => (done ? [...prev, mealKey] : prev.filter((k) => k !== mealKey)));
+    try {
+      const res = await fetch("/api/patient/nutrition/plan/checkin", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ meal: mealKey, done }),
+      });
+      const d = await res.json().catch(() => ({}));
+      if (res.ok && Array.isArray(d.done)) setPlanDone(d.done);
+    } catch { /* mantém estado otimista */ }
+  }
 
   const loadAppts = useCallback(async () => {
     const r = await fetch("/api/patient/nutrition/appointments");
@@ -214,16 +232,47 @@ export default function PacienteNutricaoPage() {
             )}
           </div>
 
+          {/* Segui meu plano hoje? — progresso de aderência */}
+          {plan.plan.meals.length > 0 && (() => {
+            const total = plan.plan.meals.length;
+            const doneCount = plan.plan.meals.filter((m, i) => planDone.includes(`${i}:${m.name || `Refeição ${i + 1}`}`)).length;
+            const pct = Math.round((doneCount / total) * 100);
+            return (
+              <div className="mt-3 px-5">
+                <div className="flex items-center justify-between">
+                  <p className="text-sm font-bold text-[var(--text)]">Segui meu plano hoje?</p>
+                  <span className="text-sm font-extrabold text-[var(--gold)]">{doneCount}/{total}</span>
+                </div>
+                <div className="mt-1.5 h-2 w-full overflow-hidden rounded-full bg-white/70">
+                  <div className="h-full rounded-full bg-[var(--gold)] transition-all" style={{ width: `${pct}%` }} />
+                </div>
+                <p className="mt-1 text-[11px] text-[var(--text-muted)]">Marque cada refeição que você seguiu. Reinicia a cada dia.</p>
+              </div>
+            );
+          })()}
+
           <div className="mt-3 grid gap-2 px-5">
             {plan.plan.meals.length === 0 && (
               <p className="text-sm text-[var(--text-muted)]">O plano foi liberado. Toque em “Ver PDF” para os detalhes.</p>
             )}
-            {plan.plan.meals.map((m, i) => (
-              <div key={i} className="rounded-2xl border border-[var(--border)] bg-white p-3">
-                <p className="flex items-center gap-2 text-sm font-bold text-[var(--text)]">
-                  {m.time && <span className="rounded-full bg-[var(--gold-soft)] px-2 py-0.5 text-xs font-bold text-[var(--gold)]">{m.time}</span>}
-                  {m.name || `Refeição ${i + 1}`}
-                </p>
+            {plan.plan.meals.map((m, i) => {
+              const mealKey = `${i}:${m.name || `Refeição ${i + 1}`}`;
+              const checked = planDone.includes(mealKey);
+              return (
+              <div key={i} className={`rounded-2xl border p-3 transition ${checked ? "border-[var(--gold)] bg-[var(--gold-soft)]" : "border-[var(--border)] bg-white"}`}>
+                <div className="flex items-center justify-between gap-2">
+                  <p className="flex items-center gap-2 text-sm font-bold text-[var(--text)]">
+                    {m.time && <span className="rounded-full bg-[var(--gold-soft)] px-2 py-0.5 text-xs font-bold text-[var(--gold)]">{m.time}</span>}
+                    {m.name || `Refeição ${i + 1}`}
+                  </p>
+                  <button
+                    type="button"
+                    onClick={() => toggleMeal(mealKey)}
+                    className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-bold transition ${checked ? "bg-[var(--gold)] text-white" : "border border-[var(--border-gold)] text-[var(--gold)]"}`}
+                  >
+                    {checked ? "✓ Cumpri" : "Marcar"}
+                  </button>
+                </div>
                 {Array.isArray(m.items) && m.items.length > 0 ? (
                   <ul className="mt-2 grid gap-1">
                     {m.items.map((it, j) => (
@@ -237,7 +286,8 @@ export default function PacienteNutricaoPage() {
                   <p className="mt-1 text-xs text-[var(--text-muted)]">—</p>
                 )}
               </div>
-            ))}
+              );
+            })}
           </div>
 
           {(plan.plan.waterMl || plan.plan.totals || plan.plan.notes) && (

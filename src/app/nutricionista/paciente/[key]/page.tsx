@@ -340,7 +340,7 @@ function GoalsAndDiary({ patientKey }: { patientKey: string }) {
   const [note, setNote] = useState("");
   const [savedMsg, setSavedMsg] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
-  const [diary, setDiary] = useState<{ tracks: { key: string; label: string; unit: string; total: number; goal: number | null; status: string }[]; entries: { id: string; food: string; grams?: number | null; volumeMl?: number | null; meal?: string | null }[]; date: string } | null>(null);
+  const [diary, setDiary] = useState<{ tracks: { key: string; label: string; unit: string; total: number; goal: number | null; status: string }[]; entries: { id: string; food: string; grams?: number | null; volumeMl?: number | null; meal?: string | null }[]; date: string; planAdherence?: { total: number; done: number } | null } | null>(null);
   const [timeline, setTimeline] = useState<{ at: string; type: string; label: string; by?: string | null }[]>([]);
 
   useEffect(() => {
@@ -391,6 +391,11 @@ function GoalsAndDiary({ patientKey }: { patientKey: string }) {
 
       <section className="panel mt-4">
         <h2 className="font-display text-lg text-[var(--text)]">Diário alimentar do paciente {diary?.date ? `(${diary.date.split("-").reverse().join("/")})` : ""}</h2>
+        {diary?.planAdherence && (
+          <p className="mt-1 inline-flex items-center gap-2 rounded-full bg-[var(--gold-soft)] px-3 py-1 text-sm font-semibold text-[var(--gold)]">
+            Aderência ao plano hoje: {diary.planAdherence.done}/{diary.planAdherence.total} refeições
+          </p>
+        )}
         {!diary || diary.entries.length === 0 ? (
           <p className="mt-1 text-sm text-[var(--text-muted)]">Sem registros do paciente hoje.</p>
         ) : (
