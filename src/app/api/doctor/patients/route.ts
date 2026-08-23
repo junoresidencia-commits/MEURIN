@@ -148,13 +148,21 @@ export async function POST(req: Request) {
     }
   }
 
+  // Aceita idade quando não há data de nascimento: deriva uma data aproximada
+  // (1º de janeiro do ano) só para os cálculos; a data exata pode ser corrigida depois.
+  let birthdate = b.birthdate ? String(b.birthdate) : null;
+  if (!birthdate && b.age != null && String(b.age).trim() !== "") {
+    const ageNum = Number(String(b.age).replace(/\D/g, ""));
+    if (ageNum > 0 && ageNum < 130) birthdate = `${new Date().getFullYear() - ageNum}-01-01`;
+  }
+
   const patient = await createPatient({
     doctorId,
     name,
     cpf: b.cpf ? String(b.cpf) : null,
     cns: b.cns ? String(b.cns).replace(/\s+/g, "") : null,
     motherName: b.motherName ? String(b.motherName) : null,
-    birthdate: b.birthdate ? String(b.birthdate) : null,
+    birthdate,
     sex: b.sex ? String(b.sex) : null,
     phone: b.phone ? String(b.phone) : null,
     email: b.email ? String(b.email) : null,

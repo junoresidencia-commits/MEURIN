@@ -13,16 +13,19 @@ export async function POST(req: Request, { params }: { params: Promise<{ email: 
   if (!access || !access.allowed) return NextResponse.json({ error: "Sem acesso a este paciente." }, { status: 403 });
 
   const b = await req.json().catch(() => ({}));
-  const patch: { sex?: string; birthdate?: string } = {};
+  const patch: { sex?: string; birthdate?: string; cns?: string | null; motherName?: string | null } = {};
   if (b.sex !== undefined) {
     const s = String(b.sex).toLowerCase();
     if (s === "masculino" || s === "feminino") patch.sex = s;
     else return NextResponse.json({ error: "Sexo deve ser masculino ou feminino." }, { status: 400 });
   }
   if (b.birthdate !== undefined && /^\d{4}-\d{2}-\d{2}$/.test(String(b.birthdate))) patch.birthdate = String(b.birthdate);
+  if (b.cns !== undefined) patch.cns = String(b.cns).replace(/\s+/g, "") || null;
+  if (b.motherName !== undefined) patch.motherName = String(b.motherName).trim() || null;
   if (Object.keys(patch).length === 0) return NextResponse.json({ error: "Nada para atualizar." }, { status: 400 });
 
-  const patient = param.includes("@") ? await findByEmailAny(param) : await getPatient(param);
+  const patientId = param.startsWith("pid:") ? param.slice(4) : param;
+  const patient = param.includes("@") ? await findByEmailAny(param) : await getPatient(patientId);
   if (!patient) return NextResponse.json({ error: "Paciente não encontrado." }, { status: 404 });
   await updatePatient(patient.id, patch);
   return NextResponse.json({ ok: true });

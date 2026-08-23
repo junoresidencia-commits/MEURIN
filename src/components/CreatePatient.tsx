@@ -12,6 +12,7 @@ export function CreatePatient({ onCreated }: { onCreated: () => void }) {
     cns: "",
     motherName: "",
     birthdate: "",
+    age: "",
     sex: "",
     phone: "",
     email: "",
@@ -39,17 +40,24 @@ export function CreatePatient({ onCreated }: { onCreated: () => void }) {
 
   async function submit(force = false) {
     if (!form.name.trim()) { setError("Informe o nome completo."); return; }
-    if (!form.birthdate) { setError("Informe a data de nascimento (necessária para calcular idade e TFGe)."); return; }
+    const ageNum = Number(String(form.age).replace(/\D/g, ""));
+    const hasAge = form.age.trim() !== "" && ageNum > 0 && ageNum < 130;
+    if (!form.birthdate && !hasAge) { setError("Informe a data de nascimento OU a idade (necessária para calcular TFGe)."); return; }
     if (!form.sex) { setError("Selecione o sexo (feminino ou masculino)."); return; }
     if (!form.address.trim()) { setError("Informe a cidade / região."); return; }
     setSaving(true);
     setError("");
     if (force) setDup(null);
+    // Sem data de nascimento? Deriva uma data aproximada a partir da idade (1º de janeiro
+    // do ano). Serve para os cálculos; o médico pode corrigir a data exata depois.
+    const birthdate = form.birthdate || (hasAge ? `${new Date().getFullYear() - ageNum}-01-01` : "");
+    const { age: _age, ...rest } = form;
+    void _age;
     try {
       const res = await fetch("/api/doctor/patients", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ ...form, force }),
+        body: JSON.stringify({ ...rest, birthdate, force }),
       });
       const data = await res.json();
       if (data.possibleDuplicate) {
@@ -139,7 +147,8 @@ export function CreatePatient({ onCreated }: { onCreated: () => void }) {
   const fields = [
     ["name", "Nome completo", "text", true],
     ["cpf", "CPF", "text", false],
-    ["birthdate", "Data de nascimento", "date", true],
+    ["birthdate", "Data de nascimento (ou informe a idade)", "date", false],
+    ["age", "Idade (anos) — se não tiver a data", "number", false],
     ["sex", "Sexo", "select", true],
     ["address", "Cidade / região", "text", true],
     ["cns", "CNS (Cartão SUS)", "text", false],
@@ -162,7 +171,7 @@ export function CreatePatient({ onCreated }: { onCreated: () => void }) {
   return (
     <div className="panel mt-4 space-y-3">
       <p className="text-xs font-bold uppercase tracking-wider text-[var(--gold)]">Novo paciente</p>
-      <p className="text-xs text-[var(--text-muted)]">Campos com <span className="text-[var(--danger)]">*</span> são obrigatórios (idade, sexo e cidade são necessários para cálculos e pesquisa).</p>
+      <p className="text-xs text-[var(--text-muted)]">Obrigatórios: nome, sexo, cidade e <b>data de nascimento OU idade</b>. Sem a data, informe a idade — a data exata pode ser preenchida depois.</p>
       <div className="grid gap-3 sm:grid-cols-2">
         {fields.map(([k, label, type, required]) => (
           <label key={k} className="block">

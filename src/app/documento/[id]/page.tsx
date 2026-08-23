@@ -143,6 +143,9 @@ export default function DocumentoPage() {
 
   return (
     <div className="mx-auto max-w-2xl px-5 py-10">
+      <div className="mb-3 print:hidden">
+        <a href="/medicos/painel" className="text-sm font-semibold text-[var(--gold)]">← Painel</a>
+      </div>
       <div className="mb-4 flex flex-wrap justify-end gap-2 print:hidden">
         <button type="button" className="btn-gold" onClick={downloadPdf}>
           Baixar PDF

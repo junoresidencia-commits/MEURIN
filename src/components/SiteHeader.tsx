@@ -35,7 +35,9 @@ export function SiteHeader() {
     pathname?.startsWith("/atendente") ||
     pathname?.startsWith("/medicos") ||
     pathname?.startsWith("/nutricionista") ||
-    pathname?.startsWith("/consulta")
+    pathname?.startsWith("/consulta") ||
+    pathname?.startsWith("/lme") ||
+    pathname?.startsWith("/documento")
   ) {
     return null;
   }

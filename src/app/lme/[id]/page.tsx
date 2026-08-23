@@ -132,6 +132,19 @@ export default function LmePage() {
 
   return (
     <div className="mx-auto max-w-3xl px-5 py-8">
+      {/* Voltar ao app — evita ficar "preso" nesta página. */}
+      <div className="mb-3 flex flex-wrap items-center gap-3 print:hidden">
+        {isDoctor ? (
+          <>
+            <Link href="/medicos/painel" className="text-sm font-semibold text-[var(--gold)]">← Painel</Link>
+            {lme.patientEmail && (
+              <Link href={`/medicos/paciente/${encodeURIComponent(lme.patientEmail)}`} className="text-sm font-semibold text-[var(--gold)]">← Prontuário do paciente</Link>
+            )}
+          </>
+        ) : (
+          <Link href="/" className="text-sm font-semibold text-[var(--gold)]">← Início</Link>
+        )}
+      </div>
       <div className="mb-3 flex flex-wrap items-center justify-between gap-2 print:hidden">
         <div>
           <p className="text-xs font-bold uppercase tracking-wide text-[var(--gold)]">LME OFICIAL — SESAB/CEAF</p>
