@@ -15,6 +15,7 @@ import { TemplatePicker } from "@/components/TemplatePicker";
 import { AttendanceControl } from "@/components/AttendanceControl";
 import { ReturnPicker } from "@/components/ReturnPicker";
 import { PatientLmeField } from "@/components/PatientCnsField";
+import { PatientEditForm } from "@/components/PatientEditForm";
 import { guessSexFromName } from "@/lib/sex-guess";
 
 type Lab = { id: string; testKey: string; value: number; unit?: string | null; measuredAt: string };
@@ -37,7 +38,7 @@ type HomeRecord = {
 };
 type FoodLog = { id: string; food: string; meal?: string | null; quantity?: string | null; loggedAt: string };
 type Booking = { id: string; status: string; slotStart: string; careReason: string; meetingRoomId: string };
-type Patient = { email: string; name: string; city: string; phone: string; birthdate?: string | null; sex?: string | null; cns?: string | null; cpf?: string | null; motherName?: string | null };
+type Patient = { email: string; name: string; city: string; phone: string; birthdate?: string | null; sex?: string | null; cns?: string | null; cpf?: string | null; motherName?: string | null; isCreated?: boolean };
 type Note = {
   id: string;
   doctorName: string;
@@ -140,6 +141,7 @@ export default function ProntuarioPage() {
   const [review, setReview] = useState<{ groups: ParsedLabGroup[]; source?: string } | null>(null);
   const [clinicalReview, setClinicalReview] = useState<DetectedField[] | null>(null);
   const [shared, setShared] = useState(true);
+  const [editingPatient, setEditingPatient] = useState(false);
   const [saving, setSaving] = useState(false);
   const [saveMsg, setSaveMsg] = useState("");
   const [saveErr, setSaveErr] = useState("");
@@ -324,8 +326,20 @@ export default function ProntuarioPage() {
             {[patient?.city, patient?.email].filter(Boolean).join(" · ")}
           </p>
         </div>
-        <ResetAccessButton emailParam={emailParam} />
+        <div className="flex flex-col gap-2">
+          <button type="button" className="btn-ghost text-sm" onClick={() => setEditingPatient((v) => !v)}>{editingPatient ? "Fechar edição" : "Editar dados"}</button>
+          <ResetAccessButton emailParam={emailParam} />
+        </div>
       </div>
+
+      {editingPatient && patient && (
+        <PatientEditForm
+          emailParam={emailParam}
+          patient={{ name: patient.name, phone: patient.phone, email: patient.email, city: patient.city, birthdate: patient.birthdate, sex: patient.sex }}
+          onClose={() => setEditingPatient(false)}
+          onSaved={load}
+        />
+      )}
 
       <div className="mt-3">
         <AttendanceControl patientKey={emailParam} />
