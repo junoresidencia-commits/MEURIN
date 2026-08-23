@@ -57,6 +57,13 @@ export type DoctorStatus =
   | "suspended"
   | "correction";
 
+/** Assinatura VISUAL (aparência no documento). NÃO substitui assinatura digital ICP-Brasil. */
+export interface SignatureVisual {
+  kind: "typed" | "image" | "draw";
+  value: string; // texto (typed) ou dataURL (image/draw)
+  updatedAt?: string;
+}
+
 export type PixKeyType = "cpf" | "cnpj" | "email" | "telefone" | "aleatoria";
 
 /** Perfil Pix do médico para recebimento direto (dados do recebedor). */
@@ -81,6 +88,8 @@ export interface Doctor {
   pixKey?: string;
   bankAccountHint?: string;
   stripeConnectReady: boolean;
+  /** Assinatura visual do médico (aparência). Não é ICP-Brasil. */
+  signatureVisual?: SignatureVisual;
   /** Perfil Pix estruturado (recebimento direto). Complementa pixKey (legado). */
   pixProfile?: PixProfile;
   weeklyAvailability: WeeklySlot[];
