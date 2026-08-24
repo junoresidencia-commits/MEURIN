@@ -8,19 +8,9 @@ import { addDocument } from "@/lib/patient-store";
 import { getLetterhead, type LetterheadArea } from "@/lib/letterheads-store";
 import { LETTERHEADS_BUCKET, DOCPDF_BUCKET, readFile, saveFile } from "@/lib/doc-storage";
 import { buildDocumentPdf, fillFields, type DocBackground } from "@/lib/document-engine";
+import { idadeFromBirthdate } from "@/lib/pdf-text";
 
 export const maxDuration = 60;
-
-function idadeFrom(birthdate?: string | null): string | null {
-  if (!birthdate) return null;
-  const b = new Date(birthdate);
-  if (Number.isNaN(b.getTime())) return null;
-  const now = new Date();
-  let a = now.getFullYear() - b.getFullYear();
-  const m = now.getMonth() - b.getMonth();
-  if (m < 0 || (m === 0 && now.getDate() < b.getDate())) a--;
-  return a >= 0 && a < 130 ? String(a) : null;
-}
 
 export async function POST(req: Request) {
   const doctorId = await getDoctorSessionId();
@@ -43,33 +33,40 @@ export async function POST(req: Request) {
     const doctor = await getDoctorById(doctorId);
     if (!doctor) return NextResponse.json({ error: "Médico não encontrado." }, { status: 404 });
 
-    // Dados do paciente para o cabeçalho (CPF só quando é paciente cadastrado).
-    let cpf: string | undefined;
+    // Dados do paciente para o cabeçalho (cadastro + acesso já resolvido).
+    let cpf: string | undefined = access.cpf || undefined;
     let birthdate: string | null = access.birthdate;
-    if (!patientParam.includes("@")) {
-      const p = await getPatient(patientParam);
-      if (p) { cpf = p.cpf || undefined; birthdate = p.birthdate || birthdate; }
+    if ((!cpf || !birthdate) && !patientParam.includes("@")) {
+      const p = await getPatient(patientParam.replace(/^pid:/, "")).catch(() => null);
+      if (p) {
+        cpf = cpf || p.cpf || undefined;
+        birthdate = birthdate || p.birthdate || null;
+      }
     }
 
-    // Papel timbrado (opcional). "Sem timbrado" => fundo branco.
+    // Papel timbrado (opcional). Se o arquivo faltar, gera em fundo branco — não bloqueia.
     let background: DocBackground | null = null;
     let area: LetterheadArea = defaultAreaNoLetterhead();
     let usedLetterheadId: string | null = null;
     if (letterheadId) {
       const lh = await getLetterhead(letterheadId);
-      if (!lh || lh.doctorId !== doctorId) return NextResponse.json({ error: "Papel timbrado inválido." }, { status: 400 });
-      const file = await readFile(LETTERHEADS_BUCKET, lh.storage, lh.filePath);
-      if (!file) return NextResponse.json({ error: "Arquivo do papel timbrado indisponível." }, { status: 400 });
-      background = { kind: lh.kind, bytes: file.buffer, mime: lh.mime || file.mime };
-      area = lh.area;
-      usedLetterheadId = lh.id;
+      if (lh && lh.doctorId === doctorId) {
+        const file = await readFile(LETTERHEADS_BUCKET, lh.storage, lh.filePath);
+        if (file) {
+          background = { kind: lh.kind, bytes: file.buffer, mime: lh.mime || file.mime };
+          area = lh.area;
+          usedLetterheadId = lh.id;
+        }
+      }
     }
 
+    const idade = idadeFromBirthdate(birthdate);
     const vars: Record<string, string> = {
       paciente_nome: access.name || "",
       paciente_cpf: cpf || "",
+      paciente_cns: access.cns || "",
       paciente_data_nascimento: birthdate ? new Date(birthdate).toLocaleDateString("pt-BR") : "",
-      paciente_idade: idadeFrom(birthdate) || "",
+      paciente_idade: idade,
       data_atual: new Date().toLocaleDateString("pt-BR", { timeZone: "America/Bahia" }),
       medico_nome: doctor.name,
       medico_crm: [doctor.crm, doctor.crmState].filter(Boolean).join("-"),
@@ -82,7 +79,7 @@ export async function POST(req: Request) {
     const pdfBytes = await buildDocumentPdf({
       title: filledTitle,
       content: filledContent,
-      patient: { name: access.name, cpf, birthdate, idade: idadeFrom(birthdate) },
+      patient: { name: access.name, cpf, birthdate, idade },
       doctor: { name: doctor.name, crm: doctor.crm, crmState: doctor.crmState, rqe: doctor.rqe, specialty: doctor.specialty },
       area,
       background,
@@ -94,28 +91,37 @@ export async function POST(req: Request) {
       });
     }
 
-    // Salva o PDF final no storage e cria o registro no prontuário (não disponível ao paciente ainda).
-    const saved = await saveFile(DOCPDF_BUCKET, doctorId, { name: `${type}.pdf`, type: "application/pdf", buffer: Buffer.from(pdfBytes) });
-    const now = new Date().toISOString();
-    const doc = await addDocument({
-      patientEmail: access.key,
-      doctorId,
-      doctorName: doctor.name,
-      doctorCrm: doctor.crm,
-      type,
-      title: filledTitle,
-      body: content, // guarda o conteúdo original (com {{campos}}) para reedição
-      sharedWithPatient: false, // médico decide disponibilizar depois
-      letterheadId: usedLetterheadId,
-      pdfPath: saved.path,
-      pdfStorage: saved.storage,
-      status: "final",
-      version: 1,
-      groupId: uuid(),
-      history: [{ at: now, by: doctor.name, action: "criado", detail: `Documento gerado (${type}).` }],
-    });
-
-    return NextResponse.json({ ok: true, id: doc.id, pdfUrl: `/api/documents/${doc.id}/pdf` }, { status: 201 });
+    // Salva o PDF no storage e no prontuário. Se persistir falhar, ainda devolve o PDF.
+    try {
+      const saved = await saveFile(DOCPDF_BUCKET, doctorId, { name: `${type}.pdf`, type: "application/pdf", buffer: Buffer.from(pdfBytes) });
+      const now = new Date().toISOString();
+      const doc = await addDocument({
+        patientEmail: access.key,
+        doctorId,
+        doctorName: doctor.name,
+        doctorCrm: doctor.crm,
+        type,
+        title: filledTitle,
+        body: content,
+        sharedWithPatient: false,
+        letterheadId: usedLetterheadId,
+        pdfPath: saved.path,
+        pdfStorage: saved.storage,
+        status: "final",
+        version: 1,
+        groupId: uuid(),
+        history: [{ at: now, by: doctor.name, action: "criado", detail: `Documento gerado (${type}).` }],
+      });
+      return NextResponse.json({ ok: true, id: doc.id, pdfUrl: `/api/documents/${doc.id}/pdf` }, { status: 201 });
+    } catch (persistErr) {
+      console.error("documents/generate persist", persistErr);
+      return NextResponse.json({
+        ok: true,
+        id: null,
+        pdfBase64: Buffer.from(pdfBytes).toString("base64"),
+        warning: "PDF gerado. Não foi possível salvar no prontuário agora — baixe o arquivo.",
+      }, { status: 201 });
+    }
   } catch (err) {
     console.error("documents/generate", err);
     return NextResponse.json({ error: "Não foi possível gerar o documento." }, { status: 500 });

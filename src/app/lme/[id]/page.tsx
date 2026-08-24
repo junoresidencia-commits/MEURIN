@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import { receitaFromLme, relatorioFromLme, composerHref } from "@/lib/complementary-docs";
+import { inferProtocolFromMedNames } from "@/lib/ceaf-documents";
 
 type Med = { name: string; presentation?: string; monthlyQty?: string };
 type Lme = {
@@ -80,6 +81,7 @@ export default function LmePage() {
   if (!lme) return <div className="mx-auto max-w-2xl px-5 py-20 text-[var(--text-muted)]">Carregando…</div>;
 
   const date = new Date(lme.createdAt).toLocaleDateString("pt-BR");
+  const ceafProtocol = inferProtocolFromMedNames((lme.medications || []).map((m) => m.name));
 
   async function downloadPdf() {
     if (!lme) return;
@@ -179,6 +181,18 @@ export default function LmePage() {
             <Link href={composerHref(lme.patientEmail, receitaFromLme(lme), lme.id)} className="btn-gold">Gerar Receita</Link>
             <Link href={composerHref(lme.patientEmail, relatorioFromLme(lme), lme.id)} className="btn-ghost">Gerar Relatório Médico</Link>
           </div>
+          {ceafProtocol && (
+              <div className="mt-3 border-t border-[var(--border-gold)]/60 pt-3">
+                <p className="text-xs font-bold uppercase tracking-wider text-[var(--gold)]">TER e formulário oficiais (identificação preenchida)</p>
+                <p className="mt-1 text-xs text-[var(--text-muted)]">
+                  Nome, CPF, CNS, data, médico e CRM/UF já vêm preenchidos. Os critérios clínicos (incluindo calcitriol) ficam para você marcar.
+                </p>
+                <div className="mt-2 flex flex-wrap gap-2">
+                  <a href={`/api/ceaf/official?protocol=${encodeURIComponent(ceafProtocol)}&lmeId=${encodeURIComponent(lme.id)}&doc=ter`} target="_blank" rel="noopener noreferrer" className="btn-gold text-sm">Abrir TER preenchido</a>
+                  <a href={`/api/ceaf/official?protocol=${encodeURIComponent(ceafProtocol)}&lmeId=${encodeURIComponent(lme.id)}&doc=form`} target="_blank" rel="noopener noreferrer" className="btn-ghost text-sm">Abrir formulário oficial</a>
+                </div>
+              </div>
+          )}
           <div className="mt-3 border-t border-[var(--border-gold)]/60 pt-3">
             <p className="text-xs font-bold uppercase tracking-wider text-[var(--gold)]">Pacote (LME + Receita + Relatório)</p>
             <p className="mt-1 text-xs text-[var(--text-muted)]">Junta a LME oficial com a Receita e o Relatório já gerados em PDF, num único arquivo para baixar ou imprimir.</p>

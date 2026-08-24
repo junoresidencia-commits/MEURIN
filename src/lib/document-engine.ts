@@ -1,6 +1,7 @@
 import "server-only";
 import { PDFDocument, StandardFonts, rgb, type PDFFont, type PDFImage, type PDFEmbeddedPage, type PDFPage } from "pdf-lib";
 import type { LetterheadArea } from "./letterheads-store";
+import { winAnsiSafe } from "./pdf-text";
 
 // A4 em pontos.
 const A4_W = 595.28;
@@ -42,18 +43,18 @@ export function fillFields(text: string, vars: Record<string, string>): string {
   return (text || "").replace(/\{\{\s*([a-z_]+)\s*\}\}/gi, (_m, key) => vars[String(key).toLowerCase()] ?? "");
 }
 
-// Mantém apenas caracteres que a fonte padrão (WinAnsi) codifica com segurança.
 function safe(text: string): string {
-  return (text || "")
-    .replace(/[\u2018\u2019]/g, "'")
-    .replace(/[\u201C\u201D]/g, '"')
-    .replace(/\u2013/g, "-")
-    .replace(/\u2014/g, "\u2014") // em dash (WinAnsi ok)
-    .replace(/\u2022/g, "\u2022") // bullet (WinAnsi ok)
-    .replace(/\u2026/g, "...")
-    .replace(/\t/g, "    ")
-    // remove o que sobrar fora do Latin comum
-    .replace(/[^\u0000-\u024F\u2013\u2014\u2022]/g, "?");
+  return winAnsiSafe(text);
+}
+
+function widthOf(font: PDFFont, text: string, size: number): number {
+  const t = safe(text);
+  if (!t) return 0;
+  try {
+    return font.widthOfTextAtSize(t, size);
+  } catch {
+    return t.length * size * 0.5;
+  }
 }
 
 type Run = { text: string; bold: boolean };
@@ -73,14 +74,15 @@ function wrapRuns(runs: Run[], maxWidth: number, size: number, font: PDFFont, fo
   let width = 0;
   const pushWord = (word: string, bold: boolean, spaceBefore: boolean) => {
     const f = bold ? fontBold : font;
-    const token = (spaceBefore ? " " : "") + word;
-    const w = f.widthOfTextAtSize(token, size);
+    const clean = safe(word);
+    const token = (spaceBefore ? " " : "") + clean;
+    const w = widthOf(f, token, size);
     if (width + w > maxWidth && current.length > 0) {
       lines.push(current);
       current = [];
       width = 0;
-      const w2 = f.widthOfTextAtSize(word, size);
-      current.push({ text: word, bold });
+      const w2 = widthOf(f, clean, size);
+      current.push({ text: clean, bold });
       width += w2;
     } else {
       current.push({ text: token, bold });
@@ -167,8 +169,12 @@ export async function buildDocumentPdf(input: BuildDocInput): Promise<Uint8Array
     for (const r of runs) {
       const f = r.bold ? fontBold : font;
       const t = safe(r.text);
-      page.drawText(t, { x: cx, y: y - size, size, font: f, color: INK });
-      cx += f.widthOfTextAtSize(t, size);
+      try {
+        page.drawText(t, { x: cx, y: y - size, size, font: f, color: INK });
+      } catch {
+        /* caractere residual — segue o documento */
+      }
+      cx += widthOf(f, t, size);
     }
     y -= size * lineGap;
   };
@@ -205,7 +211,9 @@ export async function buildDocumentPdf(input: BuildDocInput): Promise<Uint8Array
   // Título
   if (input.title) {
     ensure(20);
-    page.drawText(safe(input.title), { x: x0, y: y - 15, size: 15, font: fontBold, color: INK });
+    try {
+      page.drawText(safe(input.title), { x: x0, y: y - 15, size: 15, font: fontBold, color: INK });
+    } catch { /* título com caractere residual */ }
     y -= 26;
   }
 
@@ -237,15 +245,22 @@ export async function buildDocumentPdf(input: BuildDocInput): Promise<Uint8Array
 }
 
 function drawSplit(page: PDFPage, x0: number, x1: number, y: number, left: string, right: string, font: PDFFont, size: number, ink: ReturnType<typeof rgb>, muted: ReturnType<typeof rgb>) {
-  page.drawText(safe(left), { x: x0, y: y - size, size, font, color: ink });
+  try {
+    page.drawText(safe(left), { x: x0, y: y - size, size, font, color: ink });
+  } catch { /* ok */ }
   if (right) {
-    const w = font.widthOfTextAtSize(safe(right), size);
-    page.drawText(safe(right), { x: x1 - w, y: y - size, size, font, color: muted });
+    const w = widthOf(font, safe(right), size);
+    try {
+      page.drawText(safe(right), { x: x1 - w, y: y - size, size, font, color: muted });
+    } catch { /* ok */ }
   }
 }
 function centerText(page: PDFPage, cx: number, y: number, text: string, font: PDFFont, size: number, color: ReturnType<typeof rgb>) {
-  const w = font.widthOfTextAtSize(text, size);
-  page.drawText(text, { x: cx - w / 2, y, size, font, color });
+  const t = safe(text);
+  const w = widthOf(font, t, size);
+  try {
+    page.drawText(t, { x: cx - w / 2, y, size, font, color });
+  } catch { /* ok */ }
 }
 function clamp01(n: number): number {
   if (!Number.isFinite(n)) return 0;

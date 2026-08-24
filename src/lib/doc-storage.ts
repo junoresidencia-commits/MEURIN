@@ -29,6 +29,22 @@ function sanitize(name: string): string {
   return (name || "arquivo").replace(/[^a-zA-Z0-9._-]/g, "_").slice(-80) || "arquivo";
 }
 
+async function writeLocal(bucket: string, relPath: string, buffer: Buffer): Promise<{ path: string; storage: StorageKind }> {
+  const roots = [LOCAL_ROOT, path.join("/tmp", "meurim-storage")];
+  let lastErr: unknown;
+  for (const root of roots) {
+    try {
+      const full = path.join(root, bucket, relPath);
+      await fs.mkdir(path.dirname(full), { recursive: true });
+      await fs.writeFile(full, buffer);
+      return { path: relPath, storage: "local" };
+    } catch (err) {
+      lastErr = err;
+    }
+  }
+  throw lastErr instanceof Error ? lastErr : new Error("Falha ao gravar arquivo local.");
+}
+
 export async function saveFile(
   bucket: string,
   keyPrefix: string,
@@ -37,19 +53,19 @@ export async function saveFile(
   const relPath = `${keyPrefix.replace(/[^a-zA-Z0-9/_-]/g, "_")}/${uuid()}-${sanitize(file.name)}`;
   const supabase = getSupabaseAdmin();
   if (supabase) {
-    await ensureBucket(bucket);
-    const { error } = await supabase.storage.from(bucket).upload(relPath, file.buffer, {
-      contentType: file.type || "application/octet-stream",
-      upsert: true,
-    });
-    if (error) throw error;
-    return { path: relPath, storage: "supabase" };
+    try {
+      await ensureBucket(bucket);
+      const { error } = await supabase.storage.from(bucket).upload(relPath, file.buffer, {
+        contentType: file.type || "application/octet-stream",
+        upsert: true,
+      });
+      if (!error) return { path: relPath, storage: "supabase" };
+      console.error("storage upload", bucket, error.message || error);
+    } catch (err) {
+      console.error("storage upload", bucket, err);
+    }
   }
-  // Local
-  const full = path.join(LOCAL_ROOT, bucket, relPath);
-  await fs.mkdir(path.dirname(full), { recursive: true });
-  await fs.writeFile(full, file.buffer);
-  return { path: relPath, storage: "local" };
+  return writeLocal(bucket, relPath, file.buffer);
 }
 
 export async function readFile(
@@ -65,13 +81,13 @@ export async function readFile(
     const buf = Buffer.from(await data.arrayBuffer());
     return { buffer: buf, mime: data.type || "application/octet-stream" };
   }
-  try {
-    const full = path.join(LOCAL_ROOT, bucket, filePath);
-    const buffer = await fs.readFile(full);
-    return { buffer, mime: guessMime(filePath) };
-  } catch {
-    return null;
+  for (const root of [LOCAL_ROOT, path.join("/tmp", "meurim-storage")]) {
+    try {
+      const buffer = await fs.readFile(path.join(root, bucket, filePath));
+      return { buffer, mime: guessMime(filePath) };
+    } catch { /* tenta o próximo */ }
   }
+  return null;
 }
 
 export async function deleteFile(bucket: string, storage: StorageKind, filePath: string): Promise<void> {

@@ -6,6 +6,7 @@ import { useParams, useSearchParams } from "next/navigation";
 import { TemplatePicker } from "@/components/TemplatePicker";
 import { PosologyBuilder } from "@/components/PosologyBuilder";
 import type { TemplateType } from "@/lib/document-templates";
+import { receitaFromLme, relatorioFromLme } from "@/lib/complementary-docs";
 
 const TEMPLATE_TYPES = ["receita", "exame", "relatorio"];
 
@@ -41,6 +42,7 @@ function ComporDocumentoInner() {
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [savedId, setSavedId] = useState<string | null>(null);
   const [status, setStatus] = useState<string>("");
+  const lmeId = sp.get("lmeId") || "";
 
   const load = useCallback(async () => {
     const r = await fetch("/api/doctor/letterheads").then((x) => x.json());
@@ -50,6 +52,22 @@ function ComporDocumentoInner() {
     if (def) setLetterheadId(def.id);
   }, []);
   useEffect(() => { load(); }, [load]);
+
+  useEffect(() => {
+    if (!lmeId || content.trim()) return;
+    let cancelled = false;
+    fetch(`/api/lme/${lmeId}`)
+      .then((r) => r.json())
+      .then((d) => {
+        if (cancelled || !d?.lme) return;
+        const draft = type === "relatorio" ? relatorioFromLme(d.lme) : receitaFromLme(d.lme);
+        setContent(draft.body);
+        setTitle((t) => t || draft.title);
+        setType(draft.type);
+      })
+      .catch(() => {});
+    return () => { cancelled = true; };
+  }, [lmeId, type, content]);
 
   function payload(preview: boolean) {
     return {
@@ -85,8 +103,15 @@ function ComporDocumentoInner() {
       });
       const d = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(d.error || "Falha ao gerar.");
+      if (d.pdfBase64) {
+        const bin = Uint8Array.from(atob(d.pdfBase64), (c) => c.charCodeAt(0));
+        const url = URL.createObjectURL(new Blob([bin], { type: "application/pdf" }));
+        setPreviewUrl(url);
+        setMsg(d.warning || "PDF gerado.");
+        return;
+      }
       setSavedId(d.id); setStatus("final");
-      setPreviewUrl(`/api/documents/${d.id}/pdf`);
+      setPreviewUrl(d.pdfUrl || `/api/documents/${d.id}/pdf`);
       setMsg("Documento gerado e salvo no prontuário.");
     } catch (e) {
       setMsg(e instanceof Error ? e.message : "Erro.");
