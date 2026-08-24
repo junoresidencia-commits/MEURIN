@@ -137,6 +137,8 @@ function NutriAppointments() {
         <span className="text-[var(--gold)]">{open ? "−" : "+"}</span>
       </button>
       {open && (
+        <>
+        <p className="mt-2 text-sm text-[var(--text-muted)]">Ao confirmar o recebimento, o plano alimentar é liberado na área do paciente.</p>
         <div className="mt-3 grid gap-2">
           {appts.map((a) => (
             <div key={a.id} className="rounded-xl border border-[var(--border)] p-3">
@@ -160,6 +162,7 @@ function NutriAppointments() {
             </div>
           ))}
         </div>
+        </>
       )}
     </section>
   );

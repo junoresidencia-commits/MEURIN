@@ -14,6 +14,7 @@ export default function NutriConfigPage() {
   const [loading, setLoading] = useState(true);
   const [price, setPrice] = useState("");
   const [returnPrice, setReturnPrice] = useState("");
+  const [phone, setPhone] = useState("");
   const [pix, setPix] = useState({ keyType: "cpf", key: "", holderName: "", holderDoc: "", bank: "", city: "" });
   const [commission, setCommission] = useState<number | null>(null);
   const [payout, setPayout] = useState("active");
@@ -27,6 +28,7 @@ export default function NutriConfigPage() {
       const d = await r.json();
       setPrice(d.consultationPriceCents != null ? String(d.consultationPriceCents / 100) : "");
       setReturnPrice(d.returnPriceCents != null ? String(d.returnPriceCents / 100) : "");
+      setPhone(d.phone || "");
       if (d.pixProfile) setPix({ keyType: d.pixProfile.keyType || "cpf", key: d.pixProfile.key || "", holderName: d.pixProfile.holderName || "", holderDoc: d.pixProfile.holderDoc || "", bank: d.pixProfile.bank || "", city: d.pixProfile.city || "" });
       setCommission(d.commissionPercent ?? null);
       setPayout(d.payoutStatus || "active");
@@ -39,7 +41,7 @@ export default function NutriConfigPage() {
     try {
       const res = await fetch("/api/nutricionista/settings", {
         method: "PUT", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ consultationPrice: price, returnPrice, pixProfile: pix }),
+        body: JSON.stringify({ consultationPrice: price, returnPrice, pixProfile: pix, phone }),
       });
       const d = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(d.error || "Erro");
@@ -55,13 +57,14 @@ export default function NutriConfigPage() {
     <div className="mx-auto max-w-2xl px-5 py-8">
       <Link href="/nutricionista/painel" className="text-sm font-semibold text-[var(--gold)]">← Painel</Link>
       <h1 className="font-display mt-2 text-2xl font-extrabold text-[var(--text)]">Meu perfil e recebimentos</h1>
-      <p className="mt-1 text-sm text-[var(--text-muted)]">Atualize sua foto de perfil, o valor da consulta/retorno e a sua chave Pix para receber diretamente. O paciente paga e envia o comprovante; você confirma o recebimento.</p>
+      <p className="mt-1 text-sm text-[var(--text-muted)]">Atualize sua foto, telefone (os pacientes usam para combinar Pix e consulta), o valor da consulta/retorno e a chave Pix. O plano alimentar só é liberado ao paciente depois que você confirmar o pagamento.</p>
 
       <div className="mt-5">
         <ProfilePhotoUploader endpoint="/api/nutricionista/photo" label="Foto de perfil" hint="Sua foto aparece na sua área e para a equipe." fallback="Nu" />
       </div>
 
       <section className="panel mt-4 grid gap-3 sm:grid-cols-2">
+        <label className="block sm:col-span-2"><span className="mb-1 block text-xs font-semibold text-[var(--text-muted)]">Telefone / WhatsApp (visível ao paciente)</span><input className="input-field" inputMode="tel" value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="(71) 99999-0000" /></label>
         <label className="block"><span className="mb-1 block text-xs font-semibold text-[var(--text-muted)]">Valor da consulta (R$)</span><input className="input-field" inputMode="decimal" value={price} onChange={(e) => setPrice(e.target.value)} /></label>
         <label className="block"><span className="mb-1 block text-xs font-semibold text-[var(--text-muted)]">Valor do retorno (R$)</span><input className="input-field" inputMode="decimal" value={returnPrice} onChange={(e) => setReturnPrice(e.target.value)} /></label>
       </section>
