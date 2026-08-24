@@ -137,15 +137,13 @@ export async function GET(req: Request) {
   if (!values.introDoctor) values.introDoctor = doctor.name;
   if (!values.doctor) values.doctor = doctor.name;
   if (!values.date) values.date = todayBr();
-  if (!values.service) {
-    const loc = (doctor.locations || []).find((l) => l.active) || (doctor.locations || [])[0];
-    if (loc) {
-      values.service = loc.name;
-      if (!values.city) values.city = loc.city || "";
-      if (!values.local) values.local = loc.city || loc.name;
-    }
+  const loc = (doctor.locations || []).find((l) => l.active) || (doctor.locations || [])[0];
+  if (loc) {
+    if (!values.service) values.service = loc.name;
+    if (!values.city) values.city = loc.city || "";
+    if (!values.local) values.local = loc.city || loc.name;
   }
-  if (!values.local) values.local = values.city || "";
+  if (!values.local) values.local = values.city || values.service || "";
 
   const ref = officialDocPages(protocol, doc);
   if (!ref) return NextResponse.json({ error: "Documento oficial não encontrado para este protocolo." }, { status: 404 });

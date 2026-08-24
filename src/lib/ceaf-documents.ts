@@ -79,7 +79,7 @@ export const OFFICIAL_OVERLAY: Record<string, { ter?: OverlayField[]; form?: Ove
       { field: "uf", page: 0, x: 448, y: 99.4, size: 9, maxWidth: 80 },
     ],
     form: [
-      { field: "date", page: 0, x: 486, y: 658.8, size: 10, maxWidth: 50 },
+      { field: "date", page: 0, x: 483, y: 658.8, size: 9, maxWidth: 70 },
       { field: "name", page: 0, x: 152, y: 641.7, size: 10, maxWidth: 300 },
       { field: "age", page: 0, x: 494, y: 641.7, size: 10, maxWidth: 28 },
       { field: "service", page: 0, x: 102, y: 616.0, size: 10, maxWidth: 245 },
