@@ -653,6 +653,7 @@ function EvolutionCharts({ labs, records }: { labs: Lab[]; records: HomeRecord[]
 function AcessosRapidos() {
   const items: { href: string; label: string; icon: string }[] = [
     { href: "/paciente/exames", label: "Exames", icon: "🧪" },
+    { href: "/paciente/medicamentos", label: "Medicamentos", icon: "💊" },
     { href: "/paciente/documentos", label: "Documentos", icon: "📄" },
     { href: "/paciente/nutricao", label: "Nutrição", icon: "🥗" },
     { href: "/paciente/entender", label: "Entender", icon: "📖" },

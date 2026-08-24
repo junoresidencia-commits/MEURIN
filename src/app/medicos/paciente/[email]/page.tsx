@@ -16,6 +16,7 @@ import { AttendanceControl } from "@/components/AttendanceControl";
 import { ReturnPicker } from "@/components/ReturnPicker";
 import { PatientLmeField } from "@/components/PatientCnsField";
 import { PatientEditForm } from "@/components/PatientEditForm";
+import { DoctorMedicationsView } from "@/components/DoctorMedicationsView";
 import { guessSexFromName } from "@/lib/sex-guess";
 
 type Lab = { id: string; testKey: string; value: number; unit?: string | null; measuredAt: string };
@@ -73,6 +74,7 @@ const TABS = [
   { id: "lme", label: "LME / CEAF" },
   { id: "enviados", label: "Enviados" },
   { id: "sinais", label: "Sinais em casa" },
+  { id: "medicamentos", label: "Medicamentos / Adesão" },
   { id: "alimentacao", label: "Alimentação" },
   { id: "consultas", label: "Consultas" },
   { id: "pesquisa", label: "Pesquisa" },
@@ -696,6 +698,10 @@ export default function ProntuarioPage() {
               </>
             )}
           </div>
+        )}
+
+        {tab === "medicamentos" && (
+          <DoctorMedicationsView emailParam={emailParam} />
         )}
 
         {tab === "alimentacao" && (
