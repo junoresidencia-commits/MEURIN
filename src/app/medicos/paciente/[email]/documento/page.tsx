@@ -6,6 +6,10 @@ import { useParams, useSearchParams } from "next/navigation";
 import { TemplatePicker } from "@/components/TemplatePicker";
 import { PosologyBuilder } from "@/components/PosologyBuilder";
 import type { TemplateType } from "@/lib/document-templates";
+import { useOfflineOptional } from "@/components/offline/OfflineProvider";
+import { OfflineNeedsNet } from "@/components/offline/OfflineBanner";
+import { draftKey, enqueue, getDraft, loadSession, newClientOpId, saveDraft } from "@/lib/offline/idb";
+import type { OfflineDraft } from "@/lib/offline/types";
 
 const TEMPLATE_TYPES = ["receita", "exame", "relatorio"];
 
@@ -41,6 +45,14 @@ function ComporDocumentoInner() {
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [savedId, setSavedId] = useState<string | null>(null);
   const [status, setStatus] = useState<string>("");
+  const [draftAt, setDraftAt] = useState<string | null>(null);
+  const offline = useOfflineOptional();
+
+  function draftKind(): OfflineDraft["kind"] {
+    if (type === "receita") return "receita";
+    if (type === "relatorio") return "relatorio";
+    return "documento";
+  }
 
   const load = useCallback(async () => {
     const r = await fetch("/api/doctor/letterheads").then((x) => x.json());
@@ -50,6 +62,44 @@ function ComporDocumentoInner() {
     if (def) setLetterheadId(def.id);
   }, []);
   useEffect(() => { load(); }, [load]);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      const sess = await loadSession();
+      if (!sess || cancelled) return;
+      const d = await getDraft(sess.doctorId, patientParam, draftKind());
+      if (d?.payload && !cancelled) {
+        if (typeof d.payload.title === "string" && d.payload.title) setTitle(d.payload.title);
+        if (typeof d.payload.content === "string" && d.payload.content) setContent(d.payload.content);
+        if (typeof d.payload.type === "string" && d.payload.type) setType(d.payload.type);
+        setDraftAt(d.updatedAt);
+      }
+    })();
+    return () => { cancelled = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [patientParam]);
+
+  useEffect(() => {
+    const t = setTimeout(() => {
+      void (async () => {
+        if (!title.trim() && !content.trim()) return;
+        const sess = offline?.session || (await loadSession());
+        if (!sess) return;
+        const at = new Date().toISOString();
+        await saveDraft({
+          key: draftKey(sess.doctorId, patientParam, draftKind()),
+          doctorId: sess.doctorId,
+          patientKey: patientParam,
+          kind: draftKind(),
+          payload: { type, title, content, letterheadId },
+          updatedAt: at,
+        });
+        setDraftAt(at);
+      })();
+    }, 800);
+    return () => clearTimeout(t);
+  }, [type, title, content, letterheadId, patientParam, offline?.session]);
 
   function payload(preview: boolean) {
     return {
@@ -63,6 +113,10 @@ function ComporDocumentoInner() {
   }
 
   async function preview() {
+    if (!navigator.onLine) {
+      setMsg("Esta função precisa de conexão com a internet.");
+      return;
+    }
     setBusy(true); setMsg("");
     try {
       const res = await fetch("/api/documents/generate", {
@@ -79,7 +133,25 @@ function ComporDocumentoInner() {
 
   async function salvar() {
     setBusy(true); setMsg("");
+    const sess = offline?.session || (await loadSession());
     try {
+      if (!navigator.onLine) {
+        if (!sess) throw new Error("Abra o prontuário online uma vez para salvar o documento offline.");
+        await enqueue({
+          id: newClientOpId(),
+          doctorId: sess.doctorId,
+          patientKey: patientParam,
+          kind: "document.generate",
+          label: type === "receita" ? "Receita" : type === "relatorio" ? "Relatório" : "Documento",
+          payload: payload(false),
+          status: "pending",
+          createdAt: new Date().toISOString(),
+          attempts: 0,
+        });
+        await offline?.refreshQueue();
+        setMsg("Rascunho salvo neste dispositivo. O PDF será gerado quando a internet retornar.");
+        return;
+      }
       const res = await fetch("/api/documents/generate", {
         method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload(false)),
       });
@@ -89,6 +161,22 @@ function ComporDocumentoInner() {
       setPreviewUrl(`/api/documents/${d.id}/pdf`);
       setMsg("Documento gerado e salvo no prontuário.");
     } catch (e) {
+      if (!navigator.onLine && sess) {
+        await enqueue({
+          id: newClientOpId(),
+          doctorId: sess.doctorId,
+          patientKey: patientParam,
+          kind: "document.generate",
+          label: type === "receita" ? "Receita" : type === "relatorio" ? "Relatório" : "Documento",
+          payload: payload(false),
+          status: "pending",
+          createdAt: new Date().toISOString(),
+          attempts: 0,
+        });
+        await offline?.refreshQueue();
+        setMsg("Rascunho salvo neste dispositivo. O PDF será gerado quando a internet retornar.");
+        return;
+      }
       setMsg(e instanceof Error ? e.message : "Erro.");
     } finally { setBusy(false); }
   }
@@ -165,10 +253,19 @@ function ComporDocumentoInner() {
           <p className="mt-1 text-xs text-[var(--text-muted)]">
             Campos: <code>{"{{paciente_nome}}"}</code> <code>{"{{paciente_cpf}}"}</code> <code>{"{{paciente_idade}}"}</code> <code>{"{{data_atual}}"}</code> <code>{"{{medico_nome}}"}</code> <code>{"{{medico_crm}}"}</code> <code>{"{{medico_rqe}}"}</code>
           </p>
+          {draftAt && (
+            <p className="mt-2 text-[11px] text-[var(--text-muted)]">
+              Rascunho salvo localmente às {new Date(draftAt).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}
+            </p>
+          )}
 
           <div className="mt-4 flex flex-wrap gap-2">
-            <button type="button" className="btn-ghost" onClick={preview} disabled={busy}>Pré-visualizar</button>
-            <button type="button" className="btn-gold" onClick={salvar} disabled={busy || !content.trim()}>Gerar PDF e salvar</button>
+            <OfflineNeedsNet label="Pré-visualizar o PDF precisa de conexão com a internet.">
+              <button type="button" className="btn-ghost" onClick={preview} disabled={busy}>Pré-visualizar</button>
+            </OfflineNeedsNet>
+            <button type="button" className="btn-gold" onClick={salvar} disabled={busy || !content.trim()}>
+              {offline && !offline.online ? "Salvar neste dispositivo" : "Gerar PDF e salvar"}
+            </button>
           </div>
 
           {savedId && (

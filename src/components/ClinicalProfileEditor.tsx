@@ -11,11 +11,15 @@ import {
   computeImc,
   type ClinicalProfileData,
 } from "@/lib/clinical-fields";
+import { useOfflineOptional } from "@/components/offline/OfflineProvider";
+import { getCachedChartSnapshot, mergeIntoSnapshot } from "@/lib/offline/chart-cache";
+import { enqueue, loadSession, newClientOpId } from "@/lib/offline/idb";
 
 type FieldMeta = { source: string; at: string };
 type HistoryEntry = { field: string; from: unknown; to: unknown; source: string; at: string };
 
 export function ClinicalProfileEditor({ emailParam }: { emailParam: string }) {
+  const offline = useOfflineOptional();
   const [data, setData] = useState<ClinicalProfileData>({});
   const [meta, setMeta] = useState<Record<string, FieldMeta>>({});
   const [history, setHistory] = useState<HistoryEntry[]>([]);
@@ -23,16 +27,29 @@ export function ClinicalProfileEditor({ emailParam }: { emailParam: string }) {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [msg, setMsg] = useState("");
+  const [msgErr, setMsgErr] = useState(false);
+  const [updatedAt, setUpdatedAt] = useState<string | null>(null);
+
+  function applyPayload(d: { profile?: ClinicalProfileData; meta?: Record<string, FieldMeta>; history?: HistoryEntry[]; updatedAt?: string | null }) {
+    setData(d.profile || {});
+    setMeta(d.meta || {});
+    setHistory(Array.isArray(d.history) ? d.history : []);
+    setUpdatedAt(typeof d.updatedAt === "string" ? d.updatedAt : null);
+  }
 
   function load() {
     return fetch(`/api/doctor/patients/${emailParam}/profile`)
-      .then((r) => (r.ok ? r.json() : { profile: {}, meta: {}, history: [] }))
-      .then((d) => {
-        setData(d.profile || {});
-        setMeta(d.meta || {});
-        setHistory(Array.isArray(d.history) ? d.history : []);
+      .then(async (r) => {
+        if (!r.ok) throw new Error("fail");
+        return r.json();
       })
-      .catch(() => {});
+      .then((d) => applyPayload(d))
+      .catch(async () => {
+        const snap = await getCachedChartSnapshot(emailParam);
+        if (snap) {
+          applyPayload({ profile: snap.profile as ClinicalProfileData, updatedAt: snap.profileUpdatedAt });
+        }
+      });
   }
 
   useEffect(() => {
@@ -54,16 +71,54 @@ export function ClinicalProfileEditor({ emailParam }: { emailParam: string }) {
   async function save() {
     setSaving(true);
     setMsg("");
+    setMsgErr(false);
+    const sess = offline?.session || (await loadSession());
+
+    const queueLocal = async () => {
+      if (!sess) throw new Error("Abra o prontuário online uma vez para salvar o perfil offline.");
+      await enqueue({
+        id: newClientOpId(),
+        doctorId: sess.doctorId,
+        patientKey: decodeURIComponent(emailParam),
+        kind: "profile.put",
+        label: "Perfil clínico",
+        payload: { data, baseUpdatedAt: updatedAt },
+        status: "pending",
+        createdAt: new Date().toISOString(),
+        attempts: 0,
+      });
+      await mergeIntoSnapshot(sess.doctorId, emailParam, { profile: data as Record<string, unknown> });
+      await offline?.refreshQueue();
+      setMsg("Perfil salvo neste dispositivo. Será sincronizado quando a internet retornar.");
+    };
+
     try {
+      if (!navigator.onLine) {
+        await queueLocal();
+        return;
+      }
       const res = await fetch(`/api/doctor/patients/${emailParam}/profile`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ data }),
+        body: JSON.stringify({ data, baseUpdatedAt: updatedAt }),
       });
-      if (!res.ok) throw new Error();
-      await load();
+      const body = await res.json().catch(() => ({}));
+      if (res.status === 409) {
+        setMsgErr(true);
+        setMsg("Este perfil foi alterado em outro dispositivo. Use o aviso no topo para escolher o que manter.");
+        return;
+      }
+      if (!res.ok) throw new Error(body.error || "fail");
+      applyPayload(body);
       setMsg("Perfil clínico salvo.");
     } catch {
+      if (!navigator.onLine && sess) {
+        try {
+          await queueLocal();
+          return;
+        } catch { /* cai no erro abaixo */ }
+      }
+      setMsgErr(true);
       setMsg("Não foi possível salvar.");
     } finally {
       setSaving(false);
@@ -212,7 +267,7 @@ export function ClinicalProfileEditor({ emailParam }: { emailParam: string }) {
         </div>
       )}
 
-      {msg && <p className="text-sm text-[var(--green)]">{msg}</p>}
+      {msg && <p className={`text-sm ${msgErr ? "text-[var(--danger)]" : "text-[var(--green)]"}`}>{msg}</p>}
       <button type="button" className="btn-gold" onClick={save} disabled={saving}>
         {saving ? "Salvando…" : "Salvar perfil clínico"}
       </button>

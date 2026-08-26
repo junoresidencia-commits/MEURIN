@@ -1,0 +1,187 @@
+<!doctype html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <title>Consulta offline · Meu Rim</title>
+    <style>
+      :root { --teal:#087b82; --bg:#f7fafb; --text:#0b2f45; --muted:#6d8190; --border:#d5e1e6; --card:#fff; --amber:#92400e; --amberbg:#fffbeb; }
+      * { box-sizing: border-box; }
+      body { margin:0; background:var(--bg); color:var(--text);
+        font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+        padding: calc(12px + env(safe-area-inset-top)) 16px 32px; }
+      .pill { display:inline-block; background:var(--amberbg); color:var(--amber); border:1px solid #fde68a; border-radius:999px; padding:4px 12px; font-size:12px; font-weight:700; }
+      h1 { font-size:22px; margin:12px 0 4px; }
+      p.lead { color:var(--muted); margin:0 0 16px; line-height:1.5; }
+      .card { background:var(--card); border:1px solid var(--border); border-radius:16px; padding:14px 16px; margin-bottom:12px; }
+      .muted { color:var(--muted); font-size:13px; }
+      textarea { width:100%; min-height:160px; border:1px solid var(--border); border-radius:12px; padding:10px; font:inherit; }
+      button { background:var(--teal); color:#fff; border:0; border-radius:999px; padding:10px 18px; font-weight:600; margin-top:8px; }
+      .note { white-space:pre-wrap; font-size:14px; line-height:1.45; }
+      .lab { font-size:13px; }
+    </style>
+  </head>
+  <body>
+    <span class="pill">🟠 Modo offline</span>
+    <h1 id="title">Consulta em andamento</h1>
+    <p class="lead">Você está sem conexão. Os dados essenciais desta consulta ficam neste dispositivo e serão sincronizados quando a internet retornar.</p>
+    <div id="root"><p class="muted">Carregando dados locais…</p></div>
+    <script>
+      const DB = "meurim-offline-v1";
+      const path = location.pathname;
+      const m = path.match(/\/medicos\/paciente\/([^/]+)/);
+      const patientKey = m ? decodeURIComponent(m[1]) : "";
+
+      function openDb() {
+        return new Promise((res, rej) => {
+          const r = indexedDB.open(DB, 1);
+          r.onupgradeneeded = () => {
+            const db = r.result;
+            if (!db.objectStoreNames.contains("session")) db.createObjectStore("session");
+            if (!db.objectStoreNames.contains("snapshots")) {
+              const s = db.createObjectStore("snapshots", { keyPath: "key" });
+              s.createIndex("doctorId", "doctorId", { unique: false });
+            }
+            if (!db.objectStoreNames.contains("drafts")) {
+              const d = db.createObjectStore("drafts", { keyPath: "key" });
+              d.createIndex("doctorId", "doctorId", { unique: false });
+            }
+            if (!db.objectStoreNames.contains("queue")) {
+              const q = db.createObjectStore("queue", { keyPath: "id" });
+              q.createIndex("doctorId", "doctorId", { unique: false });
+            }
+          };
+          r.onsuccess = () => res(r.result);
+          r.onerror = () => rej(r.error);
+        });
+      }
+      function get(store, key) {
+        return openDb().then((db) => new Promise((res, rej) => {
+          const q = db.transaction(store, "readonly").objectStore(store).get(key);
+          q.onsuccess = () => res(q.result || null);
+          q.onerror = () => rej(q.error);
+        }));
+      }
+      function put(store, val) {
+        return openDb().then((db) => new Promise((res, rej) => {
+          const q = db.transaction(store, "readwrite").objectStore(store).put(val);
+          q.onsuccess = () => res();
+          q.onerror = () => rej(q.error);
+        }));
+      }
+      function uuid() {
+        return (crypto.randomUUID && crypto.randomUUID()) || ("xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(/[xy]/g, (c) => {
+          const r = (Math.random() * 16) | 0;
+          const v = c === "x" ? r : (r & 0x3) | 0x8;
+          return v.toString(16);
+        }));
+      }
+      function esc(s) { return String(s || "").replace(/</g, ""); }
+
+      (async () => {
+        const root = document.getElementById("root");
+        const sess = await get("session", "current");
+        if (!sess || !patientKey) {
+          root.innerHTML = "<div class='card'><p>Não há dados desta consulta neste dispositivo. Conecte-se à internet e abra o prontuário uma vez para poder continuar offline.</p><button onclick='location.reload()'>Tentar novamente</button></div>";
+          return;
+        }
+        const snap = await get("snapshots", sess.doctorId + "::" + patientKey);
+        if (!snap) {
+          root.innerHTML = "<div class='card'><p>Este paciente ainda não foi aberto neste aparelho. É preciso carregá-lo online uma vez.</p><button onclick='location.reload()'>Tentar novamente</button></div>";
+          return;
+        }
+        document.getElementById("title").textContent = snap.patient.name || "Paciente";
+        const evoKey = sess.doctorId + "::" + patientKey + "::evolucao";
+        const draft = await get("drafts", evoKey);
+        const history = (draft && draft.payload && draft.payload.history) || "";
+        const meds = (snap.profile && snap.profile.medicamentos_em_uso) || "";
+        const notes = (snap.notes || []).slice(0, 8).map(n =>
+          "<div class='card'><p class='muted'>" + new Date(n.createdAt).toLocaleString("pt-BR") + (n.pending ? " · pendente" : "") + "</p><div class='note'>" +
+          esc(n.history || n.chiefComplaint || n.assessment || n.plan || "") + "</div></div>"
+        ).join("") || "<p class='muted'>Nenhuma evolução anterior neste cache.</p>";
+        const labs = (snap.labs || []).slice(0, 12).map(l =>
+          "<div class='lab'>" + esc(l.testKey) + ": <b>" + l.value + "</b> " + esc(l.unit||"") + " · " + new Date(l.measuredAt).toLocaleDateString("pt-BR") + "</div>"
+        ).join("") || "<p class='muted'>Nenhum exame neste cache.</p>";
+
+        root.innerHTML =
+          "<div class='card'><p class='muted'>Evolução (salva automaticamente neste dispositivo)</p>" +
+          "<textarea id='evo'>" + esc(history) + "</textarea>" +
+          "<p class='muted' id='saved'></p>" +
+          "<button type='button' id='save'>Registrar evolução neste dispositivo</button></div>" +
+          "<div class='card'><p class='muted'>Medicamentos em uso</p>" +
+          "<textarea id='meds' style='min-height:90px'>" + esc(meds) + "</textarea>" +
+          "<p class='muted' id='medsSaved'></p>" +
+          "<button type='button' id='saveMeds'>Atualizar medicamentos neste dispositivo</button></div>" +
+          "<div class='card'><p class='muted'>Exames recentes (pré-carregados)</p>" + labs + "</div>" +
+          "<p class='muted'>Evoluções anteriores</p>" + notes;
+
+        let timer = null;
+        document.getElementById("evo").addEventListener("input", () => {
+          clearTimeout(timer);
+          timer = setTimeout(async () => {
+            const text = document.getElementById("evo").value;
+            const at = new Date().toISOString();
+            await put("drafts", {
+              key: evoKey, doctorId: sess.doctorId, patientKey: patientKey, kind: "evolucao",
+              payload: { history: text, chiefComplaint: "", assessment: "", plan: "", shared: true },
+              updatedAt: at
+            });
+            const t = new Date(at);
+            document.getElementById("saved").textContent = "Rascunho salvo localmente às " +
+              String(t.getHours()).padStart(2,"0") + ":" + String(t.getMinutes()).padStart(2,"0");
+          }, 800);
+        });
+
+        document.getElementById("save").onclick = async () => {
+          const text = document.getElementById("evo").value.trim();
+          if (!text) { document.getElementById("saved").textContent = "Escreva a evolução antes de registrar."; return; }
+          const id = uuid();
+          const now = new Date().toISOString();
+          await put("queue", {
+            id: id,
+            doctorId: sess.doctorId,
+            patientKey: patientKey,
+            kind: "note.create",
+            label: "Evolução clínica",
+            payload: { chiefComplaint: "", history: text, assessment: "", plan: "", sharedWithPatient: true },
+            status: "pending",
+            createdAt: now,
+            attempts: 0
+          });
+          snap.notes = [{ id: id, doctorName: sess.doctorName, history: text, createdAt: now, pending: true, sharedWithPatient: true }].concat(snap.notes || []);
+          await put("snapshots", snap);
+          await put("drafts", {
+            key: evoKey, doctorId: sess.doctorId, patientKey: patientKey, kind: "evolucao",
+            payload: { history: "", chiefComplaint: "", assessment: "", plan: "", shared: true },
+            updatedAt: now
+          });
+          document.getElementById("evo").value = "";
+          document.getElementById("saved").textContent = "Evolução na fila local. Sincroniza quando a internet voltar.";
+        };
+
+        document.getElementById("saveMeds").onclick = async () => {
+          const text = document.getElementById("meds").value;
+          const id = uuid();
+          snap.profile = Object.assign({}, snap.profile || {}, { medicamentos_em_uso: text });
+          await put("snapshots", snap);
+          await put("queue", {
+            id: id,
+            doctorId: sess.doctorId,
+            patientKey: patientKey,
+            kind: "profile.put",
+            label: "Medicamento",
+            payload: { data: snap.profile, baseUpdatedAt: snap.profileUpdatedAt },
+            status: "pending",
+            createdAt: new Date().toISOString(),
+            attempts: 0
+          });
+          const t = new Date();
+          document.getElementById("medsSaved").textContent = "Medicamentos na fila local às " +
+            String(t.getHours()).padStart(2,"0") + ":" + String(t.getMinutes()).padStart(2,"0");
+        };
+      })().catch(() => {
+        document.getElementById("root").innerHTML = "<div class='card'><p>Não foi possível ler os dados locais.</p></div>";
+      });
+    </script>
+  </body>
+</html>

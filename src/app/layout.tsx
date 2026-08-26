@@ -4,6 +4,8 @@ import { SiteFooter } from "@/components/SiteFooter";
 import { SiteHeader } from "@/components/SiteHeader";
 import { PwaBootstrap } from "@/components/PwaBootstrap";
 import { AreaTheme } from "@/components/AreaTheme";
+import { OfflineProvider } from "@/components/offline/OfflineProvider";
+import { OfflineBanner } from "@/components/offline/OfflineBanner";
 import "./globals.css";
 
 const display = Inter({
@@ -82,10 +84,13 @@ export default function RootLayout({
     <html lang="pt-BR">
       <body className={`${display.variable} ${body.variable} font-sans-body antialiased`}>
         <PwaBootstrap />
-        <AreaTheme />
-        <SiteHeader />
-        <main>{children}</main>
-        <SiteFooter />
+        <OfflineProvider>
+          <OfflineBanner />
+          <AreaTheme />
+          <SiteHeader />
+          <main>{children}</main>
+          <SiteFooter />
+        </OfflineProvider>
       </body>
     </html>
   );
