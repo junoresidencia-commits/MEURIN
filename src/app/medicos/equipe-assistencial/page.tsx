@@ -131,7 +131,9 @@ export default function MinhaEquipePage() {
 
           {loading && <p className="mt-6 text-sm text-[var(--text-muted)]">Carregando profissionais…</p>}
 
-          {!loading && availableTotal > 0 && (
+          {!loading && (
+            <>
+          {availableTotal > 0 && (
             <p className="mt-4 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900">
               {availableTotal === 1 ? "Há 1 profissional cadastrado no Meu Rim pronto para entrar na sua equipe." : `Há ${availableTotal} profissionais cadastrados no Meu Rim prontos para entrar na sua equipe.`}
             </p>
@@ -196,6 +198,8 @@ export default function MinhaEquipePage() {
 
           {spec === "nutrition" && (
             <p className="mt-6 text-xs text-[var(--text-muted)]">Permissões detalhadas da nutrição (exames, diário, plano) continuam em <Link href="/medicos/equipe-nutricao" className="font-semibold text-[var(--gold)]">Equipe de Nutrição</Link>.</p>
+          )}
+            </>
           )}
         </div>
       </div>

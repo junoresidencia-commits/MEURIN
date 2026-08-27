@@ -92,12 +92,15 @@ export default function EquipeNutricaoPage() {
           {msg && <p className="mt-4 text-sm font-semibold text-[var(--text-soft)]">{msg}</p>}
           {newPass && <p className="mt-3 rounded-xl border border-[var(--border-gold)] bg-[var(--gold-soft)] px-3 py-2 text-sm text-[var(--text)]">Senha inicial para o primeiro acesso: <b>{newPass}</b> (a nutricionista entra em <b>/nutricionista/login</b> com o CPF/e-mail e troca depois).</p>}
 
+          {loading && <p className="mt-6 text-sm text-[var(--text-muted)]">Carregando…</p>}
+
+          {!loading && (
+            <>
           <section className="mt-6">
             <h2 className="font-display text-xl">Nutricionistas disponíveis</h2>
             <p className="mt-1 text-sm text-[var(--text-muted)]">Quem já se cadastrou e ainda não está na sua equipe. Adicionar também libera o acesso.</p>
             <div className="mt-3 grid gap-2">
-              {loading && <p className="text-sm text-[var(--text-muted)]">Carregando…</p>}
-              {!loading && available.length === 0 && <p className="text-sm text-[var(--text-muted)]">Nenhuma nutricionista disponível no momento.</p>}
+              {available.length === 0 && <p className="text-sm text-[var(--text-muted)]">Nenhuma nutricionista disponível no momento.</p>}
               {available.map((m) => (
                 <div key={m.nutritionistId} className="panel flex flex-wrap items-center justify-between gap-2">
                   <div>
@@ -153,6 +156,8 @@ export default function EquipeNutricaoPage() {
               </div>
             </div>
           </details>
+            </>
+          )}
         </div>
       </div>
       <DoctorMobileNav />
