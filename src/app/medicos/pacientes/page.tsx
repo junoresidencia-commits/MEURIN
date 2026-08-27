@@ -8,6 +8,7 @@ import { DoctorMobileNav } from "@/components/DoctorMobileNav";
 import { GlobalPatientSearch } from "@/components/GlobalPatientSearch";
 import { PatientQuickSheet } from "@/components/PatientQuickSheet";
 import { CreatePatient } from "@/components/CreatePatient";
+import { ReferToCareTeam } from "@/components/ReferToCareTeam";
 
 type LabVal = { value: number; unit: string | null; date: string } | null;
 type Row = {
@@ -272,6 +273,9 @@ function PacientesInner() {
                         <button type="button" className="font-semibold text-[var(--text-muted)] hover:text-[var(--danger)]" onClick={() => removePatient(r.key, r.name)}>Excluir</button>
                       )}
                     </span>
+                  </div>
+                  <div className="mt-3 border-t border-dashed border-[var(--border)] pt-3">
+                    <ReferToCareTeam emailParam={r.key} patientName={r.name} compact />
                   </div>
                 </li>
               ))}

@@ -368,7 +368,7 @@ export default function ProntuarioPage() {
         <AttendanceControl patientKey={emailParam} />
       </div>
 
-      <CareTeamPatientCard emailParam={emailParam} />
+      <CareTeamPatientCard emailParam={emailParam} patientName={patient?.name} />
 
       {/* Cabeçalho clínico */}
       <div className="mt-4 grid grid-cols-3 gap-3">

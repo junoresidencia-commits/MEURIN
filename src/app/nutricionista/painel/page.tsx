@@ -6,7 +6,7 @@ import { useRouter } from "next/navigation";
 import { NotificationBell } from "@/components/NotificationBell";
 
 type Me = { nutritionist: { name: string; crn?: string | null; uf?: string | null; specialty?: string | null; photoUrl?: string | null }; doctors: { id: string; name: string }[] };
-type Patient = { key: string; name: string; cpf: string | null; doctorId: string };
+type Patient = { key: string; name: string; cpf: string | null; doctorId: string; doctorName?: string | null };
 type Referral = { id: string; patientKey: string; patientName?: string | null; reason?: string | null; objective?: string | null; priority: string; status: string; doctorName?: string | null; createdAt: string };
 
 export default function NutricionistaPainelPage() {
@@ -110,6 +110,7 @@ export default function NutricionistaPainelPage() {
               <div>
                 <p className="font-semibold text-[var(--text)]">{p.name}</p>
                 {p.cpf && <p className="text-xs text-[var(--text-muted)]">CPF {p.cpf}</p>}
+                {p.doctorName && <p className="text-xs text-[var(--text-muted)]">Encaminhado por {p.doctorName}</p>}
               </div>
               <div className="flex items-center gap-2">
                 {unread[p.key] ? <span className="rounded-full bg-[var(--gold)] px-2 py-0.5 text-[11px] font-bold text-white">{unread[p.key]}</span> : null}

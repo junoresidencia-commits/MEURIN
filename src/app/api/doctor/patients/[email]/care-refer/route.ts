@@ -42,17 +42,18 @@ export async function POST(req: Request, { params }: { params: Promise<{ email: 
   const professionalId = String(b.professionalId || "");
   if (!professionalId) return NextResponse.json({ error: "Escolha o profissional." }, { status: 400 });
   const doctor = await getDoctorById(doctorId);
+  const patientName = (access.name || String(b.patientName || "")).trim() || "Paciente";
 
   if (role === "nutrition") {
     const link = await getNutritionLink(professionalId, doctorId);
     if (!link?.active) return NextResponse.json({ error: "Este nutricionista não está na sua equipe ativa." }, { status: 400 });
     const ref = await addReferral({
       doctorId, doctorName: doctor?.name ?? null, nutritionistId: professionalId,
-      patientKey: access.key, patientName: access.name,
+      patientKey: access.key, patientName,
       reason: b.reason ? String(b.reason) : null, notes: b.notes ? String(b.notes) : null,
       objective: null, restrictions: null, priority: "normal",
     });
-    await notifyReferral("nutrition", professionalId, access.key, access.name);
+    await notifyReferral("nutrition", professionalId, access.key, patientName);
     return NextResponse.json({ ok: true, referral: ref }, { status: 201 });
   }
 
@@ -63,9 +64,9 @@ export async function POST(req: Request, { params }: { params: Promise<{ email: 
   if (!link?.active) return NextResponse.json({ error: "Este profissional não está na sua equipe ativa." }, { status: 400 });
   const ref = await addAlliedReferral({
     role: role as AlliedRole, doctorId, doctorName: doctor?.name ?? null, professionalId,
-    patientKey: access.key, patientName: access.name,
+    patientKey: access.key, patientName,
     reason: b.reason ? String(b.reason) : null, notes: b.notes ? String(b.notes) : null,
   });
-  await notifyReferral(role as CareChatRole, professionalId, access.key, access.name);
+  await notifyReferral(role as CareChatRole, professionalId, access.key, patientName);
   return NextResponse.json({ ok: true, referral: ref }, { status: 201 });
 }

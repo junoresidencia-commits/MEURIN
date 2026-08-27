@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
+import { ReferToCareTeam } from "@/components/ReferToCareTeam";
 
 type Lab = { value: number; unit: string | null; date: string; trend: "up" | "down" | "flat" | null } | null;
 type Summary = {
@@ -126,6 +127,12 @@ export function PatientQuickSheet({ patientKey, onClose }: { patientKey: string;
             <div className="mt-4 flex flex-col gap-1 text-sm text-[var(--text-muted)]">
               <span>Última consulta: {data.lastConsultation ? fmtDate(data.lastConsultation) : "—"}</span>
               <span>Próxima consulta: {data.nextConsultation ? fmtDate(data.nextConsultation) : "—"}</span>
+            </div>
+
+            <div className="mt-5 rounded-2xl border border-[var(--border)] bg-white p-3">
+              <p className="text-xs font-bold uppercase tracking-wider text-[var(--gold)]">Encaminhar para a equipe</p>
+              <p className="mt-0.5 mb-2 text-xs text-[var(--text-muted)]">O nome deste paciente aparece na área da profissional.</p>
+              <ReferToCareTeam emailParam={patientKey} patientName={data.patient.name} compact />
             </div>
 
             <Link href={`/medicos/paciente/${encodeURIComponent(patientKey)}`} className="btn-gold mt-5 block text-center">

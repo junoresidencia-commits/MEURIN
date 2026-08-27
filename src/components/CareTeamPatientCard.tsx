@@ -1,7 +1,8 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
+import { ReferToCareTeam } from "@/components/ReferToCareTeam";
 
 type Member = {
   id: string;
@@ -32,12 +33,10 @@ const ROLE_META: Record<string, { title: string; registry: string; empty: string
   nursing: { title: "Enfermeiro(a)", registry: "COREN", empty: "Nenhum enfermeiro encaminhado" },
 };
 
-export function CareTeamPatientCard({ emailParam }: { emailParam: string }) {
+export function CareTeamPatientCard({ emailParam, patientName }: { emailParam: string; patientName?: string }) {
   const [assigned, setAssigned] = useState<Assigned | null>(null);
   const [team, setTeam] = useState<{ nutrition: TeamPro[]; psychology: TeamPro[]; nursing: TeamPro[] }>({ nutrition: [], psychology: [], nursing: [] });
   const [manage, setManage] = useState(false);
-  const [refer, setRefer] = useState(false);
-  const [form, setForm] = useState({ role: "nutrition", professionalId: "", reason: "", notes: "" });
   const [msg, setMsg] = useState("");
   const [saving, setSaving] = useState(false);
 
@@ -56,30 +55,6 @@ export function CareTeamPatientCard({ emailParam }: { emailParam: string }) {
       });
     }).catch(() => {});
   }, []);
-
-  const professionals = useMemo(() => {
-    if (form.role === "psychology") return team.psychology;
-    if (form.role === "nursing") return team.nursing;
-    return team.nutrition;
-  }, [form.role, team]);
-
-  async function referPatient() {
-    if (!form.professionalId) { setMsg("Escolha o profissional."); return; }
-    setSaving(true); setMsg("");
-    try {
-      const res = await fetch(`/api/doctor/patients/${emailParam}/care-refer`, {
-        method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(form),
-      });
-      const d = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(d.error || "Não foi possível encaminhar.");
-      setMsg("Paciente encaminhado. Ele já vê o profissional na área dele e pode mandar mensagem.");
-      setRefer(false);
-      setForm({ ...form, reason: "", notes: "" });
-      await loadAssigned();
-    } catch (e) { setMsg(e instanceof Error ? e.message : "Erro"); }
-    finally { setSaving(false); }
-  }
 
   async function remove(role: string, referralId?: string) {
     if (!referralId) return;
@@ -104,7 +79,7 @@ export function CareTeamPatientCard({ emailParam }: { emailParam: string }) {
       if (professionalId) {
         const res = await fetch(`/api/doctor/patients/${emailParam}/care-refer`, {
           method: "POST", headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ role, professionalId, reason: "Atribuição na equipe assistencial" }),
+          body: JSON.stringify({ role, professionalId, reason: "Atribuição na equipe assistencial", patientName: patientName || null }),
         });
         const d = await res.json().catch(() => ({}));
         if (!res.ok) throw new Error(d.error || "Não foi possível atribuir.");
@@ -139,12 +114,9 @@ export function CareTeamPatientCard({ emailParam }: { emailParam: string }) {
       <div className="flex flex-wrap items-start justify-between gap-2">
         <div>
           <p className="text-xs font-bold uppercase tracking-wider text-[var(--gold)]">Equipe assistencial</p>
-          <p className="mt-0.5 text-sm text-[var(--text-muted)]">Profissionais que acompanham este paciente. Eles só veem quem você encaminhar.</p>
+          <p className="mt-0.5 text-sm text-[var(--text-muted)]">Encaminhe este paciente para nutricionista, psicóloga ou enfermeira. O nome dele aparece na área de quem receber.</p>
         </div>
-        <div className="flex flex-wrap gap-2">
-          <button type="button" className="btn-ghost text-sm" onClick={() => { setManage((v) => !v); setRefer(false); }}>Gerenciar equipe</button>
-          <button type="button" className="btn-gold text-sm" onClick={() => { setRefer((v) => !v); setManage(false); }}>Encaminhar para minha equipe</button>
-        </div>
+        <button type="button" className="btn-ghost text-sm" onClick={() => setManage((v) => !v)}>{manage ? "Fechar" : "Gerenciar equipe"}</button>
       </div>
 
       <div className="mt-3">
@@ -180,38 +152,9 @@ export function CareTeamPatientCard({ emailParam }: { emailParam: string }) {
         </div>
       )}
 
-      {refer && (
-        <div className="mt-4 grid gap-3 border-t border-[var(--border)] pt-3 sm:grid-cols-2">
-          <label className="block">
-            <span className="mb-1 block text-xs font-semibold text-[var(--text-muted)]">Especialidade</span>
-            <select className="input-field" value={form.role} onChange={(e) => setForm({ ...form, role: e.target.value, professionalId: "" })}>
-              <option value="nutrition">Nutrição</option>
-              <option value="psychology">Psicologia</option>
-              <option value="nursing">Enfermagem</option>
-            </select>
-          </label>
-          <label className="block">
-            <span className="mb-1 block text-xs font-semibold text-[var(--text-muted)]">Profissional</span>
-            <select className="input-field" value={form.professionalId} onChange={(e) => setForm({ ...form, professionalId: e.target.value })}>
-              <option value="">Selecione</option>
-              {professionals.map((p) => (
-                <option key={p.id} value={p.id}>{p.name}{p.registry ? ` · ${p.registry}` : ""}</option>
-              ))}
-            </select>
-          </label>
-          <label className="block sm:col-span-2">
-            <span className="mb-1 block text-xs font-semibold text-[var(--text-muted)]">Motivo do encaminhamento (opcional)</span>
-            <input className="input-field" value={form.reason} onChange={(e) => setForm({ ...form, reason: e.target.value })} />
-          </label>
-          <label className="block sm:col-span-2">
-            <span className="mb-1 block text-xs font-semibold text-[var(--text-muted)]">Observação para o profissional (opcional)</span>
-            <textarea className="input-field min-h-[70px]" value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} />
-          </label>
-          <div className="sm:col-span-2">
-            <button type="button" className="btn-gold" onClick={referPatient} disabled={saving}>{saving ? "Encaminhando…" : "Encaminhar paciente"}</button>
-          </div>
-        </div>
-      )}
+      <div className="mt-4 border-t border-[var(--border)] pt-3">
+        <ReferToCareTeam emailParam={emailParam} patientName={patientName} onDone={() => { void loadAssigned(); }} />
+      </div>
       {msg && <p className="mt-2 text-sm font-semibold text-[var(--text-soft)]">{msg}</p>}
     </div>
   );
