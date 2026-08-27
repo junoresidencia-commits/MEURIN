@@ -4,7 +4,7 @@
    - /api/* NUNCA é cacheado (dados clínicos ficam só no IndexedDB, por médico);
    - push: sem dados clínicos. */
 
-const VERSION = "meurim-v2-offline";
+const VERSION = "meurim-v3-offline";
 const STATIC_CACHE = `${VERSION}-static`;
 const APP_CACHE = `${VERSION}-app`;
 const OFFLINE_URL = "/offline.html";
@@ -22,9 +22,18 @@ const STATIC_ASSETS = [
 
 self.addEventListener("install", (event) => {
   event.waitUntil(
-    caches.open(STATIC_CACHE).then((c) => c.addAll(STATIC_ASSETS)).catch(() => {})
+    (async () => {
+      const c = await caches.open(STATIC_CACHE);
+      for (const url of STATIC_ASSETS) {
+        try {
+          await c.add(url);
+        } catch (_e) {
+          /* um ícone ausente não pode impedir o shell offline */
+        }
+      }
+      await self.skipWaiting();
+    })()
   );
-  self.skipWaiting();
 });
 
 self.addEventListener("activate", (event) => {
@@ -83,7 +92,9 @@ self.addEventListener("fetch", (event) => {
           if (chart) return chart;
         }
         const fallback = await caches.match(OFFLINE_URL);
-        return fallback || new Response("Offline", { status: 503 });
+        if (fallback) return fallback;
+        const chart = await caches.match(OFFLINE_CHART);
+        return chart || new Response("Offline", { status: 503, headers: { "Content-Type": "text/plain; charset=utf-8" } });
       })
     );
     return;
