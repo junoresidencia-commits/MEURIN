@@ -8,10 +8,10 @@ import { NEPHRO_LABS, labLabel, labUnit } from "@/lib/labs";
 import { LmeWizard } from "@/components/LmeWizard";
 import { ClinicalProfileEditor } from "@/components/ClinicalProfileEditor";
 import { ClinicalReviewModal } from "@/components/ClinicalReviewModal";
-import { extractClinicalFields, type DetectedField } from "@/lib/clinical-extractor";
+import { AUTO_SAVE_CLINICAL_KEYS, extractClinicalFields, formatDrcSummary, type DetectedField } from "@/lib/clinical-extractor";
 import { ExamReviewModal } from "@/components/ExamReviewModal";
 import { MedReviewModal } from "@/components/MedReviewModal";
-import { extractMedsFromText, labsToExameBody, medsToReceitaBody, mergeMeds, parseMedsList } from "@/lib/med-parser";
+import { extractMedsFromText, labsToExameBody, medsToReceitaBody, parseMedsList } from "@/lib/med-parser";
 import { composerHref } from "@/lib/complementary-docs";
 import { parseLabGroups, type ParsedLabGroup } from "@/lib/lab-parser";
 import { TemplatePicker } from "@/components/TemplatePicker";
@@ -335,13 +335,68 @@ export default function ProntuarioPage() {
     }
   }
 
-  function offerFromEvolution(text: string) {
+  async function persistAutoClinical(fields: DetectedField[]): Promise<boolean> {
+    const changes: Record<string, unknown> = {};
+    for (const f of fields) changes[f.key] = f.value;
+    const sess = offline?.session || (await loadSession());
+    try {
+      if (typeof navigator === "undefined" || navigator.onLine) {
+        const res = await fetch(`/api/doctor/patients/${emailParam}/profile`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ changes, source: "evolução" }),
+        });
+        if (res.ok) {
+          const body = await res.json().catch(() => ({}));
+          if (body.profile && sess) {
+            await mergeIntoSnapshot(sess.doctorId, emailParam, { profile: body.profile }).catch(() => {});
+          }
+          return true;
+        }
+        if (navigator.onLine) return false;
+      }
+      if (!sess) return false;
+      const snap = await getSnapshot(sess.doctorId, decodeURIComponent(emailParam));
+      const merged = { ...(snap?.profile || {}), ...changes };
+      await enqueue({
+        id: newClientOpId(),
+        doctorId: sess.doctorId,
+        patientKey: decodeURIComponent(emailParam),
+        kind: "profile.put",
+        label: "DRC reconhecida na evolução",
+        payload: { data: merged, baseUpdatedAt: snap?.profileUpdatedAt || profileUpdatedAt },
+        status: "pending",
+        createdAt: new Date().toISOString(),
+        attempts: 0,
+      });
+      await mergeIntoSnapshot(sess.doctorId, emailParam, { profile: merged });
+      await offline?.refreshQueue();
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
+  async function offerFromEvolution(text: string) {
     const groups = parseLabGroups(text);
-    const meds = mergeMeds(extractMedsFromText(text), parseMedsList(medsText));
+    const fromEvo = extractMedsFromText(text);
     const detectedClinical = extractClinicalFields(text);
+    const autoClinical = detectedClinical.filter((f) => AUTO_SAVE_CLINICAL_KEYS.has(f.key));
+    let otherClinical = detectedClinical.filter((f) => !AUTO_SAVE_CLINICAL_KEYS.has(f.key));
+
+    if (autoClinical.length) {
+      const ok = await persistAutoClinical(autoClinical);
+      const summary = formatDrcSummary(autoClinical);
+      if (ok && summary) {
+        setSaveMsg((m) => `${m ? `${m} ` : ""}${summary} reconhecida e salva no perfil.`);
+      } else if (!ok) {
+        otherClinical = [...autoClinical, ...otherClinical];
+      }
+    }
+
     if (groups.length > 0) setReview({ groups });
-    if (meds.length > 0) setMedReview(meds);
-    if (detectedClinical.length > 0) setClinicalReview(detectedClinical);
+    if (fromEvo.length > 0) setMedReview(fromEvo);
+    if (otherClinical.length > 0) setClinicalReview(otherClinical);
   }
 
   async function saveNote() {
@@ -398,7 +453,7 @@ export default function ProntuarioPage() {
         setDraftAt(null);
         await offline?.refreshQueue();
         setSaveMsg("Evolução salva neste dispositivo. Será sincronizada quando a internet retornar.");
-        offerFromEvolution(evolutionText);
+        void offerFromEvolution(evolutionText);
         setSaving(false);
         return;
       }
@@ -414,7 +469,7 @@ export default function ProntuarioPage() {
       setDraftAt(null);
       setSaveMsg("Evolução salva no prontuário." + (shared ? " Liberada ao paciente." : ""));
       await load();
-      offerFromEvolution(evolutionText);
+      void offerFromEvolution(evolutionText);
     } catch (e) {
       const networkFail = !navigator.onLine || (e instanceof TypeError);
       if (networkFail && sess) {
@@ -457,7 +512,7 @@ export default function ProntuarioPage() {
         setDraftAt(null);
         await offline?.refreshQueue();
         setSaveMsg("Evolução salva neste dispositivo. Será sincronizada quando a internet retornar.");
-        offerFromEvolution(evolutionText);
+        void offerFromEvolution(evolutionText);
         setSaving(false);
         return;
       }

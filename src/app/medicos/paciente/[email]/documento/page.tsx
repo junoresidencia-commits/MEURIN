@@ -69,6 +69,8 @@ function ComporDocumentoInner() {
       const sess = await loadSession();
       if (!sess || cancelled) return;
       const d = await getDraft(sess.doctorId, patientParam, draftKind());
+      // Prefill da URL (repetir receita/exames, meds da evolução) prevalece sobre rascunho antigo.
+      if (sp.get("body")) return;
       if (d?.payload && !cancelled) {
         if (typeof d.payload.title === "string" && d.payload.title) setTitle(d.payload.title);
         if (typeof d.payload.content === "string" && d.payload.content) setContent(d.payload.content);

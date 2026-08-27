@@ -40,7 +40,7 @@ export function MedReviewModal({
   async function saveToProfile() {
     if (!selected.length) {
       setErr("Selecione ao menos um medicamento.");
-      return;
+      return false;
     }
     setSaving(true);
     setErr("");
@@ -68,12 +68,14 @@ export function MedReviewModal({
       });
       if (res.status === 409) {
         setErr("O perfil foi alterado em outro dispositivo. Atualize a página e tente de novo.");
-        return;
+        return false;
       }
       if (!res.ok) throw new Error();
       onSavedMeds?.(text);
+      return true;
     } catch {
       setErr("Não foi possível salvar nos medicamentos em uso.");
+      return false;
     } finally {
       setSaving(false);
     }
@@ -86,6 +88,11 @@ export function MedReviewModal({
     }
     const body = medsToReceitaBody(selected.map((r) => ({ ...r, name: r.text.split("—")[0].trim() || r.name, raw: r.text })));
     router.push(composerHref(emailParam, { type: "receita", title: "Receita médica", body }));
+  }
+
+  async function saveAndOpenReceita() {
+    const ok = await saveToProfile();
+    if (ok) openReceita();
   }
 
   return (
@@ -107,13 +114,16 @@ export function MedReviewModal({
           ))}
         </div>
         {err && <p className="mt-3 rounded-xl border border-[var(--danger)]/30 bg-[var(--danger)]/10 px-3 py-2 text-sm text-[var(--danger)]">{err}</p>}
-        <div className="mt-5 flex flex-col gap-2 sm:flex-row">
+        <div className="mt-5 flex flex-col gap-2 sm:flex-row sm:flex-wrap">
           <button type="button" className="btn-ghost flex-1" onClick={onClose} disabled={saving}>Agora não</button>
           <button type="button" className="btn-ghost flex-1" onClick={() => void saveToProfile()} disabled={saving || !selected.length}>
             {saving ? "Salvando…" : "Salvar em uso"}
           </button>
-          <button type="button" className="btn-gold flex-1" onClick={openReceita} disabled={!selected.length}>
+          <button type="button" className="btn-ghost flex-1" onClick={openReceita} disabled={!selected.length}>
             Abrir receita
+          </button>
+          <button type="button" className="btn-gold flex-1" onClick={() => void saveAndOpenReceita()} disabled={saving || !selected.length}>
+            Salvar e abrir receita
           </button>
         </div>
       </div>

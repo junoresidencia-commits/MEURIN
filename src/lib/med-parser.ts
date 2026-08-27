@@ -38,25 +38,27 @@ function titleCase(s: string): string {
 function parseLine(rawLine: string, inBlock = false): ParsedMed | null {
   const line = rawLine.replace(/^[\s\-•*\d.)]+/, "").trim();
   if (line.length < 3 || line.length > 180) return null;
-  const n = norm(line);
-  if (/^(medicamentos?|em uso|manter|prescricao|posologia|orientac)/.test(n)) return null;
+  const n0 = norm(line);
+  if (/^(medicamentos?|em uso|manter|prescricao|posologia|orientac)\s*:?\s*$/.test(n0)) return null;
 
+  const cleaned = line.replace(/^(manter|iniciar|introduzir|suspender|continuar)\s+/i, "").trim();
+  const n = norm(cleaned);
   const known = KNOWN.find((k) => new RegExp(`(?:^|\\b)${k.replace(/ /g, "\\s+")}\\b`).test(n));
-  const doseM = line.match(DOSE_RE);
-  const freqM = line.match(FREQ_RE);
+  const doseM = cleaned.match(DOSE_RE);
+  const freqM = cleaned.match(FREQ_RE);
 
   if (known) {
     if (!inBlock && !doseM) return null;
     const name = titleCase(known === "hctz" ? "Hidroclorotiazida" : known === "aas" ? "AAS" : known);
-    return { name, dose: doseM?.[1], freq: freqM?.[1], raw: line };
+    return { name, dose: doseM?.[1], freq: freqM?.[1], raw: cleaned };
   }
 
   // Genérico: palavra capitalizada + dose (ex.: "Telmisartana 40 mg 1x/dia")
   if (doseM) {
-    const before = line.slice(0, doseM.index).replace(/[,:;]+$/, "").trim();
+    const before = cleaned.slice(0, doseM.index).replace(/[,:;]+$/, "").trim();
     const name = before.replace(/^(manter|iniciar|introduzir|suspender)\s+/i, "").trim();
     if (name.split(/\s+/).length <= 5 && /[A-Za-zÀ-ÿ]{4,}/.test(name) && !/\d/.test(name)) {
-      return { name: titleCase(name), dose: doseM[1], freq: freqM?.[1], raw: line };
+      return { name: titleCase(name), dose: doseM[1], freq: freqM?.[1], raw: cleaned };
     }
   }
   return null;

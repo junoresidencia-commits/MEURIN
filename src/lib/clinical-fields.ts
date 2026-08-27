@@ -13,7 +13,7 @@ export const TRI_OPTIONS: { value: TriState; label: string }[] = [
   { value: "desconhecido", label: "Desconhecido" },
 ];
 
-export const ESTAGIOS_G = ["G1", "G2", "G3a", "G3b", "G4", "G5"] as const;
+export const ESTAGIOS_G = ["G1", "G2", "G3", "G3a", "G3b", "G4", "G5"] as const;
 export const CATEGORIAS_A = ["A1", "A2", "A3"] as const;
 
 export const ETIOLOGIAS: { value: string; label: string }[] = [
