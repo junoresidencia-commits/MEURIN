@@ -73,7 +73,7 @@ export function CareTeamPatientCard({ emailParam }: { emailParam: string }) {
       });
       const d = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(d.error || "Não foi possível encaminhar.");
-      setMsg("Paciente encaminhado. Ele aparece na área daquele profissional.");
+      setMsg("Paciente encaminhado. Ele já vê o profissional na área dele e pode mandar mensagem.");
       setRefer(false);
       setForm({ ...form, reason: "", notes: "" });
       await loadAssigned();

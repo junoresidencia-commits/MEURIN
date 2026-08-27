@@ -145,7 +145,7 @@ export type PayoutStatus = "active" | "pending" | "blocked";
 export type CalendarEventMode = "meurim" | "patient";
 
 /** Papel do destinatário/dono do dispositivo de push. */
-export type NotifyRole = "medico" | "paciente";
+export type NotifyRole = "medico" | "paciente" | "nutricionista" | "psicologo" | "enfermeiro";
 
 /** Dispositivo/assinatura de push de um usuário (pode ter vários). */
 export interface PushDevice {

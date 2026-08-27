@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import { ClinicalSnapshotCard } from "@/components/ClinicalSnapshotCard";
 import { PdModule } from "@/components/PdModule";
+import { CareMessageThread } from "@/components/CareMessageThread";
 import { NURSE_ASSESSMENT, PSY_ANAMNESIS, payloadToBody } from "@/lib/allied-forms";
 import type { AlliedRole } from "@/lib/allied-types";
 
@@ -115,6 +116,12 @@ export function AlliedPatientWorkspace({ role }: { role: AlliedRole }) {
       <Link href={`${base}/painel`} className="text-sm font-semibold text-[var(--gold)]">← Meus Pacientes</Link>
       <h1 className="font-display mt-2 text-3xl font-extrabold text-[var(--text)]">{patient.name}</h1>
       <p className="text-sm text-[var(--text-muted)]">Dados clínicos já existentes no Meu Rim — sem preencher de novo.</p>
+
+      <section className="panel mt-4">
+        <h2 className="font-display text-lg text-[var(--text)]">Mensagens com o paciente</h2>
+        <p className="text-sm text-[var(--text-muted)]">O paciente vê você na área dele e pode escrever por aqui. Chega alerta no sino.</p>
+        <CareMessageThread role={role} patientKey={key} viewer="professional" />
+      </section>
 
       <div className="mt-5 flex gap-2 overflow-x-auto pb-1">
         {tabs.map((t) => (

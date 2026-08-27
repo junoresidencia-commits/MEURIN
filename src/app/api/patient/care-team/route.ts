@@ -4,6 +4,7 @@ import { findByEmailAny, getPatient, clinicalKey } from "@/lib/patients-store";
 import { getDoctorById } from "@/lib/store";
 import { listReferralsForPatient, getNutritionist } from "@/lib/nutritionists-store";
 import { listAlliedReferralsForPatient, currentAssignment, getAlliedProfessional } from "@/lib/allied-store";
+import { unreadInThread, type CareChatRole } from "@/lib/care-messages-store";
 
 export async function GET() {
   const subject = await getPatientEmail();
@@ -17,7 +18,7 @@ export async function GET() {
 
   let nutRefs = await listReferralsForPatient(key);
   if (keys[1] && keys[1] !== key) nutRefs = nutRefs.concat(await listReferralsForPatient(keys[1]));
-  const nutRef = nutRefs.find((r) => r.status !== "encerrado");
+  const nutRef = nutRefs.find((r) => r.status !== "encerrado" && r.nutritionistId);
   const nut = nutRef?.nutritionistId ? await getNutritionist(nutRef.nutritionistId) : null;
 
   let alliedRefs = await listAlliedReferralsForPatient(key);
@@ -27,10 +28,30 @@ export async function GET() {
   const psyPro = psy ? await getAlliedProfessional(psy.professionalId) : null;
   const nurPro = nur ? await getAlliedProfessional(nur.professionalId) : null;
 
+  async function member(
+    role: CareChatRole,
+    id: string,
+    name: string,
+    registry: string,
+    email?: string | null,
+    phone?: string | null,
+    reason?: string | null,
+    referredAt?: string | null,
+  ) {
+    const unread = await unreadInThread(role, id, key, "professional");
+    return { role, professionalId: id, name, registry, email: email || null, phone: phone || null, reason: reason || null, referredAt: referredAt || null, unread };
+  }
+
   const team = [
-    nut ? { role: "nutrition" as const, name: nut.name, registry: nut.crn ? `CRN ${nut.crn}${nut.uf ? "-" + nut.uf : ""}` : "" } : null,
-    psyPro ? { role: "psychology" as const, name: psyPro.name, registry: psyPro.registry ? `CRP ${psyPro.registry}${psyPro.uf ? "-" + psyPro.uf : ""}` : "" } : null,
-    nurPro ? { role: "nursing" as const, name: nurPro.name, registry: nurPro.registry ? `COREN ${nurPro.registry}${nurPro.uf ? "-" + nurPro.uf : ""}` : "" } : null,
+    nut && nutRef?.nutritionistId
+      ? await member("nutrition", nut.id, nut.name, nut.crn ? `CRN ${nut.crn}${nut.uf ? "-" + nut.uf : ""}` : "", nut.email, nut.phone, nutRef.reason, nutRef.createdAt)
+      : null,
+    psyPro && psy
+      ? await member("psychology", psyPro.id, psyPro.name, psyPro.registry ? `CRP ${psyPro.registry}${psyPro.uf ? "-" + psyPro.uf : ""}` : "", psyPro.email, psyPro.phone, psy.reason, psy.createdAt)
+      : null,
+    nurPro && nur
+      ? await member("nursing", nurPro.id, nurPro.name, nurPro.registry ? `COREN ${nurPro.registry}${nurPro.uf ? "-" + nurPro.uf : ""}` : "", nurPro.email, nurPro.phone, nur.reason, nur.createdAt)
+      : null,
   ].filter(Boolean);
 
   return NextResponse.json({

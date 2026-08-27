@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { NotificationBell } from "@/components/NotificationBell";
 import type { AlliedRole } from "@/lib/allied-types";
 
 type Me = { professional: { name: string; registry?: string | null; uf?: string | null }; doctors: { id: string; name: string }[] };
@@ -20,6 +21,7 @@ export function AlliedPanel({ role }: { role: AlliedRole }) {
   const [patients, setPatients] = useState<Patient[]>([]);
   const [q, setQ] = useState("");
   const [loading, setLoading] = useState(true);
+  const [unread, setUnread] = useState<Record<string, number>>({});
 
   useEffect(() => {
     (async () => {
@@ -34,6 +36,8 @@ export function AlliedPanel({ role }: { role: AlliedRole }) {
       const pRes = await fetch("/api/allied/patients");
       const pData = await pRes.json();
       setPatients(pData.patients || []);
+      const u = await fetch("/api/care-messages/unread").then((r) => r.json()).catch(() => ({ counts: {} }));
+      setUnread(u.counts || {});
       setLoading(false);
     })();
   }, [meta.base, role, router]);
@@ -57,7 +61,10 @@ export function AlliedPanel({ role }: { role: AlliedRole }) {
             Vinculado a {me?.doctors.length || 0} médico(s)
           </p>
         </div>
-        <button type="button" className="btn-ghost" onClick={logout}>Sair</button>
+        <div className="flex items-center gap-2">
+          <NotificationBell />
+          <button type="button" className="btn-ghost" onClick={logout}>Sair</button>
+        </div>
       </div>
 
       <section className="mt-8">
@@ -72,7 +79,10 @@ export function AlliedPanel({ role }: { role: AlliedRole }) {
                 <p className="font-semibold text-[var(--text)]">{p.name}</p>
                 {p.reason && <p className="text-xs text-[var(--text-muted)]">{p.reason}</p>}
               </div>
-              <span className="text-[var(--gold)]">Abrir →</span>
+              <div className="flex items-center gap-2">
+                {unread[p.key] ? <span className="rounded-full bg-[var(--gold)] px-2 py-0.5 text-[11px] font-bold text-white">{unread[p.key]}</span> : null}
+                <span className="text-[var(--gold)]">Abrir →</span>
+              </div>
             </Link>
           ))}
         </div>

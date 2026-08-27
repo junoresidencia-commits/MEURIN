@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { NotificationBell } from "@/components/NotificationBell";
 
 type Me = { nutritionist: { name: string; crn?: string | null; uf?: string | null; specialty?: string | null; photoUrl?: string | null }; doctors: { id: string; name: string }[] };
 type Patient = { key: string; name: string; cpf: string | null; doctorId: string };
@@ -15,6 +16,7 @@ export default function NutricionistaPainelPage() {
   const [referrals, setReferrals] = useState<Referral[]>([]);
   const [q, setQ] = useState("");
   const [loading, setLoading] = useState(true);
+  const [unread, setUnread] = useState<Record<string, number>>({});
 
   async function load() {
     const meRes = await fetch("/api/nutricionista/me");
@@ -25,6 +27,8 @@ export default function NutricionistaPainelPage() {
     const pData = await pRes.json();
     setPatients(pData.patients || []);
     setReferrals(pData.referrals || []);
+    const u = await fetch("/api/care-messages/unread").then((r) => r.json()).catch(() => ({ counts: {} }));
+    setUnread(u.counts || {});
     setLoading(false);
   }
   useEffect(() => {
@@ -62,6 +66,7 @@ export default function NutricionistaPainelPage() {
           </div>
         </div>
         <div className="flex gap-2">
+          <NotificationBell />
           <Link href="/nutricionista/configuracoes" className="btn-ghost">Perfil e recebimentos</Link>
           <button type="button" className="btn-ghost" onClick={logout}>Sair</button>
         </div>
@@ -106,7 +111,10 @@ export default function NutricionistaPainelPage() {
                 <p className="font-semibold text-[var(--text)]">{p.name}</p>
                 {p.cpf && <p className="text-xs text-[var(--text-muted)]">CPF {p.cpf}</p>}
               </div>
-              <span className="text-[var(--gold)]">Abrir →</span>
+              <div className="flex items-center gap-2">
+                {unread[p.key] ? <span className="rounded-full bg-[var(--gold)] px-2 py-0.5 text-[11px] font-bold text-white">{unread[p.key]}</span> : null}
+                <span className="text-[var(--gold)]">Abrir →</span>
+              </div>
             </Link>
           ))}
         </div>

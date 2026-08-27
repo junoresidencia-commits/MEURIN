@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
+import { CareMessageThread } from "@/components/CareMessageThread";
 
 type Lab = { key: string; label: string; value: number; unit?: string; measuredAt: string };
 type Summary = {
@@ -145,6 +146,12 @@ export default function NutriPacientePage() {
     <div className="mx-auto max-w-3xl px-5 py-8">
       <Link href="/nutricionista/painel" className="text-sm font-semibold text-[var(--gold)]">← Painel</Link>
       <h1 className="font-display mt-2 text-2xl font-extrabold text-[var(--text)]">{sum.patient.name}</h1>
+
+      <section className="panel mt-4">
+        <h2 className="font-display text-lg text-[var(--text)]">Mensagens com o paciente</h2>
+        <p className="text-sm text-[var(--text-muted)]">O paciente vê você na área dele e pode escrever por aqui. Chega alerta no sino.</p>
+        <CareMessageThread role="nutrition" patientKey={key} viewer="professional" />
+      </section>
 
       {/* Resumo renal (somente leitura) */}
       <section className="panel mt-4">
