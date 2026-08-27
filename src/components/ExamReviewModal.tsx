@@ -9,11 +9,20 @@ type ExistingLab = { testKey: string; measuredAt: string };
 type InputGroup = { date?: string; labs: { testKey: string; value: number | string; unit?: string }[] };
 
 function todayIso(): string {
-  return new Date().toISOString().slice(0, 10);
+  const d = new Date();
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${y}-${m}-${day}`;
 }
 function dayOf(iso: string): string {
+  if (/^\d{4}-\d{2}-\d{2}$/.test(iso)) return iso;
   const d = new Date(iso);
-  return Number.isNaN(d.getTime()) ? iso.slice(0, 10) : d.toISOString().slice(0, 10);
+  if (Number.isNaN(d.getTime())) return iso.slice(0, 10);
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${y}-${m}-${day}`;
 }
 let gid = 0;
 function newId(): string {
@@ -60,7 +69,7 @@ export function ExamReviewModal({
 }) {
   const initialGroups: GroupState[] = useMemo(() => {
     const src: InputGroup[] = groups && groups.length ? groups : [{ date: initialDate, labs: initialLabs || [] }];
-    return src.map((g) => ({ id: newId(), date: g.date || todayIso(), rows: g.labs.map(toRow) }));
+    return src.map((g) => ({ id: newId(), date: g.date || "", rows: g.labs.map(toRow) }));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
   const [gs, setGs] = useState<GroupState[]>(initialGroups);
@@ -123,6 +132,11 @@ export function ExamReviewModal({
         setSaving(false);
         return;
       }
+      if (gs.some((g) => g.rows.some((r) => r.checked) && !g.date)) {
+        setErr("Informe a data da coleta em cada bloco — não gravamos exame sem data.");
+        setSaving(false);
+        return;
+      }
       const res = await fetch(`/api/doctor/patients/${emailParam}/labs`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -151,7 +165,7 @@ export function ExamReviewModal({
         <p className="mb-4 text-sm text-[var(--text-soft)]">
           {totalDates > 1
             ? `Foram encontradas ${totalDates} datas de exames. Confira cada data antes de adicionar ao histórico — cada resultado é salvo na sua própria data, sem apagar os anteriores.`
-            : "Confira antes de adicionar ao histórico — você pode editar valores, unidades, nomes, a data da coleta, excluir ou incluir exames."}
+            : "Confira antes de adicionar ao histórico — você pode editar valores, unidades, nomes, a data da coleta, excluir ou incluir exames. Sem data identificada, preencha a data da coleta."}
         </p>
 
         <div className="space-y-4">
@@ -162,7 +176,9 @@ export function ExamReviewModal({
               <div key={g.id} className="rounded-[20px] border border-[var(--border)] p-3">
                 <div className="mb-2 flex items-end justify-between gap-2">
                   <label className="block flex-1">
-                    <span className="mb-1 block text-xs font-semibold text-[var(--text-muted)]">Data da coleta</span>
+                    <span className="mb-1 block text-xs font-semibold text-[var(--text-muted)]">
+                      Data da coleta{!g.date ? " (não identificada — preencha)" : ""}
+                    </span>
                     <input type="date" className="input-field" value={g.date} onChange={(e) => patchGroup(g.id, { date: e.target.value })} />
                   </label>
                   <span className="pb-2 text-xs text-[var(--text-muted)]">{validCount} exame(s)</span>
