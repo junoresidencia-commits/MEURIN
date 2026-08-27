@@ -10,6 +10,9 @@ import { ClinicalProfileEditor } from "@/components/ClinicalProfileEditor";
 import { ClinicalReviewModal } from "@/components/ClinicalReviewModal";
 import { extractClinicalFields, type DetectedField } from "@/lib/clinical-extractor";
 import { ExamReviewModal } from "@/components/ExamReviewModal";
+import { MedReviewModal } from "@/components/MedReviewModal";
+import { extractMedsFromText, labsToExameBody, medsToReceitaBody, mergeMeds, parseMedsList } from "@/lib/med-parser";
+import { composerHref } from "@/lib/complementary-docs";
 import { parseLabGroups, type ParsedLabGroup } from "@/lib/lab-parser";
 import { TemplatePicker } from "@/components/TemplatePicker";
 import { AttendanceControl } from "@/components/AttendanceControl";
@@ -57,6 +60,7 @@ type Doc = {
   id: string;
   type: "receita" | "exame" | "relatorio";
   title: string;
+  body?: string;
   sharedWithPatient: boolean;
   createdAt: string;
 };
@@ -144,6 +148,7 @@ export default function ProntuarioPage() {
   const [form, setForm] = useState({ chiefComplaint: "", history: "", assessment: "", plan: "" });
   const [review, setReview] = useState<{ groups: ParsedLabGroup[]; source?: string } | null>(null);
   const [clinicalReview, setClinicalReview] = useState<DetectedField[] | null>(null);
+  const [medReview, setMedReview] = useState<import("@/lib/med-parser").ParsedMed[] | null>(null);
   const [shared, setShared] = useState(true);
   const [editingPatient, setEditingPatient] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -330,6 +335,15 @@ export default function ProntuarioPage() {
     }
   }
 
+  function offerFromEvolution(text: string) {
+    const groups = parseLabGroups(text);
+    const meds = mergeMeds(extractMedsFromText(text), parseMedsList(medsText));
+    const detectedClinical = extractClinicalFields(text);
+    if (groups.length > 0) setReview({ groups });
+    if (meds.length > 0) setMedReview(meds);
+    if (detectedClinical.length > 0) setClinicalReview(detectedClinical);
+  }
+
   async function saveNote() {
     setSaving(true);
     setSaveErr("");
@@ -384,6 +398,7 @@ export default function ProntuarioPage() {
         setDraftAt(null);
         await offline?.refreshQueue();
         setSaveMsg("Evolução salva neste dispositivo. Será sincronizada quando a internet retornar.");
+        offerFromEvolution(evolutionText);
         setSaving(false);
         return;
       }
@@ -394,19 +409,12 @@ export default function ProntuarioPage() {
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Não foi possível salvar.");
-      const groups = parseLabGroups(evolutionText);
-      const detectedClinical = extractClinicalFields(evolutionText);
       setForm({ chiefComplaint: "", history: "", assessment: "", plan: "" });
       if (sess) await deleteDraft(sess.doctorId, emailParam, "evolucao").catch(() => {});
       setDraftAt(null);
       setSaveMsg("Evolução salva no prontuário." + (shared ? " Liberada ao paciente." : ""));
       await load();
-      if (groups.length > 0) {
-        setReview({ groups });
-      }
-      if (detectedClinical.length > 0) {
-        setClinicalReview(detectedClinical);
-      }
+      offerFromEvolution(evolutionText);
     } catch (e) {
       const networkFail = !navigator.onLine || (e instanceof TypeError);
       if (networkFail && sess) {
@@ -449,6 +457,7 @@ export default function ProntuarioPage() {
         setDraftAt(null);
         await offline?.refreshQueue();
         setSaveMsg("Evolução salva neste dispositivo. Será sincronizada quando a internet retornar.");
+        offerFromEvolution(evolutionText);
         setSaving(false);
         return;
       }
@@ -597,6 +606,14 @@ export default function ProntuarioPage() {
   }, [medsText, medsTouched, emailParam, offline?.session]);
 
   const labKeys = Array.from(new Set(labs.map((l) => l.testKey)));
+  const lastReceita = documents.find((d) => d.type === "receita" && String(d.body || "").trim());
+  const lastExameDoc = documents.find((d) => d.type === "exame" && String(d.body || "").trim());
+  const lastLabPanel = (() => {
+    if (!labs.length) return null;
+    const day = [...labs].map((l) => l.measuredAt.slice(0, 10)).sort().at(-1)!;
+    const labels = Array.from(new Set(labs.filter((l) => l.measuredAt.slice(0, 10) === day).map((l) => labLabel(l.testKey))));
+    return { day, labels };
+  })();
   const bp = records.find((r) => r.kind === "bp");
   const glucose = records.find((r) => r.kind === "glucose");
   const weight = records.find((r) => r.kind === "weight");
@@ -755,6 +772,44 @@ export default function ProntuarioPage() {
                   Medicamentos salvos às {new Date(medsSavedAt).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}
                 </p>
               )}
+              <div className="flex flex-wrap gap-2">
+                {medsText.trim() && (
+                  <Link
+                    href={composerHref(emailParam, { type: "receita", title: "Receita médica", body: medsToReceitaBody(parseMedsList(medsText)) })}
+                    className="btn-ghost text-sm"
+                  >
+                    Receita com medicamentos em uso
+                  </Link>
+                )}
+                {lastReceita?.body && (
+                  <Link
+                    href={composerHref(emailParam, { type: "receita", title: lastReceita.title || "Receita médica", body: lastReceita.body })}
+                    className="btn-ghost text-sm"
+                  >
+                    Repetir última receita
+                  </Link>
+                )}
+                {lastExameDoc?.body && (
+                  <Link
+                    href={composerHref(emailParam, { type: "exame", title: lastExameDoc.title || "Pedido de exames", body: lastExameDoc.body })}
+                    className="btn-ghost text-sm"
+                  >
+                    Repetir último pedido de exames
+                  </Link>
+                )}
+                {lastLabPanel && (
+                  <Link
+                    href={composerHref(emailParam, {
+                      type: "exame",
+                      title: "Pedido de exames",
+                      body: labsToExameBody(lastLabPanel.labels, new Date(lastLabPanel.day + "T12:00:00").toLocaleDateString("pt-BR")),
+                    })}
+                    className="btn-ghost text-sm"
+                  >
+                    Repetir exames da última coleta
+                  </Link>
+                )}
+              </div>
 
               <label className="flex items-center gap-2 text-sm text-[var(--text-soft)]">
                 <input type="checkbox" checked={shared} onChange={(e) => setShared(e.target.checked)} className="h-4 w-4 accent-[var(--gold)]" />
@@ -962,6 +1017,28 @@ export default function ProntuarioPage() {
                 <Link href={`/medicos/paciente/${emailParam}/documento`} className="btn-gold">Abrir compositor →</Link>
               </div>
             )}
+            <div className="flex flex-wrap gap-2">
+              {medsText.trim() && (
+                <Link href={composerHref(emailParam, { type: "receita", title: "Receita médica", body: medsToReceitaBody(parseMedsList(medsText)) })} className="btn-ghost text-sm">
+                  Receita com medicamentos em uso
+                </Link>
+              )}
+              {lastReceita?.body && (
+                <Link href={composerHref(emailParam, { type: "receita", title: lastReceita.title || "Receita médica", body: lastReceita.body })} className="btn-ghost text-sm">
+                  Repetir última receita
+                </Link>
+              )}
+              {lastExameDoc?.body && (
+                <Link href={composerHref(emailParam, { type: "exame", title: lastExameDoc.title || "Pedido de exames", body: lastExameDoc.body })} className="btn-ghost text-sm">
+                  Repetir último pedido de exames
+                </Link>
+              )}
+              {lastLabPanel && (
+                <Link href={composerHref(emailParam, { type: "exame", title: "Pedido de exames", body: labsToExameBody(lastLabPanel.labels, new Date(lastLabPanel.day + "T12:00:00").toLocaleDateString("pt-BR")) })} className="btn-ghost text-sm">
+                  Repetir exames da última coleta
+                </Link>
+              )}
+            </div>
             {hasLetterhead !== false && (
               <p className="text-xs text-[var(--text-muted)]">
                 Gerencie seus papéis timbrados em{" "}
@@ -981,6 +1058,11 @@ export default function ProntuarioPage() {
                   <p className="text-xs text-[var(--text-muted)]">{DOC_TYPE_LABEL[d.type]} · {fmt(d.createdAt)}</p>
                 </a>
                 <div className="flex shrink-0 items-center gap-3">
+                  {d.body && (d.type === "receita" || d.type === "exame") && (
+                    <Link href={composerHref(emailParam, { type: d.type, title: d.title, body: d.body })} className="text-sm font-semibold text-[var(--text-soft)]">
+                      Repetir
+                    </Link>
+                  )}
                   <a href={`/documento/${d.id}`} target="_blank" rel="noopener noreferrer" className="text-sm font-semibold text-[var(--gold)]">Abrir PDF →</a>
                   <button type="button" className="text-sm font-semibold text-[var(--text-muted)] hover:text-[var(--danger)]" onClick={() => removeDocument(d.id)}>Excluir</button>
                 </div>
@@ -1109,8 +1191,17 @@ export default function ProntuarioPage() {
         />
       )}
 
-      {/* Depois dos exames, confirma os dados clínicos detectados (perfil estruturado). */}
-      {!review && clinicalReview && (
+      {!review && medReview && (
+        <MedReviewModal
+          emailParam={emailParam}
+          detected={medReview}
+          existingText={medsText}
+          onClose={() => setMedReview(null)}
+          onSavedMeds={(text) => { setMedsText(text); setMedsTouched(true); setMedsSavedAt(new Date().toISOString()); }}
+        />
+      )}
+
+      {!review && !medReview && clinicalReview && (
         <ClinicalReviewModal
           emailParam={emailParam}
           detected={clinicalReview}

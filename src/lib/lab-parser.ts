@@ -153,20 +153,70 @@ const LAB_RE = new RegExp(
 );
 
 const DATE_RE = /(\d{1,2})[\/.-](\d{1,2})[\/.-](\d{2,4})/;
-const DATE_RE_G = /(\d{1,2})[\/.-](\d{1,2})[\/.-](\d{2,4})/g;
+const DATE_DMY_G = /(\d{1,2})[\/.-](\d{1,2})[\/.-](\d{2,4})/g;
+const DATE_ISO_G = /(\d{4})-(\d{2})-(\d{2})/g;
+const MONTHS: Record<string, string> = {
+  janeiro: "01", jan: "01",
+  fevereiro: "02", fev: "02",
+  marco: "03", março: "03", mar: "03",
+  abril: "04", abr: "04",
+  maio: "05", mai: "05",
+  junho: "06", jun: "06",
+  julho: "07", jul: "07",
+  agosto: "08", ago: "08",
+  setembro: "09", set: "09",
+  outubro: "10", out: "10",
+  novembro: "11", nov: "11",
+  dezembro: "12", dez: "12",
+};
+const DATE_PT_G = /(\d{1,2})\s+de\s+(janeiro|fevereiro|mar[cç]o|abril|maio|junho|julho|agosto|setembro|outubro|novembro|dezembro|jan|fev|mar|abr|mai|jun|jul|ago|set|out|nov|dez)\.?\s+(?:de\s+)?(\d{4})/gi;
 
-function toIsoDate(match: RegExpMatchArray): string | undefined {
-  const [, d, m, yRaw] = match;
-  if (yRaw.length !== 2 && yRaw.length !== 4) return undefined; // evita "1/2/3"
+const IGNORE_DATE_BEFORE = /\b(retorno|retornar|consulta|agendar|agendad|proxima|próxima|comparec|versus|\bvs\b|comparad|desde|a partir)/i;
+
+function toIsoDate(dRaw: string, mRaw: string, yRaw: string): string | undefined {
+  if (yRaw.length !== 2 && yRaw.length !== 4) return undefined;
   const y = yRaw.length === 2 ? `20${yRaw}` : yRaw;
   const yr = Number(y);
-  if (yr < 1990 || yr > 2099) return undefined; // sanidade: ignora números soltos
-  const dd = d.padStart(2, "0");
-  const mm = m.padStart(2, "0");
+  if (yr < 1990 || yr > 2099) return undefined;
+  const dd = dRaw.padStart(2, "0");
+  const mm = mRaw.padStart(2, "0");
   const day = Number(dd);
   const mon = Number(mm);
   if (day < 1 || day > 31 || mon < 1 || mon > 12) return undefined;
   return `${y}-${mm}-${dd}`;
+}
+
+function dateIgnoredAt(text: string, index: number): boolean {
+  const pre = text.slice(Math.max(0, index - 28), index);
+  return IGNORE_DATE_BEFORE.test(pre);
+}
+
+type DateMark = { index: number; iso?: string; length: number };
+
+function collectDateMarks(text: string): DateMark[] {
+  const marks: DateMark[] = [];
+  for (const m of text.matchAll(DATE_DMY_G)) {
+    if (dateIgnoredAt(text, m.index ?? 0)) continue;
+    marks.push({ index: m.index ?? 0, iso: toIsoDate(m[1], m[2], m[3]), length: m[0].length });
+  }
+  for (const m of text.matchAll(DATE_ISO_G)) {
+    if (dateIgnoredAt(text, m.index ?? 0)) continue;
+    marks.push({ index: m.index ?? 0, iso: toIsoDate(m[3], m[2], m[1]), length: m[0].length });
+  }
+  for (const m of text.matchAll(DATE_PT_G)) {
+    if (dateIgnoredAt(text, m.index ?? 0)) continue;
+    const month = MONTHS[m[2].toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "")] || MONTHS[m[2].toLowerCase()];
+    if (!month) continue;
+    marks.push({ index: m.index ?? 0, iso: toIsoDate(m[1], month, m[3]), length: m[0].length });
+  }
+  marks.sort((a, b) => a.index - b.index);
+  const dedup: DateMark[] = [];
+  for (const mark of marks) {
+    const prev = dedup[dedup.length - 1];
+    if (prev && mark.index < prev.index + prev.length) continue;
+    dedup.push(mark);
+  }
+  return dedup;
 }
 
 /** Extrai os exames de UM trecho de texto, mantendo a 1ª ocorrência de cada exame nele. */
@@ -196,7 +246,7 @@ function extractLabs(text: string): ParsedLab[] {
 export function parseLabsFromText(text: string): ParseResult {
   if (!text || !text.trim()) return { labs: [] };
   const dateMatch = text.match(DATE_RE);
-  const date = dateMatch ? toIsoDate(dateMatch) : undefined;
+  const date = dateMatch ? toIsoDate(dateMatch[1], dateMatch[2], dateMatch[3]) : collectDateMarks(text)[0]?.iso;
   return { labs: extractLabs(text), date };
 }
 
@@ -208,42 +258,70 @@ export function parseLabsFromText(text: string): ParseResult {
  * próxima data) pertencem a essa data. Exames antes da primeira data ficam sem data
  * (o médico confirma no modal). Blocos com a MESMA data são unidos.
  */
+/**
+ * Extrai exames AGRUPADOS por data. Reconhece VÁRIAS datas dentro do mesmo texto
+ * (evolução/prontuário longo, colagem de laudo) e separa os resultados por data.
+ *
+ * Regras (para não jogar o exame na data errada):
+ * - data no começo ou no fim da mesma linha vale para os exames daquela linha;
+ * - linha só com data vira cabeçalho dos exames das linhas seguintes;
+ * - datas de retorno/consulta/agendamento são ignoradas.
+ */
 export function parseLabGroups(text: string): ParsedLabGroup[] {
   if (!text || !text.trim()) return [];
 
-  const marks: { index: number; iso?: string }[] = [];
-  for (const m of text.matchAll(DATE_RE_G)) {
-    marks.push({ index: m.index ?? 0, iso: toIsoDate(m) });
-  }
+  const lines = text.split(/\r?\n/);
+  let currentDate: string | undefined;
+  const buckets: { date?: string; labs: ParsedLab[] }[] = [];
 
-  if (marks.length === 0) {
-    const labs = extractLabs(text);
-    return labs.length ? [{ date: undefined, labs }] : [];
-  }
-
-  const groups: ParsedLabGroup[] = [];
-  const pre = extractLabs(text.slice(0, marks[0].index));
-  if (pre.length) groups.push({ date: undefined, labs: pre });
-
-  for (let i = 0; i < marks.length; i++) {
-    const start = marks[i].index;
-    const end = i + 1 < marks.length ? marks[i + 1].index : text.length;
-    const labs = extractLabs(text.slice(start, end));
-    if (labs.length) groups.push({ date: marks[i].iso, labs });
-  }
-
-  // Une blocos com a MESMA data (mantém a 1ª ocorrência de cada exame).
-  const merged: ParsedLabGroup[] = [];
-  for (const g of groups) {
-    const key = g.date ?? "__none__";
-    const existing = merged.find((x) => (x.date ?? "__none__") === key);
+  function add(date: string | undefined, labs: ParsedLab[]) {
+    if (!labs.length) return;
+    const key = date ?? "__none__";
+    const existing = buckets.find((b) => (b.date ?? "__none__") === key);
     if (!existing) {
-      merged.push({ date: g.date, labs: [...g.labs] });
-      continue;
+      buckets.push({ date, labs: [...labs] });
+      return;
     }
-    for (const lab of g.labs) {
+    for (const lab of labs) {
       if (!existing.labs.some((l) => l.testKey === lab.testKey)) existing.labs.push(lab);
     }
   }
-  return merged;
+
+  for (let li = 0; li < lines.length; li++) {
+    const line = lines[li];
+    const marks = collectDateMarks(line);
+    const labs = extractLabs(line);
+    if (marks.length && labs.length) {
+      const first = marks[0];
+      const last = marks[marks.length - 1];
+      const dateAtStart = first.index <= 2 || !extractLabs(line.slice(0, first.index)).length;
+      const iso = (dateAtStart ? first.iso : last.iso) || currentDate;
+      add(iso, labs);
+      if (iso) currentDate = iso;
+    } else if (marks.length && !labs.length) {
+      const iso = marks[0].iso;
+      if (iso) currentDate = iso;
+    } else if (labs.length) {
+      add(currentDate, labs);
+    }
+  }
+
+  // Texto sem quebras de linha: cai no algoritmo antigo por posição, mas com datas ignoradas.
+  if (buckets.length === 0 && !text.includes("\n")) {
+    const marks = collectDateMarks(text);
+    if (marks.length === 0) {
+      const labs = extractLabs(text);
+      return labs.length ? [{ date: undefined, labs }] : [];
+    }
+    const pre = extractLabs(text.slice(0, marks[0].index));
+    // Exames na mesma linha *antes* da 1ª data pertencem a essa data (não ficam "sem data").
+    if (pre.length) add(marks[0].iso, pre);
+    for (let i = 0; i < marks.length; i++) {
+      const start = marks[i].index;
+      const end = i + 1 < marks.length ? marks[i + 1].index : text.length;
+      add(marks[i].iso, extractLabs(text.slice(start, end)));
+    }
+  }
+
+  return buckets.filter((b) => b.labs.length);
 }

@@ -8,7 +8,16 @@ import { estimateEgfr, estimateEgfrCystatin, EGFR_EQUATION, EGFR_CYS_EQUATION, E
 const VALID = new Set(NEPHRO_LABS.map((l) => l.key));
 
 function dayOf(iso: string): string {
+  if (/^\d{4}-\d{2}-\d{2}$/.test(iso)) return iso;
   return new Date(iso).toISOString().slice(0, 10);
+}
+
+function measuredAtIso(raw: unknown, fallback: string): string {
+  if (raw == null || raw === "") return fallback;
+  const s = String(raw).trim();
+  if (/^\d{4}-\d{2}-\d{2}$/.test(s)) return `${s}T12:00:00.000Z`;
+  const d = new Date(s);
+  return Number.isNaN(d.getTime()) ? fallback : d.toISOString();
 }
 
 /**
@@ -130,7 +139,7 @@ export async function POST(
         rejected.push({ testKey: key, reason: "valor inválido" });
         continue;
       }
-      const at = item?.measuredAt ? new Date(String(item.measuredAt)).toISOString() : defaultAt;
+      const at = measuredAtIso(item?.measuredAt, defaultAt);
       const day = dayOf(at);
       const onConflict = item?.onConflict === "keep" || item?.onConflict === "update" ? item.onConflict : null;
 
