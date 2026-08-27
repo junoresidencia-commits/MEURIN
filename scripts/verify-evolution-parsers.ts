@@ -50,6 +50,9 @@ expectEq("meds em uso", meds.map((m) => m.name), ["Losartana", "Furosemida"]);
 const inlineMed = extractMedsFromText("Manter losartana 50 mg. Creatinina 1,3.");
 expectEq("losartana com dose fora do bloco", inlineMed.map((m) => m.name), ["Losartana"]);
 
+const twoMeds = extractMedsFromText("Manter losartana 50 mg 1x/dia e furosemida 40 mg.");
+expectEq("dois meds na mesma linha", twoMeds.map((m) => m.name), ["Losartana", "Furosemida"]);
+
 const failed = cases.filter((c) => !c.ok);
 for (const c of cases) {
   console.log(`${c.ok ? "ok" : "FAIL"}  ${c.name}${c.detail ? " — " + c.detail : ""}`);

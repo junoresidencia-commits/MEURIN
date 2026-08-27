@@ -84,6 +84,11 @@ export function parseMedsList(text: string): ParsedMed[] {
   return out;
 }
 
+function partsOf(line: string): string[] {
+  const chunks = line.split(/\s*;\s*|\s+e\s+/i).map((s) => s.trim()).filter(Boolean);
+  return chunks.length ? chunks : [line];
+}
+
 /**
  * Detecta medicamentos na evolução (linhas de "em uso", "medicações", ou nomes conhecidos + dose).
  */
@@ -115,10 +120,10 @@ export function extractMedsFromText(text: string): ParsedMed[] {
       continue;
     }
     if (inBlock) {
-      push(parseLine(line, true));
+      partsOf(line).forEach((part) => push(parseLine(part, true)));
       continue;
     }
-    push(parseLine(line));
+    partsOf(line).forEach((part) => push(parseLine(part)));
   }
   return out;
 }
