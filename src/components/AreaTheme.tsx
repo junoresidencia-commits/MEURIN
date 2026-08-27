@@ -11,6 +11,8 @@ export function AreaTheme() {
   useEffect(() => {
     let area = "";
     if (pathname.startsWith("/nutricionista")) area = "nutri";
+    else if (pathname.startsWith("/psicologo")) area = "psico";
+    else if (pathname.startsWith("/enfermeiro")) area = "enfermagem";
     else if (pathname.startsWith("/atendente")) area = "atendente";
     else if (pathname.startsWith("/medicos")) area = "medico";
     const root = document.documentElement;

@@ -12,6 +12,8 @@ export function SiteFooter() {
     pathname?.startsWith("/atendente") ||
     pathname?.startsWith("/medicos") ||
     pathname?.startsWith("/nutricionista") ||
+    pathname?.startsWith("/psicologo") ||
+    pathname?.startsWith("/enfermeiro") ||
     pathname?.startsWith("/consulta") ||
     pathname?.startsWith("/lme") ||
     pathname?.startsWith("/documento")
