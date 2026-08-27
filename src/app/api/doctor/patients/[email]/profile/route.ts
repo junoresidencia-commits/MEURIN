@@ -25,15 +25,31 @@ export async function PUT(req: Request, { params }: { params: Promise<{ email: s
   if (!access) return NextResponse.json({ error: "Não autenticado." }, { status: 401 });
   if (!access.allowed) return NextResponse.json({ error: "Sem acesso a este paciente." }, { status: 403 });
 
-  let body: { data?: unknown };
+  let body: { data?: unknown; baseUpdatedAt?: string | null; force?: boolean };
   try {
     body = await req.json();
   } catch {
     return NextResponse.json({ error: "Requisição inválida." }, { status: 400 });
   }
   const data = (body.data && typeof body.data === "object" ? body.data : {}) as Record<string, unknown>;
+  if (body.force !== true) {
+    const current = await getProfile(access.key);
+    const serverAt = current?.updatedAt || null;
+    const clientAt = body.baseUpdatedAt || null;
+    if (serverAt && serverAt !== clientAt && (!clientAt || serverAt > clientAt)) {
+      return NextResponse.json(
+        {
+          error: "O prontuário foi alterado em outro dispositivo.",
+          conflict: true,
+          updatedAt: current?.updatedAt,
+          profile: current?.data,
+        },
+        { status: 409 }
+      );
+    }
+  }
   const saved = await replaceProfileData(access.key, doctorId || null, doctorId || null, data, "manual");
-  return NextResponse.json({ ok: true, profile: saved.data, meta: saved.meta, history: saved.history });
+  return NextResponse.json({ ok: true, profile: saved.data, meta: saved.meta, history: saved.history, updatedAt: saved.updatedAt });
 }
 
 // Aplica alterações confirmadas a partir da evolução/PDF (proveniência informada)

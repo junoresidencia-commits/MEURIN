@@ -17,6 +17,10 @@ import { ReturnPicker } from "@/components/ReturnPicker";
 import { PatientLmeField } from "@/components/PatientCnsField";
 import { PatientEditForm } from "@/components/PatientEditForm";
 import { guessSexFromName } from "@/lib/sex-guess";
+import { useOfflineOptional } from "@/components/offline/OfflineProvider";
+import { OfflineNeedsNet } from "@/components/offline/OfflineBanner";
+import { cacheChartSnapshot, mergeIntoSnapshot } from "@/lib/offline/chart-cache";
+import { deleteDraft, enqueue, getDraft, getSnapshot, listQueue, loadSession, newClientOpId, saveDraft, draftKey } from "@/lib/offline/idb";
 
 type Lab = { id: string; testKey: string; value: number; unit?: string | null; measuredAt: string };
 type Upload = { id: string; name: string; category?: string | null; examDate?: string | null; signedUrl?: string | null };
@@ -145,33 +149,127 @@ export default function ProntuarioPage() {
   const [saving, setSaving] = useState(false);
   const [saveMsg, setSaveMsg] = useState("");
   const [saveErr, setSaveErr] = useState("");
+  const [draftAt, setDraftAt] = useState<string | null>(null);
+  const [fromCache, setFromCache] = useState(false);
+  const [medsText, setMedsText] = useState("");
+  const [medsTouched, setMedsTouched] = useState(false);
+  const [medsSavedAt, setMedsSavedAt] = useState<string | null>(null);
+  const [profileUpdatedAt, setProfileUpdatedAt] = useState<string | null>(null);
+  const offline = useOfflineOptional();
 
   // Formulário de documento (receita / exame / relatório)
   // Documentos usam o papel timbrado salvo (compositor). hasLetterhead controla a orientação.
   const [hasLetterhead, setHasLetterhead] = useState<boolean | null>(null);
 
   const load = useCallback(async () => {
-    const res = await fetch(`/api/doctor/patients/${emailParam}`);
-    if (res.status === 401) {
-      router.replace("/medicos/login");
-      return;
-    }
-    const data = await res.json();
-    if (!res.ok) {
-      setError(data.error || "Não foi possível carregar o prontuário.");
+    const applySnap = async () => {
+      const sess = await loadSession();
+      if (!sess) return false;
+      const snap = await getSnapshot(sess.doctorId, decodeURIComponent(emailParam));
+      if (!snap) return false;
+      setPatient({
+        email: snap.patient.email || "",
+        name: snap.patient.name,
+        city: snap.patient.city || "",
+        phone: snap.patient.phone || "",
+        birthdate: snap.patient.birthdate,
+        sex: snap.patient.sex,
+        cns: snap.patient.cns,
+        cpf: snap.patient.cpf,
+      });
+      setNotes(snap.notes);
+      setLabs(snap.labs);
+      setDocuments(
+        (snap.documents || []).map((d) => ({
+          id: d.id,
+          type: d.type === "receita" || d.type === "exame" || d.type === "relatorio" ? d.type : "relatorio",
+          title: d.title,
+          sharedWithPatient: false,
+          createdAt: d.createdAt,
+        }))
+      );
+      const queued = await listQueue(sess.doctorId);
+      const pendingNotes = queued.filter(
+        (op) => op.kind === "note.create" && op.patientKey === decodeURIComponent(emailParam)
+      );
+      if (pendingNotes.length) {
+        setNotes((prev) => {
+          const extra = pendingNotes
+            .filter((op) => !prev.some((n) => n.id === op.id))
+            .map((op) => ({
+              id: op.id,
+              doctorName: sess.doctorName,
+              chiefComplaint: String(op.payload.chiefComplaint || "") || null,
+              history: String(op.payload.history || "") || null,
+              assessment: String(op.payload.assessment || "") || null,
+              plan: String(op.payload.plan || "") || null,
+              sharedWithPatient: Boolean(op.payload.sharedWithPatient),
+              createdAt: op.createdAt,
+            }));
+          return extra.length ? [...extra, ...prev] : prev;
+        });
+      }
+      setMedsText(typeof snap.profile.medicamentos_em_uso === "string" ? snap.profile.medicamentos_em_uso : "");
+      setProfileUpdatedAt(snap.profileUpdatedAt);
+      setFromCache(true);
+      return true;
+    };
+
+    try {
+      const res = await fetch(`/api/doctor/patients/${emailParam}`);
+      if (res.status === 401) {
+        if (!navigator.onLine && (await applySnap())) { setLoading(false); return; }
+        router.replace("/medicos/login");
+        return;
+      }
+      const data = await res.json();
+      if (!res.ok) {
+        if (!navigator.onLine && (await applySnap())) { setLoading(false); return; }
+        setError(data.error || "Não foi possível carregar o prontuário.");
+        setLoading(false);
+        return;
+      }
+      setFromCache(false);
+      setPatient(data.patient);
+      setRecords(data.records || []);
+      setFood(data.food || []);
+      setBookings(data.bookings || []);
+      setNotes(data.notes || []);
+      setDocuments(data.documents || []);
+      setLabs(data.labs || []);
+      setUploads(data.uploads || []);
+      setLmeList(data.lme || []);
       setLoading(false);
-      return;
+      const sess = await loadSession();
+      if (sess) {
+        let profile: Record<string, unknown> = {};
+        let pUpdated: string | null = null;
+        try {
+          const pr = await fetch(`/api/doctor/patients/${emailParam}/profile`);
+          if (pr.ok) {
+            const pd = await pr.json();
+            profile = pd.profile || {};
+            pUpdated = pd.updatedAt || null;
+            setMedsText(typeof profile.medicamentos_em_uso === "string" ? String(profile.medicamentos_em_uso) : "");
+            setProfileUpdatedAt(pUpdated);
+          }
+        } catch { /* perfil é complementar */ }
+        await cacheChartSnapshot({
+          doctorId: sess.doctorId,
+          patientKey: emailParam,
+          patient: data.patient,
+          notes: data.notes || [],
+          labs: data.labs || [],
+          documents: data.documents || [],
+          profile,
+          profileUpdatedAt: pUpdated,
+        });
+      }
+    } catch {
+      if (await applySnap()) { setLoading(false); return; }
+      setError("Não foi possível carregar o prontuário.");
+      setLoading(false);
     }
-    setPatient(data.patient);
-    setRecords(data.records || []);
-    setFood(data.food || []);
-    setBookings(data.bookings || []);
-    setNotes(data.notes || []);
-    setDocuments(data.documents || []);
-    setLabs(data.labs || []);
-    setUploads(data.uploads || []);
-    setLmeList(data.lme || []);
-    setLoading(false);
   }, [emailParam, router]);
 
   async function saveAppointment() {
@@ -236,19 +334,71 @@ export default function ProntuarioPage() {
     setSaving(true);
     setSaveErr("");
     setSaveMsg("");
+    const evolutionText = [form.chiefComplaint, form.history, form.assessment, form.plan].filter(Boolean).join("\n");
+    if (!evolutionText.trim()) {
+      setSaveErr("Escreva ao menos um campo da evolução.");
+      setSaving(false);
+      return;
+    }
+    const clientOpId = newClientOpId();
+    const sess = offline?.session || (await loadSession());
     try {
+      if (!navigator.onLine) {
+        if (!sess) throw new Error("Abra o prontuário online uma vez para poder salvar offline.");
+        await enqueue({
+          id: clientOpId,
+          doctorId: sess.doctorId,
+          patientKey: decodeURIComponent(emailParam),
+          kind: "note.create",
+          label: "Evolução clínica",
+          payload: { ...form, sharedWithPatient: shared },
+          status: "pending",
+          createdAt: new Date().toISOString(),
+          attempts: 0,
+        });
+        setNotes((prev) => [{
+          id: clientOpId,
+          doctorName: sess.doctorName,
+          chiefComplaint: form.chiefComplaint || null,
+          history: form.history || null,
+          assessment: form.assessment || null,
+          plan: form.plan || null,
+          sharedWithPatient: shared,
+          createdAt: new Date().toISOString(),
+        }, ...prev]);
+        await mergeIntoSnapshot(sess.doctorId, emailParam, {
+          notes: [{
+            id: clientOpId,
+            doctorName: sess.doctorName,
+            chiefComplaint: form.chiefComplaint || null,
+            history: form.history || null,
+            assessment: form.assessment || null,
+            plan: form.plan || null,
+            sharedWithPatient: shared,
+            createdAt: new Date().toISOString(),
+            pending: true,
+          }],
+        });
+        setForm({ chiefComplaint: "", history: "", assessment: "", plan: "" });
+        await deleteDraft(sess.doctorId, emailParam, "evolucao").catch(() => {});
+        setDraftAt(null);
+        await offline?.refreshQueue();
+        setSaveMsg("Evolução salva neste dispositivo. Será sincronizada quando a internet retornar.");
+        setSaving(false);
+        return;
+      }
       const res = await fetch(`/api/doctor/patients/${emailParam}/notes`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ ...form, sharedWithPatient: shared }),
+        body: JSON.stringify({ ...form, sharedWithPatient: shared, clientOpId }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Não foi possível salvar.");
-      // Leitura automática: detecta exames (em VÁRIAS datas) E dados clínicos na evolução.
-      const evolutionText = [form.chiefComplaint, form.history, form.assessment, form.plan].filter(Boolean).join("\n");
       const groups = parseLabGroups(evolutionText);
       const detectedClinical = extractClinicalFields(evolutionText);
       setForm({ chiefComplaint: "", history: "", assessment: "", plan: "" });
+      if (sess) await deleteDraft(sess.doctorId, emailParam, "evolucao").catch(() => {});
+      setDraftAt(null);
       setSaveMsg("Evolução salva no prontuário." + (shared ? " Liberada ao paciente." : ""));
       await load();
       if (groups.length > 0) {
@@ -258,9 +408,96 @@ export default function ProntuarioPage() {
         setClinicalReview(detectedClinical);
       }
     } catch (e) {
+      const networkFail = !navigator.onLine || (e instanceof TypeError);
+      if (networkFail && sess) {
+        await enqueue({
+          id: clientOpId,
+          doctorId: sess.doctorId,
+          patientKey: decodeURIComponent(emailParam),
+          kind: "note.create",
+          label: "Evolução clínica",
+          payload: { ...form, sharedWithPatient: shared },
+          status: "pending",
+          createdAt: new Date().toISOString(),
+          attempts: 0,
+        });
+        setNotes((prev) => [{
+          id: clientOpId,
+          doctorName: sess.doctorName,
+          chiefComplaint: form.chiefComplaint || null,
+          history: form.history || null,
+          assessment: form.assessment || null,
+          plan: form.plan || null,
+          sharedWithPatient: shared,
+          createdAt: new Date().toISOString(),
+        }, ...prev]);
+        await mergeIntoSnapshot(sess.doctorId, emailParam, {
+          notes: [{
+            id: clientOpId,
+            doctorName: sess.doctorName,
+            chiefComplaint: form.chiefComplaint || null,
+            history: form.history || null,
+            assessment: form.assessment || null,
+            plan: form.plan || null,
+            sharedWithPatient: shared,
+            createdAt: new Date().toISOString(),
+            pending: true,
+          }],
+        });
+        setForm({ chiefComplaint: "", history: "", assessment: "", plan: "" });
+        await deleteDraft(sess.doctorId, emailParam, "evolucao").catch(() => {});
+        setDraftAt(null);
+        await offline?.refreshQueue();
+        setSaveMsg("Evolução salva neste dispositivo. Será sincronizada quando a internet retornar.");
+        setSaving(false);
+        return;
+      }
       setSaveErr(e instanceof Error ? e.message : "Erro inesperado.");
     } finally {
       setSaving(false);
+    }
+  }
+
+  async function saveMeds() {
+    const sess = offline?.session || (await loadSession());
+    if (!sess) { setSaveErr("Abra o prontuário online uma vez para atualizar medicamentos offline."); return; }
+    try {
+      if (!navigator.onLine) {
+        const curSnap = await getSnapshot(sess.doctorId, decodeURIComponent(emailParam));
+        const merged = { ...(curSnap?.profile || {}), medicamentos_em_uso: medsText };
+        await enqueue({
+          id: newClientOpId(),
+          doctorId: sess.doctorId,
+          patientKey: decodeURIComponent(emailParam),
+          kind: "profile.put",
+          label: "Medicamento",
+          payload: { data: merged, baseUpdatedAt: profileUpdatedAt || curSnap?.profileUpdatedAt },
+          status: "pending",
+          createdAt: new Date().toISOString(),
+          attempts: 0,
+        });
+        await mergeIntoSnapshot(sess.doctorId, emailParam, { profile: merged });
+        setMedsSavedAt(new Date().toISOString());
+        await offline?.refreshQueue();
+        return;
+      }
+      const cur = await fetch(`/api/doctor/patients/${emailParam}/profile`).then((r) => r.json()).catch(() => ({}));
+      const data = { ...(cur.profile || {}), medicamentos_em_uso: medsText };
+      const res = await fetch(`/api/doctor/patients/${emailParam}/profile`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ data, baseUpdatedAt: cur.updatedAt || profileUpdatedAt }),
+      });
+      const d = await res.json().catch(() => ({}));
+      if (res.status === 409) {
+        setSaveErr("O prontuário foi alterado em outro dispositivo. Confira o perfil clínico antes de substituir.");
+        return;
+      }
+      if (!res.ok) throw new Error(d.error || "Não foi possível salvar.");
+      setProfileUpdatedAt(d.updatedAt || null);
+      setMedsSavedAt(new Date().toISOString());
+    } catch (e) {
+      setSaveErr(e instanceof Error ? e.message : "Não foi possível salvar medicamentos.");
     }
   }
 
@@ -294,11 +531,70 @@ export default function ProntuarioPage() {
   }, [load]);
 
   useEffect(() => {
+    const onSynced = () => { void load(); };
+    window.addEventListener("meurim:offline-synced", onSynced);
+    return () => window.removeEventListener("meurim:offline-synced", onSynced);
+  }, [load]);
+
+  useEffect(() => {
     fetch("/api/doctor/letterheads")
       .then((r) => r.json())
       .then((d) => setHasLetterhead(Array.isArray(d.letterheads) && d.letterheads.length > 0))
       .catch(() => setHasLetterhead(false));
   }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      const sess = await loadSession();
+      if (!sess || cancelled) return;
+      const d = await getDraft(sess.doctorId, emailParam, "evolucao");
+      if (d?.payload && !cancelled) {
+        setForm({
+          chiefComplaint: String(d.payload.chiefComplaint || ""),
+          history: String(d.payload.history || ""),
+          assessment: String(d.payload.assessment || ""),
+          plan: String(d.payload.plan || ""),
+        });
+        if (typeof d.payload.shared === "boolean") setShared(d.payload.shared);
+        setDraftAt(d.updatedAt);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [emailParam]);
+
+  useEffect(() => {
+    const t = setTimeout(() => {
+      void (async () => {
+        const sess = offline?.session || (await loadSession());
+        if (!sess) return;
+        if (!form.chiefComplaint && !form.history && !form.assessment && !form.plan) return;
+        const at = new Date().toISOString();
+        await saveDraft({
+          key: draftKey(sess.doctorId, emailParam, "evolucao"),
+          doctorId: sess.doctorId,
+          patientKey: decodeURIComponent(emailParam),
+          kind: "evolucao",
+          payload: { ...form, shared },
+          updatedAt: at,
+        });
+        setDraftAt(at);
+      })();
+    }, 800);
+    return () => clearTimeout(t);
+  }, [form, shared, emailParam, offline?.session]);
+
+  useEffect(() => {
+    const t = setTimeout(() => {
+      void (async () => {
+        if (!medsTouched) return;
+        const sess = offline?.session || (await loadSession());
+        if (!sess) return;
+        await mergeIntoSnapshot(sess.doctorId, emailParam, { profile: { medicamentos_em_uso: medsText } });
+      })();
+    }, 800);
+    return () => clearTimeout(t);
+  }, [medsText, medsTouched, emailParam, offline?.session]);
 
   const labKeys = Array.from(new Set(labs.map((l) => l.testKey)));
   const bp = records.find((r) => r.kind === "bp");
@@ -338,6 +634,7 @@ export default function ProntuarioPage() {
           <h1 className="font-display text-2xl font-extrabold text-[var(--text)]">{patient?.name}</h1>
           <p className="text-sm text-[var(--text-muted)]">
             {[patient?.city, patient?.email].filter(Boolean).join(" · ")}
+            {fromCache ? " · dados deste dispositivo" : ""}
           </p>
         </div>
         <div className="flex flex-col gap-2">
@@ -347,16 +644,20 @@ export default function ProntuarioPage() {
       </div>
 
       {editingPatient && patient && (
-        <PatientEditForm
-          emailParam={emailParam}
-          patient={{ name: patient.name, phone: patient.phone, email: patient.email, city: patient.city, birthdate: patient.birthdate, sex: patient.sex }}
-          onClose={() => setEditingPatient(false)}
-          onSaved={load}
-        />
+        <OfflineNeedsNet>
+          <PatientEditForm
+            emailParam={emailParam}
+            patient={{ name: patient.name, phone: patient.phone, email: patient.email, city: patient.city, birthdate: patient.birthdate, sex: patient.sex }}
+            onClose={() => setEditingPatient(false)}
+            onSaved={load}
+          />
+        </OfflineNeedsNet>
       )}
 
       <div className="mt-3">
-        <AttendanceControl patientKey={emailParam} />
+        <OfflineNeedsNet>
+          <AttendanceControl patientKey={emailParam} />
+        </OfflineNeedsNet>
       </div>
 
       {/* Cabeçalho clínico */}
@@ -431,6 +732,29 @@ export default function ProntuarioPage() {
                   placeholder="Escreva a evolução do jeito que preferir — texto livre."
                 />
               </label>
+              {draftAt && (
+                <p className="text-[11px] text-[var(--text-muted)]">
+                  Rascunho salvo localmente às {new Date(draftAt).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}
+                </p>
+              )}
+
+              <label className="block">
+                <span className="mb-1.5 block text-xs font-bold uppercase tracking-wider text-[var(--gold)]">Medicamentos em uso</span>
+                <textarea
+                  className="input-field min-h-[80px]"
+                  value={medsText}
+                  onChange={(e) => { setMedsTouched(true); setMedsText(e.target.value); }}
+                  placeholder="Nome, dose e frequência — salvo neste dispositivo se estiver offline."
+                />
+              </label>
+              <button type="button" className="btn-ghost text-sm" onClick={() => void saveMeds()}>
+                Atualizar medicamentos
+              </button>
+              {medsSavedAt && (
+                <p className="text-[11px] text-[var(--text-muted)]">
+                  Medicamentos salvos às {new Date(medsSavedAt).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}
+                </p>
+              )}
 
               <label className="flex items-center gap-2 text-sm text-[var(--text-soft)]">
                 <input type="checkbox" checked={shared} onChange={(e) => setShared(e.target.checked)} className="h-4 w-4 accent-[var(--gold)]" />
@@ -444,7 +768,9 @@ export default function ProntuarioPage() {
                 {saving ? "Salvando…" : "Salvar evolução"}
               </button>
 
-              <ReturnPicker patientKey={emailParam} />
+              <OfflineNeedsNet>
+                <ReturnPicker patientKey={emailParam} />
+              </OfflineNeedsNet>
             </div>
 
             <p className="text-xs font-bold uppercase tracking-wider text-[var(--gold)]">Evoluções anteriores</p>
@@ -454,7 +780,7 @@ export default function ProntuarioPage() {
                 <div className="flex items-center justify-between">
                   <p className="text-sm font-semibold text-[var(--text)]">{fmt(n.createdAt)} · {n.doctorName}</p>
                   <span className={`rounded-full px-2.5 py-1 text-[11px] font-bold ${n.sharedWithPatient ? "bg-[#eaf8f2] text-[#1c8c70]" : "bg-[var(--border)] text-[var(--text-muted)]"}`}>
-                    {n.sharedWithPatient ? "Liberada ao paciente" : "Interna"}
+                    {offline?.pending.some((p) => p.id === n.id) ? "Pendente de sincronização" : n.sharedWithPatient ? "Liberada ao paciente" : "Interna"}
                   </span>
                 </div>
                 {n.chiefComplaint && <p className="text-sm text-[var(--text-soft)]"><b>Queixa:</b> {n.chiefComplaint}</p>}
@@ -468,56 +794,58 @@ export default function ProntuarioPage() {
 
         {tab === "exames" && (
           <div className="space-y-4">
-            <EgfrReadinessBanner emailParam={emailParam} birthdate={patient?.birthdate} sex={patient?.sex} patientName={patient?.name} onFixed={load} />
-            <div className="panel space-y-3">
-              <p className="text-xs font-bold uppercase tracking-wider text-[var(--gold)]">
-                Adicionar resultado de exame
-              </p>
-              <p className="text-xs text-[var(--text-muted)]">Ao lançar a <b>creatinina</b> (ou <b>cistatina C</b>), a <b>TFGe é calculada automaticamente</b> (CKD‑EPI) e entra no gráfico.</p>
-              <div className="grid gap-3 sm:grid-cols-3">
-                <label className="block sm:col-span-1">
-                  <span className="mb-1 block text-xs font-semibold text-[var(--text-muted)]">Exame</span>
-                  <select className="input-field" value={labTest} onChange={(e) => setLabTest(e.target.value)}>
-                    {NEPHRO_LABS.map((l) => (
-                      <option key={l.key} value={l.key}>{l.label}</option>
-                    ))}
-                  </select>
-                </label>
-                <label className="block">
-                  <span className="mb-1 block text-xs font-semibold text-[var(--text-muted)]">Valor ({labUnit(labTest)})</span>
-                  <input inputMode="decimal" className="input-field" value={labValue} onChange={(e) => setLabValue(e.target.value)} placeholder="Ex.: 1,8" />
-                </label>
-                <label className="block">
-                  <span className="mb-1 block text-xs font-semibold text-[var(--text-muted)]">Data do exame</span>
-                  <input type="date" className="input-field" value={labDate} onChange={(e) => setLabDate(e.target.value)} />
-                </label>
+            <OfflineNeedsNet>
+              <EgfrReadinessBanner emailParam={emailParam} birthdate={patient?.birthdate} sex={patient?.sex} patientName={patient?.name} onFixed={load} />
+              <div className="panel space-y-3">
+                <p className="text-xs font-bold uppercase tracking-wider text-[var(--gold)]">
+                  Adicionar resultado de exame
+                </p>
+                <p className="text-xs text-[var(--text-muted)]">Ao lançar a <b>creatinina</b> (ou <b>cistatina C</b>), a <b>TFGe é calculada automaticamente</b> (CKD‑EPI) e entra no gráfico.</p>
+                <div className="grid gap-3 sm:grid-cols-3">
+                  <label className="block sm:col-span-1">
+                    <span className="mb-1 block text-xs font-semibold text-[var(--text-muted)]">Exame</span>
+                    <select className="input-field" value={labTest} onChange={(e) => setLabTest(e.target.value)}>
+                      {NEPHRO_LABS.map((l) => (
+                        <option key={l.key} value={l.key}>{l.label}</option>
+                      ))}
+                    </select>
+                  </label>
+                  <label className="block">
+                    <span className="mb-1 block text-xs font-semibold text-[var(--text-muted)]">Valor ({labUnit(labTest)})</span>
+                    <input inputMode="decimal" className="input-field" value={labValue} onChange={(e) => setLabValue(e.target.value)} placeholder="Ex.: 1,8" />
+                  </label>
+                  <label className="block">
+                    <span className="mb-1 block text-xs font-semibold text-[var(--text-muted)]">Data do exame</span>
+                    <input type="date" className="input-field" value={labDate} onChange={(e) => setLabDate(e.target.value)} />
+                  </label>
+                </div>
+                {labErr && <p className="text-sm text-[var(--danger)]">{labErr}</p>}
+                {egfrInfo && <p className="rounded-xl border border-[var(--border-gold)] bg-[var(--gold-soft)] px-3 py-2 text-sm text-[var(--text-soft)]">{egfrInfo}</p>}
+                <button type="button" className="btn-gold" onClick={saveLab} disabled={labSaving || !labValue.trim()}>
+                  {labSaving ? "Salvando…" : "Adicionar exame"}
+                </button>
               </div>
-              {labErr && <p className="text-sm text-[var(--danger)]">{labErr}</p>}
-              {egfrInfo && <p className="rounded-xl border border-[var(--border-gold)] bg-[var(--gold-soft)] px-3 py-2 text-sm text-[var(--text-soft)]">{egfrInfo}</p>}
-              <button type="button" className="btn-gold" onClick={saveLab} disabled={labSaving || !labValue.trim()}>
-                {labSaving ? "Salvando…" : "Adicionar exame"}
-              </button>
-            </div>
 
-            <div className="panel space-y-3">
-              <p className="text-xs font-bold uppercase tracking-wider text-[var(--gold)]">
-                Importar exames de texto (várias datas)
-              </p>
-              <p className="text-sm text-[var(--text-soft)]">
-                Cole um laudo ou trecho de prontuário com exames de <b>várias datas</b>. O sistema separa
-                automaticamente por data e mostra tudo para você conferir antes de salvar no histórico.
-              </p>
-              <textarea
-                className="input-field min-h-[120px] font-mono text-[13px]"
-                value={importText}
-                onChange={(e) => setImportText(e.target.value)}
-                placeholder={"Ex.:\n10/01/2024\nCreatinina 1,2  Ureia 45  Potássio 4,4\n20/06/2024\nCreatinina 1,5  Ureia 58  Potássio 4,8\n15/02/2025\nCreatinina 1,8  Ureia 70  Potássio 5,0"}
-              />
-              {importErr && <p className="text-sm text-[var(--danger)]">{importErr}</p>}
-              <button type="button" className="btn-ghost" onClick={importFromText} disabled={!importText.trim()}>
-                Reconhecer exames do texto
-              </button>
-            </div>
+              <div className="panel space-y-3">
+                <p className="text-xs font-bold uppercase tracking-wider text-[var(--gold)]">
+                  Importar exames de texto (várias datas)
+                </p>
+                <p className="text-sm text-[var(--text-soft)]">
+                  Cole um laudo ou trecho de prontuário com exames de <b>várias datas</b>. O sistema separa
+                  automaticamente por data e mostra tudo para você conferir antes de salvar no histórico.
+                </p>
+                <textarea
+                  className="input-field min-h-[120px] font-mono text-[13px]"
+                  value={importText}
+                  onChange={(e) => setImportText(e.target.value)}
+                  placeholder={"Ex.:\n10/01/2024\nCreatinina 1,2  Ureia 45  Potássio 4,4\n20/06/2024\nCreatinina 1,5  Ureia 58  Potássio 4,8\n15/02/2025\nCreatinina 1,8  Ureia 70  Potássio 5,0"}
+                />
+                {importErr && <p className="text-sm text-[var(--danger)]">{importErr}</p>}
+                <button type="button" className="btn-ghost" onClick={importFromText} disabled={!importText.trim()}>
+                  Reconhecer exames do texto
+                </button>
+              </div>
+            </OfflineNeedsNet>
 
             {labKeys.length === 0 && <p className="text-[var(--text-muted)]">Nenhum exame registrado ainda.</p>}
             {labKeys.map((key) => {
@@ -572,8 +900,10 @@ export default function ProntuarioPage() {
         {tab === "lme" && (
           <div className="space-y-4">
             {/* Dados da LME (CNS e Nome da mãe) — avisam quando faltam; auto-preenchem a LME. */}
-            <PatientLmeField emailParam={emailParam} field="cns" label="CNS (Cartão SUS)" value={patient?.cns} numeric placeholder="000 0000 0000 0000" note="Necessário para a LME/CEAF. Se este paciente precisar, cadastre agora — senão, pode deixar em branco." onSaved={load} />
-            <PatientLmeField emailParam={emailParam} field="motherName" label="Nome da mãe" value={patient?.motherName} placeholder="Nome completo da mãe" note="Aparece no formulário oficial da LME. Cadastre para já sair preenchido nas próximas LMEs." onSaved={load} />
+            <OfflineNeedsNet>
+              <PatientLmeField emailParam={emailParam} field="cns" label="CNS (Cartão SUS)" value={patient?.cns} numeric placeholder="000 0000 0000 0000" note="Necessário para a LME/CEAF. Se este paciente precisar, cadastre agora — senão, pode deixar em branco." onSaved={load} />
+              <PatientLmeField emailParam={emailParam} field="motherName" label="Nome da mãe" value={patient?.motherName} placeholder="Nome completo da mãe" note="Aparece no formulário oficial da LME. Cadastre para já sair preenchido nas próximas LMEs." onSaved={load} />
+            </OfflineNeedsNet>
 
             {/* Kit CEAF — checklist */}
             <div className="panel">
@@ -591,7 +921,9 @@ export default function ProntuarioPage() {
             </div>
 
             {/* Assistente de LME em 8 etapas */}
-            <LmeWizard emailParam={emailParam} patientName={patient?.name} onCreated={load} />
+            <OfflineNeedsNet>
+              <LmeWizard emailParam={emailParam} patientName={patient?.name} onCreated={load} />
+            </OfflineNeedsNet>
 
             <p className="text-xs font-bold uppercase tracking-wider text-[var(--gold)]">LMEs geradas</p>
             {lmeList.length === 0 && <p className="text-[var(--text-muted)]">Nenhuma LME ainda.</p>}
@@ -700,8 +1032,10 @@ export default function ProntuarioPage() {
 
         {tab === "alimentacao" && (
           <div className="space-y-3">
-            <NutritionReferralBox emailParam={emailParam} />
-            <DoctorNutritionView emailParam={emailParam} />
+            <OfflineNeedsNet>
+              <NutritionReferralBox emailParam={emailParam} />
+              <DoctorNutritionView emailParam={emailParam} />
+            </OfflineNeedsNet>
             <p className="text-xs font-bold uppercase tracking-wider text-[var(--gold)]">Diário alimentar do paciente</p>
             {food.length === 0 && <p className="text-[var(--text-muted)]">Nenhum alimento registrado.</p>}
             {food.map((f) => (
@@ -718,6 +1052,7 @@ export default function ProntuarioPage() {
 
         {tab === "consultas" && (
           <div className="space-y-3">
+            <OfflineNeedsNet>
             <div className="panel space-y-3">
               <p className="text-xs font-bold uppercase tracking-wider text-[var(--gold)]">Agendar consulta</p>
               <div className="grid gap-3 sm:grid-cols-2">
@@ -735,6 +1070,7 @@ export default function ProntuarioPage() {
                 {apptSaving ? "Agendando…" : "Agendar consulta"}
               </button>
             </div>
+            </OfflineNeedsNet>
             {bookings.length === 0 && <p className="text-[var(--text-muted)]">Nenhuma consulta ainda.</p>}
             {bookings.map((b) => (
               <div key={b.id} className="panel flex items-center justify-between gap-3">
@@ -752,7 +1088,11 @@ export default function ProntuarioPage() {
           </div>
         )}
 
-        {tab === "pesquisa" && <ResearchTab emailParam={emailParam} patientName={patient?.name || ""} />}
+        {tab === "pesquisa" && (
+          <OfflineNeedsNet>
+            <ResearchTab emailParam={emailParam} patientName={patient?.name || ""} />
+          </OfflineNeedsNet>
+        )}
       </div>
 
       {review && (

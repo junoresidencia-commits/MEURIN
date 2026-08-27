@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { DoctorSidebar } from "@/components/DoctorSidebar";
 import { DoctorMobileNav } from "@/components/DoctorMobileNav";
+import { wipeOfflineOnLogout } from "@/lib/offline/idb";
 
 type Item = { href: string; label: string; desc: string; external?: boolean };
 type Group = { title: string; items: Item[] };
@@ -23,6 +24,7 @@ export default function MedicoMaisPage() {
   }, [router]);
 
   async function logout() {
+    await wipeOfflineOnLogout();
     await fetch("/api/auth", { method: "DELETE" });
     router.push("/medicos/login");
   }

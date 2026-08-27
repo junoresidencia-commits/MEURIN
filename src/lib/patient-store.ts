@@ -335,14 +335,42 @@ function mapNoteRow(row: Record<string, unknown>): ClinicalNote {
   };
 }
 
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
+export async function getClinicalNoteById(id: string): Promise<ClinicalNote | null> {
+  if (!id) return null;
+  if (supabaseActive("clinical_notes")) {
+    const supabase = getSupabaseAdmin()!;
+    const { data, error } = await supabase.from("clinical_notes").select("*").eq("id", id).maybeSingle();
+    if (error) {
+      if (isMissingTableError(error)) missingTables.add("clinical_notes");
+      else throw error;
+    } else {
+      return data ? mapNoteRow(data as Record<string, unknown>) : null;
+    }
+  }
+  const file = await readFile();
+  return file.notes.find((n) => n.id === id) ?? null;
+}
+
 export async function addClinicalNote(
-  input: Omit<ClinicalNote, "id" | "createdAt">
+  input: Omit<ClinicalNote, "id" | "createdAt"> & { id?: string }
 ): Promise<ClinicalNote> {
+  const id = input.id && UUID_RE.test(input.id) ? input.id : uuid();
+  const existing = await getClinicalNoteById(id);
+  if (existing) return existing;
+
   const note: ClinicalNote = {
-    id: uuid(),
+    id,
     createdAt: new Date().toISOString(),
-    ...input,
     patientEmail: input.patientEmail.toLowerCase().trim(),
+    doctorId: input.doctorId,
+    doctorName: input.doctorName,
+    chiefComplaint: input.chiefComplaint,
+    history: input.history,
+    assessment: input.assessment,
+    plan: input.plan,
+    sharedWithPatient: input.sharedWithPatient,
   };
 
   if (supabaseActive("clinical_notes")) {
@@ -362,13 +390,18 @@ export async function addClinicalNote(
     });
     if (error) {
       if (isMissingTableError(error)) missingTables.add("clinical_notes");
-      else throw error;
+      else if (error.code === "23505") {
+        const again = await getClinicalNoteById(id);
+        if (again) return again;
+        throw error;
+      } else throw error;
     } else {
       return note;
     }
   }
 
   const data = await readFile();
+  if (data.notes.some((n) => n.id === id)) return data.notes.find((n) => n.id === id)!;
   data.notes.push(note);
   await writeFile(data);
   return note;
@@ -434,10 +467,13 @@ function mapDocumentRow(row: Record<string, unknown>): ClinicalDocument {
 }
 
 export async function addDocument(
-  input: Omit<ClinicalDocument, "id" | "createdAt">
+  input: Omit<ClinicalDocument, "id" | "createdAt"> & { id?: string }
 ): Promise<ClinicalDocument> {
+  const id = input.id && UUID_RE.test(input.id) ? input.id : uuid();
+  const existing = await getDocumentById(id);
+  if (existing) return existing;
   const doc: ClinicalDocument = {
-    id: uuid(),
+    id,
     createdAt: new Date().toISOString(),
     ...input,
     patientEmail: input.patientEmail.toLowerCase().trim(),
@@ -471,13 +507,19 @@ export async function addDocument(
     });
     if (error) {
       if (isMissingTableError(error)) missingTables.add("documents");
-      else throw error;
+      else if (error.code === "23505") {
+        const again = await getDocumentById(id);
+        if (again) return again;
+        throw error;
+      } else throw error;
     } else {
       return doc;
     }
   }
 
   const data = await readFile();
+  const already = data.documents.find((d) => d.id === id);
+  if (already) return already;
   data.documents.push(doc);
   await writeFile(data);
   return doc;

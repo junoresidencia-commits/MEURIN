@@ -62,6 +62,7 @@ export const CLINICAL_FIELDS: FieldDef[] = [
   { key: "peso_kg", label: "Peso", kind: "number", group: "Dados gerais", unit: "kg" },
   { key: "altura_cm", label: "Altura", kind: "number", group: "Dados gerais", unit: "cm" },
   { key: "tabagismo", label: "Tabagismo", kind: "tri", group: "Dados gerais" },
+  { key: "medicamentos_em_uso", label: "Medicamentos em uso", kind: "text", group: "Dados gerais", description: "Lista livre dos medicamentos em uso (nome, dose, frequência)." },
   // Comorbidades
   { key: "has", label: "Hipertensão (HAS)", kind: "tri", group: "Comorbidades" },
   { key: "dm", label: "Diabetes (DM)", kind: "tri", group: "Comorbidades" },

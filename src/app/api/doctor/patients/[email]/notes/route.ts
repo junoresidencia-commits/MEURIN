@@ -34,7 +34,10 @@ export async function POST(
     return NextResponse.json({ error: "Escreva ao menos um campo da evolução." }, { status: 400 });
   }
 
+  const clientOpId = typeof body.clientOpId === "string" ? body.clientOpId.trim() : "";
+
   const note = await addClinicalNote({
+    id: clientOpId || undefined,
     patientEmail: access.key,
     doctorId: doctor.id,
     doctorName: doctor.name,

@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
+import { wipeOfflineOnLogout } from "@/lib/offline/idb";
 
 const PATHS: Record<string, string> = {
   home: "M3 10.5 12 3l9 7.5M5 9.5V21h14V9.5",
@@ -54,6 +55,7 @@ export function DoctorSidebar() {
   }, []);
 
   async function logout() {
+    await wipeOfflineOnLogout();
     await fetch("/api/auth", { method: "DELETE" });
     router.push("/medicos/login");
   }

@@ -4,7 +4,7 @@ import { getDoctorSessionId } from "@/lib/auth";
 import { getDoctorById } from "@/lib/store";
 import { resolvePatientAccess } from "@/lib/doctor-access";
 import { getPatient } from "@/lib/patients-store";
-import { addDocument } from "@/lib/patient-store";
+import { addDocument, getDocumentById } from "@/lib/patient-store";
 import { getLetterhead, type LetterheadArea } from "@/lib/letterheads-store";
 import { LETTERHEADS_BUCKET, DOCPDF_BUCKET, readFile, saveFile } from "@/lib/doc-storage";
 import { buildDocumentPdf, fillFields, type DocBackground } from "@/lib/document-engine";
@@ -39,6 +39,14 @@ export async function POST(req: Request) {
 
     const access = await resolvePatientAccess(patientParam);
     if (!access || !access.allowed) return NextResponse.json({ error: "Sem acesso a este paciente." }, { status: 403 });
+
+    const clientOpIdEarly = typeof body.clientOpId === "string" ? body.clientOpId.trim() : "";
+    if (clientOpIdEarly && !preview) {
+      const existing = await getDocumentById(clientOpIdEarly);
+      if (existing) {
+        return NextResponse.json({ ok: true, id: existing.id, pdfUrl: existing.pdfPath ? `/api/documents/${existing.id}/pdf` : null }, { status: 200 });
+      }
+    }
 
     const doctor = await getDoctorById(doctorId);
     if (!doctor) return NextResponse.json({ error: "Médico não encontrado." }, { status: 404 });
@@ -97,7 +105,9 @@ export async function POST(req: Request) {
     // Salva o PDF final no storage e cria o registro no prontuário (não disponível ao paciente ainda).
     const saved = await saveFile(DOCPDF_BUCKET, doctorId, { name: `${type}.pdf`, type: "application/pdf", buffer: Buffer.from(pdfBytes) });
     const now = new Date().toISOString();
+    const clientOpId = typeof body.clientOpId === "string" ? body.clientOpId.trim() : "";
     const doc = await addDocument({
+      id: clientOpId || undefined,
       patientEmail: access.key,
       doctorId,
       doctorName: doctor.name,
