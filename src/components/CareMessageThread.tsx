@@ -28,12 +28,15 @@ export function CareMessageThread({
   const bottom = useRef<HTMLDivElement>(null);
 
   async function load() {
+    if (viewer === "professional" && !patientKey) return;
+    if (viewer === "patient" && !professionalId) return;
     const q = new URLSearchParams({ role });
     if (professionalId) q.set("professionalId", professionalId);
     if (patientKey) q.set("patientKey", patientKey);
-    const res = await fetch(`/api/care-messages?${q.toString()}`);
+    const res = await fetch(`/api/care-messages?${q.toString()}`, { cache: "no-store", credentials: "include" });
     const d = await res.json().catch(() => ({}));
-    if (res.ok) setMessages(d.messages || []);
+    if (res.ok) { setMessages(d.messages || []); setErr(""); }
+    else setErr(d.error || "Não foi possível abrir a conversa.");
   }
 
   useEffect(() => {
@@ -54,6 +57,7 @@ export function CareMessageThread({
     try {
       const res = await fetch("/api/care-messages", {
         method: "POST", headers: { "Content-Type": "application/json" },
+        credentials: "include",
         body: JSON.stringify({ role, professionalId, patientKey, body }),
       });
       const d = await res.json().catch(() => ({}));

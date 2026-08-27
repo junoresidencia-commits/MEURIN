@@ -120,7 +120,7 @@ export function AlliedPatientWorkspace({ role }: { role: AlliedRole }) {
       <section className="panel mt-4">
         <h2 className="font-display text-lg text-[var(--text)]">Mensagens com o paciente</h2>
         <p className="text-sm text-[var(--text-muted)]">O paciente vê você na área dele e pode escrever por aqui. Chega alerta no sino.</p>
-        <CareMessageThread role={role} patientKey={key} viewer="professional" />
+        <CareMessageThread role={role} patientKey={patient.key} viewer="professional" />
       </section>
 
       <div className="mt-5 flex gap-2 overflow-x-auto pb-1">

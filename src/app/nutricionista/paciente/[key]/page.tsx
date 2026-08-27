@@ -150,7 +150,7 @@ export default function NutriPacientePage() {
       <section className="panel mt-4">
         <h2 className="font-display text-lg text-[var(--text)]">Mensagens com o paciente</h2>
         <p className="text-sm text-[var(--text-muted)]">O paciente vê você na área dele e pode escrever por aqui. Chega alerta no sino.</p>
-        <CareMessageThread role="nutrition" patientKey={key} viewer="professional" />
+        <CareMessageThread role="nutrition" patientKey={sum.patient.key} viewer="professional" />
       </section>
 
       {/* Resumo renal (somente leitura) */}

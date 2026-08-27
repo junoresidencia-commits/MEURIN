@@ -70,30 +70,35 @@ export async function resolveCareThread(input: {
 }): Promise<CareThreadAccess | null> {
   if (!isCareChatRole(input.role)) return null;
   const role = input.role;
+  const patientKeys = normalizePatientKey(input.patientKey || "");
 
   if (role === "nutrition") {
     const nut = await requireNutritionist();
     if (nut) {
-      const patientKey = String(input.patientKey || "");
-      if (!patientKey) return null;
-      const access = await resolveNutritionPatientAccess(patientKey);
-      if (!access?.allowed) return null;
-      return {
-        role, professionalId: nut.id, patientKey: access.key,
-        patientNotifyId: access.key, patientName: access.name, sender: "professional",
-      };
+      if (patientKeys.length === 0) return null;
+      for (const patientKey of patientKeys) {
+        const access = await resolveNutritionPatientAccess(patientKey);
+        if (!access?.allowed) continue;
+        return {
+          role, professionalId: nut.id, patientKey: access.key,
+          patientNotifyId: access.key, patientName: access.name, sender: "professional",
+        };
+      }
+      return null;
     }
   } else {
     const pro = await requireAllied(role);
     if (pro) {
-      const patientKey = String(input.patientKey || "");
-      if (!patientKey) return null;
-      const access = await resolveAlliedPatientAccess(patientKey, pro);
-      if (!access?.allowed) return null;
-      return {
-        role, professionalId: pro.id, patientKey: access.key,
-        patientNotifyId: access.key, patientName: access.name, sender: "professional",
-      };
+      if (patientKeys.length === 0) return null;
+      for (const patientKey of patientKeys) {
+        const access = await resolveAlliedPatientAccess(patientKey, pro);
+        if (!access?.allowed) continue;
+        return {
+          role, professionalId: pro.id, patientKey: access.key,
+          patientNotifyId: access.key, patientName: access.name, sender: "professional",
+        };
+      }
+      return null;
     }
   }
 
@@ -107,4 +112,14 @@ export async function resolveCareThread(input: {
     role, professionalId, patientKey: session.key,
     patientNotifyId: session.notifyId, patientName: session.patient.name, sender: "patient",
   };
+}
+
+function normalizePatientKey(raw: string): string[] {
+  let k = String(raw || "").trim();
+  if (!k) return [];
+  try { k = decodeURIComponent(k); } catch { /* keep raw */ }
+  const out = new Set<string>([k]);
+  if (k.startsWith("pid:")) out.add(k.slice(4));
+  else if (/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(k)) out.add(`pid:${k}`);
+  return [...out];
 }
