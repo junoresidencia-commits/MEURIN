@@ -38,6 +38,14 @@ expectEq("duas datas de coleta", twoDates.map((g) => ({ date: g.date, keys: g.la
   { date: "2024-02-15", keys: ["creatinina", "ureia"] },
 ]);
 
+const withMeds = parseLabGroups(
+  "DRC III. Manter losartana 50 mg 1x/dia e furosemida 40 mg.\n10/01/2024 creatinina 1,4 potássio 4,2\n15/02/2024 creatinina 1,6 ureia 58\nRetorno 20/03/2024"
+);
+expectEq("mg da dose não vira magnésio nem data extra", withMeds.map((g) => ({ date: g.date, keys: g.labs.map((l) => l.testKey) })), [
+  { date: "2024-01-10", keys: ["creatinina", "potassio"] },
+  { date: "2024-02-15", keys: ["creatinina", "ureia"] },
+]);
+
 const retorno = parseLabGroups("creatinina 2,1 em 05/06/2024. Retorno 20/07/2024.");
 expectEq("ignora data de retorno", retorno.map((g) => g.date), ["2024-06-05"]);
 

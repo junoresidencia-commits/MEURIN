@@ -219,6 +219,8 @@ function collectDateMarks(text: string): DateMark[] {
   return dedup;
 }
 
+const UNIT_FALSE_POS = new Set(["mg", "mcg", "g", "ml", "ui", "p", "k", "na", "ca", "cl", "cr", "ht"]);
+
 /** Extrai os exames de UM trecho de texto, mantendo a 1ª ocorrência de cada exame nele. */
 function extractLabs(text: string): ParsedLab[] {
   const seen = new Set<string>();
@@ -227,6 +229,10 @@ function extractLabs(text: string): ParsedLab[] {
     const rawLabel = m[1].toLowerCase();
     const testKey = SYNONYMS[rawLabel];
     if (!testKey || !VALID_KEYS.has(testKey) || seen.has(testKey)) continue;
+
+    // "50 mg 1x/dia" não é magnésio: o rótulo curto veio depois de um número (unidade/dose).
+    const pre = text.slice(Math.max(0, (m.index ?? 0) - 12), m.index ?? 0);
+    if (UNIT_FALSE_POS.has(rawLabel) && /\d\s*$/.test(pre)) continue;
 
     const numRaw = m[2].replace(/[<>\s]/g, "").replace(",", ".");
     const value = Number(numRaw);
