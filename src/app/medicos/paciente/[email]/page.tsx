@@ -17,6 +17,8 @@ import { ReturnPicker } from "@/components/ReturnPicker";
 import { PatientLmeField } from "@/components/PatientCnsField";
 import { PatientEditForm } from "@/components/PatientEditForm";
 import { guessSexFromName } from "@/lib/sex-guess";
+import { CareTeamPatientCard, CareTimeline } from "@/components/CareTeamPatientCard";
+import { PdModule } from "@/components/PdModule";
 
 type Lab = { id: string; testKey: string; value: number; unit?: string | null; measuredAt: string };
 type Upload = { id: string; name: string; category?: string | null; examDate?: string | null; signedUrl?: string | null };
@@ -74,10 +76,11 @@ const TABS = [
   { id: "enviados", label: "Enviados" },
   { id: "sinais", label: "Sinais em casa" },
   { id: "alimentacao", label: "Alimentação" },
+  { id: "timeline", label: "Linha do tempo" },
   { id: "consultas", label: "Consultas" },
   { id: "pesquisa", label: "Pesquisa" },
 ] as const;
-type Tab = (typeof TABS)[number]["id"];
+type Tab = (typeof TABS)[number]["id"] | "dp";
 
 const DOC_TYPE_LABEL: Record<Doc["type"], string> = {
   receita: "Receita",
@@ -109,12 +112,18 @@ export default function ProntuarioPage() {
   const [uploads, setUploads] = useState<Upload[]>([]);
   const [lmeList, setLmeList] = useState<Lme[]>([]);
   const [tab, setTab] = useState<Tab>("evolucao");
+  const [isPd, setIsPd] = useState(false);
   const [egfrInfo, setEgfrInfo] = useState("");
-  // Abre direto numa aba quando vier ?tab= (ex.: link de "corrigir" da Pesquisa).
+  useEffect(() => {
+    fetch(`/api/doctor/patients/${emailParam}/profile`).then((r) => r.json()).then((d) => {
+      const v = d.profile?.dialise_peritoneal;
+      setIsPd(v === true || v === "sim");
+    }).catch(() => {});
+  }, [emailParam]);
   useEffect(() => {
     if (typeof window === "undefined") return;
     const t = new URLSearchParams(window.location.search).get("tab");
-    if (t && TABS.some((x) => x.id === t)) setTab(t as Tab);
+    if (t && (TABS.some((x) => x.id === t) || t === "dp")) setTab(t as Tab);
   }, []);
 
   // Formulário de exame
@@ -359,6 +368,8 @@ export default function ProntuarioPage() {
         <AttendanceControl patientKey={emailParam} />
       </div>
 
+      <CareTeamPatientCard emailParam={emailParam} />
+
       {/* Cabeçalho clínico */}
       <div className="mt-4 grid grid-cols-3 gap-3">
         <Metric label="PA (casa)" value={bp ? `${bp.systolic}/${bp.diastolic}` : "—"} unit={bp ? "mmHg" : ""} />
@@ -367,7 +378,7 @@ export default function ProntuarioPage() {
       </div>
 
       <div className="mt-6 flex gap-2 overflow-x-auto pb-1">
-        {TABS.map((t) => (
+        {[...TABS, ...(isPd ? [{ id: "dp" as const, label: "Diálise peritoneal" }] : [])].map((t) => (
           <button
             key={t.id}
             type="button"
@@ -714,6 +725,15 @@ export default function ProntuarioPage() {
               </div>
             ))}
           </div>
+        )}
+
+        {tab === "timeline" && <CareTimeline emailParam={emailParam} />}
+
+        {tab === "dp" && isPd && (
+          <PdModule
+            patientKey={emailParam}
+            labs={labs.map((l) => ({ key: l.testKey, label: labLabel(l.testKey), value: l.value, unit: l.unit || labUnit(l.testKey), measuredAt: l.measuredAt }))}
+          />
         )}
 
         {tab === "consultas" && (

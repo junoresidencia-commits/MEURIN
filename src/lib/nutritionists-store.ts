@@ -68,7 +68,7 @@ export interface NutritionReferral {
   restrictions?: string | null;
   priority: "normal" | "alta";
   notes?: string | null;
-  status: "aberto" | "atendido";
+  status: "aberto" | "atendido" | "encerrado";
   createdAt: string;
 }
 export interface NutritionConsultation {
@@ -432,7 +432,7 @@ export async function listNutritionLinksForNutritionist(nutritionistId: string):
 }
 
 // ---------- Referrals ----------
-export async function addReferral(input: Omit<NutritionReferral, "id" | "createdAt" | "status"> & { status?: "aberto" | "atendido" }): Promise<NutritionReferral> {
+export async function addReferral(input: Omit<NutritionReferral, "id" | "createdAt" | "status"> & { status?: "aberto" | "atendido" | "encerrado" }): Promise<NutritionReferral> {
   const ref: NutritionReferral = {
     id: uuid(), createdAt: new Date().toISOString(), status: input.status ?? "aberto",
     doctorId: input.doctorId, doctorName: input.doctorName ?? null, nutritionistId: input.nutritionistId ?? null,
@@ -479,7 +479,7 @@ export async function listReferralsForPatient(patientKey: string): Promise<Nutri
   return db.referrals.filter((r) => r.patientKey === patientKey).sort((a, b) => b.createdAt.localeCompare(a.createdAt));
 }
 
-export async function setReferralStatus(id: string, status: "aberto" | "atendido"): Promise<void> {
+export async function setReferralStatus(id: string, status: "aberto" | "atendido" | "encerrado"): Promise<void> {
   if (active()) {
     const s = getSupabaseAdmin()!;
     const { error } = await s.from("nutrition_referrals").update({ status }).eq("id", id);
@@ -519,4 +519,15 @@ export async function listConsultationsForPatient(patientKey: string): Promise<N
   }
   const db = await readLocal();
   return db.consultations.filter((c) => c.patientKey === patientKey).sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+}
+
+export async function listConsultationsForNutritionist(nutritionistId: string): Promise<NutritionConsultation[]> {
+  if (active()) {
+    const s = getSupabaseAdmin()!;
+    const { data, error } = await s.from("nutrition_consultations").select("*").eq("nutritionist_id", nutritionistId).order("created_at", { ascending: false });
+    if (!isMissing(error) && !error) return (data ?? []).map(mapConsult);
+    if (isMissing(error)) tableMissing = true;
+  }
+  const db = await readLocal();
+  return db.consultations.filter((c) => c.nutritionistId === nutritionistId).sort((a, b) => b.createdAt.localeCompare(a.createdAt));
 }

@@ -35,6 +35,7 @@ const PRIMARY: { href: string; label: string; icon: keyof typeof PATHS }[] = [
 const MORE: { href: string; label: string; icon: keyof typeof PATHS }[] = [
   { href: "/medicos/lme", label: "Documentos / LME", icon: "file" },
   { href: "/medicos/mensagens", label: "Mensagens", icon: "link" },
+  { href: "/medicos/equipe-assistencial", label: "Minha Equipe", icon: "heart" },
   { href: "/medicos/equipe-nutricao", label: "Nutrição", icon: "heart" },
   { href: "/medicos/painel#financeiro", label: "Financeiro", icon: "chart" },
   { href: "/medicos/pesquisa", label: "Estudos e Pesquisa", icon: "chart" },

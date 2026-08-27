@@ -95,7 +95,8 @@ export default function NutricionistaPainelPage() {
 
       {/* Pacientes */}
       <section className="mt-8">
-        <h2 className="font-display text-xl text-[var(--text)]">Pacientes</h2>
+        <h2 className="font-display text-xl text-[var(--text)]">Meus Pacientes</h2>
+        <p className="mt-1 text-sm text-[var(--text-muted)]">Somente pacientes encaminhados a você.</p>
         <input className="input-field mt-3" placeholder="Buscar por nome ou CPF" value={q} onChange={(e) => setQ(e.target.value)} />
         <div className="mt-3 grid gap-2">
           {filtered.length === 0 && <p className="text-sm text-[var(--text-muted)]">Nenhum paciente encontrado.</p>}

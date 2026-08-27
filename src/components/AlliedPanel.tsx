@@ -1,0 +1,82 @@
+"use client";
+
+import { useEffect, useState } from "react";
+import Link from "next/link";
+import { useRouter } from "next/navigation";
+import type { AlliedRole } from "@/lib/allied-types";
+
+type Me = { professional: { name: string; registry?: string | null; uf?: string | null }; doctors: { id: string; name: string }[] };
+type Patient = { key: string; name: string; reason?: string | null; at: string };
+
+const META: Record<AlliedRole, { title: string; registry: string; base: string }> = {
+  psychology: { title: "Psicologia", registry: "CRP", base: "/psicologo" },
+  nursing: { title: "Enfermagem", registry: "COREN", base: "/enfermeiro" },
+};
+
+export function AlliedPanel({ role }: { role: AlliedRole }) {
+  const router = useRouter();
+  const meta = META[role];
+  const [me, setMe] = useState<Me | null>(null);
+  const [patients, setPatients] = useState<Patient[]>([]);
+  const [q, setQ] = useState("");
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    (async () => {
+      const meRes = await fetch("/api/allied/me");
+      if (meRes.status === 401) { router.replace(`${meta.base}/login`); return; }
+      const meData = await meRes.json();
+      if (meData.professional?.role && meData.professional.role !== role) {
+        router.replace(meData.professional.role === "nursing" ? "/enfermeiro/painel" : "/psicologo/painel");
+        return;
+      }
+      setMe(meData);
+      const pRes = await fetch("/api/allied/patients");
+      const pData = await pRes.json();
+      setPatients(pData.patients || []);
+      setLoading(false);
+    })();
+  }, [meta.base, role, router]);
+
+  async function logout() {
+    await fetch("/api/allied/session", { method: "DELETE" });
+    router.push(`${meta.base}/login`);
+  }
+
+  const filtered = q ? patients.filter((p) => p.name.toLowerCase().includes(q.toLowerCase())) : patients;
+  if (loading) return <div className="mx-auto max-w-4xl px-5 py-20 text-[var(--text-muted)]">Carregando…</div>;
+
+  return (
+    <div className="mx-auto max-w-4xl px-5 py-8">
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <p className="text-xs font-bold uppercase tracking-wide text-[var(--gold)]">{meta.title}</p>
+          <h1 className="font-display text-3xl font-extrabold text-[var(--text)]">Olá, {me?.professional.name?.split(" ")[0]}</h1>
+          <p className="mt-1 text-sm text-[var(--text-muted)]">
+            {me?.professional.registry ? `${meta.registry} ${me.professional.registry}${me.professional.uf ? "-" + me.professional.uf : ""} · ` : ""}
+            Vinculado a {me?.doctors.length || 0} médico(s)
+          </p>
+        </div>
+        <button type="button" className="btn-ghost" onClick={logout}>Sair</button>
+      </div>
+
+      <section className="mt-8">
+        <h2 className="font-display text-xl text-[var(--text)]">Meus Pacientes</h2>
+        <p className="mt-1 text-sm text-[var(--text-muted)]">Somente pacientes encaminhados a você.</p>
+        <input className="input-field mt-3" placeholder="Pesquisar por nome" value={q} onChange={(e) => setQ(e.target.value)} />
+        <div className="mt-3 grid gap-2">
+          {filtered.length === 0 && <p className="text-sm text-[var(--text-muted)]">Nenhum paciente encaminhado.</p>}
+          {filtered.map((p) => (
+            <Link key={p.key} href={`${meta.base}/paciente/${encodeURIComponent(p.key)}`} className="panel flex items-center justify-between transition hover:border-[var(--border-gold)]">
+              <div>
+                <p className="font-semibold text-[var(--text)]">{p.name}</p>
+                {p.reason && <p className="text-xs text-[var(--text-muted)]">{p.reason}</p>}
+              </div>
+              <span className="text-[var(--gold)]">Abrir →</span>
+            </Link>
+          ))}
+        </div>
+      </section>
+    </div>
+  );
+}

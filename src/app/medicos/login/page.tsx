@@ -85,6 +85,8 @@ export default function LoginMedicoPage() {
           <Link href="/paciente/entrar" className="hover:text-[var(--gold)]">Sou paciente</Link>
           <Link href="/atendente/login" className="hover:text-[var(--gold)]">Sou atendente</Link>
           <Link href="/nutricionista/login" className="hover:text-[var(--gold)]">Sou nutricionista</Link>
+          <Link href="/psicologo/login" className="hover:text-[var(--gold)]">Sou psicólogo(a)</Link>
+          <Link href="/enfermeiro/login" className="hover:text-[var(--gold)]">Sou enfermeiro(a)</Link>
         </div>
     </AuthShell>
   );

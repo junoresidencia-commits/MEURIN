@@ -8,6 +8,7 @@ import { ConsentGate } from "@/components/ConsentGate";
 import { NotificationBell } from "@/components/NotificationBell";
 import { EnableNotifications } from "@/components/EnableNotifications";
 import { LabChart } from "@/components/LabChart";
+import { PatientHealthTeam } from "@/components/PatientHealthTeam";
 import { formatSlotLabel } from "@/lib/scheduling-client";
 
 type HomeRecord = {
@@ -239,6 +240,8 @@ export default function PacienteInicioPage() {
           <Link href="/paciente/senha" className="shrink-0 whitespace-nowrap rounded-full border border-[var(--border)] bg-white/80 px-3.5 py-1.5 text-xs font-semibold text-[var(--text-soft)] backdrop-blur transition hover:border-[var(--border-gold)]">Trocar senha</Link>
         </nav>
       </header>
+
+      <PatientHealthTeam />
 
       <KidneyNumbers labs={labs} />
 

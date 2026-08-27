@@ -35,6 +35,8 @@ export function SiteHeader() {
     pathname?.startsWith("/atendente") ||
     pathname?.startsWith("/medicos") ||
     pathname?.startsWith("/nutricionista") ||
+    pathname?.startsWith("/psicologo") ||
+    pathname?.startsWith("/enfermeiro") ||
     pathname?.startsWith("/consulta") ||
     pathname?.startsWith("/lme") ||
     pathname?.startsWith("/documento")
@@ -84,6 +86,18 @@ export function SiteHeader() {
             >
               Sou nutricionista
             </Link>
+            <Link
+              href="/psicologo/login"
+              className="rounded-full px-3 py-2.5 text-[var(--text-soft)] transition hover:text-[var(--gold)]"
+            >
+              Sou psicólogo(a)
+            </Link>
+            <Link
+              href="/enfermeiro/login"
+              className="rounded-full px-3 py-2.5 text-[var(--text-soft)] transition hover:text-[var(--gold)]"
+            >
+              Sou enfermeiro(a)
+            </Link>
           </nav>
 
           <button
@@ -130,6 +144,20 @@ export function SiteHeader() {
                 onClick={() => setOpen(false)}
               >
                 Sou nutricionista
+              </Link>
+              <Link
+                href="/psicologo/login"
+                className="rounded-full px-4 py-3 text-center text-sm font-semibold text-[var(--text-soft)]"
+                onClick={() => setOpen(false)}
+              >
+                Sou psicólogo(a)
+              </Link>
+              <Link
+                href="/enfermeiro/login"
+                className="rounded-full px-4 py-3 text-center text-sm font-semibold text-[var(--text-soft)]"
+                onClick={() => setOpen(false)}
+              >
+                Sou enfermeiro(a)
               </Link>
               <Link
                 href="/educacao"
