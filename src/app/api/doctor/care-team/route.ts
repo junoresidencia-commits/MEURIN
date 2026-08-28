@@ -64,16 +64,20 @@ export async function GET() {
     .filter((l) => l.professional)
     .map((l) => mapAllied(l.professional, { active: l.active }));
 
+  const alliedMineByRole = Object.fromEntries(ALLIED_ROLES.map((role) => [role, alliedMine.filter((p) => p.role === role)]));
+  const alliedAvailByRole = Object.fromEntries(ALLIED_ROLES.map((role) => [
+    role,
+    allAllied.filter((p) => p.role === role && !myAlliedIds.has(p.id) && catalogVisible(p.status)).map((p) => mapAllied(p)),
+  ]));
+
   return NextResponse.json({
     mine: {
       nutrition: nutLinks.filter((l) => l.nutritionist).map((l) => mapNutrition(l.nutritionist, { active: l.active })),
-      psychology: alliedMine.filter((p) => p.role === "psychology"),
-      nursing: alliedMine.filter((p) => p.role === "nursing"),
+      ...alliedMineByRole,
     },
     available: {
       nutrition: allNut.filter((n) => !myNutIds.has(n.id) && catalogVisible(n.status)).map((n) => mapNutrition(n)),
-      psychology: allAllied.filter((p) => p.role === "psychology" && !myAlliedIds.has(p.id) && catalogVisible(p.status)).map((p) => mapAllied(p)),
-      nursing: allAllied.filter((p) => p.role === "nursing" && !myAlliedIds.has(p.id) && catalogVisible(p.status)).map((p) => mapAllied(p)),
+      ...alliedAvailByRole,
     },
   });
 }

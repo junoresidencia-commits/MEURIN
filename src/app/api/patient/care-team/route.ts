@@ -3,7 +3,7 @@ import { getPatientEmail } from "@/lib/patient-session";
 import { findByEmailAny, getPatient, clinicalKey } from "@/lib/patients-store";
 import { getDoctorById } from "@/lib/store";
 import { listReferralsForPatient, getNutritionist } from "@/lib/nutritionists-store";
-import { listAlliedReferralsForPatient, currentAssignment, getAlliedProfessional } from "@/lib/allied-store";
+import { listAlliedReferralsForPatient, currentAssignment, getAlliedProfessional, ALLIED_ROLES, ROLE_META } from "@/lib/allied-store";
 import { unreadInThread, type CareChatRole } from "@/lib/care-messages-store";
 
 export async function GET() {
@@ -23,10 +23,6 @@ export async function GET() {
 
   let alliedRefs = await listAlliedReferralsForPatient(key);
   if (keys[1] && keys[1] !== key) alliedRefs = alliedRefs.concat(await listAlliedReferralsForPatient(keys[1]));
-  const psy = currentAssignment(alliedRefs, "psychology");
-  const nur = currentAssignment(alliedRefs, "nursing");
-  const psyPro = psy ? await getAlliedProfessional(psy.professionalId) : null;
-  const nurPro = nur ? await getAlliedProfessional(nur.professionalId) : null;
 
   async function member(
     role: CareChatRole,
@@ -46,16 +42,26 @@ export async function GET() {
     nut && nutRef?.nutritionistId
       ? await member("nutrition", nut.id, nut.name, nut.crn ? `CRN ${nut.crn}${nut.uf ? "-" + nut.uf : ""}` : "", nut.email, nut.phone, nutRef.reason, nutRef.createdAt)
       : null,
-    psyPro && psy
-      ? await member("psychology", psyPro.id, psyPro.name, psyPro.registry ? `CRP ${psyPro.registry}${psyPro.uf ? "-" + psyPro.uf : ""}` : "", psyPro.email, psyPro.phone, psy.reason, psy.createdAt)
-      : null,
-    nurPro && nur
-      ? await member("nursing", nurPro.id, nurPro.name, nurPro.registry ? `COREN ${nurPro.registry}${nurPro.uf ? "-" + nurPro.uf : ""}` : "", nurPro.email, nurPro.phone, nur.reason, nur.createdAt)
-      : null,
-  ].filter(Boolean);
+  ];
+  for (const role of ALLIED_ROLES) {
+    const ref = currentAssignment(alliedRefs, role);
+    const pro = ref ? await getAlliedProfessional(ref.professionalId) : null;
+    if (!pro || !ref) continue;
+    const meta = ROLE_META[role];
+    team.push(await member(
+      role,
+      pro.id,
+      pro.name,
+      pro.registry ? `${meta.registry} ${pro.registry}${pro.uf ? "-" + pro.uf : ""}` : "",
+      pro.email,
+      pro.phone,
+      ref.reason,
+      ref.createdAt,
+    ));
+  }
 
   return NextResponse.json({
     nephrologist: doctor ? { name: doctor.name, crm: doctor.crm, specialty: doctor.specialty } : null,
-    team,
+    team: team.filter(Boolean),
   });
 }

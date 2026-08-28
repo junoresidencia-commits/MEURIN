@@ -25,6 +25,8 @@ const ROLE: Record<string, string> = {
   nutrition: "Nutricionista",
   psychology: "Psicólogo(a)",
   nursing: "Enfermeiro(a)",
+  cardiology: "Cardiologista",
+  endocrinology: "Endocrinologista",
 };
 
 export function PatientHealthTeam() {

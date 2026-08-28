@@ -5,21 +5,23 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { DoctorSidebar } from "@/components/DoctorSidebar";
 import { DoctorMobileNav } from "@/components/DoctorMobileNav";
+import { ALLIED_ROLES, ROLE_META, type AlliedRole } from "@/lib/allied-types";
 
 type Pro = {
   id: string; role: string; name: string; registry?: string | null; uf?: string | null;
   email?: string | null; phone?: string | null; status?: string; active?: boolean; specialty?: string | null;
 };
 
+type SpecId = "nutrition" | AlliedRole;
+
 type Payload = {
-  mine: { nutrition: Pro[]; psychology: Pro[]; nursing: Pro[] };
-  available: { nutrition: Pro[]; psychology: Pro[]; nursing: Pro[] };
+  mine: Record<SpecId, Pro[]>;
+  available: Record<SpecId, Pro[]>;
 };
 
-const SPECS: { id: "nutrition" | "psychology" | "nursing"; title: string; registry: string }[] = [
+const SPECS: { id: SpecId; title: string; registry: string }[] = [
   { id: "nutrition", title: "Nutrição", registry: "CRN" },
-  { id: "psychology", title: "Psicologia", registry: "CRP" },
-  { id: "nursing", title: "Enfermagem", registry: "COREN" },
+  ...ALLIED_ROLES.map((id) => ({ id, title: ROLE_META[id].label, registry: ROLE_META[id].registry })),
 ];
 
 export default function MinhaEquipePage() {
@@ -109,7 +111,7 @@ export default function MinhaEquipePage() {
         <div className="mx-auto max-w-3xl px-5 pb-28 pt-8 lg:pb-8">
           <Link href="/medicos/mais" className="text-sm font-semibold text-[var(--gold)]">← Mais</Link>
           <h1 className="font-display text-3xl font-extrabold text-[var(--text)]">Minha Equipe</h1>
-          <p className="mt-1 text-[var(--text-muted)]">Nutrição, psicologia e enfermagem. Quem já se cadastrou aparece em disponíveis — clique em Adicionar para entrar na sua equipe. O profissional só vê os pacientes que você encaminhar.</p>
+          <p className="mt-1 text-[var(--text-muted)]">Nutrição, psicologia, enfermagem, cardiologia e endocrinologia. Quem já se cadastrou aparece em disponíveis — clique em Adicionar para entrar na sua equipe. O profissional só vê os pacientes que você encaminhar.</p>
 
           <div className="mt-5 flex flex-wrap gap-2">
             {SPECS.map((s) => {

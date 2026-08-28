@@ -200,6 +200,22 @@ body {
   --border-gold: #ebcfc5;
   --shadow-gold: 0 12px 26px rgba(196, 92, 62, 0.22);
 }
+[data-area="cardio"] {
+  --gold: #9b2c4a;         /* vinho */
+  --gold-light: #9b2c4a;
+  --gold-dark: #741f36;
+  --gold-soft: #f8eaee;
+  --border-gold: #e8c5cf;
+  --shadow-gold: 0 12px 26px rgba(155, 44, 74, 0.22);
+}
+[data-area="endocrino"] {
+  --gold: #c47a1a;         /* âmbar */
+  --gold-light: #c47a1a;
+  --gold-dark: #9a5e12;
+  --gold-soft: #f8f1e4;
+  --border-gold: #ead6b4;
+  --shadow-gold: 0 12px 26px rgba(196, 122, 26, 0.22);
+}
 
 @media print {
   header,

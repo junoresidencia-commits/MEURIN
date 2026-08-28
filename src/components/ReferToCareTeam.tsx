@@ -2,15 +2,30 @@
 
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
+import { ALLIED_ROLES, ROLE_META, type AlliedRole } from "@/lib/allied-types";
 
-type Role = "nutrition" | "psychology" | "nursing";
+type Role = "nutrition" | AlliedRole;
 type Pro = { id: string; role: string; name: string; registry?: string | null; uf?: string | null; active?: boolean };
 
 const ROLES: { id: Role; label: string; short: string; registry: string }[] = [
   { id: "nutrition", label: "Nutricionista", short: "Nutrição", registry: "CRN" },
-  { id: "psychology", label: "Psicóloga", short: "Psicologia", registry: "CRP" },
-  { id: "nursing", label: "Enfermeira", short: "Enfermagem", registry: "COREN" },
+  ...ALLIED_ROLES.map((id) => ({
+    id,
+    label: ROLE_META[id].referLabel.charAt(0).toUpperCase() + ROLE_META[id].referLabel.slice(1),
+    short: ROLE_META[id].label,
+    registry: ROLE_META[id].registry,
+  })),
 ];
+
+function emptyTeam(): Record<Role, Pro[]> {
+  return {
+    nutrition: [],
+    psychology: [],
+    nursing: [],
+    cardiology: [],
+    endocrinology: [],
+  };
+}
 
 export function ReferToCareTeam({
   emailParam,
@@ -23,7 +38,7 @@ export function ReferToCareTeam({
   compact?: boolean;
   onDone?: () => void;
 }) {
-  const [team, setTeam] = useState<Record<Role, Pro[]>>({ nutrition: [], psychology: [], nursing: [] });
+  const [team, setTeam] = useState<Record<Role, Pro[]>>(emptyTeam);
   const [role, setRole] = useState<Role | null>(null);
   const [professionalId, setProfessionalId] = useState("");
   const [reason, setReason] = useState("");
@@ -32,11 +47,12 @@ export function ReferToCareTeam({
 
   useEffect(() => {
     fetch("/api/doctor/care-team").then((r) => r.json()).then((d) => {
-      setTeam({
-        nutrition: (d.mine?.nutrition || []).filter((p: Pro) => p.active !== false),
-        psychology: (d.mine?.psychology || []).filter((p: Pro) => p.active !== false),
-        nursing: (d.mine?.nursing || []).filter((p: Pro) => p.active !== false),
-      });
+      const next = emptyTeam();
+      next.nutrition = (d.mine?.nutrition || []).filter((p: Pro) => p.active !== false);
+      for (const id of ALLIED_ROLES) {
+        next[id] = (d.mine?.[id] || []).filter((p: Pro) => p.active !== false);
+      }
+      setTeam(next);
     }).catch(() => {});
   }, []);
 
@@ -109,7 +125,7 @@ export function ReferToCareTeam({
               </label>
               <label className="block">
                 <span className="mb-1 block text-xs font-semibold text-[var(--text-muted)]">Motivo (opcional)</span>
-                <input className="input-field" value={reason} onChange={(e) => setReason(e.target.value)} placeholder="Ex.: ajuste de potássio, ansiedade, treino de DP" />
+                <input className="input-field" value={reason} onChange={(e) => setReason(e.target.value)} placeholder="Ex.: ajuste de potássio, HAS, diabetes, ansiedade" />
               </label>
               <button type="button" className="btn-gold" onClick={send} disabled={saving || !professionalId}>
                 {saving ? "Encaminhando…" : `Encaminhar para ${meta.label.toLowerCase()}`}

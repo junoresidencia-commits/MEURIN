@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { ReferToCareTeam } from "@/components/ReferToCareTeam";
+import { ALLIED_ROLES, ROLE_META, type AlliedRole } from "@/lib/allied-types";
 
 type Member = {
   id: string;
@@ -12,11 +13,9 @@ type Member = {
   referralId?: string;
 };
 
-type Assigned = {
-  nutrition: Member | null;
-  psychology: Member | null;
-  nursing: Member | null;
-};
+type CareRole = "nutrition" | AlliedRole;
+
+type Assigned = Record<CareRole, Member | null>;
 
 type TeamPro = {
   id: string;
@@ -27,32 +26,55 @@ type TeamPro = {
   active: boolean;
 };
 
-const ROLE_META: Record<string, { title: string; registry: string; empty: string }> = {
+const ASSIGN_ROLES: CareRole[] = ["nutrition", ...ALLIED_ROLES];
+
+const CARD_META: Record<CareRole, { title: string; registry: string; empty: string }> = {
   nutrition: { title: "Nutricionista", registry: "CRN", empty: "Nenhuma nutricionista encaminhada" },
-  psychology: { title: "Psicólogo(a)", registry: "CRP", empty: "Nenhum psicólogo encaminhado" },
-  nursing: { title: "Enfermeiro(a)", registry: "COREN", empty: "Nenhum enfermeiro encaminhado" },
+  ...Object.fromEntries(ALLIED_ROLES.map((id) => [id, { title: ROLE_META[id].title, registry: ROLE_META[id].registry, empty: ROLE_META[id].emptyAssigned }])) as Record<AlliedRole, { title: string; registry: string; empty: string }>,
 };
+
+function emptyAssigned(): Assigned {
+  return {
+    nutrition: null,
+    psychology: null,
+    nursing: null,
+    cardiology: null,
+    endocrinology: null,
+  };
+}
+
+function emptyTeam(): Record<CareRole, TeamPro[]> {
+  return {
+    nutrition: [],
+    psychology: [],
+    nursing: [],
+    cardiology: [],
+    endocrinology: [],
+  };
+}
 
 export function CareTeamPatientCard({ emailParam, patientName }: { emailParam: string; patientName?: string }) {
   const [assigned, setAssigned] = useState<Assigned | null>(null);
-  const [team, setTeam] = useState<{ nutrition: TeamPro[]; psychology: TeamPro[]; nursing: TeamPro[] }>({ nutrition: [], psychology: [], nursing: [] });
+  const [team, setTeam] = useState<Record<CareRole, TeamPro[]>>(emptyTeam);
   const [manage, setManage] = useState(false);
   const [msg, setMsg] = useState("");
   const [saving, setSaving] = useState(false);
 
   const loadAssigned = useCallback(async () => {
     const d = await fetch(`/api/doctor/patients/${emailParam}/care-team`).then((r) => r.json());
-    setAssigned({ nutrition: d.nutrition || null, psychology: d.psychology || null, nursing: d.nursing || null });
+    const next = emptyAssigned();
+    next.nutrition = d.nutrition || null;
+    for (const role of ALLIED_ROLES) next[role] = d[role] || null;
+    setAssigned(next);
   }, [emailParam]);
 
   useEffect(() => { loadAssigned(); }, [loadAssigned]);
   useEffect(() => {
     fetch("/api/doctor/care-team").then((r) => r.json()).then((d) => {
-      setTeam({
-        nutrition: (d.mine?.nutrition || []).filter((p: TeamPro) => p.active),
-        psychology: (d.mine?.psychology || []).filter((p: TeamPro) => p.active),
-        nursing: (d.mine?.nursing || []).filter((p: TeamPro) => p.active),
-      });
+      const next = emptyTeam();
+      next.nutrition = (d.mine?.nutrition || []).filter((p: TeamPro) => p.active);
+      for (const role of ALLIED_ROLES) next[role] = (d.mine?.[role] || []).filter((p: TeamPro) => p.active);
+      setTeam(next);
     }).catch(() => {});
   }, []);
 
@@ -66,7 +88,7 @@ export function CareTeamPatientCard({ emailParam, patientName }: { emailParam: s
     await loadAssigned();
   }
 
-  async function assign(role: string, professionalId: string) {
+  async function assign(role: CareRole, professionalId: string) {
     setSaving(true); setMsg("");
     try {
       const current = assigned?.[role as keyof Assigned];
@@ -89,9 +111,9 @@ export function CareTeamPatientCard({ emailParam, patientName }: { emailParam: s
     finally { setSaving(false); }
   }
 
-  function line(role: keyof Assigned) {
+  function line(role: CareRole) {
     const m = assigned?.[role];
-    const meta = ROLE_META[role];
+    const meta = CARD_META[role];
     return (
       <div key={role} className="flex items-start justify-between gap-2 border-b border-[var(--border)] py-2 last:border-0">
         <div>
@@ -114,22 +136,20 @@ export function CareTeamPatientCard({ emailParam, patientName }: { emailParam: s
       <div className="flex flex-wrap items-start justify-between gap-2">
         <div>
           <p className="text-xs font-bold uppercase tracking-wider text-[var(--gold)]">Equipe assistencial</p>
-          <p className="mt-0.5 text-sm text-[var(--text-muted)]">Encaminhe este paciente para nutricionista, psicóloga ou enfermeira. O nome dele aparece na área de quem receber.</p>
+          <p className="mt-0.5 text-sm text-[var(--text-muted)]">Encaminhe este paciente para nutricionista, psicóloga, enfermeira, cardiologista ou endocrinologista. O nome dele aparece na área de quem receber.</p>
         </div>
         <button type="button" className="btn-ghost text-sm" onClick={() => setManage((v) => !v)}>{manage ? "Fechar" : "Gerenciar equipe"}</button>
       </div>
 
       <div className="mt-3">
-        {line("nutrition")}
-        {line("psychology")}
-        {line("nursing")}
+        {ASSIGN_ROLES.map((role) => line(role))}
       </div>
 
       {manage && (
         <div className="mt-4 grid gap-3 border-t border-[var(--border)] pt-3">
-          {(["nutrition", "psychology", "nursing"] as const).map((role) => (
+          {ASSIGN_ROLES.map((role) => (
             <label key={role} className="block">
-              <span className="mb-1 block text-xs font-semibold text-[var(--text-muted)]">{ROLE_META[role].title}</span>
+              <span className="mb-1 block text-xs font-semibold text-[var(--text-muted)]">{CARD_META[role].title}</span>
               <div className="flex flex-wrap gap-2">
                 <select
                   className="input-field"
@@ -139,7 +159,7 @@ export function CareTeamPatientCard({ emailParam, patientName }: { emailParam: s
                 >
                   <option value="">Sem profissional neste paciente</option>
                   {(team[role] || []).map((p) => (
-                    <option key={p.id} value={p.id}>{p.name}{p.registry ? ` · ${ROLE_META[role].registry} ${p.registry}` : ""}</option>
+                    <option key={p.id} value={p.id}>{p.name}{p.registry ? ` · ${CARD_META[role].registry} ${p.registry}` : ""}</option>
                   ))}
                 </select>
                 {assigned?.[role]?.referralId && (

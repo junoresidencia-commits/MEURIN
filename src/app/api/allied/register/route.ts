@@ -5,7 +5,7 @@ export async function POST(req: Request) {
   try {
     const b = await req.json().catch(() => ({}));
     const role = b.role as AlliedRole;
-    if (!ALLIED_ROLES.includes(role)) return NextResponse.json({ error: "Informe a especialidade (psicologia ou enfermagem)." }, { status: 400 });
+    if (!ALLIED_ROLES.includes(role)) return NextResponse.json({ error: "Informe a especialidade." }, { status: 400 });
     const name = String(b.name || "").trim();
     const cpf = b.cpf ? String(b.cpf) : null;
     const email = b.email ? String(b.email).trim() : null;

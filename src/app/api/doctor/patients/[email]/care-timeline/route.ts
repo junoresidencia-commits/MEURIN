@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { getDoctorSessionId } from "@/lib/auth";
 import { resolvePatientAccess } from "@/lib/doctor-access";
-import { listAlliedReferralsForPatient, listNotesForPatient } from "@/lib/allied-store";
+import { listAlliedReferralsForPatient, listNotesForPatient, ROLE_META, isAlliedRole } from "@/lib/allied-store";
 import { listConsultationsForPatient, listReferralsForPatient } from "@/lib/nutritionists-store";
 import { listPdDailyLogs, listPdCatheterEvals, listPdPeritonitis } from "@/lib/pd-store";
 
@@ -26,9 +26,10 @@ export async function GET(_req: Request, { params }: { params: Promise<{ email: 
 
   for (const n of alliedNotes) {
     const shared = n.role !== "psychology" || n.shareWithTeam;
+    const area = isAlliedRole(n.role) ? ROLE_META[n.role].label : n.role;
     events.push({
       at: n.createdAt,
-      area: n.role === "psychology" ? "Psicologia" : "Enfermagem",
+      area,
       label: n.kind === "anamnese" ? "Anamnese registrada" : n.kind === "avaliacao" ? "Avaliação registrada" : "Evolução registrada",
       by: n.professionalName,
       detail: shared ? n.body : "Atendimento realizado (conteúdo restrito à psicologia).",
@@ -36,7 +37,8 @@ export async function GET(_req: Request, { params }: { params: Promise<{ email: 
     });
   }
   for (const r of alliedRefs) {
-    events.push({ at: r.createdAt, area: r.role === "psychology" ? "Psicologia" : "Enfermagem", label: "Paciente encaminhado", by: r.doctorName, detail: r.reason, id: r.id });
+    const area = isAlliedRole(r.role) ? ROLE_META[r.role].label : r.role;
+    events.push({ at: r.createdAt, area, label: "Paciente encaminhado", by: r.doctorName, detail: r.reason, id: r.id });
   }
   for (const r of nutRefs) {
     events.push({ at: r.createdAt, area: "Nutrição", label: "Encaminhamento nutricional", by: r.doctorName, detail: r.reason, id: r.id });

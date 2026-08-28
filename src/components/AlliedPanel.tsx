@@ -5,19 +5,15 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { NotificationBell } from "@/components/NotificationBell";
 import type { AlliedRole } from "@/lib/allied-types";
+import { ROLE_META } from "@/lib/allied-types";
 
 type Me = { professional: { name: string; registry?: string | null; uf?: string | null }; doctors: { id: string; name: string }[] };
 type Patient = { key: string; name: string; reason?: string | null; doctorName?: string | null; at: string };
 type Referral = { id: string; patientKey: string; patientName?: string | null; reason?: string | null; doctorName?: string | null; status: string };
 
-const META: Record<AlliedRole, { title: string; registry: string; base: string }> = {
-  psychology: { title: "Psicologia", registry: "CRP", base: "/psicologo" },
-  nursing: { title: "Enfermagem", registry: "COREN", base: "/enfermeiro" },
-};
-
 export function AlliedPanel({ role }: { role: AlliedRole }) {
   const router = useRouter();
-  const meta = META[role];
+  const meta = { title: ROLE_META[role].label, registry: ROLE_META[role].registry, base: ROLE_META[role].path };
   const [me, setMe] = useState<Me | null>(null);
   const [patients, setPatients] = useState<Patient[]>([]);
   const [referrals, setReferrals] = useState<Referral[]>([]);
@@ -31,7 +27,8 @@ export function AlliedPanel({ role }: { role: AlliedRole }) {
       if (meRes.status === 401) { router.replace(`${meta.base}/login`); return; }
       const meData = await meRes.json();
       if (meData.professional?.role && meData.professional.role !== role) {
-        router.replace(meData.professional.role === "nursing" ? "/enfermeiro/painel" : "/psicologo/painel");
+        const other = meData.professional.role as AlliedRole;
+        router.replace(`${ROLE_META[other]?.path || meta.base}/painel`);
         return;
       }
       setMe(meData);

@@ -5,25 +5,16 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { AuthShell } from "@/components/AuthShell";
 import type { AlliedRole } from "@/lib/allied-types";
-
-const META: Record<AlliedRole, { eyebrow: string; subtitle: string; cadastro: string; painel: string }> = {
-  psychology: {
-    eyebrow: "Área da psicologia",
-    subtitle: "Acesso para psicólogos vinculados por um médico. Use CPF ou e-mail e a senha.",
-    cadastro: "/psicologo/cadastro",
-    painel: "/psicologo/painel",
-  },
-  nursing: {
-    eyebrow: "Área da enfermagem",
-    subtitle: "Acesso para enfermeiros vinculados por um médico. Use CPF ou e-mail e a senha.",
-    cadastro: "/enfermeiro/cadastro",
-    painel: "/enfermeiro/painel",
-  },
-};
+import { ROLE_META } from "@/lib/allied-types";
 
 export function AlliedLoginForm({ role }: { role: AlliedRole }) {
   const router = useRouter();
-  const meta = META[role];
+  const meta = {
+    eyebrow: `Área da ${ROLE_META[role].label.toLowerCase()}`,
+    subtitle: `Acesso para ${ROLE_META[role].plural.toLowerCase()} vinculados por um médico. Use CPF ou e-mail e a senha.`,
+    cadastro: `${ROLE_META[role].path}/cadastro`,
+    painel: `${ROLE_META[role].path}/painel`,
+  };
   const [identifier, setIdentifier] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
@@ -65,8 +56,8 @@ export function AlliedLoginForm({ role }: { role: AlliedRole }) {
 }
 
 export function AlliedRegisterForm({ role }: { role: AlliedRole }) {
-  const registry = role === "psychology" ? "CRP" : "COREN";
-  const login = role === "psychology" ? "/psicologo/login" : "/enfermeiro/login";
+  const registry = ROLE_META[role].registry;
+  const login = `${ROLE_META[role].path}/login`;
   const [form, setForm] = useState({ name: "", cpf: "", email: "", password: "", phone: "", registry: "", uf: "", specialty: "", bio: "" });
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
@@ -104,7 +95,7 @@ export function AlliedRegisterForm({ role }: { role: AlliedRole }) {
   return (
     <div className="mx-auto max-w-xl px-5 py-12">
       <Link href={login} className="mb-4 inline-flex items-center gap-1 text-sm font-semibold text-[var(--gold)]">← Voltar</Link>
-      <p className="text-sm font-semibold text-[var(--gold)]">{role === "psychology" ? "Área da psicologia" : "Área da enfermagem"}</p>
+      <p className="text-sm font-semibold text-[var(--gold)]">Área da {ROLE_META[role].label.toLowerCase()}</p>
       <h1 className="font-display mt-2 text-3xl font-extrabold text-[var(--text)]">Criar cadastro</h1>
       <p className="mt-2 text-[var(--text-muted)]">Cadastre-se para atender pacientes encaminhados no Meu Rim.</p>
       <form onSubmit={submit} className="panel mt-6 grid gap-3 sm:grid-cols-2" noValidate>

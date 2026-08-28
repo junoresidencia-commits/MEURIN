@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { getDoctorSessionId } from "@/lib/auth";
 import { resolvePatientAccess } from "@/lib/doctor-access";
-import { listAlliedReferralsForPatient, currentAssignment, getAlliedProfessional, setAlliedReferralStatus } from "@/lib/allied-store";
+import { ALLIED_ROLES, listAlliedReferralsForPatient, currentAssignment, getAlliedProfessional, setAlliedReferralStatus } from "@/lib/allied-store";
 import { listReferralsForPatient, getNutritionist, setReferralStatus } from "@/lib/nutritionists-store";
 
 export async function GET(_req: Request, { params }: { params: Promise<{ email: string }> }) {
@@ -16,18 +16,19 @@ export async function GET(_req: Request, { params }: { params: Promise<{ email: 
     listReferralsForPatient(access.key),
   ]);
 
-  const psy = currentAssignment(alliedRefs, "psychology");
-  const nur = currentAssignment(alliedRefs, "nursing");
   const nutRef = nutRefs.find((r) => r.status !== "encerrado") || null;
   const nut = nutRef?.nutritionistId ? await getNutritionist(nutRef.nutritionistId) : null;
-  const psyPro = psy ? await getAlliedProfessional(psy.professionalId) : null;
-  const nurPro = nur ? await getAlliedProfessional(nur.professionalId) : null;
 
-  return NextResponse.json({
+  const assigned: Record<string, { id: string; name: string; registry?: string | null; uf?: string | null; referralId?: string } | null> = {
     nutrition: nut ? { id: nut.id, name: nut.name, registry: nut.crn, uf: nut.uf, referralId: nutRef?.id } : null,
-    psychology: psyPro ? { id: psyPro.id, name: psyPro.name, registry: psyPro.registry, uf: psyPro.uf, referralId: psy?.id } : null,
-    nursing: nurPro ? { id: nurPro.id, name: nurPro.name, registry: nurPro.registry, uf: nurPro.uf, referralId: nur?.id } : null,
-  });
+  };
+  for (const role of ALLIED_ROLES) {
+    const ref = currentAssignment(alliedRefs, role);
+    const pro = ref ? await getAlliedProfessional(ref.professionalId) : null;
+    assigned[role] = pro && ref ? { id: pro.id, name: pro.name, registry: pro.registry, uf: pro.uf, referralId: ref.id } : null;
+  }
+
+  return NextResponse.json(assigned);
 }
 
 export async function DELETE(req: Request, { params }: { params: Promise<{ email: string }> }) {

@@ -7,28 +7,26 @@ import { listReferralsForPatient } from "./nutritionists-store";
 import { listAlliedReferralsForPatient } from "./allied-store";
 import type { NotifyRole } from "./types";
 import type { CareChatRole, CareMessageSender } from "./care-messages-store";
+import { isAlliedRole, ROLE_META } from "./allied-types";
 
 export function isCareChatRole(s: string): s is CareChatRole {
-  return s === "nutrition" || s === "psychology" || s === "nursing";
+  return s === "nutrition" || isAlliedRole(s);
 }
 
 export function notifyRoleForCare(role: CareChatRole): NotifyRole {
   if (role === "nutrition") return "nutricionista";
-  if (role === "psychology") return "psicologo";
-  return "enfermeiro";
+  return ROLE_META[role].notify;
 }
 
 export function professionalChatUrl(role: CareChatRole, patientKey: string) {
   const enc = encodeURIComponent(patientKey);
   if (role === "nutrition") return `/nutricionista/paciente/${enc}#mensagens`;
-  if (role === "psychology") return `/psicologo/paciente/${enc}#mensagens`;
-  return `/enfermeiro/paciente/${enc}#mensagens`;
+  return `${ROLE_META[role].path}/paciente/${enc}#mensagens`;
 }
 
 export function careRoleLabel(role: CareChatRole) {
   if (role === "nutrition") return "nutricionista";
-  if (role === "psychology") return "psicólogo(a)";
-  return "enfermeiro(a)";
+  return ROLE_META[role].careLabel;
 }
 
 export interface CareThreadAccess {
