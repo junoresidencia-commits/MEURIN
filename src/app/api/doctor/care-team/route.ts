@@ -2,8 +2,9 @@ import { NextResponse } from "next/server";
 import { getDoctorSessionId } from "@/lib/auth";
 import {
   ALLIED_ROLES, DEFAULT_ALLIED_PASSWORD, createAlliedProfessional, deleteAlliedLink,
-  findAlliedByCpfOrEmail, listAlliedLinksForDoctor, listAlliedProfessionals, normalizeCpf,
-  setAlliedLinkActive, setAlliedStatus, upsertAlliedLink, type AlliedProfessional, type AlliedRole,
+  findAlliedByCpfOrEmail, findAlliedDoctorByCpfOrEmail, isDoctorTeamRole, listAlliedLinksForDoctor,
+  listAlliedProfessionals, normalizeCpf, roleFromDoctorSpecialty, setAlliedLinkActive, setAlliedStatus,
+  upsertAlliedLink, type AlliedProfessional, type AlliedRole,
 } from "@/lib/allied-store";
 import {
   DEFAULT_NUTRITIONIST_PASSWORD, createNutritionist, deleteNutritionLink, findNutritionistByCpfOrEmail,
@@ -122,18 +123,25 @@ export async function POST(req: Request) {
   }
 
   if (!ALLIED_ROLES.includes(role as AlliedRole)) return NextResponse.json({ error: "Especialidade inválida." }, { status: 400 });
-  const existing = await findAlliedByCpfOrEmail(role as AlliedRole, cpf, email);
+  const requestedRole = role as AlliedRole;
+  const specialtyRaw = b.specialty ? String(b.specialty).trim() : "";
+  const mapped = roleFromDoctorSpecialty(
+    specialtyRaw || (requestedRole === "cardiology" ? "Cardiologia" : requestedRole === "endocrinology" ? "Endocrinologia" : "")
+  );
+  const resolvedRole = requestedRole === "physician" ? mapped.role : requestedRole;
+  const specialty = specialtyRaw || mapped.specialty || null;
+  const existing = isDoctorTeamRole(requestedRole)
+    ? await findAlliedDoctorByCpfOrEmail(cpf, email)
+    : await findAlliedByCpfOrEmail(requestedRole, cpf, email);
   if (existing) {
     await upsertAlliedLink(existing.id, doctorId);
     await setAlliedStatus(existing.id, "active");
     return NextResponse.json({ ok: true, linked: true, message: "Profissional já cadastrado — vinculado à sua equipe." });
   }
   const created = await createAlliedProfessional({
-    role: role as AlliedRole, name, cpf, email, phone: b.phone ? String(b.phone) : null,
+    role: resolvedRole, name, cpf, email, phone: b.phone ? String(b.phone) : null,
     registry: b.registry ? String(b.registry) : null, uf: b.uf ? String(b.uf) : null,
-    specialty: b.specialty
-      ? String(b.specialty)
-      : role === "cardiology" ? "Cardiologia" : role === "endocrinology" ? "Endocrinologia" : null,
+    specialty,
     status: "active",
   });
   await upsertAlliedLink(created.id, doctorId);

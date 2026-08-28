@@ -148,6 +148,12 @@ export default function CadastroMedicoPage() {
             Entrar
           </Link>
         </p>
+        <p className="text-center text-xs text-[var(--text-muted)]">
+          É cardiologista, endocrinologista ou outro médico da equipe de um nefrologista?{" "}
+          <Link href="/especialista/cadastro" className="font-semibold text-[var(--gold)]">
+            Cadastro de médico da equipe
+          </Link>
+        </p>
       </form>
     </AuthShell>
   );

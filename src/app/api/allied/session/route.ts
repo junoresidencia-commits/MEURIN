@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { ALLIED_COOKIE, ALLIED_MAX_AGE, createAlliedToken } from "@/lib/allied-session";
-import { ALLIED_ROLES, findAlliedByCpfOrEmail, touchAlliedAccess, verifyAlliedPassword, type AlliedRole } from "@/lib/allied-store";
+import { ALLIED_ROLES, findAlliedForLogin, touchAlliedAccess, verifyAlliedPassword, type AlliedRole } from "@/lib/allied-store";
 
 export async function POST(req: Request) {
   try {
@@ -10,7 +10,7 @@ export async function POST(req: Request) {
     const identifier = String(b.identifier || b.cpf || b.email || "").trim();
     const password = String(b.password || "");
     if (!identifier || !password) return NextResponse.json({ error: "Informe CPF ou e-mail e a senha." }, { status: 400 });
-    const pro = await findAlliedByCpfOrEmail(role, identifier, identifier);
+    const pro = await findAlliedForLogin(role, identifier);
     if (!pro || !(await verifyAlliedPassword(pro, password))) {
       return NextResponse.json({ error: "CPF/e-mail ou senha inválidos." }, { status: 401 });
     }

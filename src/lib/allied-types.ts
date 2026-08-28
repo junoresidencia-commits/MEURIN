@@ -109,6 +109,50 @@ export function isAlliedRole(s: string): s is AlliedRole {
   return (ALLIED_ROLES as readonly string[]).includes(s);
 }
 
+/** Médicos da equipe (não o nefrologista dono da clínica). */
+export const DOCTOR_TEAM_ROLES: AlliedRole[] = ["cardiology", "endocrinology", "physician"];
+
+export function isDoctorTeamRole(role: AlliedRole): boolean {
+  return DOCTOR_TEAM_ROLES.includes(role);
+}
+
+export const DOCTOR_SPECIALTY_OPTIONS = [
+  "Cardiologia",
+  "Endocrinologia",
+  "Clínica médica",
+  "Urologia",
+  "Reumatologia",
+  "Gastroenterologia",
+  "Pneumologia",
+  "Hematologia",
+  "Infectologia",
+  "Outra",
+] as const;
+
+function fold(s: string) {
+  return s.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+}
+
+/** Cadastro normal de médico: a especialidade define a área (cardio, endócrino ou outra). */
+export function roleFromDoctorSpecialty(specialty: string): { role: AlliedRole; specialty: string } {
+  const raw = specialty.trim();
+  const n = fold(raw);
+  if (n.startsWith("cardio")) return { role: "cardiology", specialty: raw || "Cardiologia" };
+  if (n.startsWith("endocrin")) return { role: "endocrinology", specialty: raw || "Endocrinologia" };
+  return { role: "physician", specialty: raw };
+}
+
+export function alliedAreaEyebrow(role: AlliedRole) {
+  const map: Record<AlliedRole, string> = {
+    physician: "Área do médico",
+    psychology: "Área da psicologia",
+    nursing: "Área da enfermagem",
+    cardiology: "Área do cardiologista",
+    endocrinology: "Área do endocrinologista",
+  };
+  return map[role];
+}
+
 export type AlliedStatus = "pending" | "active" | "inactive" | "rejected" | "suspended";
 
 export interface AlliedProfessional {

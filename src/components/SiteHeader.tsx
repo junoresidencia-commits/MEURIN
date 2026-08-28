@@ -117,7 +117,7 @@ export function SiteHeader() {
               href="/especialista/login"
               className="rounded-full px-3 py-2.5 text-[var(--text-soft)] transition hover:text-[var(--gold)]"
             >
-              Sou outro médico
+              Sou médico da equipe
             </Link>
           </nav>
 
@@ -199,7 +199,7 @@ export function SiteHeader() {
                 className="rounded-full px-4 py-3 text-center text-sm font-semibold text-[var(--text-soft)]"
                 onClick={() => setOpen(false)}
               >
-                Sou outro médico
+                Sou médico da equipe
               </Link>
               <Link
                 href="/educacao"
