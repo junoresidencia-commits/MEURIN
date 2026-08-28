@@ -129,14 +129,20 @@ export async function fetchMercadoPagoPayment(
 }
 
 /**
- * Marca a consulta como paga/confirmada, registra o pagamento, bloqueia o
- * horário e envia o e-mail de confirmação. Idempotente.
+ * Marca a consulta como paga, registra o pagamento, bloqueia o
+ * horário e avisa o paciente. Idempotente. A consulta NÃO é confirmada
+ * automaticamente: o médico ainda confirma o horário.
+ *
+ * `markedBy` distingue Pix/Mercado Pago automático do clique "Recebi o pagamento"
+ * no painel do médico ou da atendente.
  */
 export async function confirmBookingPaid(
-  bookingId: string
+  bookingId: string,
+  opts?: { markedBy?: "sistema" | "medico" | "atendente" }
 ): Promise<{ booking: Booking; meetingUrl: string } | null> {
   let meetingUrl = "";
   const emailsToSend: { to: string; subject: string; body: string }[] = [];
+  const markedBy = opts?.markedBy ?? "sistema";
 
   const result = await updateDb((db) => {
     const booking = db.bookings.find((b) => b.id === bookingId);
@@ -159,11 +165,18 @@ export async function confirmBookingPaid(
     );
     const paymentId = uuid();
     const paidAt = new Date().toISOString();
+    const actor = markedBy === "sistema" ? "sistema" as const : "medico" as const;
+    const payDetail =
+      markedBy === "medico"
+        ? "Pagamento recebido (marcado pelo médico)."
+        : markedBy === "atendente"
+          ? "Pagamento recebido (marcado pela atendente)."
+          : "Pagamento identificado.";
 
     // Pagamento OK, mas a consulta NÃO é confirmada automaticamente: aguarda o médico.
     const events = [
       ...(booking.events ?? []),
-      { at: paidAt, actor: "sistema" as const, type: "pagamento", detail: "Pagamento identificado." },
+      { at: paidAt, actor, type: "pagamento", detail: payDetail },
       { at: paidAt, actor: "sistema" as const, type: "aguardando_confirmacao", detail: "Médico notificado. Aguardando confirmação." },
     ];
     const updatedBooking: Booking = {
@@ -180,11 +193,13 @@ export async function confirmBookingPaid(
     if (booking.patientEmail?.includes("@")) {
       emailsToSend.push({
         to: booking.patientEmail,
-        subject: "Recebemos sua solicitação de consulta — Meu Rim",
-        body: `Recebemos o pagamento da sua consulta com ${doctor.name}. Estamos aguardando a confirmação do horário pelo médico — avisaremos assim que confirmar.`,
+        subject: markedBy === "sistema" ? "Recebemos sua solicitação de consulta — Meu Rim" : "Pagamento confirmado — Meu Rim",
+        body: markedBy === "sistema"
+          ? `Recebemos o pagamento da sua consulta com ${doctor.name}. Estamos aguardando a confirmação do horário pelo médico — avisaremos assim que confirmar.`
+          : `O pagamento da sua consulta com ${doctor.name} foi confirmado. Estamos aguardando a confirmação do horário — avisaremos assim que confirmar.`,
       });
     }
-    if (doctor.email) {
+    if (doctor.email && markedBy !== "medico") {
       emailsToSend.push({
         to: doctor.email,
         subject: `Nova solicitação de consulta — ${booking.patientName}`,
@@ -220,27 +235,32 @@ export async function confirmBookingPaid(
     await sendEmail(email);
   }
 
-  // Notificações (push + central): médico recebe "nova consulta", paciente "recebemos".
+  // Notificações (push + central): médico recebe "nova consulta" só quando o
+  // pagamento veio de fora (Pix/Mercado Pago). Se o próprio médico marcou, não avisa de novo.
   try {
     const doctor = result.doctors.find((d) => d.id === booking.doctorId);
     const quando = fmtDateTime(booking.slotStart, doctor?.tz);
-    await sendNotification({
-      userId: booking.doctorId,
-      role: "medico",
-      type: "nova_consulta",
-      title: "Nova consulta agendada",
-      body: `${firstName(booking.patientName)} agendou uma consulta para ${quando}. Toque para confirmar.`,
-      targetUrl: links.doctorConsulta(booking.id),
-      tag: `booking-${booking.id}`,
-      relatedType: "booking",
-      relatedId: booking.id,
-    });
+    if (markedBy !== "medico") {
+      await sendNotification({
+        userId: booking.doctorId,
+        role: "medico",
+        type: "nova_consulta",
+        title: "Nova consulta agendada",
+        body: `${firstName(booking.patientName)} agendou uma consulta para ${quando}. Toque para confirmar.`,
+        targetUrl: links.doctorConsulta(booking.id),
+        tag: `booking-${booking.id}`,
+        relatedType: "booking",
+        relatedId: booking.id,
+      });
+    }
     await sendNotification({
       userId: patientKey(booking.patientEmail),
       role: "paciente",
       type: "solicitacao_recebida",
-      title: "Recebemos sua solicitação",
-      body: `Estamos aguardando a confirmação do médico para ${quando}. Avisaremos aqui.`,
+      title: markedBy === "sistema" ? "Recebemos sua solicitação" : "Pagamento confirmado",
+      body: markedBy === "sistema"
+        ? `Estamos aguardando a confirmação do médico para ${quando}. Avisaremos aqui.`
+        : `Seu pagamento foi confirmado. Aguardando o médico confirmar o horário de ${quando}.`,
       targetUrl: links.patientConsulta(booking.id),
       tag: `booking-${booking.id}`,
       relatedType: "booking",

@@ -6,6 +6,8 @@ import bcrypt from "bcryptjs";
 import { getSupabaseAdmin } from "./supabase-admin";
 import {
   DEFAULT_ALLIED_PASSWORD,
+  DOCTOR_TEAM_ROLES,
+  isDoctorTeamRole,
   normalizeCpf,
   type AlliedLink,
   type AlliedNote,
@@ -137,6 +139,20 @@ export async function findAlliedByCpfOrEmail(role: AlliedRole, cpf?: string | nu
   }
   const db = await readLocal();
   return db.professionals.find((p) => p.role === role && ((nrm && normalizeCpf(p.cpf) === nrm) || (mail && (p.email || "").toLowerCase() === mail))) ?? null;
+}
+
+/** Login/cadastro de médico da equipe: cardio, endócrino e outras especialidades compartilham a mesma identidade. */
+export async function findAlliedDoctorByCpfOrEmail(cpf?: string | null, email?: string | null): Promise<AlliedProfessional | null> {
+  for (const r of DOCTOR_TEAM_ROLES) {
+    const pro = await findAlliedByCpfOrEmail(r, cpf, email);
+    if (pro) return pro;
+  }
+  return null;
+}
+
+export async function findAlliedForLogin(role: AlliedRole, identifier: string): Promise<AlliedProfessional | null> {
+  if (isDoctorTeamRole(role)) return findAlliedDoctorByCpfOrEmail(identifier, identifier);
+  return findAlliedByCpfOrEmail(role, identifier, identifier);
 }
 
 export async function createAlliedProfessional(input: {

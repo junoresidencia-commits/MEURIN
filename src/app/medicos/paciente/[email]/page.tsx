@@ -368,7 +368,7 @@ export default function ProntuarioPage() {
         <AttendanceControl patientKey={emailParam} />
       </div>
 
-      <CareTeamPatientCard emailParam={emailParam} />
+      <CareTeamPatientCard emailParam={emailParam} patientName={patient?.name} />
 
       {/* Cabeçalho clínico */}
       <div className="mt-4 grid grid-cols-3 gap-3">
@@ -1055,7 +1055,7 @@ function NutritionReferralBox({ emailParam }: { emailParam: string }) {
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div>
           <p className="font-semibold text-[var(--text)]">Encaminhar para Nutrição</p>
-          <p className="text-sm text-[var(--text-muted)]">Envie este paciente à sua equipe de nutrição (configure em Mais › Equipe de Nutrição).</p>
+          <p className="text-sm text-[var(--text-muted)]">Envie este paciente à sua equipe de nutrição (cadastre em Minha Equipe).</p>
         </div>
         <button type="button" className="btn-gold" onClick={() => setOpen((v) => !v)}>{open ? "Fechar" : "Encaminhar"}</button>
       </div>

@@ -7,6 +7,7 @@ import type { Booking } from "@/lib/types";
 import { DoctorSidebar } from "@/components/DoctorSidebar";
 import { DoctorMobileNav } from "@/components/DoctorMobileNav";
 import { PatientQuickSheet } from "@/components/PatientQuickSheet";
+import { MarkPaidButton } from "@/components/MarkPaidButton";
 
 type Tab = "hoje" | "proximas" | "realizadas" | "todas";
 const TABS: { id: Tab; label: string }[] = [
@@ -102,6 +103,9 @@ export default function AtendimentosPage() {
                         <p className="truncate text-xs text-[var(--text-muted)]">{[b.locationName || (b.modality === "teleconsulta" ? "Teleconsulta" : null), b.careReason === "acompanhamento" ? "Retorno" : "Consulta"].filter(Boolean).join(" • ")}</p>
                       </button>
                       <span className="shrink-0 whitespace-nowrap rounded-full px-2 py-0.5 text-[11px] font-semibold" style={{ color: st.color, background: `${st.color}1a` }}>{st.label}</span>
+                      {b.status === "pending_payment" && (
+                        <MarkPaidButton bookingId={b.id} compact onDone={load} />
+                      )}
                       <Link href={`/medicos/paciente/${encodeURIComponent(b.patientEmail)}`} className="shrink-0 text-[var(--gold)]">›</Link>
                     </div>
                   </li>

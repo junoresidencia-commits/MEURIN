@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import { postJson, toFriendlyMessage } from "@/lib/user-errors";
 import { GoogleSignInButton } from "@/components/GoogleSignInButton";
 import { AuthShell } from "@/components/AuthShell";
+import { ROLE_META, type AlliedRole } from "@/lib/allied-types";
 
 export default function LoginMedicoPage() {
   const router = useRouter();
@@ -20,7 +21,11 @@ export default function LoginMedicoPage() {
     setLoading(true);
     setError("");
     try {
-      await postJson("/api/auth", { email, password }, "E-mail ou senha inválidos.");
+      const data = await postJson<{ kind?: string; role?: AlliedRole }>("/api/auth", { email, password }, "E-mail ou senha inválidos.");
+      if (data.kind === "allied" && data.role && ROLE_META[data.role]) {
+        router.push(`${ROLE_META[data.role].path}/painel`);
+        return;
+      }
       router.push("/medicos/painel");
     } catch (err) {
       setError(toFriendlyMessage(err, "Não foi possível entrar. Tente novamente."));
@@ -34,14 +39,14 @@ export default function LoginMedicoPage() {
         <div className="panel">
           <form onSubmit={onSubmit} className="space-y-4" noValidate>
             <label className="block">
-              <span className="mb-1.5 block text-xs font-semibold text-[var(--text-muted)]">E-mail</span>
+              <span className="mb-1.5 block text-xs font-semibold text-[var(--text-muted)]">E-mail ou CPF</span>
               <input
                 type="text"
                 inputMode="email"
                 className="input-field"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                autoComplete="email"
+                autoComplete="username"
                 placeholder="voce@exemplo.com"
               />
             </label>

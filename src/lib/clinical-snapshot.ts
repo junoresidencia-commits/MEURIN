@@ -8,11 +8,15 @@ import type { AlliedRole } from "./allied-types";
 
 const NUTRI_LABS = ["creatinina", "tfge", "ureia", "potassio", "fosforo", "calcio", "albumina", "hemoglobina", "proteinuria_24h", "rac", "glicemia", "glicemia_jejum", "hba1c"];
 const NURSE_LABS = ["creatinina", "tfge", "ureia", "potassio", "calcio", "fosforo", "albumina", "hemoglobina", "pth", "glicemia", "glicemia_jejum"];
+const CARDIO_LABS = ["creatinina", "tfge", "potassio", "sodio", "hemoglobina", "pcr", "colesterol_total", "ldl", "hdl", "triglicerideos", "glicemia", "inr"];
+const ENDO_LABS = ["hba1c", "glicemia", "glicemia_jejum", "tsh", "t4_livre", "creatinina", "tfge", "potassio", "colesterol_total", "ldl", "hdl", "triglicerideos", "vitamina_d"];
 const PSY_LABS: string[] = [];
 
 function labsFor(role: AlliedRole | "nutrition" | "doctor"): string[] {
   if (role === "nutrition") return NUTRI_LABS;
-  if (role === "nursing" || role === "doctor") return NURSE_LABS;
+  if (role === "nursing" || role === "doctor" || role === "physician") return NURSE_LABS;
+  if (role === "cardiology") return CARDIO_LABS;
+  if (role === "endocrinology") return ENDO_LABS;
   return PSY_LABS;
 }
 

@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { ROLE_META, isAlliedRole } from "@/lib/allied-types";
 
 type Pro = {
   id: string; role: string; name: string; cpf?: string | null; email?: string | null;
@@ -38,8 +39,8 @@ export default function AdminAlliedPage() {
   return (
     <div className="mx-auto max-w-4xl px-5 py-8">
       <Link href="/admin" className="text-sm font-semibold text-[var(--gold)]">← Administração</Link>
-      <h1 className="font-display text-3xl font-extrabold text-[var(--text)]">Psicologia e Enfermagem</h1>
-      <p className="mt-1 text-[var(--text-muted)]">Aprove cadastros. O médico também libera o acesso ao adicionar o profissional à equipe.</p>
+      <h1 className="font-display text-3xl font-extrabold text-[var(--text)]">Equipe assistencial</h1>
+      <p className="mt-1 text-[var(--text-muted)]">Psicologia, enfermagem, cardiologia e endocrinologia. Aprove cadastros. O médico também libera o acesso ao adicionar o profissional à equipe.</p>
       <div className="mt-4 flex flex-wrap gap-2">
         {(["pending", "active", "all"] as const).map((t) => (
           <button key={t} type="button" onClick={() => setTab(t)} className={`rounded-full px-3 py-1.5 text-sm font-bold ${tab === t ? "bg-[var(--gold)] text-white" : "border border-[var(--border)] bg-white text-[var(--text-soft)]"}`}>
@@ -53,7 +54,7 @@ export default function AdminAlliedPage() {
         {filtered.map((n) => (
           <div key={n.id} className="panel flex flex-wrap items-center justify-between gap-3">
             <div>
-              <p className="font-semibold text-[var(--text)]">{n.name} <span className="text-sm font-normal text-[var(--text-muted)]">· {n.role === "nursing" ? "Enfermagem" : "Psicologia"} {n.registry ? `· ${n.registry}` : ""}</span></p>
+              <p className="font-semibold text-[var(--text)]">{n.name} <span className="text-sm font-normal text-[var(--text-muted)]">· {isAlliedRole(n.role) ? ROLE_META[n.role].label : n.role} {n.registry ? `· ${n.registry}` : ""}</span></p>
               <p className="text-xs text-[var(--text-muted)]">{[n.cpf, n.email].filter(Boolean).join(" · ")}</p>
               <span className="mt-1 inline-block rounded-full bg-slate-100 px-2 py-0.5 text-xs font-semibold">{STATUS_LABEL[n.status] || n.status}</span>
             </div>

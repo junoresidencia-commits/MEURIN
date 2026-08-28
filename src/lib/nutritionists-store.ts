@@ -91,6 +91,7 @@ export function normalizeCpf(cpf?: string | null): string {
 
 const DATA_DIR = path.join(process.cwd(), "data");
 const FILE = path.join(DATA_DIR, "nutritionists.json");
+const NUTRITIONIST_CORE_COLUMNS = "id, name, cpf, email, phone, crn, uf, specialty, bio, photo_url, status, created_at, last_access_at";
 let tableMissing = false;
 
 function active() { return Boolean(getSupabaseAdmin()) && !tableMissing; }
@@ -170,31 +171,47 @@ function mapConsult(r: Record<string, unknown>): NutritionConsultation {
 export async function getNutritionist(id: string): Promise<Nutritionist | null> {
   if (active()) {
     const s = getSupabaseAdmin()!;
-    const { data, error } = await s.from("nutritionists").select("*").eq("id", id).maybeSingle();
-    if (!isMissing(error) && !error) return data ? mapNut(data) : null;
-    if (isMissing(error)) tableMissing = true;
+    const full = await s.from("nutritionists").select("*").eq("id", id).maybeSingle();
+    if (!full.error) return full.data ? mapNut(full.data) : null;
+    if (isMissing(full.error)) tableMissing = true;
+    else {
+      const core = await s.from("nutritionists").select(NUTRITIONIST_CORE_COLUMNS).eq("id", id).maybeSingle();
+      if (!core.error) return core.data ? mapNut(core.data as Record<string, unknown>) : null;
+      console.warn("[nutritionists] get", full.error.message, core.error?.message);
+      return null;
+    }
   }
   const db = await readLocal();
   return db.nutritionists.find((a) => a.id === id) ?? null;
 }
 
+function matchesCpfOrEmail(n: Nutritionist, nrm: string, mail: string): boolean {
+  return Boolean((nrm && normalizeCpf(n.cpf) === nrm) || (mail && (n.email || "").toLowerCase() === mail));
+}
+
 export async function findNutritionistByCpfOrEmail(cpf?: string | null, email?: string | null): Promise<Nutritionist | null> {
   const nrm = normalizeCpf(cpf);
   const mail = (email || "").toLowerCase().trim();
+  if (!nrm && !mail) return null;
   if (active()) {
     const s = getSupabaseAdmin()!;
     if (nrm) {
-      const { data } = await s.from("nutritionists").select("*").eq("cpf_normalized", nrm).maybeSingle();
-      if (data) return mapNut(data);
+      const byNorm = await s.from("nutritionists").select("*").eq("cpf_normalized", nrm).maybeSingle();
+      if (byNorm.data) return mapNut(byNorm.data);
+      if (byNorm.error && !isMissing(byNorm.error)) {
+        const byCpf = await s.from("nutritionists").select("*").eq("cpf", cpf).maybeSingle();
+        if (byCpf.data) return mapNut(byCpf.data);
+      }
     }
     if (mail) {
       const { data } = await s.from("nutritionists").select("*").ilike("email", mail).maybeSingle();
       if (data) return mapNut(data);
     }
-    return null;
+    const listed = await listAllNutritionists();
+    return listed.find((a) => matchesCpfOrEmail(a, nrm, mail)) ?? null;
   }
   const db = await readLocal();
-  return db.nutritionists.find((a) => (nrm && normalizeCpf(a.cpf) === nrm) || (mail && (a.email || "").toLowerCase() === mail)) ?? null;
+  return db.nutritionists.find((a) => matchesCpfOrEmail(a, nrm, mail)) ?? null;
 }
 
 export async function createNutritionist(input: { name: string; cpf?: string | null; email?: string | null; phone?: string | null; crn?: string | null; uf?: string | null; specialty?: string | null; bio?: string | null; password?: string; status?: NutritionistStatus; photoUrl?: string | null; documents?: NutritionistDocument[] }): Promise<Nutritionist> {
@@ -303,9 +320,17 @@ export async function updateNutritionistFinance(id: string, patch: { commissionP
 export async function listAllNutritionists(): Promise<Nutritionist[]> {
   if (active()) {
     const s = getSupabaseAdmin()!;
-    const { data, error } = await s.from("nutritionists").select("*").order("created_at", { ascending: false });
-    if (!isMissing(error) && !error) return (data ?? []).map(mapNut);
-    if (isMissing(error)) tableMissing = true;
+    const full = await s.from("nutritionists").select("*").order("created_at", { ascending: false });
+    if (!full.error) return (full.data ?? []).map(mapNut);
+    if (isMissing(full.error)) {
+      tableMissing = true;
+    } else {
+      const core = await s.from("nutritionists").select(NUTRITIONIST_CORE_COLUMNS).order("created_at", { ascending: false });
+      if (!core.error) return (core.data ?? []).map((r) => mapNut(r as Record<string, unknown>));
+      console.warn("[nutritionists] listAll", full.error.message, core.error?.message);
+      // Supabase está configurado: não cair no JSON local vazio (esconde cadastros reais).
+      return [];
+    }
   }
   const db = await readLocal();
   return [...db.nutritionists].sort((a, b) => b.createdAt.localeCompare(a.createdAt));
@@ -412,9 +437,10 @@ export async function listNutritionLinksForDoctor(doctorId: string): Promise<(Nu
     const db = await readLocal();
     links = db.links.filter((l) => l.doctorId === doctorId);
   }
+  const known = new Map((await listAllNutritionists()).map((n) => [n.id, n]));
   const out: (NutritionistLink & { nutritionist: Nutritionist })[] = [];
   for (const l of links) {
-    const nut = await getNutritionist(l.nutritionistId);
+    const nut = known.get(l.nutritionistId) ?? await getNutritionist(l.nutritionistId);
     if (nut) out.push({ ...l, nutritionist: nut });
   }
   return out.sort((a, b) => a.nutritionist.name.localeCompare(b.nutritionist.name));

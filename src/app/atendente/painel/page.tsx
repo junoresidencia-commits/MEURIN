@@ -155,7 +155,8 @@ function Row({ b, perms, onAct }: { b: Booking; perms: Perms; onAct: (id: string
         <span className={`rounded-full px-2 py-0.5 text-xs font-semibold ${st.cls}`}>{st.label}</span>
       </div>
       <div className="mt-2 flex flex-wrap gap-2">
-        {perms.confirmar && b.status !== "confirmed" && b.status !== "cancelled" && <button type="button" className="btn-ghost text-sm" onClick={() => onAct(b.id, "confirm")}>Confirmar</button>}
+        {perms.confirmar && b.status === "pending_payment" && <button type="button" className="btn-gold text-sm" onClick={() => onAct(b.id, "mark_paid")}>Recebi o pagamento</button>}
+        {perms.confirmar && b.status !== "confirmed" && b.status !== "cancelled" && b.status !== "pending_payment" && <button type="button" className="btn-ghost text-sm" onClick={() => onAct(b.id, "confirm")}>Confirmar</button>}
         {perms.remarcar && b.status !== "cancelled" && <button type="button" className="btn-ghost text-sm" onClick={reschedule}>Remarcar</button>}
         {perms.cancelar && b.status !== "cancelled" && <button type="button" className="btn-ghost text-sm text-[var(--danger)]" onClick={() => onAct(b.id, "cancel")}>Cancelar</button>}
         {perms.ausencia && b.status === "confirmed" && <button type="button" className="btn-ghost text-sm" onClick={() => onAct(b.id, "not_realized")}>Não compareceu</button>}

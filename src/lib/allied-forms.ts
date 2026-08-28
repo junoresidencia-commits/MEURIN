@@ -39,6 +39,53 @@ export const NURSE_ASSESSMENT: { key: string; label: string }[] = [
   { key: "observacoes", label: "Observações" },
 ];
 
+export const CARDIO_ASSESSMENT: { key: string; label: string }[] = [
+  { key: "motivo", label: "Motivo do encaminhamento" },
+  { key: "queixa", label: "Queixa cardiovascular" },
+  { key: "has", label: "Hipertensão" },
+  { key: "ic", label: "Insuficiência cardíaca" },
+  { key: "dac", label: "Doença arterial coronariana / DCV" },
+  { key: "pa", label: "Pressão arterial" },
+  { key: "fc", label: "Frequência cardíaca" },
+  { key: "edema", label: "Edema" },
+  { key: "dispneia", label: "Dispneia" },
+  { key: "meds", label: "Medicamentos cardiovasculares" },
+  { key: "exames", label: "ECG / ecocardiograma / outros exames" },
+  { key: "conduta", label: "Conduta" },
+  { key: "observacoes", label: "Observações" },
+];
+
+export const PHYSICIAN_ASSESSMENT: { key: string; label: string }[] = [
+  { key: "motivo", label: "Motivo do encaminhamento" },
+  { key: "queixa", label: "Queixa principal" },
+  { key: "historia", label: "História da doença atual" },
+  { key: "exame", label: "Exame físico / achados" },
+  { key: "hipotese", label: "Hipótese diagnóstica" },
+  { key: "conduta", label: "Conduta" },
+  { key: "observacoes", label: "Observações" },
+];
+
+export const ENDO_ASSESSMENT: { key: string; label: string }[] = [
+  { key: "motivo", label: "Motivo do encaminhamento" },
+  { key: "dm", label: "Diabetes (tipo, tempo, controle)" },
+  { key: "glicemia", label: "Glicemia / HbA1c" },
+  { key: "hipo", label: "Hipoglicemias" },
+  { key: "insulinoterapia", label: "Insulinoterapia / antidiabéticos" },
+  { key: "tireoide", label: "Tireoide" },
+  { key: "peso", label: "Peso / IMC" },
+  { key: "complicacoes", label: "Complicações" },
+  { key: "conduta", label: "Conduta" },
+  { key: "observacoes", label: "Observações" },
+];
+
+export function fieldsForRole(role: string) {
+  if (role === "nursing") return NURSE_ASSESSMENT;
+  if (role === "cardiology") return CARDIO_ASSESSMENT;
+  if (role === "endocrinology") return ENDO_ASSESSMENT;
+  if (role === "physician") return PHYSICIAN_ASSESSMENT;
+  return PSY_ANAMNESIS;
+}
+
 export function payloadToBody(fields: { key: string; label: string }[], payload: Record<string, string>): string {
   return fields
     .map((f) => {

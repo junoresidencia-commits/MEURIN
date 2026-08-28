@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { v4 as uuid } from "uuid";
 import { getDoctorSessionId } from "@/lib/auth";
 import { readDb, updateDb, updateBooking, deleteBooking } from "@/lib/store";
-import { appOrigin } from "@/lib/payments";
+import { appOrigin, confirmBookingPaid } from "@/lib/payments";
 import { buildConfirmationEmail, sendEmail } from "@/lib/email";
 import { generateAvailableSlots } from "@/lib/scheduling";
 import { activeHoldStarts, releaseHold } from "@/lib/holds-store";
@@ -149,6 +149,15 @@ export async function PATCH(req: Request) {
     return NextResponse.json({ error: "Consulta não encontrada." }, { status: 404 });
   }
   const events = booking.events ?? [];
+
+  if (action === "mark_paid") {
+    if (booking.status !== "pending_payment") {
+      return NextResponse.json({ error: "Esta consulta não está aguardando pagamento." }, { status: 400 });
+    }
+    const result = await confirmBookingPaid(id, { markedBy: "medico" });
+    if (!result?.booking) return NextResponse.json({ error: "Não foi possível registrar o pagamento." }, { status: 500 });
+    return NextResponse.json({ ok: true, booking: result.booking });
+  }
 
   if (action === "confirm") {
     const updated = await updateBooking(id, {

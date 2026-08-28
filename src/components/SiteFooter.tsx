@@ -14,6 +14,9 @@ export function SiteFooter() {
     pathname?.startsWith("/nutricionista") ||
     pathname?.startsWith("/psicologo") ||
     pathname?.startsWith("/enfermeiro") ||
+    pathname?.startsWith("/cardiologista") ||
+    pathname?.startsWith("/endocrinologista") ||
+    pathname?.startsWith("/especialista") ||
     pathname?.startsWith("/consulta") ||
     pathname?.startsWith("/lme") ||
     pathname?.startsWith("/documento")
