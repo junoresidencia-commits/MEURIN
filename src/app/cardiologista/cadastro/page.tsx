@@ -1,2 +1,6 @@
 import { redirect } from "next/navigation";
-export default function Page() { redirect("/medicos/cadastro?esp=Cardiologia"); }
+
+export default function Page() {
+  redirect("/medicos/cadastro?esp=Cardiologia");
+}
+
