@@ -158,7 +158,7 @@ export function AlliedRegisterForm({ role }: { role: AlliedRole }) {
           </label>
           <label className="block">
             <FieldLabel>Estado do CRM (UF)</FieldLabel>
-            <input className="input-field" value={form.uf} onChange={(e) => set("uf", e.target.value)} placeholder="BA" maxLength={2} />
+            <input className="input-field" value={form.uf} onChange={(e) => set("uf", e.target.value)} placeholder="Ex.: BA" maxLength={2} />
           </label>
           <label className="block">
             <FieldLabel>CPF</FieldLabel>
