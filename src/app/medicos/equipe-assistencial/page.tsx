@@ -187,7 +187,9 @@ export default function MinhaEquipePage() {
           </section>
 
           <details className="panel mt-8" open={availableTotal === 0 && mineTotal === 0}>
-            <summary className="cursor-pointer text-sm font-bold uppercase tracking-wider text-[var(--gold)]">Cadastrar nova {meta.title.toLowerCase()}</summary>
+            <summary className="cursor-pointer text-sm font-bold uppercase tracking-wider text-[var(--gold)]">
+              {spec === "physician" ? "Cadastrar novo médico" : `Cadastrar nova ${meta.title.toLowerCase()}`}
+            </summary>
             <div className="mt-3 grid gap-3 sm:grid-cols-2">
               <label className="block"><span className="mb-1 block text-xs font-semibold text-[var(--text-muted)]">Nome</span><input className="input-field" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} /></label>
               <label className="block"><span className="mb-1 block text-xs font-semibold text-[var(--text-muted)]">CPF</span><input className="input-field" value={form.cpf} onChange={(e) => setForm({ ...form, cpf: e.target.value })} /></label>
