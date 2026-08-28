@@ -17,7 +17,7 @@ function FieldLabel({ children }: { children: React.ReactNode }) {
 
 export function AlliedLoginForm({ role }: { role: AlliedRole }) {
   const router = useRouter();
-  const cadastro = `${ROLE_META[role].path}/cadastro`;
+  const cadastro = isDoctorTeamRole(role) ? "/medicos/cadastro" : `${ROLE_META[role].path}/cadastro`;
   const [identifier, setIdentifier] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
@@ -202,11 +202,7 @@ export function AlliedRegisterForm({ role }: { role: AlliedRole }) {
           </button>
           <p className="text-center text-sm text-[var(--text-muted)]">
             Já tem conta?{" "}
-            <Link href={login} className="font-semibold text-[var(--gold)]">Entrar</Link>
-          </p>
-          <p className="text-center text-xs text-[var(--text-muted)]">
-            É nefrologista e quer a sua clínica no Meu Rim?{" "}
-            <Link href="/medicos/cadastro" className="font-semibold text-[var(--gold)]">Cadastro da clínica</Link>
+            <Link href="/medicos/login" className="font-semibold text-[var(--gold)]">Entrar</Link>
           </p>
         </form>
       </AuthShell>

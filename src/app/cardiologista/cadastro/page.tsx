@@ -1,3 +1,2 @@
-"use client";
-import { AlliedRegisterForm } from "@/components/AlliedAuthForms";
-export default function Page() { return <AlliedRegisterForm role="cardiology" />; }
+import { redirect } from "next/navigation";
+export default function Page() { redirect("/medicos/cadastro?esp=Cardiologia"); }

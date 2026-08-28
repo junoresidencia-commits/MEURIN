@@ -129,8 +129,15 @@ export const DOCTOR_SPECIALTY_OPTIONS = [
   "Outra",
 ] as const;
 
+/** Opções do cadastro público “Sou médico” (clínica + especialistas). */
+export const DOCTOR_CADASTRO_SPECIALTIES = ["Nefrologia", ...DOCTOR_SPECIALTY_OPTIONS] as const;
+
 function fold(s: string) {
   return s.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+}
+
+export function isNephrologySpecialty(specialty: string): boolean {
+  return fold(specialty).startsWith("nefrol");
 }
 
 /** Cadastro normal de médico: a especialidade define a área (cardio, endócrino ou outra). */

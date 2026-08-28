@@ -16,7 +16,7 @@ export async function POST(req: Request) {
     }
     if (pro.status !== "active") {
       const msg = pro.status === "pending"
-        ? "Seu cadastro está em análise. O médico pode adicioná-lo à equipe; o administrador também pode aprovar o acesso."
+        ? "Seu cadastro está em análise. Aguarde o nefrologista ou o administrador liberar o acesso."
         : "Sua conta não está ativa.";
       return NextResponse.json({ error: msg }, { status: 403 });
     }

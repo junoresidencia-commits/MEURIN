@@ -101,24 +101,6 @@ export function SiteHeader() {
             >
               Sou enfermeiro(a)
             </Link>
-            <Link
-              href="/cardiologista/login"
-              className="rounded-full px-3 py-2.5 text-[var(--text-soft)] transition hover:text-[var(--gold)]"
-            >
-              Sou cardiologista
-            </Link>
-            <Link
-              href="/endocrinologista/login"
-              className="rounded-full px-3 py-2.5 text-[var(--text-soft)] transition hover:text-[var(--gold)]"
-            >
-              Sou endocrinologista
-            </Link>
-            <Link
-              href="/especialista/login"
-              className="rounded-full px-3 py-2.5 text-[var(--text-soft)] transition hover:text-[var(--gold)]"
-            >
-              Sou médico da equipe
-            </Link>
           </nav>
 
           <button
@@ -179,27 +161,6 @@ export function SiteHeader() {
                 onClick={() => setOpen(false)}
               >
                 Sou enfermeiro(a)
-              </Link>
-              <Link
-                href="/cardiologista/login"
-                className="rounded-full px-4 py-3 text-center text-sm font-semibold text-[var(--text-soft)]"
-                onClick={() => setOpen(false)}
-              >
-                Sou cardiologista
-              </Link>
-              <Link
-                href="/endocrinologista/login"
-                className="rounded-full px-4 py-3 text-center text-sm font-semibold text-[var(--text-soft)]"
-                onClick={() => setOpen(false)}
-              >
-                Sou endocrinologista
-              </Link>
-              <Link
-                href="/especialista/login"
-                className="rounded-full px-4 py-3 text-center text-sm font-semibold text-[var(--text-soft)]"
-                onClick={() => setOpen(false)}
-              >
-                Sou médico da equipe
               </Link>
               <Link
                 href="/educacao"
