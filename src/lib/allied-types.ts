@@ -1,12 +1,113 @@
-/** Tipos da equipe assistencial (psicologia + enfermagem). Nutrição permanece no módulo próprio. */
+/** Tipos da equipe assistencial. Nutrição permanece no módulo próprio. */
 
-export const ALLIED_ROLES = ["psychology", "nursing"] as const;
+export const ALLIED_ROLES = ["psychology", "nursing", "cardiology", "endocrinology", "physician"] as const;
 export type AlliedRole = (typeof ALLIED_ROLES)[number];
 
-export const ROLE_META: Record<AlliedRole, { label: string; plural: string; registry: string; path: string; area: string }> = {
-  psychology: { label: "Psicologia", plural: "Psicólogos", registry: "CRP", path: "/psicologo", area: "psico" },
-  nursing: { label: "Enfermagem", plural: "Enfermeiros", registry: "COREN", path: "/enfermeiro", area: "enfermagem" },
+export function emptyAlliedMap<T>(make: () => T): Record<AlliedRole, T> {
+  return Object.fromEntries(ALLIED_ROLES.map((r) => [r, make()])) as Record<AlliedRole, T>;
+}
+
+export const ROLE_META: Record<AlliedRole, {
+  label: string;
+  plural: string;
+  title: string;
+  referLabel: string;
+  registry: string;
+  path: string;
+  area: string;
+  notify: "psicologo" | "enfermeiro" | "cardiologista" | "endocrinologista" | "especialista";
+  careLabel: string;
+  assessmentTitle: string;
+  emptyAssigned: string;
+  shareByDefault: boolean;
+  showLabs: boolean;
+  hasCondutas: boolean;
+}> = {
+  psychology: {
+    label: "Psicologia",
+    plural: "Psicólogos",
+    title: "Psicólogo(a)",
+    referLabel: "psicóloga",
+    registry: "CRP",
+    path: "/psicologo",
+    area: "psico",
+    notify: "psicologo",
+    careLabel: "psicólogo(a)",
+    assessmentTitle: "Anamnese psicológica",
+    emptyAssigned: "Nenhum psicólogo encaminhado",
+    shareByDefault: false,
+    showLabs: false,
+    hasCondutas: false,
+  },
+  nursing: {
+    label: "Enfermagem",
+    plural: "Enfermeiros",
+    title: "Enfermeiro(a)",
+    referLabel: "enfermeira",
+    registry: "COREN",
+    path: "/enfermeiro",
+    area: "enfermagem",
+    notify: "enfermeiro",
+    careLabel: "enfermeiro(a)",
+    assessmentTitle: "Avaliação de enfermagem",
+    emptyAssigned: "Nenhum enfermeiro encaminhado",
+    shareByDefault: true,
+    showLabs: true,
+    hasCondutas: true,
+  },
+  cardiology: {
+    label: "Cardiologia",
+    plural: "Cardiologistas",
+    title: "Cardiologista",
+    referLabel: "cardiologista",
+    registry: "CRM",
+    path: "/cardiologista",
+    area: "cardio",
+    notify: "cardiologista",
+    careLabel: "cardiologista",
+    assessmentTitle: "Avaliação cardiológica",
+    emptyAssigned: "Nenhum cardiologista encaminhado",
+    shareByDefault: true,
+    showLabs: true,
+    hasCondutas: true,
+  },
+  endocrinology: {
+    label: "Endocrinologia",
+    plural: "Endocrinologistas",
+    title: "Endocrinologista",
+    referLabel: "endocrinologista",
+    registry: "CRM",
+    path: "/endocrinologista",
+    area: "endocrino",
+    notify: "endocrinologista",
+    careLabel: "endocrinologista",
+    assessmentTitle: "Avaliação endocrinológica",
+    emptyAssigned: "Nenhum endocrinologista encaminhado",
+    shareByDefault: true,
+    showLabs: true,
+    hasCondutas: true,
+  },
+  physician: {
+    label: "Outro médico",
+    plural: "Médicos especialistas",
+    title: "Médico(a)",
+    referLabel: "outro médico",
+    registry: "CRM",
+    path: "/especialista",
+    area: "especialista",
+    notify: "especialista",
+    careLabel: "médico(a) especialista",
+    assessmentTitle: "Avaliação clínica",
+    emptyAssigned: "Nenhum outro médico encaminhado",
+    shareByDefault: true,
+    showLabs: true,
+    hasCondutas: true,
+  },
 };
+
+export function isAlliedRole(s: string): s is AlliedRole {
+  return (ALLIED_ROLES as readonly string[]).includes(s);
+}
 
 export type AlliedStatus = "pending" | "active" | "inactive" | "rejected" | "suspended";
 

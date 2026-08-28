@@ -57,6 +57,7 @@ export async function resolveNutritionPatientAccess(patientKey: string): Promise
   let patient = null as Awaited<ReturnType<typeof getPatient>>;
   if (patientKey.startsWith("pid:")) patient = await getPatient(patientKey.slice(4));
   else if (patientKey.includes("@")) patient = await findByEmailAny(patientKey);
+  else patient = await getPatient(patientKey);
 
   const keys = candidateKeys(patientKey, patient);
   let refFromLinked = null as Awaited<ReturnType<typeof listReferralsForPatient>>[number] | null;

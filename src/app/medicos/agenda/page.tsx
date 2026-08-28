@@ -9,6 +9,7 @@ import { DoctorSidebar } from "@/components/DoctorSidebar";
 import { DoctorMobileNav } from "@/components/DoctorMobileNav";
 import { NotificationBell } from "@/components/NotificationBell";
 import type { AvailabilityPeriod, Booking, Modality } from "@/lib/types";
+import { MarkPaidButton } from "@/components/MarkPaidButton";
 
 type View = "dia" | "semana" | "mes";
 const DAY_LABELS = ["DOM", "SEG", "TER", "QUA", "QUI", "SEX", "SÁB"];
@@ -151,6 +152,7 @@ export default function AgendaCalendarioPage() {
   }
 
   const pending = useMemo(() => bookings.filter((b) => b.status === "paid" || b.stage === "proposto_novo_horario"), [bookings]);
+  const awaitingPay = useMemo(() => bookings.filter((b) => b.status === "pending_payment"), [bookings]);
   const nextConfirmed = useMemo(() => {
     const now = Date.now();
     return bookings.filter((b) => b.status === "confirmed" && new Date(b.slotStart).getTime() >= now - 3600000).sort((a, b) => a.slotStart.localeCompare(b.slotStart))[0];
@@ -278,7 +280,7 @@ export default function AgendaCalendarioPage() {
                       <div className="rounded-2xl border border-[var(--border)] bg-white p-6 text-center text-[var(--text-muted)]">Não há atendimento configurado neste dia.</div>
                     )}
                     {dps.map((dp) => (
-                      <PeriodBlock key={dp.key} dp={dp} bookings={bookingsOn(dayForDay)} blocked={blockedOn(dayForDay)} onPickFree={pickFree} onRemind={remindWhatsApp} onDelete={deleteBooking} />
+                      <PeriodBlock key={dp.key} dp={dp} bookings={bookingsOn(dayForDay)} blocked={blockedOn(dayForDay)} onPickFree={pickFree} onRemind={remindWhatsApp} onDelete={deleteBooking} onPaid={loadAll} />
                     ))}
                     {extras.length > 0 && (
                       <div className="rounded-2xl border border-dashed border-[var(--border)] bg-white p-3">
@@ -287,7 +289,11 @@ export default function AgendaCalendarioPage() {
                           {extras.map((b) => { const m = statusMeta(b)!; return (
                             <div key={b.id} className={`flex items-center justify-between rounded-xl border px-3 py-2 text-sm ${m.cls}`}>
                               <span><span className="font-bold">{format(new Date(b.slotStart), "HH:mm")}</span> · {b.patientName} <span className="text-xs">· {m.label}</span></span>
-                              <span className="flex gap-2"><button type="button" className="text-xs font-semibold underline" onClick={() => remindWhatsApp(b)}>Lembrar</button><button type="button" className="text-xs font-semibold underline" onClick={() => deleteBooking(b.id)}>Excluir</button></span>
+                              <span className="flex flex-wrap items-center gap-2">
+                                {b.status === "pending_payment" && <MarkPaidButton bookingId={b.id} compact onDone={loadAll} />}
+                                <button type="button" className="text-xs font-semibold underline" onClick={() => remindWhatsApp(b)}>Lembrar</button>
+                                <button type="button" className="text-xs font-semibold underline" onClick={() => deleteBooking(b.id)}>Excluir</button>
+                              </span>
                             </div>
                           ); })}
                         </div>
@@ -334,6 +340,22 @@ export default function AgendaCalendarioPage() {
               </div>
 
               <div className="panel">
+                <p className="text-xs font-bold uppercase tracking-wider text-[var(--gold)]">Aguardando pagamento {awaitingPay.length > 0 && <span className="ml-2 rounded-full bg-amber-500 px-2 py-0.5 text-xs text-white">{awaitingPay.length}</span>}</p>
+                {awaitingPay.length === 0 && <p className="mt-2 text-sm text-[var(--text-muted)]">Nenhuma consulta esperando Pix ou dinheiro.</p>}
+                <div className="mt-2 grid gap-3">
+                  {awaitingPay.slice(0, 4).map((b) => (
+                    <div key={b.id} className="rounded-xl border border-amber-200 bg-amber-50 p-2">
+                      <p className="text-sm font-semibold text-[var(--text)]">{b.patientName}</p>
+                      <p className="text-xs text-[var(--text-muted)]">{format(new Date(b.slotStart), "d/MM · HH:mm")} · {new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(b.priceCents / 100)}</p>
+                      <div className="mt-2">
+                        <MarkPaidButton bookingId={b.id} compact onDone={() => { void loadAll(); }} />
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              <div className="panel">
                 <p className="text-xs font-bold uppercase tracking-wider text-[var(--gold)]">Aguardando sua resposta {pending.length > 0 && <span className="ml-2 rounded-full bg-[var(--danger)] px-2 py-0.5 text-xs text-white">{pending.length}</span>}</p>
                 {pending.length === 0 && <p className="mt-2 text-sm text-[var(--text-muted)]">Tudo em dia.</p>}
                 <div className="mt-2 grid gap-3">
@@ -375,10 +397,10 @@ export default function AgendaCalendarioPage() {
 
 /** Bloco de um período de trabalho (Camada 1) com as consultas/horários dentro (Camadas 2–4). */
 function PeriodBlock({
-  dp, bookings, blocked, onPickFree, onRemind, onDelete, compact,
+  dp, bookings, blocked, onPickFree, onRemind, onDelete, onPaid, compact,
 }: {
   dp: DayPeriod; bookings: Booking[]; blocked: string[];
-  onPickFree: (s: FreeSlot) => void; onRemind?: (b: Booking) => void; onDelete?: (id: string) => void; compact?: boolean;
+  onPickFree: (s: FreeSlot) => void; onRemind?: (b: Booking) => void; onDelete?: (id: string) => void; onPaid?: () => void; compact?: boolean;
 }) {
   const now = Date.now();
   const tele = dp.period.modality === "teleconsulta";
@@ -412,8 +434,9 @@ function PeriodBlock({
               <div key={s.start} className={`rounded-md border px-1.5 py-1 text-[11px] leading-tight ${m.cls}`}>
                 <span className="font-bold">{format(new Date(b.slotStart), "HH:mm")}</span> {b.patientName}
                 <span className="block opacity-80">{m.label}</span>
-                {!compact && (onRemind || onDelete) && (
-                  <span className="mt-0.5 flex gap-2">
+                {!compact && (onRemind || onDelete || (b.status === "pending_payment" && onPaid)) && (
+                  <span className="mt-0.5 flex flex-wrap gap-2">
+                    {b.status === "pending_payment" && onPaid && <MarkPaidButton bookingId={b.id} compact onDone={onPaid} />}
                     {onRemind && <button type="button" className="text-[10px] font-semibold underline" onClick={() => onRemind(b)}>Lembrar</button>}
                     {onDelete && <button type="button" className="text-[10px] font-semibold underline" onClick={() => onDelete(b.id)}>Excluir</button>}
                   </span>

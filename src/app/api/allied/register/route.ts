@@ -5,7 +5,7 @@ export async function POST(req: Request) {
   try {
     const b = await req.json().catch(() => ({}));
     const role = b.role as AlliedRole;
-    if (!ALLIED_ROLES.includes(role)) return NextResponse.json({ error: "Informe a especialidade (psicologia ou enfermagem)." }, { status: 400 });
+    if (!ALLIED_ROLES.includes(role)) return NextResponse.json({ error: "Informe a especialidade." }, { status: 400 });
     const name = String(b.name || "").trim();
     const cpf = b.cpf ? String(b.cpf) : null;
     const email = b.email ? String(b.email).trim() : null;
@@ -14,6 +14,9 @@ export async function POST(req: Request) {
     if (!cpf && !email) return NextResponse.json({ error: "Informe CPF e/ou e-mail." }, { status: 400 });
     if (cpf && normalizeCpf(cpf).length < 11) return NextResponse.json({ error: "CPF inválido." }, { status: 400 });
     if (password.length < 6) return NextResponse.json({ error: "Crie uma senha com pelo menos 6 caracteres." }, { status: 400 });
+    if (role === "physician" && !String(b.specialty || "").trim()) {
+      return NextResponse.json({ error: "Informe a especialidade (ex.: Reumatologia, Urologia)." }, { status: 400 });
+    }
     const existing = await findAlliedByCpfOrEmail(role, cpf, email);
     if (existing) return NextResponse.json({ error: "Já existe um cadastro com este CPF/e-mail nesta especialidade." }, { status: 409 });
     const photoUrl = typeof b.photoUrl === "string" && b.photoUrl.startsWith("data:") && b.photoUrl.length < 900000 ? b.photoUrl : null;

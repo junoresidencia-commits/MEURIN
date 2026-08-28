@@ -11,6 +11,7 @@ import { NotificationBell } from "@/components/NotificationBell";
 import { EnableNotifications } from "@/components/EnableNotifications";
 import { GlobalPatientSearch } from "@/components/GlobalPatientSearch";
 import { PatientQuickSheet } from "@/components/PatientQuickSheet";
+import { MarkPaidButton } from "@/components/MarkPaidButton";
 function consultaStatus(b: Booking): { emoji: string; label: string; color: string } {
   if (b.stage === "proposto_novo_horario") return { emoji: "🟠", label: "Novo horário proposto", color: "#e08a2e" };
   if (b.status === "confirmed") return { emoji: "🟢", label: "Confirmado", color: "#1a9a78" };
@@ -261,16 +262,21 @@ export default function PainelMedicoPage() {
                 const st = consultaStatus(b);
                 const time = new Date(b.slotStart).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
                 return (
-                  <li key={b.id}>
-                    <button type="button" onClick={() => setQuickKey(b.patientEmail)} className="flex w-full items-center gap-3 rounded-xl px-2 py-2 text-left transition hover:bg-[var(--gold-soft)]">
-                      <span className="font-display w-12 shrink-0 text-base text-[var(--text)]">{time}</span>
-                      <span className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-[var(--gold-soft)] text-xs font-bold text-[var(--gold)]">{b.patientName.slice(0, 2).toUpperCase()}</span>
-                      <span className="min-w-0 flex-1">
-                        <span className="block truncate text-sm font-semibold text-[var(--text)]">{b.patientName}</span>
-                        <span className="block truncate text-xs text-[var(--text-muted)]">{[b.locationName || (b.modality === "teleconsulta" ? "Teleconsulta" : null), b.careReason === "acompanhamento" ? "Retorno" : "Primeira consulta"].filter(Boolean).join(" • ")}</span>
-                      </span>
-                      <span className="shrink-0 whitespace-nowrap rounded-full px-2 py-0.5 text-[11px] font-semibold" style={{ color: st.color, background: `${st.color}1a` }}>{st.label}</span>
-                    </button>
+                  <li key={b.id} className="rounded-xl px-2 py-2 hover:bg-[var(--gold-soft)]">
+                    <div className="flex items-center gap-3">
+                      <button type="button" onClick={() => setQuickKey(b.patientEmail)} className="flex min-w-0 flex-1 items-center gap-3 text-left">
+                        <span className="font-display w-12 shrink-0 text-base text-[var(--text)]">{time}</span>
+                        <span className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-[var(--gold-soft)] text-xs font-bold text-[var(--gold)]">{b.patientName.slice(0, 2).toUpperCase()}</span>
+                        <span className="min-w-0 flex-1">
+                          <span className="block truncate text-sm font-semibold text-[var(--text)]">{b.patientName}</span>
+                          <span className="block truncate text-xs text-[var(--text-muted)]">{[b.locationName || (b.modality === "teleconsulta" ? "Teleconsulta" : null), b.careReason === "acompanhamento" ? "Retorno" : "Primeira consulta"].filter(Boolean).join(" • ")}</span>
+                        </span>
+                        <span className="shrink-0 whitespace-nowrap rounded-full px-2 py-0.5 text-[11px] font-semibold" style={{ color: st.color, background: `${st.color}1a` }}>{st.label}</span>
+                      </button>
+                      {b.status === "pending_payment" && (
+                        <MarkPaidButton bookingId={b.id} compact onDone={() => { void reloadBookings(); }} />
+                      )}
+                    </div>
                   </li>
                 );
               })}
@@ -459,8 +465,37 @@ export default function PainelMedicoPage() {
         <p className="mt-4 text-sm text-[var(--text-muted)]">
           Recebimentos (Mercado Pago e Pix) ficam em{" "}
           <Link href="/medicos/configuracoes#recebimentos" className="font-semibold text-[var(--gold)]">Configurações › Recebimentos</Link>.
+          Se o paciente pagou fora do app (Pix na clínica, dinheiro), use <b>Recebi o pagamento</b> na consulta.
         </p>
       </section>
+
+      {(() => {
+        const awaitingPay = bookings.filter((b) => b.status === "pending_payment");
+        if (awaitingPay.length === 0) return null;
+        return (
+          <section className="mt-8">
+            <h2 className="font-display text-2xl text-[var(--text)]">
+              Aguardando pagamento
+              <span className="ml-2 rounded-full bg-amber-500 px-2 py-0.5 text-sm font-bold text-white align-middle">{awaitingPay.length}</span>
+            </h2>
+            <p className="mt-1 text-sm text-[var(--text-muted)]">Quando o Pix ou o dinheiro já entrou, toque em <b>Recebi o pagamento</b>. Depois a consulta aparece para você confirmar o horário.</p>
+            <div className="mt-4 grid gap-3">
+              {awaitingPay.map((b) => (
+                <div key={b.id} className="panel border-amber-200">
+                  <div className="flex flex-wrap items-start justify-between gap-2">
+                    <div>
+                      <p className="font-bold text-[var(--text)]">{b.patientName}</p>
+                      <p className="text-sm text-[var(--text-muted)]">{formatSlotLabel(b.slotStart)} · {new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(b.priceCents / 100)}</p>
+                      <p className="text-xs text-[var(--text-soft)]">{b.patientPhone ? `WhatsApp: ${b.patientPhone} · ` : ""}Aguardando pagamento</p>
+                    </div>
+                    <MarkPaidButton bookingId={b.id} onDone={() => { void reloadBookings(); }} />
+                  </div>
+                </div>
+              ))}
+            </div>
+          </section>
+        );
+      })()}
 
       {(() => {
         const pending = bookings.filter((b) => b.status === "paid" || b.stage === "proposto_novo_horario");
@@ -540,6 +575,9 @@ export default function PainelMedicoPage() {
                   <Link href={`/consulta/${b.meetingRoomId}`} className="btn-gold">
                     Entrar na sala
                   </Link>
+                )}
+                {b.status === "pending_payment" && (
+                  <MarkPaidButton bookingId={b.id} onDone={() => { void reloadBookings(); }} />
                 )}
                 {b.status === "confirmed" && (
                   <>

@@ -1,6 +1,10 @@
 import "server-only";
 import { getDoctorSessionId } from "./auth";
 import { getPatientEmail } from "./patient-session";
+import { getNutritionistId } from "./nutrition-session";
+import { getAlliedSessionId } from "./allied-session";
+import { getAlliedProfessional } from "./allied-store";
+import { isAlliedRole, ROLE_META } from "./allied-types";
 import type { NotifyRole } from "./types";
 
 export interface CurrentUser {
@@ -13,6 +17,13 @@ export interface CurrentUser {
 export async function getCurrentUser(): Promise<CurrentUser | null> {
   const doctorId = await getDoctorSessionId();
   if (doctorId) return { userId: doctorId, role: "medico" };
+  const nutritionistId = await getNutritionistId();
+  if (nutritionistId) return { userId: nutritionistId, role: "nutricionista" };
+  const alliedId = await getAlliedSessionId();
+  if (alliedId) {
+    const pro = await getAlliedProfessional(alliedId);
+    if (pro && isAlliedRole(pro.role)) return { userId: alliedId, role: ROLE_META[pro.role].notify };
+  }
   const patient = await getPatientEmail();
   if (patient) return { userId: patient.toLowerCase().trim(), role: "paciente" };
   return null;

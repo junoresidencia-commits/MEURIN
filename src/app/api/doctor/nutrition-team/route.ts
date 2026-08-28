@@ -2,13 +2,27 @@ import { NextResponse } from "next/server";
 import { getDoctorSessionId } from "@/lib/auth";
 import {
   DEFAULT_NUTRITIONIST_PASSWORD, createNutritionist, deleteNutritionLink, findNutritionistByCpfOrEmail,
-  listNutritionLinksForDoctor, normalizeCpf, setNutritionLink, upsertNutritionLink,
+  getNutritionist, listAllNutritionists, listNutritionLinksForDoctor, normalizeCpf, setNutritionLink,
+  updateNutritionistStatus, upsertNutritionLink,
 } from "@/lib/nutritionists-store";
+
+function catalogVisible(status?: string | null) {
+  return status !== "rejected" && status !== "suspended";
+}
+
+async function activateNutritionistForTeam(id: string) {
+  const nut = await getNutritionist(id);
+  if (nut && nut.status !== "active" && nut.status !== "rejected" && nut.status !== "suspended") {
+    await updateNutritionistStatus(id, "active");
+  }
+}
 
 export async function GET() {
   const doctorId = await getDoctorSessionId();
   if (!doctorId) return NextResponse.json({ error: "Não autenticado." }, { status: 401 });
   const links = await listNutritionLinksForDoctor(doctorId);
+  const myIds = new Set(links.map((l) => l.nutritionistId));
+  const available = (await listAllNutritionists()).filter((n) => !myIds.has(n.id) && catalogVisible(n.status));
   return NextResponse.json({
     team: links.map((l) => ({
       nutritionistId: l.nutritionistId,
@@ -23,6 +37,16 @@ export async function GET() {
       status: l.nutritionist.status,
       lastAccessAt: l.nutritionist.lastAccessAt,
     })),
+    available: available.map((n) => ({
+      nutritionistId: n.id,
+      name: n.name,
+      cpf: n.cpf,
+      email: n.email,
+      phone: n.phone,
+      crn: n.crn,
+      uf: n.uf,
+      status: n.status,
+    })),
   });
 }
 
@@ -30,6 +54,12 @@ export async function POST(req: Request) {
   const doctorId = await getDoctorSessionId();
   if (!doctorId) return NextResponse.json({ error: "Não autenticado." }, { status: 401 });
   const b = await req.json().catch(() => ({}));
+  if (b.nutritionistId) {
+    const nutritionistId = String(b.nutritionistId);
+    await upsertNutritionLink(nutritionistId, doctorId);
+    await activateNutritionistForTeam(nutritionistId);
+    return NextResponse.json({ ok: true, nutritionistId, linked: true });
+  }
   const name = String(b.name || "").trim();
   const cpf = b.cpf ? String(b.cpf) : null;
   const email = b.email ? String(b.email).trim() : null;
@@ -43,6 +73,7 @@ export async function POST(req: Request) {
   const existing = await findNutritionistByCpfOrEmail(cpf, email);
   if (existing) {
     await upsertNutritionLink(existing.id, doctorId, permissions);
+    await activateNutritionistForTeam(existing.id);
     return NextResponse.json({ ok: true, nutritionistId: existing.id, linked: true, message: "Nutricionista já tinha cadastro no Meu Rim — vinculada à sua equipe." });
   }
 

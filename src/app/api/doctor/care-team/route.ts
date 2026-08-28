@@ -3,55 +3,81 @@ import { getDoctorSessionId } from "@/lib/auth";
 import {
   ALLIED_ROLES, DEFAULT_ALLIED_PASSWORD, createAlliedProfessional, deleteAlliedLink,
   findAlliedByCpfOrEmail, listAlliedLinksForDoctor, listAlliedProfessionals, normalizeCpf,
-  setAlliedLinkActive, setAlliedStatus, upsertAlliedLink, type AlliedRole,
+  setAlliedLinkActive, setAlliedStatus, upsertAlliedLink, type AlliedProfessional, type AlliedRole,
 } from "@/lib/allied-store";
 import {
   DEFAULT_NUTRITIONIST_PASSWORD, createNutritionist, deleteNutritionLink, findNutritionistByCpfOrEmail,
-  listAllNutritionists, listNutritionLinksForDoctor, setNutritionLink, upsertNutritionLink,
+  getNutritionist, listAllNutritionists, listNutritionLinksForDoctor, setNutritionLink,
+  updateNutritionistStatus, upsertNutritionLink, type Nutritionist,
 } from "@/lib/nutritionists-store";
+
+function catalogVisible(status?: string | null) {
+  return status !== "rejected" && status !== "suspended";
+}
+
+async function safeList<T>(label: string, fn: () => Promise<T[]>, fallback: T[] = []): Promise<T[]> {
+  try { return await fn(); }
+  catch (err) {
+    console.warn(`[care-team] ${label}`, err);
+    return fallback;
+  }
+}
+
+async function activateNutritionistForTeam(id: string) {
+  const nut = await getNutritionist(id);
+  if (nut && nut.status !== "active" && nut.status !== "rejected" && nut.status !== "suspended") {
+    await updateNutritionistStatus(id, "active");
+  }
+}
+
+function mapNutrition(n: Nutritionist, extra?: { active?: boolean }) {
+  return {
+    id: n.id, role: "nutrition" as const, name: n.name, registry: n.crn,
+    uf: n.uf, email: n.email, phone: n.phone, status: n.status,
+    active: extra?.active ?? true, lastAccessAt: n.lastAccessAt, specialty: n.specialty,
+  };
+}
+
+function mapAllied(p: AlliedProfessional, extra?: { active?: boolean }) {
+  return {
+    id: p.id, role: p.role, name: p.name, registry: p.registry,
+    uf: p.uf, email: p.email, phone: p.phone, status: p.status,
+    active: extra?.active ?? true, lastAccessAt: p.lastAccessAt, specialty: p.specialty,
+  };
+}
 
 export async function GET() {
   const doctorId = await getDoctorSessionId();
   if (!doctorId) return NextResponse.json({ error: "Não autenticado." }, { status: 401 });
 
   const [nutLinks, alliedLinks, allNut, allAllied] = await Promise.all([
-    listNutritionLinksForDoctor(doctorId),
-    listAlliedLinksForDoctor(doctorId),
-    listAllNutritionists(),
-    listAlliedProfessionals(),
+    safeList("nutrition-links", () => listNutritionLinksForDoctor(doctorId)),
+    safeList("allied-links", () => listAlliedLinksForDoctor(doctorId)),
+    safeList("nutritionists", () => listAllNutritionists()),
+    safeList("allied-professionals", () => listAlliedProfessionals()),
   ]);
 
   const myNutIds = new Set(nutLinks.map((l) => l.nutritionistId));
   const myAlliedIds = new Set(alliedLinks.map((l) => l.professionalId));
 
+  const alliedMine = alliedLinks
+    .filter((l) => l.professional)
+    .map((l) => mapAllied(l.professional, { active: l.active }));
+
+  const alliedMineByRole = Object.fromEntries(ALLIED_ROLES.map((role) => [role, alliedMine.filter((p) => p.role === role)]));
+  const alliedAvailByRole = Object.fromEntries(ALLIED_ROLES.map((role) => [
+    role,
+    allAllied.filter((p) => p.role === role && !myAlliedIds.has(p.id) && catalogVisible(p.status)).map((p) => mapAllied(p)),
+  ]));
+
   return NextResponse.json({
     mine: {
-      nutrition: nutLinks.map((l) => ({
-        id: l.nutritionistId, role: "nutrition", name: l.nutritionist.name, registry: l.nutritionist.crn,
-        uf: l.nutritionist.uf, email: l.nutritionist.email, phone: l.nutritionist.phone, status: l.nutritionist.status,
-        active: l.active, lastAccessAt: l.nutritionist.lastAccessAt,
-      })),
-      psychology: alliedLinks.filter((l) => l.professional.role === "psychology").map((l) => ({
-        id: l.professionalId, role: "psychology", name: l.professional.name, registry: l.professional.registry,
-        uf: l.professional.uf, email: l.professional.email, phone: l.professional.phone, status: l.professional.status,
-        active: l.active, lastAccessAt: l.professional.lastAccessAt,
-      })),
-      nursing: alliedLinks.filter((l) => l.professional.role === "nursing").map((l) => ({
-        id: l.professionalId, role: "nursing", name: l.professional.name, registry: l.professional.registry,
-        uf: l.professional.uf, email: l.professional.email, phone: l.professional.phone, status: l.professional.status,
-        active: l.active, lastAccessAt: l.professional.lastAccessAt,
-      })),
+      nutrition: nutLinks.filter((l) => l.nutritionist).map((l) => mapNutrition(l.nutritionist, { active: l.active })),
+      ...alliedMineByRole,
     },
     available: {
-      nutrition: allNut.filter((n) => !myNutIds.has(n.id) && (n.status === "active" || n.status === "pending")).map((n) => ({
-        id: n.id, role: "nutrition", name: n.name, registry: n.crn, uf: n.uf, email: n.email, status: n.status, specialty: n.specialty,
-      })),
-      psychology: allAllied.filter((p) => p.role === "psychology" && !myAlliedIds.has(p.id) && (p.status === "active" || p.status === "pending")).map((p) => ({
-        id: p.id, role: "psychology", name: p.name, registry: p.registry, uf: p.uf, email: p.email, status: p.status, specialty: p.specialty,
-      })),
-      nursing: allAllied.filter((p) => p.role === "nursing" && !myAlliedIds.has(p.id) && (p.status === "active" || p.status === "pending")).map((p) => ({
-        id: p.id, role: "nursing", name: p.name, registry: p.registry, uf: p.uf, email: p.email, status: p.status, specialty: p.specialty,
-      })),
+      nutrition: allNut.filter((n) => !myNutIds.has(n.id) && catalogVisible(n.status)).map((n) => mapNutrition(n)),
+      ...alliedAvailByRole,
     },
   });
 }
@@ -64,6 +90,7 @@ export async function POST(req: Request) {
 
   if (b.professionalId && role === "nutrition") {
     await upsertNutritionLink(String(b.professionalId), doctorId);
+    await activateNutritionistForTeam(String(b.professionalId));
     return NextResponse.json({ ok: true, linked: true });
   }
   if (b.professionalId && ALLIED_ROLES.includes(role as AlliedRole)) {
@@ -84,6 +111,7 @@ export async function POST(req: Request) {
     const existing = await findNutritionistByCpfOrEmail(cpf, email);
     if (existing) {
       await upsertNutritionLink(existing.id, doctorId);
+      await activateNutritionistForTeam(existing.id);
       return NextResponse.json({ ok: true, linked: true, message: "Nutricionista já cadastrada — vinculada à sua equipe." });
     }
     const created = await createNutritionist({
@@ -102,7 +130,11 @@ export async function POST(req: Request) {
   }
   const created = await createAlliedProfessional({
     role: role as AlliedRole, name, cpf, email, phone: b.phone ? String(b.phone) : null,
-    registry: b.registry ? String(b.registry) : null, uf: b.uf ? String(b.uf) : null, status: "active",
+    registry: b.registry ? String(b.registry) : null, uf: b.uf ? String(b.uf) : null,
+    specialty: b.specialty
+      ? String(b.specialty)
+      : role === "cardiology" ? "Cardiologia" : role === "endocrinology" ? "Endocrinologia" : null,
+    status: "active",
   });
   await upsertAlliedLink(created.id, doctorId);
   return NextResponse.json({ ok: true, created: true, id: created.id, defaultPassword: DEFAULT_ALLIED_PASSWORD }, { status: 201 });

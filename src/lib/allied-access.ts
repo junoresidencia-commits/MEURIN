@@ -23,11 +23,16 @@ export async function resolveAlliedPatientAccess(patientKey: string, pro?: Allie
   if (!professional) return null;
   const refs = await listReferralsForProfessional(professional.id);
   const doctorIds = await listActiveDoctorIdsForProfessional(professional.id);
-  const ref = refs.find((r) => r.patientKey === patientKey && r.status !== "encerrado" && doctorIds.includes(r.doctorId));
+  const keys = new Set<string>([patientKey]);
+  try { keys.add(decodeURIComponent(patientKey)); } catch { /* ignore */ }
+  if (patientKey.startsWith("pid:")) keys.add(patientKey.slice(4));
+  else keys.add(`pid:${patientKey}`);
+  const ref = refs.find((r) => keys.has(r.patientKey) && r.status !== "encerrado" && doctorIds.includes(r.doctorId));
   if (!ref) return null;
 
   let patient = null as Awaited<ReturnType<typeof getPatient>>;
-  if (patientKey.startsWith("pid:")) patient = await getPatient(patientKey.slice(4));
+  const id = patientKey.startsWith("pid:") ? patientKey.slice(4) : patientKey;
+  if (id && !id.includes("@")) patient = await getPatient(id);
   return {
     allowed: true as const,
     key: patient ? clinicalKey(patient) : patientKey,

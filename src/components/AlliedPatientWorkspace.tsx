@@ -5,8 +5,9 @@ import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import { ClinicalSnapshotCard } from "@/components/ClinicalSnapshotCard";
 import { PdModule } from "@/components/PdModule";
-import { NURSE_ASSESSMENT, PSY_ANAMNESIS, payloadToBody } from "@/lib/allied-forms";
-import type { AlliedRole } from "@/lib/allied-types";
+import { CareMessageThread } from "@/components/CareMessageThread";
+import { fieldsForRole, payloadToBody } from "@/lib/allied-forms";
+import { ROLE_META, type AlliedRole } from "@/lib/allied-types";
 
 type Note = {
   id: string; kind: string; title?: string | null; body: string; payload: Record<string, unknown>;
@@ -21,9 +22,9 @@ export function AlliedPatientWorkspace({ role }: { role: AlliedRole }) {
   const router = useRouter();
   const params = useParams<{ key: string }>();
   const key = decodeURIComponent(Array.isArray(params.key) ? params.key[0] : params.key);
-  const base = role === "nursing" ? "/enfermeiro" : "/psicologo";
-  const registryLabel = role === "nursing" ? "COREN" : "CRP";
-  const fields = role === "nursing" ? NURSE_ASSESSMENT : PSY_ANAMNESIS;
+  const base = ROLE_META[role].path;
+  const registryLabel = ROLE_META[role].registry;
+  const fields = fieldsForRole(role);
 
   const [patient, setPatient] = useState<{ name: string; key: string } | null>(null);
   const [snapshot, setSnapshot] = useState<Parameters<typeof ClinicalSnapshotCard>[0]["snapshot"] | null>(null);
@@ -35,7 +36,7 @@ export function AlliedPatientWorkspace({ role }: { role: AlliedRole }) {
   const [evolucao, setEvolucao] = useState("");
   const [condutas, setCondutas] = useState("");
   const [orientacoes, setOrientacoes] = useState("");
-  const [share, setShare] = useState(role !== "psychology");
+  const [share, setShare] = useState(ROLE_META[role].shareByDefault);
   const [saving, setSaving] = useState(false);
   const [msg, setMsg] = useState("");
 
@@ -85,7 +86,7 @@ export function AlliedPatientWorkspace({ role }: { role: AlliedRole }) {
         method: "POST", headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           kind, body: bodyText, payload: kind === "evolucao" ? extra : payload,
-          shareWithTeam: share, title: kind === "evolucao" ? "Evolução" : role === "psychology" ? "Anamnese psicológica" : "Avaliação de enfermagem",
+          shareWithTeam: share, title: kind === "evolucao" ? "Evolução" : ROLE_META[role].assessmentTitle,
         }),
       });
       const d = await res.json().catch(() => ({}));
@@ -116,6 +117,12 @@ export function AlliedPatientWorkspace({ role }: { role: AlliedRole }) {
       <h1 className="font-display mt-2 text-3xl font-extrabold text-[var(--text)]">{patient.name}</h1>
       <p className="text-sm text-[var(--text-muted)]">Dados clínicos já existentes no Meu Rim — sem preencher de novo.</p>
 
+      <section className="panel mt-4">
+        <h2 className="font-display text-lg text-[var(--text)]">Mensagens com o paciente</h2>
+        <p className="text-sm text-[var(--text-muted)]">O paciente vê você na área dele e pode escrever por aqui. Chega alerta no sino.</p>
+        <CareMessageThread role={role} patientKey={patient.key} viewer="professional" />
+      </section>
+
       <div className="mt-5 flex gap-2 overflow-x-auto pb-1">
         {tabs.map((t) => (
           <button key={t.id} type="button" onClick={() => setTab(t.id)} className={`whitespace-nowrap rounded-full px-4 py-2 text-sm font-bold ${tab === t.id ? "bg-[var(--gold)] text-white" : "border border-[var(--border)] bg-white text-[var(--text-soft)]"}`}>{t.label}</button>
@@ -123,7 +130,7 @@ export function AlliedPatientWorkspace({ role }: { role: AlliedRole }) {
       </div>
 
       <div className="mt-4 space-y-3">
-        {tab === "resumo" && <ClinicalSnapshotCard snapshot={snapshot} showLabs={role !== "psychology"} />}
+        {tab === "resumo" && <ClinicalSnapshotCard snapshot={snapshot} showLabs={ROLE_META[role].showLabs} />}
         {tab === "exames" && <ClinicalSnapshotCard snapshot={snapshot} showLabs />}
         {tab === "meds" && (
           <div className="panel">
@@ -145,7 +152,7 @@ export function AlliedPatientWorkspace({ role }: { role: AlliedRole }) {
                 Compartilhar com equipe assistencial
               </label>
             )}
-            <button type="button" className="btn-gold" onClick={() => saveNote(role === "nursing" ? "avaliacao" : "anamnese")} disabled={saving}>{saving ? "Salvando…" : "Salvar"}</button>
+            <button type="button" className="btn-gold" onClick={() => saveNote(role === "psychology" ? "anamnese" : "avaliacao")} disabled={saving}>{saving ? "Salvando…" : "Salvar"}</button>
             {anamneses.map((n) => (
               <div key={n.id} className="rounded-xl border border-[var(--border)] p-3 text-sm">
                 <p className="text-xs font-bold text-[var(--gold)]">{fmt(n.createdAt)} · {n.professionalName} {n.registry ? `· ${registryLabel} ${n.registry}` : ""}</p>
@@ -157,7 +164,7 @@ export function AlliedPatientWorkspace({ role }: { role: AlliedRole }) {
         {tab === "evolucoes" && (
           <div className="panel space-y-3">
             <label className="block"><span className="mb-1 block text-xs font-semibold text-[var(--text-muted)]">Evolução</span><textarea className="input-field min-h-[120px]" value={evolucao} onChange={(e) => setEvolucao(e.target.value)} /></label>
-            {role === "nursing" && (
+            {ROLE_META[role].hasCondutas && (
               <>
                 <label className="block"><span className="mb-1 block text-xs font-semibold text-[var(--text-muted)]">Condutas</span><textarea className="input-field min-h-[70px]" value={condutas} onChange={(e) => setCondutas(e.target.value)} /></label>
                 <label className="block"><span className="mb-1 block text-xs font-semibold text-[var(--text-muted)]">Orientações</span><textarea className="input-field min-h-[70px]" value={orientacoes} onChange={(e) => setOrientacoes(e.target.value)} /></label>

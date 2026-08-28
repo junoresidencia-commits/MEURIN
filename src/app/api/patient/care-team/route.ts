@@ -3,7 +3,8 @@ import { getPatientEmail } from "@/lib/patient-session";
 import { findByEmailAny, getPatient, clinicalKey } from "@/lib/patients-store";
 import { getDoctorById } from "@/lib/store";
 import { listReferralsForPatient, getNutritionist } from "@/lib/nutritionists-store";
-import { listAlliedReferralsForPatient, currentAssignment, getAlliedProfessional } from "@/lib/allied-store";
+import { listAlliedReferralsForPatient, currentAssignment, getAlliedProfessional, ALLIED_ROLES, ROLE_META } from "@/lib/allied-store";
+import { unreadInThread, type CareChatRole } from "@/lib/care-messages-store";
 
 export async function GET() {
   const subject = await getPatientEmail();
@@ -17,24 +18,52 @@ export async function GET() {
 
   let nutRefs = await listReferralsForPatient(key);
   if (keys[1] && keys[1] !== key) nutRefs = nutRefs.concat(await listReferralsForPatient(keys[1]));
-  const nutRef = nutRefs.find((r) => r.status !== "encerrado");
+  const nutRef = nutRefs.find((r) => r.status !== "encerrado" && r.nutritionistId);
   const nut = nutRef?.nutritionistId ? await getNutritionist(nutRef.nutritionistId) : null;
 
   let alliedRefs = await listAlliedReferralsForPatient(key);
   if (keys[1] && keys[1] !== key) alliedRefs = alliedRefs.concat(await listAlliedReferralsForPatient(keys[1]));
-  const psy = currentAssignment(alliedRefs, "psychology");
-  const nur = currentAssignment(alliedRefs, "nursing");
-  const psyPro = psy ? await getAlliedProfessional(psy.professionalId) : null;
-  const nurPro = nur ? await getAlliedProfessional(nur.professionalId) : null;
+
+  async function member(
+    role: CareChatRole,
+    id: string,
+    name: string,
+    registry: string,
+    email?: string | null,
+    phone?: string | null,
+    reason?: string | null,
+    referredAt?: string | null,
+    specialty?: string | null,
+  ) {
+    const unread = await unreadInThread(role, id, key, "professional");
+    return { role, professionalId: id, name, registry, email: email || null, phone: phone || null, reason: reason || null, referredAt: referredAt || null, unread, specialty: specialty || null };
+  }
 
   const team = [
-    nut ? { role: "nutrition" as const, name: nut.name, registry: nut.crn ? `CRN ${nut.crn}${nut.uf ? "-" + nut.uf : ""}` : "" } : null,
-    psyPro ? { role: "psychology" as const, name: psyPro.name, registry: psyPro.registry ? `CRP ${psyPro.registry}${psyPro.uf ? "-" + psyPro.uf : ""}` : "" } : null,
-    nurPro ? { role: "nursing" as const, name: nurPro.name, registry: nurPro.registry ? `COREN ${nurPro.registry}${nurPro.uf ? "-" + nurPro.uf : ""}` : "" } : null,
-  ].filter(Boolean);
+    nut && nutRef?.nutritionistId
+      ? await member("nutrition", nut.id, nut.name, nut.crn ? `CRN ${nut.crn}${nut.uf ? "-" + nut.uf : ""}` : "", nut.email, nut.phone, nutRef.reason, nutRef.createdAt)
+      : null,
+  ];
+  for (const role of ALLIED_ROLES) {
+    const ref = currentAssignment(alliedRefs, role);
+    const pro = ref ? await getAlliedProfessional(ref.professionalId) : null;
+    if (!pro || !ref) continue;
+    const meta = ROLE_META[role];
+    team.push(await member(
+      role,
+      pro.id,
+      pro.name,
+      pro.registry ? `${meta.registry} ${pro.registry}${pro.uf ? "-" + pro.uf : ""}` : "",
+      pro.email,
+      pro.phone,
+      ref.reason,
+      ref.createdAt,
+      pro.specialty,
+    ));
+  }
 
   return NextResponse.json({
     nephrologist: doctor ? { name: doctor.name, crm: doctor.crm, specialty: doctor.specialty } : null,
-    team,
+    team: team.filter(Boolean),
   });
 }

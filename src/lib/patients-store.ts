@@ -342,6 +342,15 @@ export async function findByCpfAny(cpf: string): Promise<Patient | null> {
   return list.find((p) => normalizeCpf(p.cpf) === norm) ?? null;
 }
 
+/** Resolve o cadastro a partir da chave clínica (e-mail, uuid ou "pid:<id>"). */
+export async function lookupPatientByKey(patientKey: string): Promise<Patient | null> {
+  const key = String(patientKey || "").trim();
+  if (!key) return null;
+  if (key.startsWith("pid:")) return getPatient(key.slice(4));
+  if (key.includes("@")) return findByEmailAny(key);
+  return getPatient(key);
+}
+
 /** Busca um paciente criado pelo médico por e-mail — usado na troca de senha. */
 export async function findByEmailAny(email: string): Promise<Patient | null> {
   const norm = email.toLowerCase().trim();
