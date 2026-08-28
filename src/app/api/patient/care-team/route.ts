@@ -33,9 +33,10 @@ export async function GET() {
     phone?: string | null,
     reason?: string | null,
     referredAt?: string | null,
+    specialty?: string | null,
   ) {
     const unread = await unreadInThread(role, id, key, "professional");
-    return { role, professionalId: id, name, registry, email: email || null, phone: phone || null, reason: reason || null, referredAt: referredAt || null, unread };
+    return { role, professionalId: id, name, registry, email: email || null, phone: phone || null, reason: reason || null, referredAt: referredAt || null, unread, specialty: specialty || null };
   }
 
   const team = [
@@ -57,6 +58,7 @@ export async function GET() {
       pro.phone,
       ref.reason,
       ref.createdAt,
+      pro.specialty,
     ));
   }
 

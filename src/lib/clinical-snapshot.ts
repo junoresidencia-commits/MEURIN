@@ -14,7 +14,7 @@ const PSY_LABS: string[] = [];
 
 function labsFor(role: AlliedRole | "nutrition" | "doctor"): string[] {
   if (role === "nutrition") return NUTRI_LABS;
-  if (role === "nursing" || role === "doctor") return NURSE_LABS;
+  if (role === "nursing" || role === "doctor" || role === "physician") return NURSE_LABS;
   if (role === "cardiology") return CARDIO_LABS;
   if (role === "endocrinology") return ENDO_LABS;
   return PSY_LABS;

@@ -1055,7 +1055,7 @@ function NutritionReferralBox({ emailParam }: { emailParam: string }) {
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div>
           <p className="font-semibold text-[var(--text)]">Encaminhar para Nutrição</p>
-          <p className="text-sm text-[var(--text-muted)]">Envie este paciente à sua equipe de nutrição (configure em Mais › Equipe de Nutrição).</p>
+          <p className="text-sm text-[var(--text-muted)]">Envie este paciente à sua equipe de nutrição (cadastre em Minha Equipe).</p>
         </div>
         <button type="button" className="btn-gold" onClick={() => setOpen((v) => !v)}>{open ? "Fechar" : "Encaminhar"}</button>
       </div>

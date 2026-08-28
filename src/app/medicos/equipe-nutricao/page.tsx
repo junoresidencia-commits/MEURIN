@@ -84,10 +84,10 @@ export default function EquipeNutricaoPage() {
       <DoctorSidebar />
       <div className="min-w-0 flex-1">
         <div className="mx-auto max-w-3xl px-5 pb-28 pt-8 lg:pb-8">
-          <Link href="/medicos/mais" className="text-sm font-semibold text-[var(--gold)]">← Mais</Link>
-          <h1 className="font-display text-3xl font-extrabold text-[var(--text)]">Equipe de Nutrição</h1>
-          <p className="mt-1 text-[var(--text-muted)]">Nutricionistas já cadastradas no Meu Rim aparecem em disponíveis. Adicione à sua equipe para encaminhar pacientes. Elas acessam só quem você indicar — sem alterar diagnóstico, receita, LME ou evolução médica.</p>
-          <p className="mt-2 text-xs text-[var(--text-muted)]">Psicologia e enfermagem ficam em <Link href="/medicos/equipe-assistencial" className="font-semibold text-[var(--gold)]">Minha Equipe</Link>.</p>
+          <Link href="/medicos/equipe-assistencial" className="text-sm font-semibold text-[var(--gold)]">← Minha Equipe</Link>
+          <h1 className="font-display text-3xl font-extrabold text-[var(--text)]">Permissões da nutrição</h1>
+          <p className="mt-1 text-[var(--text-muted)]">Quem pode ver exames, diário e plano alimentar. O cadastro das nutricionistas fica em Minha Equipe; aqui você só ajusta as permissões detalhadas.</p>
+          <p className="mt-2 text-xs text-[var(--text-muted)]">Psicologia, enfermagem e médicos ficam em <Link href="/medicos/equipe-assistencial" className="font-semibold text-[var(--gold)]">Minha Equipe</Link>.</p>
 
           {msg && <p className="mt-4 text-sm font-semibold text-[var(--text-soft)]">{msg}</p>}
           {newPass && <p className="mt-3 rounded-xl border border-[var(--border-gold)] bg-[var(--gold-soft)] px-3 py-2 text-sm text-[var(--text)]">Senha inicial para o primeiro acesso: <b>{newPass}</b> (a nutricionista entra em <b>/nutricionista/login</b> com o CPF/e-mail e troca depois).</p>}

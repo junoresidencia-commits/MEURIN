@@ -2,10 +2,10 @@
 
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { ALLIED_ROLES, ROLE_META, type AlliedRole } from "@/lib/allied-types";
+import { ALLIED_ROLES, ROLE_META, emptyAlliedMap, type AlliedRole } from "@/lib/allied-types";
 
 type Role = "nutrition" | AlliedRole;
-type Pro = { id: string; role: string; name: string; registry?: string | null; uf?: string | null; active?: boolean };
+type Pro = { id: string; role: string; name: string; registry?: string | null; uf?: string | null; specialty?: string | null; active?: boolean };
 
 const ROLES: { id: Role; label: string; short: string; registry: string }[] = [
   { id: "nutrition", label: "Nutricionista", short: "Nutrição", registry: "CRN" },
@@ -20,10 +20,7 @@ const ROLES: { id: Role; label: string; short: string; registry: string }[] = [
 function emptyTeam(): Record<Role, Pro[]> {
   return {
     nutrition: [],
-    psychology: [],
-    nursing: [],
-    cardiology: [],
-    endocrinology: [],
+    ...emptyAlliedMap(() => [] as Pro[]),
   };
 }
 
@@ -119,7 +116,7 @@ export function ReferToCareTeam({
                 <select className="input-field" value={professionalId} onChange={(e) => setProfessionalId(e.target.value)}>
                   {list.length > 1 && <option value="">Selecione</option>}
                   {list.map((p) => (
-                    <option key={p.id} value={p.id}>{p.name}{p.registry ? ` · ${meta.registry} ${p.registry}` : ""}</option>
+                    <option key={p.id} value={p.id}>{p.name}{p.specialty ? ` · ${p.specialty}` : ""}{p.registry ? ` · ${meta.registry} ${p.registry}` : ""}</option>
                   ))}
                 </select>
               </label>

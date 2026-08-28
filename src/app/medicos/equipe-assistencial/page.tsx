@@ -31,7 +31,7 @@ export default function MinhaEquipePage() {
   const [error, setError] = useState("");
   const [q, setQ] = useState("");
   const [spec, setSpec] = useState<(typeof SPECS)[number]["id"]>("nutrition");
-  const [form, setForm] = useState({ name: "", cpf: "", email: "", phone: "", registry: "", uf: "" });
+  const [form, setForm] = useState({ name: "", cpf: "", email: "", phone: "", registry: "", uf: "", specialty: "" });
   const [msg, setMsg] = useState("");
   const [newPass, setNewPass] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
@@ -78,17 +78,18 @@ export default function MinhaEquipePage() {
 
   async function create() {
     if (!form.name || (!form.cpf && !form.email)) { setMsg("Informe nome e CPF e/ou e-mail."); return; }
+    if (spec === "physician" && !form.specialty.trim()) { setMsg("Informe a especialidade do médico (ex.: Reumatologia, Urologia)."); return; }
     setSaving(true); setMsg(""); setNewPass(null);
     try {
       const res = await fetch("/api/doctor/care-team", {
         method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ role: spec, ...form }),
+        body: JSON.stringify({ role: spec, ...form, specialty: form.specialty.trim() || undefined }),
       });
       const d = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(d.error || "Erro");
       if (d.created && d.defaultPassword) { setNewPass(d.defaultPassword); setMsg("Profissional criado e vinculado."); }
       else setMsg(d.message || "Profissional vinculado à sua equipe.");
-      setForm({ name: "", cpf: "", email: "", phone: "", registry: "", uf: "" });
+      setForm({ name: "", cpf: "", email: "", phone: "", registry: "", uf: "", specialty: "" });
       await load();
     } catch (e) { setMsg(e instanceof Error ? e.message : "Erro"); }
     finally { setSaving(false); }
@@ -111,7 +112,7 @@ export default function MinhaEquipePage() {
         <div className="mx-auto max-w-3xl px-5 pb-28 pt-8 lg:pb-8">
           <Link href="/medicos/mais" className="text-sm font-semibold text-[var(--gold)]">← Mais</Link>
           <h1 className="font-display text-3xl font-extrabold text-[var(--text)]">Minha Equipe</h1>
-          <p className="mt-1 text-[var(--text-muted)]">Nutrição, psicologia, enfermagem, cardiologia e endocrinologia. Quem já se cadastrou aparece em disponíveis — clique em Adicionar para entrar na sua equipe. O profissional só vê os pacientes que você encaminhar.</p>
+          <p className="mt-1 text-[var(--text-muted)]">Nutrição, psicologia, enfermagem e médicos (cardiologista, endocrinologista ou qualquer outra especialidade). Quem já se cadastrou aparece em disponíveis — clique em Adicionar para entrar na sua equipe. O profissional só vê os pacientes que você encaminhar.</p>
 
           <div className="mt-5 flex flex-wrap gap-2">
             {SPECS.map((s) => {
@@ -150,7 +151,7 @@ export default function MinhaEquipePage() {
                 <div key={p.id} className="panel flex flex-wrap items-center justify-between gap-2">
                   <div>
                     <p className="font-semibold text-[var(--text)]">{p.name} {p.registry && <span className="text-sm font-normal text-[var(--text-muted)]">· {meta.registry} {p.registry}{p.uf ? `-${p.uf}` : ""}</span>}</p>
-                    <p className="text-xs text-[var(--text-muted)]">{[p.email, p.phone].filter(Boolean).join(" · ") || "—"}</p>
+                    <p className="text-xs text-[var(--text-muted)]">{[p.specialty, p.email, p.phone].filter(Boolean).join(" · ") || "—"}</p>
                     {p.status === "pending" && <p className="mt-1 text-xs font-semibold text-amber-700">Cadastro pendente — ao adicionar, o acesso é liberado</p>}
                   </div>
                   <button type="button" className="btn-gold text-sm" onClick={() => addExisting(p)} disabled={saving}>Adicionar à equipe</button>
@@ -173,7 +174,7 @@ export default function MinhaEquipePage() {
                 <div key={p.id} className="panel flex flex-wrap items-center justify-between gap-2">
                   <div>
                     <p className="font-semibold text-[var(--text)]">{p.name} {p.registry && <span className="text-sm font-normal text-[var(--text-muted)]">· {meta.registry} {p.registry}{p.uf ? `-${p.uf}` : ""}</span>}</p>
-                    <p className="text-xs text-[var(--text-muted)]">{[p.email, p.phone].filter(Boolean).join(" · ")}</p>
+                    <p className="text-xs text-[var(--text-muted)]">{[p.specialty, p.email, p.phone].filter(Boolean).join(" · ")}</p>
                   </div>
                   <div className="flex items-center gap-2">
                     <span className={`rounded-full px-2 py-0.5 text-xs font-semibold ${p.active ? "bg-emerald-100 text-emerald-700" : "bg-slate-100 text-slate-500"}`}>{p.active ? "Ativo" : "Inativo"}</span>
@@ -194,12 +195,24 @@ export default function MinhaEquipePage() {
               <label className="block"><span className="mb-1 block text-xs font-semibold text-[var(--text-muted)]">Telefone</span><input className="input-field" value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} /></label>
               <label className="block"><span className="mb-1 block text-xs font-semibold text-[var(--text-muted)]">{meta.registry}</span><input className="input-field" value={form.registry} onChange={(e) => setForm({ ...form, registry: e.target.value })} /></label>
               <label className="block"><span className="mb-1 block text-xs font-semibold text-[var(--text-muted)]">UF</span><input className="input-field" value={form.uf} onChange={(e) => setForm({ ...form, uf: e.target.value })} /></label>
+              {spec === "physician" && (
+                <label className="block sm:col-span-2">
+                  <span className="mb-1 block text-xs font-semibold text-[var(--text-muted)]">Especialidade *</span>
+                  <input className="input-field" value={form.specialty} onChange={(e) => setForm({ ...form, specialty: e.target.value })} placeholder="Ex.: Reumatologia, Urologia, Clínica geral" />
+                </label>
+              )}
+              {(spec === "cardiology" || spec === "endocrinology") && (
+                <label className="block sm:col-span-2">
+                  <span className="mb-1 block text-xs font-semibold text-[var(--text-muted)]">Especialidade (opcional)</span>
+                  <input className="input-field" value={form.specialty} onChange={(e) => setForm({ ...form, specialty: e.target.value })} placeholder={spec === "cardiology" ? "Cardiologia" : "Endocrinologia"} />
+                </label>
+              )}
               <div className="sm:col-span-2"><button type="button" className="btn-gold" onClick={create} disabled={saving}>{saving ? "Salvando…" : "Adicionar profissional"}</button></div>
             </div>
           </details>
 
           {spec === "nutrition" && (
-            <p className="mt-6 text-xs text-[var(--text-muted)]">Permissões detalhadas da nutrição (exames, diário, plano) continuam em <Link href="/medicos/equipe-nutricao" className="font-semibold text-[var(--gold)]">Equipe de Nutrição</Link>.</p>
+            <p className="mt-6 text-xs text-[var(--text-muted)]">Permissões detalhadas da nutrição (exames, diário, plano) continuam em <Link href="/medicos/equipe-nutricao" className="font-semibold text-[var(--gold)]">Permissões da nutrição</Link>.</p>
           )}
             </>
           )}

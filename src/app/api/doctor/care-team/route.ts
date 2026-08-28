@@ -130,7 +130,11 @@ export async function POST(req: Request) {
   }
   const created = await createAlliedProfessional({
     role: role as AlliedRole, name, cpf, email, phone: b.phone ? String(b.phone) : null,
-    registry: b.registry ? String(b.registry) : null, uf: b.uf ? String(b.uf) : null, status: "active",
+    registry: b.registry ? String(b.registry) : null, uf: b.uf ? String(b.uf) : null,
+    specialty: b.specialty
+      ? String(b.specialty)
+      : role === "cardiology" ? "Cardiologia" : role === "endocrinology" ? "Endocrinologia" : null,
+    status: "active",
   });
   await upsertAlliedLink(created.id, doctorId);
   return NextResponse.json({ ok: true, created: true, id: created.id, defaultPassword: DEFAULT_ALLIED_PASSWORD }, { status: 201 });

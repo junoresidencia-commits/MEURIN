@@ -14,6 +14,7 @@ type Member = {
   reason?: string | null;
   referredAt?: string | null;
   unread?: number;
+  specialty?: string | null;
 };
 
 type Team = {
@@ -27,6 +28,7 @@ const ROLE: Record<string, string> = {
   nursing: "Enfermeiro(a)",
   cardiology: "Cardiologista",
   endocrinology: "Endocrinologista",
+  physician: "Médico(a)",
 };
 
 export function PatientHealthTeam() {
@@ -57,7 +59,7 @@ export function PatientHealthTeam() {
             <div key={m.professionalId} className="rounded-2xl border border-[var(--border)] p-3">
               <div className="flex flex-wrap items-start justify-between gap-2">
                 <div>
-                  <p className="text-[11px] font-semibold uppercase text-[var(--text-muted)]">{ROLE[m.role] || m.role}</p>
+                  <p className="text-[11px] font-semibold uppercase text-[var(--text-muted)]">{ROLE[m.role] || m.role}{m.role === "physician" && m.specialty ? ` · ${m.specialty}` : ""}</p>
                   <p className="font-semibold text-[var(--text)]">{m.name}{m.registry ? <span className="ml-1 text-sm font-normal text-[var(--text-muted)]">{m.registry}</span> : null}</p>
                   {m.reason && <p className="text-xs text-[var(--text-muted)]">Motivo: {m.reason}</p>}
                 </div>

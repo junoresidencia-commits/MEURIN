@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { ReferToCareTeam } from "@/components/ReferToCareTeam";
-import { ALLIED_ROLES, ROLE_META, type AlliedRole } from "@/lib/allied-types";
+import { ALLIED_ROLES, ROLE_META, emptyAlliedMap, type AlliedRole } from "@/lib/allied-types";
 
 type Member = {
   id: string;
@@ -36,20 +36,14 @@ const CARD_META: Record<CareRole, { title: string; registry: string; empty: stri
 function emptyAssigned(): Assigned {
   return {
     nutrition: null,
-    psychology: null,
-    nursing: null,
-    cardiology: null,
-    endocrinology: null,
+    ...emptyAlliedMap(() => null as Member | null),
   };
 }
 
 function emptyTeam(): Record<CareRole, TeamPro[]> {
   return {
     nutrition: [],
-    psychology: [],
-    nursing: [],
-    cardiology: [],
-    endocrinology: [],
+    ...emptyAlliedMap(() => [] as TeamPro[]),
   };
 }
 
@@ -136,7 +130,7 @@ export function CareTeamPatientCard({ emailParam, patientName }: { emailParam: s
       <div className="flex flex-wrap items-start justify-between gap-2">
         <div>
           <p className="text-xs font-bold uppercase tracking-wider text-[var(--gold)]">Equipe assistencial</p>
-          <p className="mt-0.5 text-sm text-[var(--text-muted)]">Encaminhe este paciente para nutricionista, psicóloga, enfermeira, cardiologista ou endocrinologista. O nome dele aparece na área de quem receber.</p>
+          <p className="mt-0.5 text-sm text-[var(--text-muted)]">Encaminhe este paciente para nutricionista, psicóloga, enfermeira ou médico (cardiologista, endocrinologista ou outra especialidade). O nome dele aparece na área de quem receber.</p>
         </div>
         <button type="button" className="btn-ghost text-sm" onClick={() => setManage((v) => !v)}>{manage ? "Fechar" : "Gerenciar equipe"}</button>
       </div>

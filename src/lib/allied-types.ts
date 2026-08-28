@@ -1,7 +1,11 @@
 /** Tipos da equipe assistencial. Nutrição permanece no módulo próprio. */
 
-export const ALLIED_ROLES = ["psychology", "nursing", "cardiology", "endocrinology"] as const;
+export const ALLIED_ROLES = ["psychology", "nursing", "cardiology", "endocrinology", "physician"] as const;
 export type AlliedRole = (typeof ALLIED_ROLES)[number];
+
+export function emptyAlliedMap<T>(make: () => T): Record<AlliedRole, T> {
+  return Object.fromEntries(ALLIED_ROLES.map((r) => [r, make()])) as Record<AlliedRole, T>;
+}
 
 export const ROLE_META: Record<AlliedRole, {
   label: string;
@@ -11,7 +15,7 @@ export const ROLE_META: Record<AlliedRole, {
   registry: string;
   path: string;
   area: string;
-  notify: "psicologo" | "enfermeiro" | "cardiologista" | "endocrinologista";
+  notify: "psicologo" | "enfermeiro" | "cardiologista" | "endocrinologista" | "especialista";
   careLabel: string;
   assessmentTitle: string;
   emptyAssigned: string;
@@ -79,6 +83,22 @@ export const ROLE_META: Record<AlliedRole, {
     careLabel: "endocrinologista",
     assessmentTitle: "Avaliação endocrinológica",
     emptyAssigned: "Nenhum endocrinologista encaminhado",
+    shareByDefault: true,
+    showLabs: true,
+    hasCondutas: true,
+  },
+  physician: {
+    label: "Outro médico",
+    plural: "Médicos especialistas",
+    title: "Médico(a)",
+    referLabel: "outro médico",
+    registry: "CRM",
+    path: "/especialista",
+    area: "especialista",
+    notify: "especialista",
+    careLabel: "médico(a) especialista",
+    assessmentTitle: "Avaliação clínica",
+    emptyAssigned: "Nenhum outro médico encaminhado",
     shareByDefault: true,
     showLabs: true,
     hasCondutas: true,

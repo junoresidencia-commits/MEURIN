@@ -15,6 +15,7 @@ export function AreaTheme() {
     else if (pathname.startsWith("/enfermeiro")) area = "enfermagem";
     else if (pathname.startsWith("/cardiologista")) area = "cardio";
     else if (pathname.startsWith("/endocrinologista")) area = "endocrino";
+    else if (pathname.startsWith("/especialista")) area = "medico";
     else if (pathname.startsWith("/atendente")) area = "atendente";
     else if (pathname.startsWith("/medicos")) area = "medico";
     const root = document.documentElement;

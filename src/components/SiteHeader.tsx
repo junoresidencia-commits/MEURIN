@@ -39,6 +39,7 @@ export function SiteHeader() {
     pathname?.startsWith("/enfermeiro") ||
     pathname?.startsWith("/cardiologista") ||
     pathname?.startsWith("/endocrinologista") ||
+    pathname?.startsWith("/especialista") ||
     pathname?.startsWith("/consulta") ||
     pathname?.startsWith("/lme") ||
     pathname?.startsWith("/documento")
@@ -111,6 +112,12 @@ export function SiteHeader() {
               className="rounded-full px-3 py-2.5 text-[var(--text-soft)] transition hover:text-[var(--gold)]"
             >
               Sou endocrinologista
+            </Link>
+            <Link
+              href="/especialista/login"
+              className="rounded-full px-3 py-2.5 text-[var(--text-soft)] transition hover:text-[var(--gold)]"
+            >
+              Sou outro médico
             </Link>
           </nav>
 
@@ -186,6 +193,13 @@ export function SiteHeader() {
                 onClick={() => setOpen(false)}
               >
                 Sou endocrinologista
+              </Link>
+              <Link
+                href="/especialista/login"
+                className="rounded-full px-4 py-3 text-center text-sm font-semibold text-[var(--text-soft)]"
+                onClick={() => setOpen(false)}
+              >
+                Sou outro médico
               </Link>
               <Link
                 href="/educacao"

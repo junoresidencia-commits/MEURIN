@@ -4,7 +4,7 @@ import path from "path";
 import { v4 as uuid } from "uuid";
 import { getSupabaseAdmin } from "./supabase-admin";
 
-export type CareChatRole = "nutrition" | "psychology" | "nursing" | "cardiology" | "endocrinology";
+export type CareChatRole = "nutrition" | "psychology" | "nursing" | "cardiology" | "endocrinology" | "physician";
 export type CareMessageSender = "patient" | "professional";
 
 export interface CareMessage {

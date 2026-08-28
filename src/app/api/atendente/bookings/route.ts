@@ -3,6 +3,7 @@ import { requireAttendantForDoctor, hasPerm } from "@/lib/attendant-context";
 import { readDb, updateBooking, getDoctorById } from "@/lib/store";
 import { logAttendantAudit } from "@/lib/attendants-store";
 import { sendNotification, patientKey, links, fmtDateTime } from "@/lib/notify";
+import { confirmBookingPaid } from "@/lib/payments";
 import type { ConsultationEvent } from "@/lib/types";
 
 function ev(actor: ConsultationEvent["actor"], type: string, detail?: string): ConsultationEvent {
@@ -27,6 +28,17 @@ export async function PATCH(req: Request) {
   if (!booking || !doctor) return NextResponse.json({ error: "Consulta não encontrada." }, { status: 404 });
   const events = booking.events ?? [];
   const who = `${ctx.attendant.name} (atendente)`;
+
+  if (action === "mark_paid") {
+    if (!hasPerm(ctx.link, "confirmar")) return deny();
+    if (booking.status !== "pending_payment") {
+      return NextResponse.json({ error: "Esta consulta não está aguardando pagamento." }, { status: 400 });
+    }
+    const result = await confirmBookingPaid(id, { markedBy: "atendente" });
+    if (!result?.booking) return NextResponse.json({ error: "Não foi possível registrar o pagamento." }, { status: 500 });
+    await audit("confirmar", "Marcou o pagamento como recebido.");
+    return NextResponse.json({ ok: true, booking: result.booking });
+  }
 
   if (action === "confirm") {
     if (!hasPerm(ctx.link, "confirmar")) return deny();

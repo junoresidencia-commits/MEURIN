@@ -55,6 +55,16 @@ export const CARDIO_ASSESSMENT: { key: string; label: string }[] = [
   { key: "observacoes", label: "Observações" },
 ];
 
+export const PHYSICIAN_ASSESSMENT: { key: string; label: string }[] = [
+  { key: "motivo", label: "Motivo do encaminhamento" },
+  { key: "queixa", label: "Queixa principal" },
+  { key: "historia", label: "História da doença atual" },
+  { key: "exame", label: "Exame físico / achados" },
+  { key: "hipotese", label: "Hipótese diagnóstica" },
+  { key: "conduta", label: "Conduta" },
+  { key: "observacoes", label: "Observações" },
+];
+
 export const ENDO_ASSESSMENT: { key: string; label: string }[] = [
   { key: "motivo", label: "Motivo do encaminhamento" },
   { key: "dm", label: "Diabetes (tipo, tempo, controle)" },
@@ -72,6 +82,7 @@ export function fieldsForRole(role: string) {
   if (role === "nursing") return NURSE_ASSESSMENT;
   if (role === "cardiology") return CARDIO_ASSESSMENT;
   if (role === "endocrinology") return ENDO_ASSESSMENT;
+  if (role === "physician") return PHYSICIAN_ASSESSMENT;
   return PSY_ANAMNESIS;
 }
 
