@@ -16,17 +16,22 @@ type Payload = {
   available: { nutrition: Pro[]; psychology: Pro[]; nursing: Pro[] };
 };
 
-const SPECS: { id: "nutrition" | "psychology" | "nursing"; title: string; registry: string }[] = [
+const SPECS: { id: "doctors" | "nutrition" | "psychology" | "nursing"; title: string; registry: string }[] = [
+  { id: "doctors", title: "Médicos", registry: "CRM" },
   { id: "nutrition", title: "Nutrição", registry: "CRN" },
   { id: "psychology", title: "Psicologia", registry: "CRP" },
   { id: "nursing", title: "Enfermagem", registry: "COREN" },
 ];
 
+type PeerDoc = { id: string; name: string; specialty: string; crm: string; crmState?: string | null; active?: boolean };
+
 export default function MinhaEquipePage() {
   const router = useRouter();
   const [data, setData] = useState<Payload | null>(null);
+  const [peers, setPeers] = useState<PeerDoc[]>([]);
+  const [foundDoctors, setFoundDoctors] = useState<PeerDoc[]>([]);
   const [q, setQ] = useState("");
-  const [spec, setSpec] = useState<(typeof SPECS)[number]["id"]>("nutrition");
+  const [spec, setSpec] = useState<(typeof SPECS)[number]["id"]>("doctors");
   const [form, setForm] = useState({ name: "", cpf: "", email: "", phone: "", registry: "", uf: "" });
   const [msg, setMsg] = useState("");
   const [newPass, setNewPass] = useState<string | null>(null);
@@ -37,8 +42,22 @@ export default function MinhaEquipePage() {
     if (!auth.doctor) { router.replace("/medicos/login"); return; }
     const d = await fetch("/api/doctor/care-team").then((r) => r.json());
     setData(d);
+    const p = await fetch("/api/doctor/peers").then((r) => r.json());
+    setPeers(p.doctors || []);
   }
   useEffect(() => { load(); }, []);
+
+  useEffect(() => {
+    if (spec !== "doctors") return;
+    const t = setTimeout(() => {
+      if (q.trim().length < 2) { setFoundDoctors([]); return; }
+      fetch(`/api/doctor/peers?q=${encodeURIComponent(q.trim())}`)
+        .then((r) => r.json())
+        .then((d) => setFoundDoctors(d.doctors || []))
+        .catch(() => {});
+    }, 250);
+    return () => clearTimeout(t);
+  }, [q, spec]);
 
   const filter = (list: Pro[]) => {
     const s = q.toLowerCase().trim();
@@ -46,9 +65,33 @@ export default function MinhaEquipePage() {
     return list.filter((p) => [p.name, p.registry, p.email].filter(Boolean).join(" ").toLowerCase().includes(s));
   };
 
-  const mine = useMemo(() => filter(data?.mine?.[spec] || []), [data, spec, q]);
-  const available = useMemo(() => filter(data?.available?.[spec] || []), [data, spec, q]);
+  const mine = useMemo(() => {
+    if (spec === "doctors") return [];
+    return filter(data?.mine?.[spec] || []);
+  }, [data, spec, q]);
+  const available = useMemo(() => {
+    if (spec === "doctors") return [];
+    return filter(data?.available?.[spec] || []);
+  }, [data, spec, q]);
   const meta = SPECS.find((s) => s.id === spec)!;
+
+  async function addDoctor(id: string) {
+    setSaving(true); setMsg("");
+    try {
+      const res = await fetch("/api/doctor/peers", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ peerId: id }) });
+      const d = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(d.error || "Erro");
+      setMsg("Médico adicionado à sua equipe.");
+      await load();
+    } catch (e) { setMsg(e instanceof Error ? e.message : "Erro"); }
+    finally { setSaving(false); }
+  }
+
+  async function removeDoctor(id: string, name: string) {
+    if (!window.confirm(`Remover ${name} da sua equipe? Os prontuários já compartilhados continuam até você revogar o acesso no paciente.`)) return;
+    await fetch("/api/doctor/peers", { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ peerId: id, active: false }) });
+    await load();
+  }
 
   async function addExisting(p: Pro) {
     setSaving(true); setMsg(""); setNewPass(null);
@@ -97,16 +140,52 @@ export default function MinhaEquipePage() {
         <div className="mx-auto max-w-3xl px-5 pb-28 pt-8 lg:pb-8">
           <Link href="/medicos/mais" className="text-sm font-semibold text-[var(--gold)]">← Mais</Link>
           <h1 className="font-display text-3xl font-extrabold text-[var(--text)]">Minha Equipe</h1>
-          <p className="mt-1 text-[var(--text-muted)]">Nutrição, psicologia e enfermagem. O profissional só vê os pacientes que você encaminhar.</p>
+          <p className="mt-1 text-[var(--text-muted)]">Médicos da plataforma, nutrição, psicologia e enfermagem. O profissional só vê os pacientes que você encaminhar.</p>
 
           <div className="mt-5 flex flex-wrap gap-2">
             {SPECS.map((s) => (
               <button key={s.id} type="button" onClick={() => setSpec(s.id)} className={`rounded-full px-4 py-2 text-sm font-bold ${spec === s.id ? "bg-[var(--gold)] text-white" : "border border-[var(--border)] bg-white text-[var(--text-soft)]"}`}>{s.title}</button>
             ))}
           </div>
-          <input className="input-field mt-4" placeholder="Pesquisar profissional" value={q} onChange={(e) => setQ(e.target.value)} />
+          <input className="input-field mt-4" placeholder={spec === "doctors" ? "Buscar médico da plataforma (nome ou CRM)" : "Pesquisar profissional"} value={q} onChange={(e) => setQ(e.target.value)} />
 
-          <section className="panel mt-6 grid gap-3 sm:grid-cols-2">
+          {spec === "doctors" && (
+            <>
+              <section className="mt-6">
+                <h2 className="font-display text-xl">Médicos da equipe</h2>
+                <div className="mt-3 grid gap-2">
+                  {peers.length === 0 && <p className="text-sm text-[var(--text-muted)]">Nenhum médico vinculado. Busque um colega aprovado na plataforma.</p>}
+                  {peers.map((p) => (
+                    <div key={p.id} className="panel flex flex-wrap items-center justify-between gap-2">
+                      <div>
+                        <p className="font-semibold text-[var(--text)]">{p.name} <span className="text-sm font-normal text-[var(--text-muted)]">— {p.specialty}</span></p>
+                        <p className="text-xs text-[var(--text-muted)]">{[p.crm, p.crmState].filter(Boolean).join(" ")}</p>
+                      </div>
+                      <button type="button" className="btn-ghost text-sm text-[var(--danger)]" onClick={() => removeDoctor(p.id, p.name)}>Remover</button>
+                    </div>
+                  ))}
+                </div>
+              </section>
+              <section className="mt-8">
+                <h2 className="font-display text-xl">Adicionar médico da plataforma</h2>
+                <p className="mt-1 text-sm text-[var(--text-muted)]">Cardiologista, endocrinologista, clínico e demais especialidades usam a mesma área médica.</p>
+                <div className="mt-3 grid gap-2">
+                  {q.trim().length < 2 && <p className="text-sm text-[var(--text-muted)]">Digite ao menos 2 letras para buscar.</p>}
+                  {foundDoctors.filter((d) => !peers.some((p) => p.id === d.id)).map((p) => (
+                    <div key={p.id} className="panel flex flex-wrap items-center justify-between gap-2">
+                      <div>
+                        <p className="font-semibold text-[var(--text)]">{p.name} <span className="text-sm font-normal text-[var(--text-muted)]">— {p.specialty}</span></p>
+                        <p className="text-xs text-[var(--text-muted)]">{p.crm}</p>
+                      </div>
+                      <button type="button" className="btn-gold text-sm" onClick={() => addDoctor(p.id)} disabled={saving}>Adicionar</button>
+                    </div>
+                  ))}
+                </div>
+              </section>
+            </>
+          )}
+
+          {spec !== "doctors" && <section className="panel mt-6 grid gap-3 sm:grid-cols-2">
             <p className="sm:col-span-2 text-xs font-bold uppercase tracking-wider text-[var(--gold)]">Adicionar {meta.title.toLowerCase()}</p>
             <label className="block"><span className="mb-1 block text-xs font-semibold text-[var(--text-muted)]">Nome</span><input className="input-field" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} /></label>
             <label className="block"><span className="mb-1 block text-xs font-semibold text-[var(--text-muted)]">CPF</span><input className="input-field" value={form.cpf} onChange={(e) => setForm({ ...form, cpf: e.target.value })} /></label>
@@ -116,9 +195,9 @@ export default function MinhaEquipePage() {
             <label className="block"><span className="mb-1 block text-xs font-semibold text-[var(--text-muted)]">UF</span><input className="input-field" value={form.uf} onChange={(e) => setForm({ ...form, uf: e.target.value })} /></label>
             <div className="sm:col-span-2"><button type="button" className="btn-gold" onClick={create} disabled={saving}>{saving ? "Salvando…" : "Adicionar profissional"}</button></div>
             {newPass && <p className="sm:col-span-2 rounded-xl border border-[var(--border-gold)] bg-[var(--gold-soft)] px-3 py-2 text-sm">Senha inicial: <b>{newPass}</b></p>}
-          </section>
+          </section>}
 
-          <section className="mt-8">
+          {spec !== "doctors" && <section className="mt-8">
             <h2 className="font-display text-xl">Minha equipe</h2>
             <div className="mt-3 grid gap-2">
               {mine.length === 0 && <p className="text-sm text-[var(--text-muted)]">Nenhum profissional nesta especialidade.</p>}
@@ -136,9 +215,9 @@ export default function MinhaEquipePage() {
                 </div>
               ))}
             </div>
-          </section>
+          </section>}
 
-          <section className="mt-8">
+          {spec !== "doctors" && <section className="mt-8">
             <h2 className="font-display text-xl">Profissionais disponíveis</h2>
             <p className="mt-1 text-sm text-[var(--text-muted)]">Quem já se cadastrou e ainda não está na sua equipe.</p>
             <div className="mt-3 grid gap-2">
@@ -153,7 +232,7 @@ export default function MinhaEquipePage() {
                 </div>
               ))}
             </div>
-          </section>
+          </section>}
 
           {spec === "nutrition" && (
             <p className="mt-6 text-xs text-[var(--text-muted)]">Permissões detalhadas da nutrição (exames, diário, plano) continuam em <Link href="/medicos/equipe-nutricao" className="font-semibold text-[var(--gold)]">Equipe de Nutrição</Link>.</p>

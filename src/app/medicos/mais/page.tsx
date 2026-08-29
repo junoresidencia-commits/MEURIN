@@ -41,7 +41,8 @@ export default function MedicoMaisPage() {
       items: [
         { href: "/medicos/agenda/configurar", label: "Clínicas e horários", desc: "Locais de atendimento e períodos da agenda." },
         { href: "/medicos/equipe", label: "Atendentes", desc: "Sua equipe administrativa e permissões." },
-        { href: "/medicos/equipe-assistencial", label: "Minha Equipe", desc: "Nutrição, psicologia e enfermagem." },
+        { href: "/medicos/equipe-assistencial", label: "Minha Equipe", desc: "Médicos, nutrição, psicologia e enfermagem." },
+        { href: "/medicos/encaminhamentos", label: "Encaminhamentos", desc: "Pacientes compartilhados com você e os que você encaminhou." },
         { href: "/medicos/equipe-nutricao", label: "Equipe de Nutrição", desc: "Permissões detalhadas das nutricionistas." },
       ],
     },

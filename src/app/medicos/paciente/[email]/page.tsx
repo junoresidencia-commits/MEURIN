@@ -18,6 +18,7 @@ import { PatientLmeField } from "@/components/PatientCnsField";
 import { PatientEditForm } from "@/components/PatientEditForm";
 import { guessSexFromName } from "@/lib/sex-guess";
 import { CareTeamPatientCard, CareTimeline } from "@/components/CareTeamPatientCard";
+import { SharePatientWithDoctor } from "@/components/SharePatientWithDoctor";
 import { PdModule } from "@/components/PdModule";
 
 type Lab = { id: string; testKey: string; value: number; unit?: string | null; measuredAt: string };
@@ -44,6 +45,7 @@ type Patient = { email: string; name: string; city: string; phone: string; birth
 type Note = {
   id: string;
   doctorName: string;
+  doctorSpecialty?: string | null;
   chiefComplaint?: string | null;
   history?: string | null;
   assessment?: string | null;
@@ -77,6 +79,8 @@ const TABS = [
   { id: "sinais", label: "Sinais em casa" },
   { id: "alimentacao", label: "Alimentação" },
   { id: "timeline", label: "Linha do tempo" },
+  { id: "equipe", label: "Equipe assistente" },
+  { id: "encaminhamentos", label: "Encaminhamentos" },
   { id: "consultas", label: "Consultas" },
   { id: "pesquisa", label: "Pesquisa" },
 ] as const;
@@ -368,6 +372,7 @@ export default function ProntuarioPage() {
         <AttendanceControl patientKey={emailParam} />
       </div>
 
+      <SharePatientWithDoctor emailParam={emailParam} patientName={patient?.name} />
       <CareTeamPatientCard emailParam={emailParam} />
 
       {/* Cabeçalho clínico */}
@@ -459,11 +464,17 @@ export default function ProntuarioPage() {
             </div>
 
             <p className="text-xs font-bold uppercase tracking-wider text-[var(--gold)]">Evoluções anteriores</p>
+            <p className="text-xs text-[var(--text-muted)]">Cada médico assina a própria evolução. O texto já registrado por outro profissional não pode ser alterado.</p>
             {notes.length === 0 && <p className="text-[var(--text-muted)]">Nenhuma evolução registrada.</p>}
             {notes.map((n) => (
               <div key={n.id} className="panel space-y-2">
                 <div className="flex items-center justify-between">
-                  <p className="text-sm font-semibold text-[var(--text)]">{fmt(n.createdAt)} · {n.doctorName}</p>
+                  <div>
+                    <p className="text-xs font-bold uppercase tracking-wider text-[var(--gold)]">
+                      {new Date(n.createdAt).toLocaleDateString("pt-BR")} — {n.doctorSpecialty || "Medicina"}
+                    </p>
+                    <p className="text-sm font-semibold text-[var(--text)]">{n.doctorName} · {fmt(n.createdAt)}</p>
+                  </div>
                   <span className={`rounded-full px-2.5 py-1 text-[11px] font-bold ${n.sharedWithPatient ? "bg-[#eaf8f2] text-[#1c8c70]" : "bg-[var(--border)] text-[var(--text-muted)]"}`}>
                     {n.sharedWithPatient ? "Liberada ao paciente" : "Interna"}
                   </span>
@@ -728,6 +739,17 @@ export default function ProntuarioPage() {
         )}
 
         {tab === "timeline" && <CareTimeline emailParam={emailParam} />}
+
+        {tab === "equipe" && (
+          <div className="space-y-3">
+            <SharePatientWithDoctor emailParam={emailParam} patientName={patient?.name} />
+            <CareTeamPatientCard emailParam={emailParam} />
+          </div>
+        )}
+
+        {tab === "encaminhamentos" && (
+          <SharePatientWithDoctor emailParam={emailParam} patientName={patient?.name} />
+        )}
 
         {tab === "dp" && isPd && (
           <PdModule
