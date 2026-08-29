@@ -166,6 +166,13 @@ export function SiteHeader() {
               >
                 Educação renal
               </Link>
+              <Link
+                href="/instalar"
+                className="rounded-full px-4 py-3 text-center text-sm font-semibold text-[var(--text-soft)]"
+                onClick={() => setOpen(false)}
+              >
+                Instalar no Mac
+              </Link>
             </div>
           </div>
         )}
