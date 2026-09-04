@@ -2,7 +2,6 @@
 
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
-import { EncaminharPacienteForm } from "@/components/EncaminharPacienteForm";
 import { encodePatientParam } from "@/lib/user-errors";
 
 type Member = {
@@ -38,7 +37,6 @@ export function CareTeamPatientCard({ emailParam }: { emailParam: string }) {
   const [assigned, setAssigned] = useState<Assigned | null>(null);
   const [team, setTeam] = useState<{ nutrition: TeamPro[]; psychology: TeamPro[]; nursing: TeamPro[] }>({ nutrition: [], psychology: [], nursing: [] });
   const [manage, setManage] = useState(false);
-  const [refer, setRefer] = useState(false);
   const [msg, setMsg] = useState("");
   const [saving, setSaving] = useState(false);
 
@@ -116,12 +114,9 @@ export function CareTeamPatientCard({ emailParam }: { emailParam: string }) {
       <div className="flex flex-wrap items-start justify-between gap-2">
         <div>
           <p className="text-xs font-bold uppercase tracking-wider text-[var(--gold)]">Equipe assistencial</p>
-          <p className="mt-0.5 text-sm text-[var(--text-muted)]">Profissionais que acompanham este paciente. Encaminhe pela especialidade; o nome vem da sua equipe.</p>
+          <p className="mt-0.5 text-sm text-[var(--text-muted)]">Profissionais que acompanham este paciente. Para encaminhar, use Encaminhar no topo.</p>
         </div>
-        <div className="flex flex-wrap gap-2">
-          <button type="button" className="btn-ghost text-sm" onClick={() => { setManage((v) => !v); setRefer(false); }}>Gerenciar equipe</button>
-          <button type="button" className="btn-gold text-sm" onClick={() => { setRefer((v) => !v); setManage(false); }}>Encaminhar</button>
-        </div>
+        <button type="button" className="btn-ghost text-sm" onClick={() => setManage((v) => !v)}>Gerenciar equipe</button>
       </div>
 
       <div className="mt-3">
@@ -157,11 +152,6 @@ export function CareTeamPatientCard({ emailParam }: { emailParam: string }) {
         </div>
       )}
 
-      {refer && (
-        <div className="mt-4 border-t border-[var(--border)] pt-3">
-          <EncaminharPacienteForm emailParam={emailParam} onDone={() => { setRefer(false); loadAssigned(); }} />
-        </div>
-      )}
       {msg && <p className="mt-2 text-sm font-semibold text-[var(--text-soft)]">{msg}</p>}
     </div>
   );
