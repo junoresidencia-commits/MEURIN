@@ -17,6 +17,7 @@ export const ESTAGIOS_G = ["G1", "G2", "G3a", "G3b", "G4", "G5"] as const;
 export const CATEGORIAS_A = ["A1", "A2", "A3"] as const;
 
 export const ETIOLOGIAS: { value: string; label: string }[] = [
+  { value: "sindrome_ckm", label: "Síndrome CKM (cardiovascular-renal-metabólica)" },
   { value: "doenca_renal_diabetica", label: "Doença renal diabética" },
   { value: "nefroesclerose_hipertensiva", label: "Nefroesclerose hipertensiva" },
   { value: "glomerulopatia", label: "Glomerulopatia" },
@@ -31,6 +32,16 @@ export const ETIOLOGIAS: { value: string; label: string }[] = [
   { value: "multifatorial", label: "Causa multifatorial" },
   { value: "indeterminada", label: "Indeterminada" },
   { value: "outras", label: "Outras" },
+];
+
+/** Estadiamento AHA da síndrome cardiovascular-renal-metabólica (CKM). */
+export const CKM_ESTAGIOS: { value: string; label: string }[] = [
+  { value: "1", label: "Estágio 1 — adiposidade excessiva ou disfuncional" },
+  { value: "2", label: "Estágio 2 — fatores de risco metabólicos e/ou DRC" },
+  { value: "3", label: "Estágio 3 — DCV subclínica ou DRC de muito alto risco" },
+  { value: "4", label: "Estágio 4 — DCV clínica (4a/4b não especificado)" },
+  { value: "4a", label: "Estágio 4a — DCV clínica sem falência renal" },
+  { value: "4b", label: "Estágio 4b — DCV clínica com falência renal" },
 ];
 
 export type FieldKind = "tri" | "enumG" | "enumA" | "etiologia" | "etiologiaMulti" | "number" | "text" | "select";
@@ -72,6 +83,22 @@ export const CLINICAL_FIELDS: FieldDef[] = [
   { key: "dislipidemia", label: "Dislipidemia", kind: "tri", group: "Comorbidades" },
   { key: "hepatopatia", label: "Doença hepática", kind: "tri", group: "Comorbidades" },
   { key: "neoplasia", label: "Neoplasia", kind: "tri", group: "Comorbidades" },
+  // Síndrome CKM (AHA) — diagnóstico integrador DCV + DRC + metabolismo
+  {
+    key: "ckm",
+    label: "Síndrome CKM",
+    kind: "tri",
+    group: "Síndrome CKM",
+    description: "Síndrome cardiovascular-renal-metabólica (CKM, AHA). Integra doença cardiovascular, DRC e alterações metabólicas (obesidade, diabetes e outros fatores de risco).",
+  },
+  {
+    key: "ckm_estadio",
+    label: "Estágio CKM",
+    kind: "select",
+    group: "Síndrome CKM",
+    options: CKM_ESTAGIOS,
+    description: "Estadiamento AHA da síndrome CKM: 1 (adiposidade), 2 (risco metabólico e/ou DRC), 3 (DCV subclínica ou DRC de muito alto risco), 4a (DCV clínica sem falência renal), 4b (DCV clínica com falência renal).",
+  },
   // Doença renal
   { key: "drc", label: "DRC", kind: "tri", group: "Doença renal" },
   { key: "estagio_g", label: "Estágio (G)", kind: "enumG", group: "Doença renal" },
@@ -97,10 +124,14 @@ export const CLINICAL_FIELDS: FieldDef[] = [
   { key: "resumo", label: "Resumo clínico", kind: "text", group: "Resumo", description: "Resumo da situação clínica do paciente (texto livre). Usado como variável de pesquisa 'resumo'." },
 ];
 
-export const CLINICAL_GROUPS = ["Dados gerais", "Comorbidades", "Doença renal", "Exame de urina (fita)", "Resumo"];
+export const CLINICAL_GROUPS = ["Dados gerais", "Comorbidades", "Síndrome CKM", "Doença renal", "Exame de urina (fita)", "Resumo"];
 
 export function etiologiaLabel(v?: string | null): string {
   return ETIOLOGIAS.find((e) => e.value === v)?.label || v || "";
+}
+
+export function ckmEstadioLabel(v?: string | null): string {
+  return CKM_ESTAGIOS.find((e) => e.value === v)?.label || v || "";
 }
 
 /** Tipo do valor de perfil (client + server). Valores ausentes ficam indefinidos = "desconhecido". */

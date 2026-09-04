@@ -34,9 +34,11 @@ const TRI_RULES: { key: string; re: RegExp }[] = [
   { key: "ira_previa", re: /\b(injuria renal aguda|insuficiencia renal aguda|\bira\b)\b/ },
   { key: "glomerulopatia", re: /\b(glomerulopatia|glomerulonefrite|gesf|nefropatia por iga|nefropatia membranosa)\b/ },
   { key: "policistica", re: /\b(policistic|rins policisticos|drpa)\b/ },
+  { key: "ckm", re: /\b(sindrome\s*ckm|\bckm\b|cardiovascular.?renal.?metabol)/ },
 ];
 
 const ETIOLOGIA_RULES: { value: string; re: RegExp }[] = [
+  { value: "sindrome_ckm", re: /(sindrome\s*ckm|\bckm\b|cardiovascular.?renal.?metabol)/ },
   { value: "doenca_renal_diabetica", re: /(nefropatia diabetica|doenca renal diabetica|nefropatia do diabetes)/ },
   { value: "nefroesclerose_hipertensiva", re: /(nefroesclerose hipertensiva|nefropatia hipertensiva)/ },
   { value: "glomerulopatia", re: /(glomerulopatia|glomerulonefrite|gesf|nefropatia por iga|nefropatia membranosa)/ },
@@ -60,8 +62,10 @@ export function extractClinicalFields(text: string): DetectedField[] {
     if (v) out.set(r.key, v);
   }
 
-  // Estágio G (ex.: "G3b", "estágio 3b", "DRC G4")
-  const g = /\b(?:drc\s*)?g\s?([1-5](?:a|b)?)\b/.exec(t) || /estagio\s*([1-5](?:a|b)?)/.exec(t);
+  // Estágio G (ex.: "G3b", "estágio 3b", "DRC G4").
+  // Se o texto fala de CKM, "estágio 2" é o estágio CKM — não força G2 da DRC.
+  const g = /\b(?:drc\s*)?g\s?([1-5](?:a|b)?)\b/.exec(t)
+    || (/(?:sindrome\s*)?ckm/.test(t) ? null : /estagio\s*([1-5](?:a|b)?)/.exec(t));
   if (g) {
     const val = "G" + g[1]; // t já está minúsculo → "G3b", "G4"
     if ((ESTAGIOS_G as readonly string[]).includes(val)) out.set("estagio_g", val);
@@ -87,6 +91,19 @@ export function extractClinicalFields(text: string): DetectedField[] {
     /(?:dm2?|diabet\w*)[^.\n;]{0,25}?(\d{1,2})\s*anos/.exec(t) ||
     /(\d{1,2})\s*anos[^.\n;]{0,20}?(?:de\s+)?(?:dm2?|diabet)/.exec(t);
   if (dmYears) out.set("tempo_dm_anos", dmYears[1]);
+
+  // Estágio CKM (ex.: "CKM estágio 2", "síndrome CKM 4b")
+  const ckmStage =
+    /(?:sindrome\s*)?ckm[^.\n;]{0,40}estagio\s*(4\s*[ab]|[1-4])/.exec(t) ||
+    /estagio\s*(4\s*[ab]|[1-4])[^.\n;]{0,40}(?:sindrome\s*)?ckm/.exec(t) ||
+    /(?:sindrome\s*)?ckm\s*(?:estagio\s*)?(4\s*[ab]|[1-4])\b/.exec(t);
+  if (ckmStage) {
+    const raw = ckmStage[1].replace(/\s+/g, "").toLowerCase();
+    if (raw === "4a" || raw === "4b" || raw === "1" || raw === "2" || raw === "3" || raw === "4") {
+      out.set("ckm_estadio", raw);
+      out.set("ckm", "sim");
+    }
+  }
 
   return Array.from(out.entries()).map(([key, value]) => ({ key, value }));
 }
