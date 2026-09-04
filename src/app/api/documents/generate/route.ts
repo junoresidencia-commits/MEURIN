@@ -96,25 +96,37 @@ export async function POST(req: Request) {
     }
 
     // Salva o PDF final no storage e cria o registro no prontuário (não disponível ao paciente ainda).
-    const saved = await saveFile(DOCPDF_BUCKET, doctorId, { name: `${type}.pdf`, type: "application/pdf", buffer: Buffer.from(pdfBytes) });
+    let saved: { path: string; storage: "supabase" | "local" };
+    try {
+      saved = await saveFile(DOCPDF_BUCKET, doctorId, { name: `${type}.pdf`, type: "application/pdf", buffer: Buffer.from(pdfBytes) });
+    } catch (err) {
+      console.error("documents/generate saveFile", err);
+      return NextResponse.json({ error: "Não foi possível guardar o PDF. Tente novamente." }, { status: 500 });
+    }
     const now = new Date().toISOString();
-    const doc = await addDocument({
-      patientEmail: access.key,
-      doctorId,
-      doctorName: doctor.name,
-      doctorCrm: doctor.crm,
-      type,
-      title: filledTitle,
-      body: content, // guarda o conteúdo original (com {{campos}}) para reedição
-      sharedWithPatient: false, // médico decide disponibilizar depois
-      letterheadId: usedLetterheadId,
-      pdfPath: saved.path,
-      pdfStorage: saved.storage,
-      status: "final",
-      version: 1,
-      groupId: uuid(),
-      history: [{ at: now, by: doctor.name, action: "criado", detail: `Documento gerado (${type}).` }],
-    });
+    let doc;
+    try {
+      doc = await addDocument({
+        patientEmail: access.key,
+        doctorId,
+        doctorName: doctor.name,
+        doctorCrm: doctor.crm,
+        type,
+        title: filledTitle,
+        body: content, // guarda o conteúdo original (com {{campos}}) para reedição
+        sharedWithPatient: false, // médico decide disponibilizar depois
+        letterheadId: usedLetterheadId,
+        pdfPath: saved.path,
+        pdfStorage: saved.storage,
+        status: "final",
+        version: 1,
+        groupId: uuid(),
+        history: [{ at: now, by: doctor.name, action: "criado", detail: `Documento gerado (${type}).` }],
+      });
+    } catch (err) {
+      console.error("documents/generate addDocument", err);
+      return NextResponse.json({ error: "Não foi possível registrar o documento no prontuário." }, { status: 500 });
+    }
 
     try {
       await writeAudit({

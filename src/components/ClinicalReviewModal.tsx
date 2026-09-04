@@ -9,6 +9,7 @@ import {
   TRI_OPTIONS,
   etiologiaLabel,
 } from "@/lib/clinical-fields";
+import { encodePatientParam } from "@/lib/user-errors";
 
 type Detected = { key: string; value: string };
 type Row = Detected & { checked: boolean };
@@ -56,7 +57,7 @@ export function ClinicalReviewModal({
         onClose();
         return;
       }
-      const res = await fetch(`/api/doctor/patients/${emailParam}/profile`, {
+      const res = await fetch(`/api/doctor/patients/${encodePatientParam(emailParam)}/profile`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ changes, source: "evolução" }),

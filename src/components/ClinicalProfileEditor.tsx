@@ -11,6 +11,7 @@ import {
   computeImc,
   type ClinicalProfileData,
 } from "@/lib/clinical-fields";
+import { encodePatientParam } from "@/lib/user-errors";
 
 type FieldMeta = { source: string; at: string };
 type HistoryEntry = { field: string; from: unknown; to: unknown; source: string; at: string };
@@ -25,7 +26,7 @@ export function ClinicalProfileEditor({ emailParam }: { emailParam: string }) {
   const [msg, setMsg] = useState("");
 
   function load() {
-    return fetch(`/api/doctor/patients/${emailParam}/profile`)
+    return fetch(`/api/doctor/patients/${encodePatientParam(emailParam)}/profile`)
       .then((r) => (r.ok ? r.json() : { profile: {}, meta: {}, history: [] }))
       .then((d) => {
         setData(d.profile || {});
@@ -55,7 +56,7 @@ export function ClinicalProfileEditor({ emailParam }: { emailParam: string }) {
     setSaving(true);
     setMsg("");
     try {
-      const res = await fetch(`/api/doctor/patients/${emailParam}/profile`, {
+      const res = await fetch(`/api/doctor/patients/${encodePatientParam(emailParam)}/profile`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ data }),

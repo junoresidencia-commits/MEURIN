@@ -89,6 +89,7 @@ export async function POST(
   req: Request,
   { params }: { params: Promise<{ email: string }> }
 ) {
+  try {
   const doctorId = await getDoctorSessionId();
   const { email: rawParam } = await params;
   const access = await resolvePatientAccess(rawParam);
@@ -223,4 +224,8 @@ export async function POST(
   }
 
   return NextResponse.json({ lab, egfr, egfrSkipped }, { status: 201 });
+  } catch (err) {
+    console.error("[labs] POST", err);
+    return NextResponse.json({ error: "Não foi possível salvar os exames. Tente novamente." }, { status: 500 });
+  }
 }

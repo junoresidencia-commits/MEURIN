@@ -42,7 +42,10 @@ export async function saveFile(
       contentType: file.type || "application/octet-stream",
       upsert: true,
     });
-    if (error) throw error;
+    if (error) {
+      console.error("[doc-storage] upload", bucket, error);
+      throw new Error("Não foi possível guardar o arquivo.");
+    }
     return { path: relPath, storage: "supabase" };
   }
   // Local

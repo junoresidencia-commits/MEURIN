@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import { DoctorSidebar } from "@/components/DoctorSidebar";
 import { DoctorMobileNav } from "@/components/DoctorMobileNav";
+import { encodePatientParam } from "@/lib/user-errors";
 
 type Draft = {
   title: string;
@@ -46,7 +47,7 @@ export default function RelatoCasoPage() {
     fetch("/api/auth").then((r) => r.json()).then((d) => {
       if (!d.doctor) { router.replace("/medicos/login"); return; }
       setReady(true);
-      fetch(`/api/doctor/patients/${emailParam}/case-report`)
+      fetch(`/api/doctor/patients/${encodePatientParam(emailParam)}/case-report`)
         .then(async (r) => { const j = await r.json(); if (!r.ok) throw new Error(j.error || "Erro"); return j; })
         .then((j) => { setDraft(j.draft); setTimeline(j.timeline || []); setMeta(j.meta); })
         .catch((e) => setErr(e.message));

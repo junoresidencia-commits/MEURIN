@@ -2,6 +2,7 @@
 
 import { useMemo, useState } from "react";
 import { NEPHRO_LABS, labUnit } from "@/lib/labs";
+import { encodePatientParam, toFriendlyMessage } from "@/lib/user-errors";
 
 type Row = { checked: boolean; testKey: string; value: string; unit: string; onConflict: "update" | "keep" };
 type GroupState = { id: string; date: string; rows: Row[] };
@@ -123,17 +124,21 @@ export function ExamReviewModal({
         setSaving(false);
         return;
       }
-      const res = await fetch(`/api/doctor/patients/${emailParam}/labs`, {
+      const res = await fetch(`/api/doctor/patients/${encodePatientParam(emailParam)}/labs`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ results, origin: source || "evolução" }),
       });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || "Não foi possível salvar.");
+      const raw = await res.text().catch(() => "");
+      let data: { error?: string } = {};
+      if (raw.trim()) {
+        try { data = JSON.parse(raw) as { error?: string }; } catch { data = {}; }
+      }
+      if (!res.ok) throw new Error(data.error || "Não foi possível salvar os exames.");
       await onSaved();
       onClose();
     } catch (e) {
-      setErr(e instanceof Error ? e.message : "Erro inesperado.");
+      setErr(toFriendlyMessage(e, "Não foi possível salvar os exames. Tente novamente."));
     } finally {
       setSaving(false);
     }

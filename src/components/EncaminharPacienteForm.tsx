@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { MEDICAL_SPECIALTIES } from "@/lib/medical-specialties";
+import { encodePatientParam } from "@/lib/user-errors";
 
 type TeamDoctor = { id: string; name: string; specialty: string; crm?: string };
 type Allied = { id: string; name: string; registry?: string | null; active?: boolean };
@@ -74,7 +75,7 @@ export function EncaminharPacienteForm({
     setSaving(true); setMsg("");
     try {
       if (alliedRole) {
-        const res = await fetch(`/api/doctor/patients/${emailParam}/care-refer`, {
+        const res = await fetch(`/api/doctor/patients/${encodePatientParam(emailParam)}/care-refer`, {
           method: "POST", headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ role: alliedRole.id, professionalId, reason }),
         });

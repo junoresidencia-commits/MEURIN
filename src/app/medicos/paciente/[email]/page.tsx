@@ -20,7 +20,7 @@ import { guessSexFromName } from "@/lib/sex-guess";
 import { CareTeamPatientCard, CareTimeline } from "@/components/CareTeamPatientCard";
 import { SharePatientWithDoctor } from "@/components/SharePatientWithDoctor";
 import { PdModule } from "@/components/PdModule";
-import { postJson, toFriendlyMessage } from "@/lib/user-errors";
+import { encodePatientParam, postJson, toFriendlyMessage } from "@/lib/user-errors";
 
 type Lab = { id: string; testKey: string; value: number; unit?: string | null; measuredAt: string };
 type Upload = { id: string; name: string; category?: string | null; examDate?: string | null; signedUrl?: string | null };
@@ -120,7 +120,7 @@ export default function ProntuarioPage() {
   const [isPd, setIsPd] = useState(false);
   const [egfrInfo, setEgfrInfo] = useState("");
   useEffect(() => {
-    fetch(`/api/doctor/patients/${emailParam}/profile`).then((r) => r.json()).then((d) => {
+    fetch(`/api/doctor/patients/${encodePatientParam(emailParam)}/profile`).then((r) => r.json()).then((d) => {
       const v = d.profile?.dialise_peritoneal;
       setIsPd(v === true || v === "sim");
     }).catch(() => {});
@@ -165,7 +165,7 @@ export default function ProntuarioPage() {
   const [hasLetterhead, setHasLetterhead] = useState<boolean | null>(null);
 
   const load = useCallback(async () => {
-    const res = await fetch(`/api/doctor/patients/${emailParam}`);
+    const res = await fetch(`/api/doctor/patients/${encodePatientParam(emailParam)}`);
     if (res.status === 401) {
       router.replace("/medicos/login");
       return;
@@ -196,7 +196,7 @@ export default function ProntuarioPage() {
     setApptSaving(true);
     setApptErr("");
     try {
-      const res = await fetch(`/api/doctor/patients/${emailParam}/appointments`, {
+      const res = await fetch(`/api/doctor/patients/${encodePatientParam(emailParam)}/appointments`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ slotStart: `${apptDate}T${apptTime}:00`, careReason: "acompanhamento" }),
@@ -221,7 +221,7 @@ export default function ProntuarioPage() {
     setLabSaving(true);
     setLabErr("");
     try {
-      const res = await fetch(`/api/doctor/patients/${emailParam}/labs`, {
+      const res = await fetch(`/api/doctor/patients/${encodePatientParam(emailParam)}/labs`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -252,7 +252,7 @@ export default function ProntuarioPage() {
     setSaveMsg("");
     try {
       await postJson(
-        `/api/doctor/patients/${emailParam}/notes`,
+        `/api/doctor/patients/${encodePatientParam(emailParam)}/notes`,
         { ...form, sharedWithPatient: shared },
         "Não foi possível salvar a evolução. Tente novamente."
       );
@@ -262,7 +262,11 @@ export default function ProntuarioPage() {
       const detectedClinical = extractClinicalFields(evolutionText);
       setForm({ chiefComplaint: "", history: "", assessment: "", plan: "" });
       setSaveMsg("Evolução salva no prontuário." + (shared ? " Liberada ao paciente." : ""));
-      await load();
+      try {
+        await load();
+      } catch (reloadErr) {
+        console.error("[evolucao] recarregar prontuário", reloadErr);
+      }
       if (groups.length > 0) {
         setReview({ groups });
       }
@@ -843,7 +847,7 @@ function ResearchTab({ emailParam, patientName }: { emailParam: string; patientN
   const [msg, setMsg] = useState("");
 
   useEffect(() => {
-    fetch(`/api/doctor/patients/${emailParam}/research`)
+    fetch(`/api/doctor/patients/${encodePatientParam(emailParam)}/research`)
       .then((r) => r.json())
       .then((d) => {
         if (d.case) { setCategories(d.case.categories || []); setNote(d.case.note || ""); }
@@ -859,7 +863,7 @@ function ResearchTab({ emailParam, patientName }: { emailParam: string; patientN
     setSaving(true);
     setMsg("");
     try {
-      const res = await fetch(`/api/doctor/patients/${emailParam}/research`, {
+      const res = await fetch(`/api/doctor/patients/${encodePatientParam(emailParam)}/research`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ categories, note, patientName }),
@@ -976,12 +980,12 @@ function EgfrReadinessBanner({ emailParam, birthdate, sex, patientName, onFixed 
   async function saveDemographics(patch: { sex?: string; birthdate?: string }) {
     setBusy(true); setMsg("");
     try {
-      const res = await fetch(`/api/doctor/patients/${emailParam}/demographics`, {
+      const res = await fetch(`/api/doctor/patients/${encodePatientParam(emailParam)}/demographics`, {
         method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(patch),
       });
       if (!res.ok) { const d = await res.json().catch(() => ({})); throw new Error(d.error || "Erro"); }
       // Recalcula a TFGe para creatinina/cistatina já lançadas.
-      await fetch(`/api/doctor/patients/${emailParam}/labs/recompute-egfr`, { method: "POST" });
+      await fetch(`/api/doctor/patients/${encodePatientParam(emailParam)}/labs/recompute-egfr`, { method: "POST" });
       setMsg("Dados salvos. TFGe recalculada quando havia creatinina.");
       await onFixed();
     } catch (e) { setMsg(e instanceof Error ? e.message : "Erro"); }
@@ -1033,7 +1037,7 @@ function ResetAccessButton({ emailParam }: { emailParam: string }) {
     if (!window.confirm("Redefinir o acesso deste paciente para a senha 123456? No próximo login, ele criará uma nova senha.")) return;
     setBusy(true); setMsg("");
     try {
-      const res = await fetch(`/api/doctor/patients/${emailParam}/reset-access`, { method: "POST" });
+      const res = await fetch(`/api/doctor/patients/${encodePatientParam(emailParam)}/reset-access`, { method: "POST" });
       const d = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(d.error || "Erro");
       setMsg("Acesso redefinido para 123456.");
@@ -1059,7 +1063,7 @@ function NutritionReferralBox({ emailParam }: { emailParam: string }) {
   async function send() {
     setSaving(true); setMsg(null);
     try {
-      const res = await fetch(`/api/doctor/patients/${emailParam}/nutrition-referral`, {
+      const res = await fetch(`/api/doctor/patients/${encodePatientParam(emailParam)}/nutrition-referral`, {
         method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(form),
       });
       const d = await res.json().catch(() => ({}));
@@ -1111,7 +1115,7 @@ function DoctorNutritionView({ emailParam }: { emailParam: string }) {
   } | null>(null);
 
   useEffect(() => {
-    fetch(`/api/doctor/patients/${emailParam}/nutrition`).then((r) => (r.ok ? r.json() : null)).then(setData).catch(() => {});
+    fetch(`/api/doctor/patients/${encodePatientParam(emailParam)}/nutrition`).then((r) => (r.ok ? r.json() : null)).then(setData).catch(() => {});
   }, [emailParam]);
 
   if (!data) return null;

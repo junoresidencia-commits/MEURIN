@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { EncaminharPacienteForm } from "@/components/EncaminharPacienteForm";
+import { encodePatientParam } from "@/lib/user-errors";
 
 type Share = {
   id: string;
@@ -36,7 +37,7 @@ export function SharePatientWithDoctor({ emailParam, patientName }: { emailParam
   const [showAudit, setShowAudit] = useState(false);
 
   const load = useCallback(async () => {
-    const d = await fetch(`/api/doctor/patients/${emailParam}/shares`).then((r) => r.json());
+    const d = await fetch(`/api/doctor/patients/${encodePatientParam(emailParam)}/shares`).then((r) => r.json());
     if (d.shares) setData(d);
   }, [emailParam]);
 
