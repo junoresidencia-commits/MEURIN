@@ -1,7 +1,6 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { EncaminharPacienteForm } from "@/components/EncaminharPacienteForm";
 import { encodePatientParam } from "@/lib/user-errors";
 
 type Share = {
@@ -31,9 +30,8 @@ const ACTION_LABEL: Record<string, string> = {
   documento_criado: "Criou documento",
 };
 
-export function SharePatientWithDoctor({ emailParam, patientName }: { emailParam: string; patientName?: string }) {
+export function SharePatientWithDoctor({ emailParam }: { emailParam: string; patientName?: string }) {
   const [data, setData] = useState<Payload | null>(null);
-  const [open, setOpen] = useState(false);
   const [showAudit, setShowAudit] = useState(false);
 
   const load = useCallback(async () => {
@@ -54,11 +52,8 @@ export function SharePatientWithDoctor({ emailParam, patientName }: { emailParam
       <div className="flex flex-wrap items-start justify-between gap-2">
         <div>
           <p className="text-xs font-bold uppercase tracking-wider text-[var(--gold)]">Equipe médica</p>
-          <p className="mt-0.5 text-sm text-[var(--text-muted)]">Um paciente, um prontuário. Escolha a especialidade e o profissional da sua equipe.</p>
+          <p className="mt-0.5 text-sm text-[var(--text-muted)]">Quem já acompanha este prontuário. Para incluir alguém, use Encaminhar no topo.</p>
         </div>
-        <button type="button" className="btn-gold text-sm" onClick={() => setOpen((v) => !v)}>
-          {open ? "Fechar" : "Encaminhar"}
-        </button>
       </div>
 
       <div className="mt-3 space-y-2">
@@ -87,16 +82,6 @@ export function SharePatientWithDoctor({ emailParam, patientName }: { emailParam
           </div>
         ))}
       </div>
-
-      {open && (
-        <div className="mt-4 border-t border-[var(--border)] pt-3">
-          <EncaminharPacienteForm
-            emailParam={emailParam}
-            patientName={patientName}
-            onDone={() => { setOpen(false); load(); }}
-          />
-        </div>
-      )}
 
       <button type="button" className="mt-3 text-xs font-semibold text-[var(--gold)]" onClick={() => setShowAudit((v) => !v)}>
         {showAudit ? "Ocultar histórico de acesso" : "Ver histórico de acesso"}
