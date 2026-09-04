@@ -20,8 +20,10 @@ import { PatientEditForm } from "@/components/PatientEditForm";
 import { guessSexFromName } from "@/lib/sex-guess";
 import { CareTeamPatientCard, CareTimeline } from "@/components/CareTeamPatientCard";
 import { SharePatientWithDoctor } from "@/components/SharePatientWithDoctor";
+import { EncaminharHeaderButton } from "@/components/EncaminharHeaderButton";
 import { PdModule } from "@/components/PdModule";
 import { encodePatientParam, postJson, toFriendlyMessage } from "@/lib/user-errors";
+import { ageFromBirthdate } from "@/lib/egfr";
 
 type Lab = { id: string; testKey: string; value: number; unit?: string | null; measuredAt: string };
 type Upload = { id: string; name: string; category?: string | null; examDate?: string | null; signedUrl?: string | null };
@@ -413,6 +415,8 @@ export default function ProntuarioPage() {
   const weight = records.find((r) => r.kind === "weight");
   const sinais = records.filter((r) => r.kind !== "symptom");
   const sintomas = records.filter((r) => r.kind === "symptom");
+  const age = ageFromBirthdate(patient?.birthdate);
+  const patientLine = ["Paciente", age != null ? `${age} anos` : null, patient?.city].filter(Boolean).join(" · ");
 
   if (loading) {
     return <div className="mx-auto max-w-3xl px-5 py-20 text-[var(--text-muted)]">Carregando prontuário…</div>;
@@ -432,25 +436,21 @@ export default function ProntuarioPage() {
   }
 
   return (
-    <div className="mx-auto max-w-3xl px-5 py-10">
+    <div className="mx-auto max-w-6xl px-5 py-10">
       <Link href="/medicos/painel" className="text-sm font-semibold text-[var(--gold)]">
         ← Painel
       </Link>
 
-      <div className="panel mt-3 flex items-center gap-4">
+      <div className="panel mt-3 flex flex-wrap items-center gap-4">
         <span className="grid h-14 w-14 place-items-center rounded-2xl bg-[var(--gold-soft)] text-lg font-extrabold text-[var(--gold)]">
           {patient?.name.slice(0, 2).toUpperCase()}
         </span>
-        <div className="flex-1">
+        <div className="min-w-0 flex-1">
           <h1 className="font-display text-2xl font-extrabold text-[var(--text)]">{patient?.name}</h1>
-          <p className="text-sm text-[var(--text-muted)]">
-            {[patient?.city, patient?.email].filter(Boolean).join(" · ")}
-          </p>
+          <p className="text-sm text-[var(--text-muted)]">{patientLine}</p>
         </div>
-        <div className="flex flex-col gap-2">
-          <button type="button" className="btn-ghost text-sm" onClick={() => setEditingPatient((v) => !v)}>{editingPatient ? "Fechar edição" : "Editar dados"}</button>
-          <ResetAccessButton emailParam={emailParam} />
-        </div>
+        <button type="button" className="btn-ghost text-sm" onClick={() => setEditingPatient((v) => !v)}>{editingPatient ? "Fechar edição" : "Editar dados"}</button>
+        <ResetAccessButton emailParam={emailParam} />
       </div>
 
       {editingPatient && patient && (
@@ -462,18 +462,9 @@ export default function ProntuarioPage() {
         />
       )}
 
-      <div className="mt-3">
-        <AttendanceControl patientKey={emailParam} />
-      </div>
-
-      <SharePatientWithDoctor emailParam={emailParam} patientName={patient?.name} />
-      <CareTeamPatientCard emailParam={emailParam} />
-
-      {/* Cabeçalho clínico */}
-      <div className="mt-4 grid grid-cols-3 gap-3">
-        <Metric label="PA (casa)" value={bp ? `${bp.systolic}/${bp.diastolic}` : "—"} unit={bp ? "mmHg" : ""} />
-        <Metric label="Glicemia" value={glucose ? String(glucose.glucoseMgDl) : "—"} unit={glucose ? "mg/dL" : ""} />
-        <Metric label="Peso" value={weight ? String(weight.weightKg).replace(".", ",") : "—"} unit={weight ? "kg" : ""} />
+      <div className="mt-3 flex flex-wrap items-center gap-2">
+        <AttendanceControl patientKey={emailParam} compact />
+        <EncaminharHeaderButton emailParam={emailParam} patientName={patient?.name} />
       </div>
 
       <div className="mt-6 flex gap-2 overflow-x-auto pb-1">
@@ -521,7 +512,7 @@ export default function ProntuarioPage() {
         {tab === "perfil" && <ClinicalProfileEditor emailParam={emailParam} />}
 
         {tab === "evolucao" && (
-          <div className="space-y-4">
+          <div className="grid items-start gap-4 lg:grid-cols-2">
             <div className="panel space-y-3">
               <p className="text-xs font-bold uppercase tracking-wider text-[var(--gold)]">
                 Nova evolução / consulta
@@ -545,6 +536,12 @@ export default function ProntuarioPage() {
                 Data em cima, exames embaixo: o sistema identifica e já lança no histórico. Só pede conferência se faltar a data ou se o mesmo exame já existir naquela data com outro valor.
               </p>
 
+              <div className="grid grid-cols-3 gap-2">
+                <Metric label="PA (casa)" value={bp ? `${bp.systolic}/${bp.diastolic}` : "—"} unit={bp ? "mmHg" : ""} />
+                <Metric label="Glicemia" value={glucose ? String(glucose.glucoseMgDl) : "—"} unit={glucose ? "mg/dL" : ""} />
+                <Metric label="Peso" value={weight ? String(weight.weightKg).replace(".", ",") : "—"} unit={weight ? "kg" : ""} />
+              </div>
+
               <label className="flex items-center gap-2 text-sm text-[var(--text-soft)]">
                 <input type="checkbox" checked={shared} onChange={(e) => setShared(e.target.checked)} className="h-4 w-4 accent-[var(--gold)]" />
                 Liberar um resumo desta evolução para o paciente ver
@@ -560,28 +557,14 @@ export default function ProntuarioPage() {
               <ReturnPicker patientKey={emailParam} />
             </div>
 
-            <p className="text-xs font-bold uppercase tracking-wider text-[var(--gold)]">Evoluções anteriores</p>
-            <p className="text-xs text-[var(--text-muted)]">Cada médico assina a própria evolução. O texto já registrado por outro profissional não pode ser alterado.</p>
-            {notes.length === 0 && <p className="text-[var(--text-muted)]">Nenhuma evolução registrada.</p>}
-            {notes.map((n) => (
-              <div key={n.id} className="panel space-y-2">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-xs font-bold uppercase tracking-wider text-[var(--gold)]">
-                      {new Date(n.createdAt).toLocaleDateString("pt-BR")} — {n.doctorSpecialty || "Medicina"}
-                    </p>
-                    <p className="text-sm font-semibold text-[var(--text)]">{n.doctorName} · {fmt(n.createdAt)}</p>
-                  </div>
-                  <span className={`rounded-full px-2.5 py-1 text-[11px] font-bold ${n.sharedWithPatient ? "bg-[#eaf8f2] text-[#1c8c70]" : "bg-[var(--border)] text-[var(--text-muted)]"}`}>
-                    {n.sharedWithPatient ? "Liberada ao paciente" : "Interna"}
-                  </span>
-                </div>
-                {n.chiefComplaint && <p className="text-sm text-[var(--text-soft)]"><b>Queixa:</b> {n.chiefComplaint}</p>}
-                {n.history && <p className="whitespace-pre-wrap text-sm text-[var(--text-soft)]">{n.history}</p>}
-                {n.assessment && <p className="text-sm text-[var(--text-soft)]"><b>Avaliação:</b> {n.assessment}</p>}
-                {n.plan && <p className="text-sm text-[var(--text-soft)]"><b>Conduta:</b> {n.plan}</p>}
-              </div>
-            ))}
+            <div className="space-y-3 lg:max-h-[calc(100vh-8rem)] lg:overflow-y-auto lg:pr-1">
+              <p className="text-xs font-bold uppercase tracking-wider text-[var(--gold)]">Evoluções anteriores</p>
+              <p className="text-xs text-[var(--text-muted)]">Cada médico assina a própria evolução. O texto já registrado por outro profissional não pode ser alterado.</p>
+              {notes.length === 0 && <p className="text-[var(--text-muted)]">Nenhuma evolução registrada.</p>}
+              {notes.map((n) => (
+                <PreviousNote key={n.id} note={n} />
+              ))}
+            </div>
           </div>
         )}
 
@@ -1007,6 +990,28 @@ function ResearchTab({ emailParam, patientName }: { emailParam: string; patientN
         </div>
         <p className="mt-2 text-xs text-[var(--text-muted)]">Os dados usados em pesquisa são anonimizados e separados do prontuário identificável.</p>
       </div>
+    </div>
+  );
+}
+
+function PreviousNote({ note: n }: { note: Note }) {
+  return (
+    <div className="panel space-y-2">
+      <div className="flex items-center justify-between gap-2">
+        <div>
+          <p className="text-xs font-bold uppercase tracking-wider text-[var(--gold)]">
+            {new Date(n.createdAt).toLocaleDateString("pt-BR")} — {n.doctorSpecialty || "Medicina"}
+          </p>
+          <p className="text-sm font-semibold text-[var(--text)]">{n.doctorName} · {fmt(n.createdAt)}</p>
+        </div>
+        <span className={`shrink-0 rounded-full px-2.5 py-1 text-[11px] font-bold ${n.sharedWithPatient ? "bg-[#eaf8f2] text-[#1c8c70]" : "bg-[var(--border)] text-[var(--text-muted)]"}`}>
+          {n.sharedWithPatient ? "Liberada ao paciente" : "Interna"}
+        </span>
+      </div>
+      {n.chiefComplaint && <p className="text-sm text-[var(--text-soft)]"><b>Queixa:</b> {n.chiefComplaint}</p>}
+      {n.history && <p className="whitespace-pre-wrap text-sm text-[var(--text-soft)]">{n.history}</p>}
+      {n.assessment && <p className="text-sm text-[var(--text-soft)]"><b>Avaliação:</b> {n.assessment}</p>}
+      {n.plan && <p className="text-sm text-[var(--text-soft)]"><b>Conduta:</b> {n.plan}</p>}
     </div>
   );
 }

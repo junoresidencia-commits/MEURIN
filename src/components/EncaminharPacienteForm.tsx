@@ -27,10 +27,13 @@ function matchesSpec(personSpec: string, selected: string) {
 export function EncaminharPacienteForm({
   emailParam,
   patientName,
+  restrict,
   onDone,
 }: {
   emailParam: string;
   patientName?: string;
+  /** Só médicos da equipe, só assistencial, ou os dois. */
+  restrict?: "medico" | "assistencial";
   onDone?: () => void;
 }) {
   const [peers, setPeers] = useState<TeamDoctor[]>([]);
@@ -107,13 +110,17 @@ export function EncaminharPacienteForm({
         <span className="mb-1 block text-xs font-semibold text-[var(--text-muted)]">Especialidade</span>
         <select className="input-field" value={specialty} onChange={(e) => { setSpecialty(e.target.value); setProfessionalId(""); setMsg(""); }}>
           <option value="">Selecione</option>
-          <optgroup label="Médicos">
-            {MEDICAL_SPECIALTIES.map((s) => <option key={s} value={s}>{s}</option>)}
-            {extraDoctorSpecs.map((s) => <option key={s} value={s}>{s}</option>)}
-          </optgroup>
-          <optgroup label="Equipe assistencial">
-            {ALLIED.map((a) => <option key={a.id} value={a.id}>{a.label}</option>)}
-          </optgroup>
+          {restrict !== "assistencial" && (
+            <optgroup label="Médicos">
+              {MEDICAL_SPECIALTIES.map((s) => <option key={s} value={s}>{s}</option>)}
+              {extraDoctorSpecs.map((s) => <option key={s} value={s}>{s}</option>)}
+            </optgroup>
+          )}
+          {restrict !== "medico" && (
+            <optgroup label="Equipe assistencial">
+              {ALLIED.map((a) => <option key={a.id} value={a.id}>{a.label}</option>)}
+            </optgroup>
+          )}
         </select>
       </label>
       <label className="block">
