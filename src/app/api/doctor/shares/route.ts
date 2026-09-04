@@ -68,13 +68,17 @@ export async function POST(req: Request) {
 
   await upsertPeer(from.id, to.id);
   await upsertPeer(to.id, from.id);
-  await writeAudit({
-    doctorId: from.id,
-    doctorName: from.name,
-    patientKey: access.key,
-    action: "compartilhou",
-    detail: `${to.name} (${to.specialty || "Medicina"})${reason ? ` — ${reason}` : ""}`,
-  });
+  try {
+    await writeAudit({
+      doctorId: from.id,
+      doctorName: from.name,
+      patientKey: access.key,
+      action: "compartilhou",
+      detail: `${to.name} (${to.specialty || "Medicina"})${reason ? ` — ${reason}` : ""}`,
+    });
+  } catch (err) {
+    console.error("[shares] audit", err);
+  }
 
   const openKey = access.email || access.key;
   await sendNotification({
@@ -114,12 +118,16 @@ export async function PATCH(req: Request) {
 
   const revoked = await revokeShare(id, doctorId);
   const actor = await getDoctorById(doctorId);
-  await writeAudit({
-    doctorId,
-    doctorName: actor?.name || null,
-    patientKey: share.patientKey,
-    action: "revogou_acesso",
-    detail: `${share.toDoctorName || share.toDoctorId}`,
-  });
+  try {
+    await writeAudit({
+      doctorId,
+      doctorName: actor?.name || null,
+      patientKey: share.patientKey,
+      action: "revogou_acesso",
+      detail: `${share.toDoctorName || share.toDoctorId}`,
+    });
+  } catch (err) {
+    console.error("[shares] audit", err);
+  }
   return NextResponse.json({ share: revoked });
 }

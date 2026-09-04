@@ -20,6 +20,7 @@ import { guessSexFromName } from "@/lib/sex-guess";
 import { CareTeamPatientCard, CareTimeline } from "@/components/CareTeamPatientCard";
 import { SharePatientWithDoctor } from "@/components/SharePatientWithDoctor";
 import { PdModule } from "@/components/PdModule";
+import { postJson, toFriendlyMessage } from "@/lib/user-errors";
 
 type Lab = { id: string; testKey: string; value: number; unit?: string | null; measuredAt: string };
 type Upload = { id: string; name: string; category?: string | null; examDate?: string | null; signedUrl?: string | null };
@@ -250,13 +251,11 @@ export default function ProntuarioPage() {
     setSaveErr("");
     setSaveMsg("");
     try {
-      const res = await fetch(`/api/doctor/patients/${emailParam}/notes`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ ...form, sharedWithPatient: shared }),
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || "Não foi possível salvar.");
+      await postJson(
+        `/api/doctor/patients/${emailParam}/notes`,
+        { ...form, sharedWithPatient: shared },
+        "Não foi possível salvar a evolução. Tente novamente."
+      );
       // Leitura automática: detecta exames (em VÁRIAS datas) E dados clínicos na evolução.
       const evolutionText = [form.chiefComplaint, form.history, form.assessment, form.plan].filter(Boolean).join("\n");
       const groups = parseLabGroups(evolutionText);
@@ -271,7 +270,7 @@ export default function ProntuarioPage() {
         setClinicalReview(detectedClinical);
       }
     } catch (e) {
-      setSaveErr(e instanceof Error ? e.message : "Erro inesperado.");
+      setSaveErr(toFriendlyMessage(e, "Não foi possível salvar a evolução. Tente novamente."));
     } finally {
       setSaving(false);
     }

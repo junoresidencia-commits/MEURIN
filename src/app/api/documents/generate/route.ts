@@ -116,13 +116,17 @@ export async function POST(req: Request) {
       history: [{ at: now, by: doctor.name, action: "criado", detail: `Documento gerado (${type}).` }],
     });
 
-    await writeAudit({
-      doctorId,
-      doctorName: doctor.name,
-      patientKey: access.key,
-      action: "documento_criado",
-      detail: `${type}: ${filledTitle}`,
-    });
+    try {
+      await writeAudit({
+        doctorId,
+        doctorName: doctor.name,
+        patientKey: access.key,
+        action: "documento_criado",
+        detail: `${type}: ${filledTitle}`,
+      });
+    } catch (err) {
+      console.error("[documents/generate] audit", err);
+    }
 
     return NextResponse.json({ ok: true, id: doc.id, pdfUrl: `/api/documents/${doc.id}/pdf` }, { status: 201 });
   } catch (err) {
