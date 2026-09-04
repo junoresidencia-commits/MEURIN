@@ -138,6 +138,15 @@ export function clinicalKey(p: Patient): string {
   return p.email ? p.email.toLowerCase().trim() : `pid:${p.id}`;
 }
 
+/** Localiza o cadastro existente pela chave clínica (e-mail ou pid:<id>) — não cria outro paciente. */
+export async function findPatientByClinicalKey(key: string): Promise<Patient | null> {
+  const raw = (key || "").trim();
+  if (!raw) return null;
+  if (raw.includes("@")) return findByEmailAny(raw);
+  const id = raw.startsWith("pid:") ? raw.slice(4) : raw;
+  return id ? getPatient(id) : null;
+}
+
 export type NewPatient = Omit<Patient, "id" | "createdAt" | "status"> & {
   status?: Patient["status"];
 };

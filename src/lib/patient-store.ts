@@ -40,6 +40,7 @@ export interface ClinicalNote {
   patientEmail: string;
   doctorId: string;
   doctorName: string;
+  doctorSpecialty?: string | null;
   chiefComplaint?: string | null;
   history?: string | null;
   assessment?: string | null;
@@ -326,6 +327,7 @@ function mapNoteRow(row: Record<string, unknown>): ClinicalNote {
     patientEmail: String(row.patient_email),
     doctorId: String(row.doctor_id),
     doctorName: String(row.doctor_name),
+    doctorSpecialty: (row.doctor_specialty as string | null) ?? (row.doctorSpecialty as string | null) ?? null,
     chiefComplaint: (row.chief_complaint as string | null) ?? null,
     history: (row.history as string | null) ?? null,
     assessment: (row.assessment as string | null) ?? null,
@@ -347,7 +349,7 @@ export async function addClinicalNote(
 
   if (supabaseActive("clinical_notes")) {
     const supabase = getSupabaseAdmin()!;
-    const { error } = await supabase.from("clinical_notes").insert({
+    const payload: Record<string, unknown> = {
       id: note.id,
       patient_email: note.patientEmail,
       doctor_id: note.doctorId,
@@ -359,7 +361,13 @@ export async function addClinicalNote(
       plan: note.plan ?? null,
       shared_with_patient: note.sharedWithPatient,
       created_at: note.createdAt,
-    });
+    };
+    if (note.doctorSpecialty) payload.doctor_specialty = note.doctorSpecialty;
+    let { error } = await supabase.from("clinical_notes").insert(payload);
+    if (error && (error.code === "PGRST204" || /doctor_specialty|column|schema cache/i.test(error.message || ""))) {
+      delete payload.doctor_specialty;
+      ({ error } = await supabase.from("clinical_notes").insert(payload));
+    }
     if (error) {
       if (isMissingTableError(error)) missingTables.add("clinical_notes");
       else throw error;

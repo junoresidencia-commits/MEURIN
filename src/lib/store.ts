@@ -235,6 +235,44 @@ export async function deleteDoctor(id: string): Promise<void> {
   }
 }
 
+export type DoctorPublicCard = {
+  id: string;
+  name: string;
+  specialty: string;
+  crm: string;
+  crmState: string | null;
+  rqe: string | null;
+};
+
+export function toDoctorPublicCard(d: Doctor): DoctorPublicCard {
+  return {
+    id: d.id,
+    name: d.name,
+    specialty: d.specialty || "",
+    crm: d.crm || "",
+    crmState: d.crmState || null,
+    rqe: d.rqe || null,
+  };
+}
+
+/** Busca médicos aprovados da plataforma (nome, especialidade ou CRM). Nunca lista pacientes. */
+export async function searchApprovedDoctors(q: string, excludeId: string, specialty?: string): Promise<DoctorPublicCard[]> {
+  const db = await readDb();
+  const n = (q || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().trim();
+  const spec = (specialty || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().trim();
+  return db.doctors
+    .filter((d) => d.id !== excludeId && (d.status ?? "approved") === "approved")
+    .filter((d) => {
+      if (spec && !(d.specialty || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().includes(spec)) return false;
+      if (!n) return Boolean(spec);
+      return [d.name, d.specialty, d.crm, d.email].some((x) =>
+        (x || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().includes(n)
+      );
+    })
+    .slice(0, 25)
+    .map(toDoctorPublicCard);
+}
+
 /** Busca um médico pelo id (Supabase direto ou fallback local). */
 export async function getDoctorById(id: string): Promise<Doctor | null> {
   const supabase = getSupabaseAdmin();

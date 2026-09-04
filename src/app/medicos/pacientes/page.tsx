@@ -27,6 +27,7 @@ type Row = {
   isCreated: boolean;
   lastConsultation: string | null;
   nextConsultation: string | null;
+  shared?: boolean;
 };
 
 type FilterId = "todos" | "ativos" | "drc" | "dialise" | "glomerulopatias" | "transplante" | "pediatria" | "retorno" | "alertas";
@@ -234,6 +235,7 @@ function PacientesInner() {
                         {r.flags.dialise && <Chip>Diálise</Chip>}
                         {r.flags.transplante && <Chip>Transplante</Chip>}
                         {r.flags.glomerulopatia && <Chip>Glomerulopatia</Chip>}
+                        {r.shared && <Chip>Compartilhado</Chip>}
                         {r.city && <span className="text-xs text-[var(--text-muted)]">{r.city}</span>}
                       </div>
                       </div>

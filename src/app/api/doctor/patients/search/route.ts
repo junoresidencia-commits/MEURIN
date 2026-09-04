@@ -1,7 +1,8 @@
 import { NextResponse } from "next/server";
 import { getDoctorSessionId } from "@/lib/auth";
 import { readDb } from "@/lib/store";
-import { listPatientsByDoctor } from "@/lib/patients-store";
+import { findPatientByClinicalKey, listPatientsByDoctor } from "@/lib/patients-store";
+import { listSharesForDoctor } from "@/lib/patient-shares-store";
 
 const norm = (s: string) => s.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().trim();
 const digits = (s: string) => s.replace(/\D/g, "");
@@ -47,6 +48,24 @@ export async function GET(req: Request) {
     byEmail.set(email, entry);
   }
   rows.push(...byEmail.values());
+
+  const seen = new Set(rows.map((r) => r.key.toLowerCase()));
+  const { incoming } = await listSharesForDoctor(doctorId);
+  for (const share of incoming.filter((s) => s.status === "active")) {
+    const patient = await findPatientByClinicalKey(share.patientKey);
+    const key = patient?.id || share.patientKey;
+    if (seen.has(key.toLowerCase()) || (patient?.email && seen.has(patient.email.toLowerCase()))) continue;
+    seen.add(key.toLowerCase());
+    rows.push({
+      key,
+      name: patient?.name || share.patientName || share.patientKey,
+      city: patient?.address || "",
+      phone: patient?.phone || "",
+      cpf: patient?.cpf || null,
+      isCreated: Boolean(patient),
+      lastSlot: share.createdAt,
+    });
+  }
 
   let result = rows;
   if (qn) {

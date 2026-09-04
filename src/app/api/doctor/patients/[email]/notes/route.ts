@@ -3,6 +3,7 @@ import { getDoctorSessionId } from "@/lib/auth";
 import { readDb } from "@/lib/store";
 import { addClinicalNote } from "@/lib/patient-store";
 import { resolvePatientAccess } from "@/lib/doctor-access";
+import { writeAudit } from "@/lib/patient-shares-store";
 
 export async function POST(
   req: Request,
@@ -38,11 +39,20 @@ export async function POST(
     patientEmail: access.key,
     doctorId: doctor.id,
     doctorName: doctor.name,
+    doctorSpecialty: doctor.specialty || null,
     chiefComplaint: chiefComplaint || null,
     history: history || null,
     assessment: assessment || null,
     plan: plan || null,
     sharedWithPatient: Boolean(body.sharedWithPatient),
+  });
+
+  await writeAudit({
+    doctorId: doctor.id,
+    doctorName: doctor.name,
+    patientKey: access.key,
+    action: "evolucao_criada",
+    detail: doctor.specialty || null,
   });
 
   return NextResponse.json({ note }, { status: 201 });

@@ -1,7 +1,8 @@
 import "server-only";
 import { getDoctorSessionId } from "./auth";
 import { readDb } from "./store";
-import { clinicalKey, getPatient, findByEmailAny } from "./patients-store";
+import { clinicalKey, getPatient, findByEmailAny, findPatientByClinicalKey, type Patient } from "./patients-store";
+import { hasActiveShareAny } from "./patient-shares-store";
 
 export interface PatientAccess {
   allowed: boolean;
@@ -26,10 +27,51 @@ export interface PatientAccess {
   }[];
 }
 
+function emptyAccess(partial: Partial<PatientAccess> & Pick<PatientAccess, "key" | "email">): PatientAccess {
+  return {
+    allowed: false,
+    name: "",
+    city: "",
+    phone: "",
+    birthdate: null,
+    sex: null,
+    cpf: null,
+    cns: null,
+    motherName: null,
+    isCreated: false,
+    bookings: [],
+    ...partial,
+  };
+}
+
+function fromPatient(patient: Patient, bookings: PatientAccess["bookings"]): PatientAccess {
+  const key = clinicalKey(patient);
+  return {
+    allowed: true,
+    key,
+    name: patient.name,
+    city: patient.address || "",
+    phone: patient.phone || "",
+    email: patient.email || "",
+    birthdate: patient.birthdate || null,
+    sex: patient.sex || null,
+    cpf: patient.cpf || null,
+    cns: patient.cns || null,
+    motherName: patient.motherName || null,
+    isCreated: true,
+    bookings,
+  };
+}
+
+async function allowedViaShare(doctorId: string, ...keys: string[]): Promise<boolean> {
+  return hasActiveShareAny(doctorId, keys.filter(Boolean));
+}
+
 /**
  * Resolve o acesso do médico logado a um paciente identificado por `param`,
  * que pode ser um e-mail (paciente vindo de agendamento) ou o id de um paciente
- * criado pelo médico. Autoriza por vínculo de consulta OU por posse do cadastro.
+ * criado pelo médico. Autoriza por vínculo de consulta, posse do cadastro
+ * OU compartilhamento ativo (paciente ↔ profissional). Não cria outro cadastro.
  */
 export async function resolvePatientAccess(param: string): Promise<PatientAccess | null> {
   const doctorId = await getDoctorSessionId();
@@ -81,46 +123,62 @@ export async function resolvePatientAccess(param: string): Promise<PatientAccess
     // (paciente criado pelo médico que ainda não tem agendamento).
     const owned = await findByEmailAny(email);
     if (owned && owned.doctorId === doctorId) {
+      return fromPatient(owned, []);
+    }
+    if (owned && await allowedViaShare(doctorId, email, clinicalKey(owned), owned.id, `pid:${owned.id}`)) {
+      return fromPatient(owned, bookingsForEmail(clinicalKey(owned)));
+    }
+    if (await allowedViaShare(doctorId, email)) {
       return {
         allowed: true,
-        key: clinicalKey(owned),
-        name: owned.name,
-        city: owned.address || "",
-        phone: owned.phone || "",
+        key: email,
+        name: email,
+        city: "",
+        phone: "",
         email,
-        birthdate: owned.birthdate || null,
-        sex: owned.sex || null,
-        cpf: owned.cpf || null,
-        cns: owned.cns || null,
-        motherName: owned.motherName || null,
-        isCreated: true,
+        birthdate: null,
+        sex: null,
+        cpf: null,
+        cns: null,
+        motherName: null,
+        isCreated: false,
         bookings: [],
       };
     }
-    return { allowed: false, key: email, name: "", city: "", phone: "", email, birthdate: null, sex: null, cpf: null, cns: null, motherName: null, isCreated: false, bookings: [] };
+    return emptyAccess({ key: email, email });
   }
 
   // Paciente criado pelo médico (param = id ou chave clínica "pid:<id>")
   const patientId = decoded.startsWith("pid:") ? decoded.slice(4) : decoded;
   const patient = await getPatient(patientId);
-  if (!patient || patient.doctorId !== doctorId) {
-    return { allowed: false, key: "", name: "", city: "", phone: "", email: "", birthdate: null, sex: null, cpf: null, cns: null, motherName: null, isCreated: true, bookings: [] };
+  if (patient && patient.doctorId === doctorId) {
+    const key = clinicalKey(patient);
+    return fromPatient(patient, bookingsForEmail(key));
   }
-  const key = clinicalKey(patient);
-  return {
-    allowed: true,
-    key,
-    name: patient.name,
-    city: patient.address || "",
-    phone: patient.phone || "",
-    email: patient.email || "",
-    birthdate: patient.birthdate || null,
-    sex: patient.sex || null,
-    cpf: patient.cpf || null,
-    cns: patient.cns || null,
-    motherName: patient.motherName || null,
-    isCreated: true,
-    // Consultas agendadas ficam sob a mesma chave clínica (email ou pid:<id>).
-    bookings: bookingsForEmail(key),
-  };
+  if (patient) {
+    const key = clinicalKey(patient);
+    if (await allowedViaShare(doctorId, decoded, key, patient.id, `pid:${patient.id}`, patient.email || "")) {
+      return fromPatient(patient, bookingsForEmail(key));
+    }
+  }
+  if (await allowedViaShare(doctorId, decoded, `pid:${patientId}`, patientId)) {
+    const shared = await findPatientByClinicalKey(decoded) || await findPatientByClinicalKey(`pid:${patientId}`);
+    if (shared) return fromPatient(shared, bookingsForEmail(clinicalKey(shared)));
+    return {
+      allowed: true,
+      key: decoded.startsWith("pid:") ? decoded : `pid:${patientId}`,
+      name: decoded,
+      city: "",
+      phone: "",
+      email: "",
+      birthdate: null,
+      sex: null,
+      cpf: null,
+      cns: null,
+      motherName: null,
+      isCreated: true,
+      bookings: [],
+    };
+  }
+  return emptyAccess({ key: "", email: "", isCreated: true });
 }

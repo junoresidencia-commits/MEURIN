@@ -8,6 +8,7 @@ import { addDocument } from "@/lib/patient-store";
 import { getLetterhead, type LetterheadArea } from "@/lib/letterheads-store";
 import { LETTERHEADS_BUCKET, DOCPDF_BUCKET, readFile, saveFile } from "@/lib/doc-storage";
 import { buildDocumentPdf, fillFields, type DocBackground } from "@/lib/document-engine";
+import { writeAudit } from "@/lib/patient-shares-store";
 
 export const maxDuration = 60;
 
@@ -113,6 +114,14 @@ export async function POST(req: Request) {
       version: 1,
       groupId: uuid(),
       history: [{ at: now, by: doctor.name, action: "criado", detail: `Documento gerado (${type}).` }],
+    });
+
+    await writeAudit({
+      doctorId,
+      doctorName: doctor.name,
+      patientKey: access.key,
+      action: "documento_criado",
+      detail: `${type}: ${filledTitle}`,
     });
 
     return NextResponse.json({ ok: true, id: doc.id, pdfUrl: `/api/documents/${doc.id}/pdf` }, { status: 201 });
