@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { PatientNav } from "@/components/PatientNav";
+import { whatsappTo } from "@/lib/phone";
 
 type Track = { key: string; label: string; unit: string; total: number; goal: number | null; status: "verde" | "amarelo" | "vermelho" | "estimativa"; pct: number | null };
 type Entry = { id: string; kind: "alimento" | "liquido"; meal?: string | null; timeLabel?: string | null; food: string; grams?: number | null; volumeMl?: number | null; household?: string | null; nutrients: Record<string, number>; note?: string | null; photoUrl?: string | null };
@@ -13,7 +14,29 @@ type Food = { id: string; name: string; state?: string; source: string; measure?
 type PlanItem = { food?: string; grams?: number | string; household?: string; note?: string };
 type PlanMeal = { name?: string; time?: string; items?: PlanItem[] };
 type Plan = { meals: PlanMeal[]; waterMl?: number | string | null; notes?: string | null; validUntil?: string | null; totals?: Record<string, number> | null } | null;
-type PlanResp = { plan: Plan; nutritionistName?: string | null; nutritionistPhotoUrl?: string | null; createdAt?: string; pdfUrl?: string | null };
+type NutriContact = {
+  id: string;
+  name: string;
+  specialty?: string | null;
+  photoUrl?: string | null;
+  phone?: string | null;
+  email?: string | null;
+  consultationPriceCents?: number | null;
+  returnPriceCents?: number | null;
+  hasPix?: boolean;
+};
+type PlanResp = {
+  plan: Plan;
+  paid?: boolean;
+  locked?: boolean;
+  hasPlan?: boolean;
+  nutritionist?: NutriContact | null;
+  nutritionistName?: string | null;
+  nutritionistPhotoUrl?: string | null;
+  createdAt?: string;
+  pdfUrl?: string | null;
+};
+type Appt = { id: string; status: string; priceCents: number; slotStart?: string | null; pixCopiaCola?: string | null; modality?: string };
 
 const LIGHT: Record<string, { bg: string; text: string; dot: string; label: string }> = {
   verde: { bg: "bg-emerald-50", text: "text-emerald-700", dot: "bg-emerald-500", label: "Dentro da meta" },
@@ -21,6 +44,11 @@ const LIGHT: Record<string, { bg: string; text: string; dot: string; label: stri
   vermelho: { bg: "bg-red-50", text: "text-red-700", dot: "bg-red-500", label: "Acima da meta" },
   estimativa: { bg: "bg-slate-50", text: "text-slate-600", dot: "bg-slate-400", label: "Estimativa" },
 };
+
+function brl(cents?: number | null) {
+  if (cents == null || !Number.isFinite(cents)) return null;
+  return (cents / 100).toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
+}
 
 export default function PacienteNutricaoPage() {
   const router = useRouter();
@@ -34,6 +62,10 @@ export default function PacienteNutricaoPage() {
   const [date, setDate] = useState("");
   const [plan, setPlan] = useState<PlanResp | null>(null);
   const [planDone, setPlanDone] = useState<string[]>([]);
+  const [planPaid, setPlanPaid] = useState(false);
+  const [planLocked, setPlanLocked] = useState(false);
+  const [hasPlan, setHasPlan] = useState(false);
+  const [nutri, setNutri] = useState<NutriContact | null>(null);
 
   // formulário
   const [kind, setKind] = useState<"alimento" | "liquido">("alimento");
@@ -54,8 +86,9 @@ export default function PacienteNutricaoPage() {
   const [labelFields, setLabelFields] = useState<Record<string, string | boolean> | null>(null);
   const [labelMsg, setLabelMsg] = useState("");
   // consultas de nutrição
-  const [appts, setAppts] = useState<{ id: string; status: string; priceCents: number; slotStart?: string | null; pixCopiaCola?: string | null; modality?: string }[]>([]);
+  const [appts, setAppts] = useState<Appt[]>([]);
   const [apptMsg, setApptMsg] = useState("");
+  const [requesting, setRequesting] = useState(false);
   // comparar alimentos
   const [cmpOpen, setCmpOpen] = useState(false);
   const [cmpQ, setCmpQ] = useState("");
@@ -78,16 +111,25 @@ export default function PacienteNutricaoPage() {
   }, [router]);
   useEffect(() => { load(); }, [load]);
 
+  const loadPlan = useCallback(async () => {
+    try {
+      const r = await fetch("/api/patient/nutrition/plan");
+      const d = r.ok ? await r.json() : null;
+      if (!d) return;
+      setPlan(d.plan ? d : null);
+      setPlanPaid(Boolean(d.paid));
+      setPlanLocked(Boolean(d.locked));
+      setHasPlan(Boolean(d.hasPlan));
+      if (d.nutritionist) setNutri(d.nutritionist);
+    } catch { /* ok */ }
+  }, []);
   useEffect(() => {
-    fetch("/api/patient/nutrition/plan")
-      .then((r) => (r.ok ? r.json() : null))
-      .then((d) => { if (d && d.plan) setPlan(d); })
-      .catch(() => {});
+    loadPlan();
     fetch("/api/patient/nutrition/plan/checkin")
       .then((r) => (r.ok ? r.json() : null))
       .then((d) => { if (d && Array.isArray(d.done)) setPlanDone(d.done); })
       .catch(() => {});
-  }, []);
+  }, [loadPlan]);
 
   async function toggleMeal(mealKey: string) {
     const done = !planDone.includes(mealKey);
@@ -107,8 +149,27 @@ export default function PacienteNutricaoPage() {
     if (!r.ok) return;
     const d = await r.json();
     setAppts(d.appointments || []);
+    if (d.nutritionist) setNutri(d.nutritionist);
+    if (typeof d.paid === "boolean") setPlanPaid(d.paid);
   }, []);
   useEffect(() => { loadAppts(); }, [loadAppts]);
+
+  async function requestConsult(modality: "teleconsulta" | "presencial") {
+    setRequesting(true); setApptMsg("");
+    try {
+      const resp = await fetch("/api/patient/nutrition/appointments", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "request", modality }),
+      });
+      const d = await resp.json().catch(() => ({}));
+      if (!resp.ok) throw new Error(d.error || "Não foi possível pedir a consulta.");
+      if (d.created === false) setApptMsg("Você já tem uma consulta aguardando pagamento ou confirmação.");
+      else setApptMsg(modality === "presencial" ? "Consulta presencial pedida. Combine o pagamento com a nutricionista." : "Teleconsulta pedida. Combine o pagamento com a nutricionista.");
+      await loadAppts();
+      await loadPlan();
+    } catch (e) { setApptMsg(e instanceof Error ? e.message : "Erro"); }
+    finally { setRequesting(false); }
+  }
 
   async function sendProof(id: string, file: File) {
     if (file.size > 1400000) { setApptMsg("Comprovante muito grande (máx. ~1,4 MB)."); return; }
@@ -214,8 +275,110 @@ export default function PacienteNutricaoPage() {
         <Link href="/paciente/nutricao/educacao" className="btn-ghost text-sm">Entenda sua alimentação →</Link>
       </div>
 
-      {/* Plano alimentar da nutricionista (interativo) */}
-      {plan?.plan && (
+      {/* Nutricionista: contato + pedido de consulta (online ou presencial) */}
+      <section className="panel mt-5">
+        <p className="text-xs font-bold uppercase tracking-wider text-[var(--gold)]">Sua nutricionista</p>
+        {nutri ? (
+          <>
+            <div className="mt-2 flex items-start gap-3">
+              {nutri.photoUrl ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img src={nutri.photoUrl} alt="" className="h-14 w-14 shrink-0 rounded-full border border-[var(--border)] object-cover" />
+              ) : (
+                <span className="grid h-14 w-14 shrink-0 place-items-center rounded-full bg-[var(--gold-soft)] text-base font-bold text-[var(--gold)]">{nutri.name.slice(0, 2).toUpperCase()}</span>
+              )}
+              <div className="min-w-0">
+                <h2 className="font-display text-lg font-extrabold text-[var(--text)]">{nutri.name}</h2>
+                <p className="text-sm text-[var(--text-muted)]">{nutri.specialty || "Nutrição clínica"}</p>
+                <p className="mt-1 text-sm text-[var(--text-soft)]">
+                  {brl(nutri.consultationPriceCents) ? `${brl(nutri.consultationPriceCents)} consulta` : "Valor combinado"}
+                  {brl(nutri.returnPriceCents) ? ` · ${brl(nutri.returnPriceCents)} retorno` : ""}
+                </p>
+              </div>
+            </div>
+            <p className="mt-3 text-sm text-[var(--text-soft)]">
+              Combine o pagamento (Pix) e a consulta — teleconsulta ou presencial. O plano alimentar só é liberado depois que ela confirmar o pagamento.
+            </p>
+            <div className="mt-3 flex flex-wrap gap-2">
+              {whatsappTo(nutri.phone, `Olá, ${nutri.name}! Sou paciente no Meu Rim. Gostaria de combinar o pagamento (Pix) e a consulta de nutrição.`) && (
+                <a className="btn-gold text-sm" target="_blank" rel="noopener noreferrer" href={whatsappTo(nutri.phone, `Olá, ${nutri.name}! Sou paciente no Meu Rim. Gostaria de combinar o pagamento (Pix) e a consulta de nutrição.`)!}>WhatsApp</a>
+              )}
+              {nutri.phone && <a className="btn-ghost text-sm" href={`tel:${nutri.phone}`}>{nutri.phone}</a>}
+              {nutri.email && <a className="btn-ghost text-sm" href={`mailto:${nutri.email}`}>{nutri.email}</a>}
+              {!nutri.phone && !nutri.email && (
+                <p className="text-sm text-[var(--text-muted)]">Ela ainda não cadastrou telefone. Peça ao seu médico o contato, ou aguarde a atualização do perfil.</p>
+              )}
+            </div>
+            {(() => {
+              const pending = appts.find((a) => a.status === "aguardando_pagamento" || a.status === "aguardando_confirmacao");
+              if (pending) return null;
+              return (
+                <div className="mt-3 flex flex-wrap gap-2">
+                  <button type="button" className="btn-gold text-sm" disabled={requesting} onClick={() => requestConsult("teleconsulta")}>{requesting ? "Pedindo…" : "Pedir teleconsulta"}</button>
+                  <button type="button" className="btn-ghost text-sm" disabled={requesting} onClick={() => requestConsult("presencial")}>Pedir presencial</button>
+                </div>
+              );
+            })()}
+            {apptMsg && <p className="mt-2 text-sm font-semibold text-[var(--green,#0d9488)]">{apptMsg}</p>}
+          </>
+        ) : (
+          <p className="mt-2 text-sm text-[var(--text-muted)]">Seu médico ainda não vinculou uma nutricionista. Quando houver encaminhamento, o contato dela aparece aqui para você combinar Pix e consulta.</p>
+        )}
+      </section>
+
+      {/* Consultas de nutrição (pagamento por Pix direto) */}
+      {appts.length > 0 && (
+        <section className="panel mt-4">
+          <p className="text-xs font-bold uppercase tracking-wider text-[var(--gold)]">Consultas de nutrição</p>
+          <div className="mt-2 grid gap-2">
+            {appts.map((a) => (
+              <div key={a.id} className="rounded-xl border border-[var(--border)] p-3">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <p className="font-semibold text-[var(--text)]">R$ {(a.priceCents / 100).toFixed(2)} <span className="text-xs font-normal text-[var(--text-muted)]">· {a.modality || "teleconsulta"}{a.slotStart ? " · " + new Date(a.slotStart).toLocaleString("pt-BR") : ""}</span></p>
+                  <span className={`rounded-full px-2 py-0.5 text-xs font-semibold ${a.status === "confirmada" || a.status === "realizada" ? "bg-emerald-100 text-emerald-700" : a.status === "cancelada" ? "bg-slate-100 text-slate-500" : "bg-amber-100 text-amber-700"}`}>
+                    {a.status === "aguardando_pagamento" ? "Pague via Pix" : a.status === "aguardando_confirmacao" ? "Aguardando confirmação" : a.status === "confirmada" ? "Confirmada" : a.status === "realizada" ? "Realizada" : "Cancelada"}
+                  </span>
+                </div>
+                {a.status === "aguardando_pagamento" && a.pixCopiaCola && (
+                  <div className="mt-2">
+                    <p className="break-all rounded-lg bg-[var(--bg)] p-2 text-xs text-[var(--text-soft)]">{a.pixCopiaCola}</p>
+                    <div className="mt-2 flex flex-wrap gap-2">
+                      <button type="button" className="btn-ghost text-sm" onClick={() => copyPix(a.pixCopiaCola!)}>Copiar Pix</button>
+                      <label className="btn-gold cursor-pointer text-sm">Enviar comprovante<input type="file" accept="image/*" className="hidden" onChange={(e) => { const f = e.target.files?.[0]; if (f) sendProof(a.id, f); }} /></label>
+                    </div>
+                  </div>
+                )}
+                {a.status === "aguardando_pagamento" && !a.pixCopiaCola && (
+                  <p className="mt-2 text-sm text-[var(--text-soft)]">
+                    A nutricionista ainda não configurou a chave Pix neste app.
+                    {nutri?.phone || nutri?.email
+                      ? " Use o WhatsApp, telefone ou e-mail acima para ela enviar o Pix e combinar a consulta."
+                      : " Combine o pagamento diretamente com ela."}
+                  </p>
+                )}
+              </div>
+            ))}
+          </div>
+        </section>
+      )}
+
+      {/* Plano alimentar da nutricionista — só após pagamento confirmado */}
+      {planLocked && hasPlan && (
+        <section className="mt-4 overflow-hidden rounded-[24px] border border-amber-200 bg-amber-50 px-5 py-5 shadow-[var(--shadow)]">
+          <p className="text-xs font-bold uppercase tracking-wider text-amber-700">Seu plano alimentar</p>
+          <h2 className="font-display mt-1 text-xl font-extrabold text-[var(--text)]">Liberado após o pagamento</h2>
+          <p className="mt-2 text-sm text-[var(--text-soft)]">
+            A nutricionista já preparou o plano, mas ele só aparece aqui (e o PDF só abre) depois que o pagamento da consulta for confirmado.
+            Use o WhatsApp ou o telefone dela para pagar via Pix e agendar teleconsulta ou presencial.
+          </p>
+        </section>
+      )}
+      {planPaid && !plan?.plan && (
+        <p className="mt-4 rounded-xl border border-[var(--border)] bg-slate-50 px-3 py-2 text-sm text-slate-600">
+          Pagamento confirmado. O plano alimentar aparece aqui depois da consulta com a nutricionista.
+        </p>
+      )}
+      {planPaid && plan?.plan && (
         <section className="mt-5 overflow-hidden rounded-[24px] border border-[var(--border-gold)] bg-gradient-to-br from-[var(--gold-soft)] to-white shadow-[var(--shadow)]">
           <div className="flex flex-wrap items-center justify-between gap-2 px-5 pt-5">
             <div className="flex items-center gap-3">
@@ -362,36 +525,6 @@ export default function PacienteNutricaoPage() {
               )}
             </div>
           ))}
-        </section>
-      )}
-
-      {/* Consultas de nutrição (pagamento por Pix direto) */}
-      {appts.length > 0 && (
-        <section className="panel mt-4">
-          <p className="text-xs font-bold uppercase tracking-wider text-[var(--gold)]">Consultas de nutrição</p>
-          {apptMsg && <p className="mt-1 text-sm font-semibold text-[var(--green,#0d9488)]">{apptMsg}</p>}
-          <div className="mt-2 grid gap-2">
-            {appts.map((a) => (
-              <div key={a.id} className="rounded-xl border border-[var(--border)] p-3">
-                <div className="flex flex-wrap items-center justify-between gap-2">
-                  <p className="font-semibold text-[var(--text)]">R$ {(a.priceCents / 100).toFixed(2)} <span className="text-xs font-normal text-[var(--text-muted)]">· {a.modality || "teleconsulta"}{a.slotStart ? " · " + new Date(a.slotStart).toLocaleString("pt-BR") : ""}</span></p>
-                  <span className={`rounded-full px-2 py-0.5 text-xs font-semibold ${a.status === "confirmada" || a.status === "realizada" ? "bg-emerald-100 text-emerald-700" : a.status === "cancelada" ? "bg-slate-100 text-slate-500" : "bg-amber-100 text-amber-700"}`}>
-                    {a.status === "aguardando_pagamento" ? "Pague via Pix" : a.status === "aguardando_confirmacao" ? "Aguardando confirmação" : a.status === "confirmada" ? "Confirmada" : a.status === "realizada" ? "Realizada" : "Cancelada"}
-                  </span>
-                </div>
-                {a.status === "aguardando_pagamento" && a.pixCopiaCola && (
-                  <div className="mt-2">
-                    <p className="break-all rounded-lg bg-[var(--bg)] p-2 text-xs text-[var(--text-soft)]">{a.pixCopiaCola}</p>
-                    <div className="mt-2 flex flex-wrap gap-2">
-                      <button type="button" className="btn-ghost text-sm" onClick={() => copyPix(a.pixCopiaCola!)}>Copiar Pix</button>
-                      <label className="btn-gold cursor-pointer text-sm">Enviar comprovante<input type="file" accept="image/*" className="hidden" onChange={(e) => { const f = e.target.files?.[0]; if (f) sendProof(a.id, f); }} /></label>
-                    </div>
-                  </div>
-                )}
-                {a.status === "aguardando_pagamento" && !a.pixCopiaCola && <p className="mt-1 text-xs text-[var(--text-muted)]">A nutricionista ainda não configurou a chave Pix. Combine o pagamento com ela.</p>}
-              </div>
-            ))}
-          </div>
         </section>
       )}
 

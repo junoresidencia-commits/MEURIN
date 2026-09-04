@@ -262,13 +262,14 @@ async function updateNutritionistRow(id: string, patch: Record<string, unknown>)
   return true;
 }
 
-export async function updateNutritionistSettings(id: string, patch: { consultationPriceCents?: number | null; returnPriceCents?: number | null; pixProfile?: PixProfile | null; signatureUrl?: string | null; photoUrl?: string | null }): Promise<void> {
+export async function updateNutritionistSettings(id: string, patch: { consultationPriceCents?: number | null; returnPriceCents?: number | null; pixProfile?: PixProfile | null; signatureUrl?: string | null; photoUrl?: string | null; phone?: string | null }): Promise<void> {
   const row: Record<string, unknown> = {};
   if (patch.consultationPriceCents !== undefined) row.consultation_price_cents = patch.consultationPriceCents;
   if (patch.returnPriceCents !== undefined) row.return_price_cents = patch.returnPriceCents;
   if (patch.pixProfile !== undefined) row.pix_profile = patch.pixProfile;
   if (patch.signatureUrl !== undefined) row.signature_url = patch.signatureUrl;
   if (patch.photoUrl !== undefined) row.photo_url = patch.photoUrl;
+  if (patch.phone !== undefined) row.phone = patch.phone;
   if (Object.keys(row).length === 0) return;
   const done = await updateNutritionistRow(id, row);
   if (done) return;
@@ -280,6 +281,7 @@ export async function updateNutritionistSettings(id: string, patch: { consultati
     if (patch.pixProfile !== undefined) n.pixProfile = patch.pixProfile;
     if (patch.signatureUrl !== undefined) n.signatureUrl = patch.signatureUrl;
     if (patch.photoUrl !== undefined) n.photoUrl = patch.photoUrl;
+    if (patch.phone !== undefined) n.phone = patch.phone;
     await writeLocal(db);
   }
 }

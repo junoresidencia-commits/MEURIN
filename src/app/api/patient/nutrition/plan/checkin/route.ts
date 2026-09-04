@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { getPatientEmail } from "@/lib/patient-session";
 import { getPlanCheckin, setPlanCheckin } from "@/lib/nutrition-plan-checkins-store";
+import { canPatientAccessNutritionPlan, resolvePatientNutritionist } from "@/lib/nutrition-plan-access";
 
 function today(): string {
   return new Date().toLocaleDateString("en-CA", { timeZone: "America/Bahia" });
@@ -9,17 +10,26 @@ function validDate(v: unknown): string {
   return typeof v === "string" && /^\d{4}-\d{2}-\d{2}$/.test(v) ? v : today();
 }
 
+async function assertPaid(email: string): Promise<boolean> {
+  const nut = await resolvePatientNutritionist(email);
+  return canPatientAccessNutritionPlan(email, nut?.id);
+}
+
 export async function GET(req: Request) {
   const email = await getPatientEmail();
   if (!email) return NextResponse.json({ error: "Sessão de paciente não encontrada." }, { status: 401 });
   const date = validDate(new URL(req.url).searchParams.get("date"));
+  if (!(await assertPaid(email))) return NextResponse.json({ date, done: [], locked: true });
   const done = await getPlanCheckin(email, date);
-  return NextResponse.json({ date, done });
+  return NextResponse.json({ date, done, locked: false });
 }
 
 export async function POST(req: Request) {
   const email = await getPatientEmail();
   if (!email) return NextResponse.json({ error: "Sessão de paciente não encontrada." }, { status: 401 });
+  if (!(await assertPaid(email))) {
+    return NextResponse.json({ error: "O plano é liberado após a confirmação do pagamento da consulta." }, { status: 403 });
+  }
   const b = await req.json().catch(() => ({}));
   const meal = typeof b.meal === "string" ? b.meal.slice(0, 120) : "";
   if (!meal) return NextResponse.json({ error: "Refeição inválida." }, { status: 400 });
