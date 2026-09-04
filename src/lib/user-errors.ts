@@ -2,6 +2,18 @@
 // Regra do projeto: NENHUM erro técnico bruto pode aparecer na interface.
 // A mensagem técnica vai para console.error (depuração); o usuário vê PT-BR amigável.
 
+/** E-mail/id do paciente na URL da API. Sem isso o Safari/Chrome recusam `@` e espaços
+ *  com "The string did not match the expected pattern" e a evolução/exame não grava. */
+export function encodePatientParam(raw: string): string {
+  const s = String(raw ?? "").trim();
+  if (!s) return "";
+  try {
+    return encodeURIComponent(decodeURIComponent(s));
+  } catch {
+    return encodeURIComponent(s);
+  }
+}
+
 /** Erro com mensagem já amigável (em português), seguro para exibir ao usuário. */
 export class FriendlyError extends Error {
   constructor(message: string) {

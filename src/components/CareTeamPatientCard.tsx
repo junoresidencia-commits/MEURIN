@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { EncaminharPacienteForm } from "@/components/EncaminharPacienteForm";
+import { encodePatientParam } from "@/lib/user-errors";
 
 type Member = {
   id: string;
@@ -42,7 +43,7 @@ export function CareTeamPatientCard({ emailParam }: { emailParam: string }) {
   const [saving, setSaving] = useState(false);
 
   const loadAssigned = useCallback(async () => {
-    const d = await fetch(`/api/doctor/patients/${emailParam}/care-team`).then((r) => r.json());
+    const d = await fetch(`/api/doctor/patients/${encodePatientParam(emailParam)}/care-team`).then((r) => r.json());
     setAssigned({ nutrition: d.nutrition || null, psychology: d.psychology || null, nursing: d.nursing || null });
   }, [emailParam]);
 
@@ -60,7 +61,7 @@ export function CareTeamPatientCard({ emailParam }: { emailParam: string }) {
   async function remove(role: string, referralId?: string) {
     if (!referralId) return;
     if (!window.confirm("Retirar este profissional deste paciente? O histórico assistencial será preservado.")) return;
-    await fetch(`/api/doctor/patients/${emailParam}/care-team`, {
+    await fetch(`/api/doctor/patients/${encodePatientParam(emailParam)}/care-team`, {
       method: "DELETE", headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ role, referralId }),
     });
@@ -72,13 +73,13 @@ export function CareTeamPatientCard({ emailParam }: { emailParam: string }) {
     try {
       const current = assigned?.[role as keyof Assigned];
       if (current?.referralId) {
-        await fetch(`/api/doctor/patients/${emailParam}/care-team`, {
+        await fetch(`/api/doctor/patients/${encodePatientParam(emailParam)}/care-team`, {
           method: "DELETE", headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ role, referralId: current.referralId }),
         });
       }
       if (professionalId) {
-        const res = await fetch(`/api/doctor/patients/${emailParam}/care-refer`, {
+        const res = await fetch(`/api/doctor/patients/${encodePatientParam(emailParam)}/care-refer`, {
           method: "POST", headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ role, professionalId, reason: "Atribuição na equipe assistencial" }),
         });
@@ -171,7 +172,7 @@ export function CareTimeline({ emailParam }: { emailParam: string }) {
   const [open, setOpen] = useState<string | null>(null);
 
   useEffect(() => {
-    fetch(`/api/doctor/patients/${emailParam}/care-timeline`).then((r) => r.json()).then((d) => setEvents(d.events || [])).catch(() => {});
+    fetch(`/api/doctor/patients/${encodePatientParam(emailParam)}/care-timeline`).then((r) => r.json()).then((d) => setEvents(d.events || [])).catch(() => {});
   }, [emailParam]);
 
   if (events.length === 0) {

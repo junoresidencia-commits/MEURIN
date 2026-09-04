@@ -265,28 +265,41 @@ export async function setPeerActive(doctorId: string, peerId: string, activeFlag
 }
 
 export async function writeAudit(input: { doctorId: string; doctorName?: string | null; patientKey?: string | null; action: string; detail?: string | null }): Promise<void> {
-  const row: ChartAuditEntry = {
-    id: uuid(),
-    doctorId: input.doctorId,
-    doctorName: input.doctorName ?? null,
-    patientKey: input.patientKey ? input.patientKey.toLowerCase().trim() : null,
-    action: input.action,
-    detail: input.detail ?? null,
-    createdAt: new Date().toISOString(),
-  };
-  if (active()) {
-    const s = getSupabaseAdmin()!;
-    const { error } = await s.from("chart_audit_log").insert({
-      id: row.id, doctor_id: row.doctorId, doctor_name: row.doctorName,
-      patient_key: row.patientKey, action: row.action, detail: row.detail, created_at: row.createdAt,
-    });
-    if (!isMissing(error)) { if (error) return; }
-    else tableMissing = true;
+  // Auditoria é best-effort: nunca pode derrubar salvar evolução, documento ou encaminhamento.
+  // Na Vercel o filesystem é só-leitura — se o insert no banco ok (ou falhar), não lançar.
+  try {
+    const row: ChartAuditEntry = {
+      id: uuid(),
+      doctorId: input.doctorId,
+      doctorName: input.doctorName ?? null,
+      patientKey: input.patientKey ? input.patientKey.toLowerCase().trim() : null,
+      action: input.action,
+      detail: input.detail ?? null,
+      createdAt: new Date().toISOString(),
+    };
+    if (active()) {
+      const s = getSupabaseAdmin()!;
+      const { error } = await s.from("chart_audit_log").insert({
+        id: row.id, doctor_id: row.doctorId, doctor_name: row.doctorName,
+        patient_key: row.patientKey, action: row.action, detail: row.detail, created_at: row.createdAt,
+      });
+      if (!isMissing(error)) {
+        if (error) console.error("[chart_audit_log] insert", error);
+        return;
+      }
+      tableMissing = true;
+    }
+    try {
+      const db = await readLocal();
+      db.audit.unshift(row);
+      db.audit = db.audit.slice(0, 2000);
+      await writeLocal(db);
+    } catch (err) {
+      console.error("[chart_audit_log] fallback local indisponível", err);
+    }
+  } catch (err) {
+    console.error("[chart_audit_log]", err);
   }
-  const db = await readLocal();
-  db.audit.unshift(row);
-  db.audit = db.audit.slice(0, 2000);
-  await writeLocal(db);
 }
 
 export async function listAudit(patientKey: string): Promise<ChartAuditEntry[]> {

@@ -6,6 +6,7 @@ import { useParams, useSearchParams } from "next/navigation";
 import { TemplatePicker } from "@/components/TemplatePicker";
 import { PosologyBuilder } from "@/components/PosologyBuilder";
 import type { TemplateType } from "@/lib/document-templates";
+import { toFriendlyMessage } from "@/lib/user-errors";
 
 const TEMPLATE_TYPES = ["receita", "exame", "relatorio"];
 
@@ -73,7 +74,7 @@ function ComporDocumentoInner() {
       const url = URL.createObjectURL(blob);
       setPreviewUrl(url);
     } catch (e) {
-      setMsg(e instanceof Error ? e.message : "Erro.");
+      setMsg(toFriendlyMessage(e, "Não foi possível pré-visualizar. Tente novamente."));
     } finally { setBusy(false); }
   }
 
@@ -89,7 +90,7 @@ function ComporDocumentoInner() {
       setPreviewUrl(`/api/documents/${d.id}/pdf`);
       setMsg("Documento gerado e salvo no prontuário.");
     } catch (e) {
-      setMsg(e instanceof Error ? e.message : "Erro.");
+      setMsg(toFriendlyMessage(e, "Não foi possível gerar o documento. Tente novamente."));
     } finally { setBusy(false); }
   }
 
