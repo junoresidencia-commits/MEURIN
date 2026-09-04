@@ -21,6 +21,7 @@ function displayValue(key: string, value: string): string {
   if (!f) return value;
   if (f.kind === "tri") return TRI_OPTIONS.find((o) => o.value === value)?.label || value;
   if (f.kind === "etiologia") return etiologiaLabel(value);
+  if (f.kind === "select") return f.options?.find((o) => o.value === value)?.label || value;
   return value;
 }
 
@@ -105,6 +106,13 @@ export function ClinicalReviewModal({
                   {(f?.kind === "enumG" || f?.kind === "enumA" || f?.kind === "etiologia") && (
                     <select className="input-field !py-2" value={r.value} onChange={(e) => update(i, { value: e.target.value })}>
                       {(f.kind === "enumG" ? ESTAGIOS_G.map((v) => ({ value: v, label: v })) : f.kind === "enumA" ? CATEGORIAS_A.map((v) => ({ value: v, label: v })) : ETIOLOGIAS).map((o) => (
+                        <option key={o.value} value={o.value}>{o.label}</option>
+                      ))}
+                    </select>
+                  )}
+                  {f?.kind === "select" && (
+                    <select className="input-field !py-2" value={r.value} onChange={(e) => update(i, { value: e.target.value })}>
+                      {(f.options || []).map((o) => (
                         <option key={o.value} value={o.value}>{o.label}</option>
                       ))}
                     </select>

@@ -4,7 +4,7 @@ type Snapshot = {
   identification: { name: string; age: number | null; sex: string | null; allergies: string | null };
   anthropometry: { pesoKg: unknown; alturaCm: unknown; imc: unknown };
   renal: { drc: unknown; estagioG: unknown; categoriaA: unknown; etiologia: unknown; hemodialise: unknown; dialisePeritoneal: unknown };
-  comorbidities: { has: unknown; dm: unknown; ic: unknown; dcv: unknown };
+  comorbidities: { has: unknown; dm: unknown; ic: unknown; dcv: unknown; ckm?: unknown; ckmEstadio?: unknown };
   medications: string;
   vitals: { pa: string | null; fc: unknown; glicemia: unknown };
   labs: { key: string; label: string; value: number; unit?: string; measuredAt: string }[];
@@ -26,6 +26,7 @@ export function ClinicalSnapshotCard({ snapshot, showLabs }: { snapshot: Snapsho
         <p><span className="text-xs font-semibold text-[var(--text-muted)]">Diagnóstico renal</span><br />DRC {val(snapshot.renal.drc)} · G{val(snapshot.renal.estagioG)} A{val(snapshot.renal.categoriaA)}</p>
         <p><span className="text-xs font-semibold text-[var(--text-muted)]">Etiologia</span><br />{val(snapshot.renal.etiologia)}</p>
         <p><span className="text-xs font-semibold text-[var(--text-muted)]">Comorbidades</span><br />HAS {val(snapshot.comorbidities.has)} · DM {val(snapshot.comorbidities.dm)}</p>
+        <p><span className="text-xs font-semibold text-[var(--text-muted)]">Síndrome CKM</span><br />{val(snapshot.comorbidities.ckm)}{snapshot.comorbidities.ckmEstadio ? ` · ${val(snapshot.comorbidities.ckmEstadio)}` : ""}</p>
         <p><span className="text-xs font-semibold text-[var(--text-muted)]">Sinais</span><br />PA {val(snapshot.vitals.pa)} · FC {val(snapshot.vitals.fc)} · glicemia {val(snapshot.vitals.glicemia)}</p>
       </div>
       <div className="panel">

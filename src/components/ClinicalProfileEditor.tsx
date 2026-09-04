@@ -186,6 +186,11 @@ export function ClinicalProfileEditor({ emailParam }: { emailParam: string }) {
               );
             })}
           </div>
+          {group === "Síndrome CKM" && (
+            <p className="text-xs text-[var(--text-muted)]">
+              Classificação AHA: a síndrome CKM reúne, numa só condição, doença cardiovascular, DRC e alterações metabólicas (obesidade, diabetes e outros fatores de risco). O estágio descreve a gravidade (1 a 4b).
+            </p>
+          )}
           {group === "Dados gerais" && imc != null && (
             <p className="text-sm text-[var(--text-soft)]">IMC calculado: <b className="text-[var(--text)]">{String(imc).replace(".", ",")} kg/m²</b></p>
           )}

@@ -1,6 +1,6 @@
 import "server-only";
 import { getProfile } from "./clinical-profile-store";
-import { computeImc, etiologiaLabel } from "./clinical-fields";
+import { computeImc, etiologiaLabel, ckmEstadioLabel } from "./clinical-fields";
 import { getLabResults, getPatientData } from "./patient-store";
 import { getPatient } from "./patients-store";
 import { NEPHRO_LABS } from "./labs";
@@ -80,6 +80,8 @@ export async function buildClinicalSnapshot(patientKey: string, role: AlliedRole
       dm: data.dm ?? null,
       ic: data.ic ?? null,
       dcv: data.dcv ?? null,
+      ckm: data.ckm ?? null,
+      ckmEstadio: ckmEstadioLabel(String(data.ckm_estadio || "")) || null,
     },
     medications: String(data.medicamentos_em_uso || patient?.medications || ""),
     vitals: {
