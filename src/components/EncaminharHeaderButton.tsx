@@ -28,7 +28,7 @@ export function EncaminharHeaderButton({
     <>
       <button
         type="button"
-        className="btn-ghost text-sm"
+        className="btn-gold text-sm"
         onClick={() => {
           setDestino(null);
           setOpen(true);
