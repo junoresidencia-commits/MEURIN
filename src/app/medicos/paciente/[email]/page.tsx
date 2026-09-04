@@ -11,6 +11,7 @@ import { ClinicalReviewModal } from "@/components/ClinicalReviewModal";
 import { extractClinicalFields, type DetectedField } from "@/lib/clinical-extractor";
 import { ExamReviewModal } from "@/components/ExamReviewModal";
 import { parseLabGroups, type ParsedLabGroup } from "@/lib/lab-parser";
+import { labCollisionDay, persistLabDate } from "@/lib/lab-dates";
 import { TemplatePicker } from "@/components/TemplatePicker";
 import { AttendanceControl } from "@/components/AttendanceControl";
 import { ReturnPicker } from "@/components/ReturnPicker";
@@ -25,6 +26,26 @@ import { encodePatientParam, postJson, toFriendlyMessage } from "@/lib/user-erro
 type Lab = { id: string; testKey: string; value: number; unit?: string | null; measuredAt: string };
 type Upload = { id: string; name: string; category?: string | null; examDate?: string | null; signedUrl?: string | null };
 type Lme = { id: string; cid10?: string | null; createdAt: string; medications: { name: string }[] };
+
+function sameLabValue(a: number, b: number) {
+  return Math.round(a * 1000) === Math.round(b * 1000);
+}
+
+/** Falta data ou já existe o mesmo exame na data com valor diferente → médico confere no modal. */
+function groupsNeedReview(
+  groups: ParsedLabGroup[],
+  existing: { testKey: string; value: number; measuredAt: string }[]
+): boolean {
+  if (groups.some((g) => !g.date)) return true;
+  for (const g of groups) {
+    const day = g.date!;
+    for (const lab of g.labs) {
+      const hit = existing.find((l) => l.testKey === lab.testKey && labCollisionDay(l.measuredAt) === day);
+      if (hit && !sameLabValue(hit.value, lab.value)) return true;
+    }
+  }
+  return false;
+}
 
 type HomeRecord = {
   id: string;
@@ -141,6 +162,8 @@ export default function ProntuarioPage() {
   // Importar exames de texto colado (laudo/prontuário antigo com várias datas)
   const [importText, setImportText] = useState("");
   const [importErr, setImportErr] = useState("");
+  const [importMsg, setImportMsg] = useState("");
+  const [importSaving, setImportSaving] = useState(false);
 
   // Agendamento pelo médico
   const [apptDate, setApptDate] = useState("");
@@ -221,17 +244,15 @@ export default function ProntuarioPage() {
     setLabSaving(true);
     setLabErr("");
     try {
-      const res = await fetch(`/api/doctor/patients/${encodePatientParam(emailParam)}/labs`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
+      const data = await postJson<{ egfr?: { value?: number }; egfrSkipped?: string }>(
+        `/api/doctor/patients/${encodePatientParam(emailParam)}/labs`,
+        {
           testKey: labTest,
           value: labValue,
-          measuredAt: labDate || undefined,
-        }),
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || "Não foi possível salvar.");
+          measuredAt: labDate ? persistLabDate(labDate) : undefined,
+        },
+        "Não foi possível salvar o exame. Tente novamente."
+      );
       // TFGe automática (CKD-EPI): confirma o cálculo ou avisa que falta idade/sexo.
       if (data.egfr && data.egfr.value != null) setEgfrInfo(`TFGe calculada automaticamente: ${String(data.egfr.value).replace(".", ",")} mL/min/1,73m² (CKD-EPI).`);
       else if (data.egfrSkipped) setEgfrInfo(data.egfrSkipped);
@@ -240,10 +261,53 @@ export default function ProntuarioPage() {
       setLabDate("");
       await load();
     } catch (e) {
-      setLabErr(e instanceof Error ? e.message : "Erro inesperado.");
+      setLabErr(toFriendlyMessage(e, "Não foi possível salvar o exame. Tente novamente."));
     } finally {
       setLabSaving(false);
     }
+  }
+
+  async function tryAutoSaveLabs(
+    groups: ParsedLabGroup[],
+    source: string
+  ): Promise<{ ok: true; count: number; duplicate: number } | { ok: false; reason: "review" | "empty" }> {
+    const usable = groups.filter((g) => g.labs.length > 0);
+    if (usable.length === 0) return { ok: false, reason: "empty" };
+    if (groupsNeedReview(usable, labs)) return { ok: false, reason: "review" };
+
+    const results = usable.flatMap((g) =>
+      g.labs.map((l) => ({
+        testKey: l.testKey,
+        value: l.value,
+        unit: l.unit,
+        measuredAt: persistLabDate(g.date!),
+      }))
+    );
+
+    try {
+      const data = await postJson<{ count?: number; conflicts?: unknown[]; duplicate?: number }>(
+        `/api/doctor/patients/${encodePatientParam(emailParam)}/labs`,
+        { results, origin: source },
+        "Não foi possível salvar os exames. Tente novamente."
+      );
+      if (Array.isArray(data.conflicts) && data.conflicts.length > 0) {
+        return { ok: false, reason: "review" };
+      }
+      return {
+        ok: true,
+        count: typeof data.count === "number" ? data.count : results.length,
+        duplicate: typeof data.duplicate === "number" ? data.duplicate : 0,
+      };
+    } catch (e) {
+      console.error("[exames] auto-gravação", e);
+      return { ok: false, reason: "review" };
+    }
+  }
+
+  function examSaveSummary(count: number, duplicate: number, identified: number): string {
+    if (count > 0) return `${count} exame(s) identificados e lançados no histórico.`;
+    if (duplicate > 0) return "Os exames já estavam no histórico nesta data.";
+    return `${identified} exame(s) identificados.`;
   }
 
   async function saveNote() {
@@ -261,14 +325,23 @@ export default function ProntuarioPage() {
       const groups = parseLabGroups(evolutionText);
       const detectedClinical = extractClinicalFields(evolutionText);
       setForm({ chiefComplaint: "", history: "", assessment: "", plan: "" });
-      setSaveMsg("Evolução salva no prontuário." + (shared ? " Liberada ao paciente." : ""));
+      let examNote = "";
+      if (groups.length > 0) {
+        const auto = await tryAutoSaveLabs(groups, "evolução");
+        if (!auto.ok && auto.reason === "review") {
+          setReview({ groups });
+        } else if (auto.ok) {
+          const identified = groups.reduce((n, g) => n + g.labs.length, 0);
+          examNote = " " + examSaveSummary(auto.count, auto.duplicate, identified);
+          setImportMsg(examSaveSummary(auto.count, auto.duplicate, identified));
+          setTab("exames");
+        }
+      }
+      setSaveMsg("Evolução salva no prontuário." + (shared ? " Liberada ao paciente." : "") + examNote);
       try {
         await load();
       } catch (reloadErr) {
         console.error("[evolucao] recarregar prontuário", reloadErr);
-      }
-      if (groups.length > 0) {
-        setReview({ groups });
       }
       if (detectedClinical.length > 0) {
         setClinicalReview(detectedClinical);
@@ -294,15 +367,33 @@ export default function ProntuarioPage() {
     else window.alert("Não foi possível excluir o documento.");
   }
 
-  function importFromText() {
+  async function importFromText() {
     setImportErr("");
+    setImportMsg("");
     const groups = parseLabGroups(importText);
     if (groups.length === 0) {
       setImportErr("Nenhum exame reconhecido no texto. Verifique se há nomes de exames e valores.");
       return;
     }
-    setReview({ groups, source: "importação (texto)" });
-    setImportText("");
+    setImportSaving(true);
+    try {
+      const auto = await tryAutoSaveLabs(groups, "importação (texto)");
+      if (!auto.ok) {
+        setReview({ groups, source: "importação (texto)" });
+        setImportText("");
+        return;
+      }
+      const identified = groups.reduce((n, g) => n + g.labs.length, 0);
+      setImportMsg(examSaveSummary(auto.count, auto.duplicate, identified));
+      setImportText("");
+      try {
+        await load();
+      } catch (reloadErr) {
+        console.error("[exames] recarregar após importação", reloadErr);
+      }
+    } finally {
+      setImportSaving(false);
+    }
   }
 
   useEffect(() => {
@@ -447,9 +538,12 @@ export default function ProntuarioPage() {
                   className="input-field min-h-[220px]"
                   value={form.history}
                   onChange={(e) => setForm((f) => ({ ...f, history: e.target.value }))}
-                  placeholder="Escreva a evolução do jeito que preferir — texto livre."
+                  placeholder={"Escreva a evolução do jeito que preferir.\n\nPode colar exames assim:\n21/08/2026\nCR: 3,51\nU: 94\nK: 5,8"}
                 />
               </label>
+              <p className="text-xs text-[var(--text-muted)]">
+                Data em cima, exames embaixo: o sistema identifica e já lança no histórico. Só pede conferência se faltar a data ou se o mesmo exame já existir naquela data com outro valor.
+              </p>
 
               <label className="flex items-center gap-2 text-sm text-[var(--text-soft)]">
                 <input type="checkbox" checked={shared} onChange={(e) => setShared(e.target.checked)} className="h-4 w-4 accent-[var(--gold)]" />
@@ -529,18 +623,19 @@ export default function ProntuarioPage() {
                 Importar exames de texto (várias datas)
               </p>
               <p className="text-sm text-[var(--text-soft)]">
-                Cole um laudo ou trecho de prontuário com exames de <b>várias datas</b>. O sistema separa
-                automaticamente por data e mostra tudo para você conferir antes de salvar no histórico.
+                Cole um laudo com a <b>data em cima</b> e os exames embaixo (pode ter várias datas). O sistema
+                identifica e já lança no histórico — só pede conferência se faltar data ou houver conflito.
               </p>
               <textarea
                 className="input-field min-h-[120px] font-mono text-[13px]"
                 value={importText}
                 onChange={(e) => setImportText(e.target.value)}
-                placeholder={"Ex.:\n10/01/2024\nCreatinina 1,2  Ureia 45  Potássio 4,4\n20/06/2024\nCreatinina 1,5  Ureia 58  Potássio 4,8\n15/02/2025\nCreatinina 1,8  Ureia 70  Potássio 5,0"}
+                placeholder={"Ex.:\n21/08/2026\nCR: 3,51\nU: 94\nK: 5,8\nNA: 141\nTFGE: 19\n\n17/07/2026\nHB: 12\nHT: 37\nLeuco: 14840\nPlaqueta: 375 mil\nCR: 2,99"}
               />
               {importErr && <p className="text-sm text-[var(--danger)]">{importErr}</p>}
-              <button type="button" className="btn-ghost" onClick={importFromText} disabled={!importText.trim()}>
-                Reconhecer exames do texto
+              {importMsg && <p className="rounded-xl border border-[var(--green)]/30 bg-[var(--green)]/10 px-3 py-2 text-sm text-[var(--green)]">{importMsg}</p>}
+              <button type="button" className="btn-ghost" onClick={importFromText} disabled={!importText.trim() || importSaving}>
+                {importSaving ? "Salvando…" : "Identificar e salvar exames"}
               </button>
             </div>
 

@@ -84,6 +84,8 @@ const SYNONYMS: Record<string, string> = {
   leuco: "leucocitos",
   plaquetas: "plaquetas",
   plaqueta: "plaquetas",
+  plt: "plaquetas",
+  plq: "plaquetas",
   ferritina: "ferritina",
   "satura\u00e7\u00e3o de transferrina": "sat_transferrina",
   "saturacao de transferrina": "sat_transferrina",
@@ -182,8 +184,14 @@ function extractLabs(text: string): ParsedLab[] {
     if (!testKey || !VALID_KEYS.has(testKey) || seen.has(testKey)) continue;
 
     const numRaw = m[2].replace(/[<>\s]/g, "").replace(",", ".");
-    const value = Number(numRaw);
+    let value = Number(numRaw);
     if (!Number.isFinite(value)) continue;
+
+    // "Plaqueta: 375 mil" → 375000 /mm³ (unidade do catálogo).
+    const after = text.slice((m.index ?? 0) + m[0].length, (m.index ?? 0) + m[0].length + 16);
+    if (/\s*mil\b/i.test(after) && (testKey === "plaquetas" || testKey === "leucocitos") && value < 10000) {
+      value *= 1000;
+    }
 
     seen.add(testKey);
     const def = NEPHRO_LABS.find((l) => l.key === testKey)!;

@@ -2,6 +2,7 @@
 
 import { useMemo, useState } from "react";
 import { NEPHRO_LABS, labUnit } from "@/lib/labs";
+import { labCollisionDay, persistLabDate, todayCivilBahia } from "@/lib/lab-dates";
 import { encodePatientParam, toFriendlyMessage } from "@/lib/user-errors";
 
 type Row = { checked: boolean; testKey: string; value: string; unit: string; onConflict: "update" | "keep" };
@@ -10,11 +11,10 @@ type ExistingLab = { testKey: string; measuredAt: string };
 type InputGroup = { date?: string; labs: { testKey: string; value: number | string; unit?: string }[] };
 
 function todayIso(): string {
-  return new Date().toISOString().slice(0, 10);
+  return todayCivilBahia();
 }
 function dayOf(iso: string): string {
-  const d = new Date(iso);
-  return Number.isNaN(d.getTime()) ? iso.slice(0, 10) : d.toISOString().slice(0, 10);
+  return labCollisionDay(iso);
 }
 let gid = 0;
 function newId(): string {
@@ -115,7 +115,7 @@ export function ExamReviewModal({
             testKey: r.testKey,
             value: r.value,
             unit: r.unit,
-            measuredAt: g.date,
+            measuredAt: persistLabDate(g.date),
             onConflict: existingOn(g.date).has(r.testKey) ? r.onConflict : undefined,
           }))
       );

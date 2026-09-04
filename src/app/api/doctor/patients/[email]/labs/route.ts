@@ -3,12 +3,13 @@ import { getDoctorSessionId } from "@/lib/auth";
 import { addLabResult, getLabResults, deleteLabResult, type LabResult } from "@/lib/patient-store";
 import { resolvePatientAccess, type PatientAccess } from "@/lib/doctor-access";
 import { NEPHRO_LABS, labUnit } from "@/lib/labs";
+import { labCollisionDay, normalizeMeasuredAt } from "@/lib/lab-dates";
 import { estimateEgfr, estimateEgfrCystatin, EGFR_EQUATION, EGFR_CYS_EQUATION, EGFR_VERSION } from "@/lib/egfr";
 
 const VALID = new Set(NEPHRO_LABS.map((l) => l.key));
 
 function dayOf(iso: string): string {
-  return new Date(iso).toISOString().slice(0, 10);
+  return labCollisionDay(iso);
 }
 
 /**
@@ -106,9 +107,7 @@ export async function POST(
   // { results: [{ testKey, value, unit?, measuredAt?, onConflict? }] }
   // Cada item é salvo NA SUA data. Nada é apagado; exames anteriores são preservados.
   if (Array.isArray(body.results)) {
-    const defaultAt = body.measuredAt
-      ? new Date(String(body.measuredAt)).toISOString()
-      : new Date().toISOString();
+    const defaultAt = normalizeMeasuredAt(body.measuredAt);
     // Cópia de trabalho: inclui os já existentes e vai recebendo os inseridos no próprio lote,
     // para deduplicar corretamente mesmo com múltiplas datas de uma vez.
     const work = [...(await getLabResults(access.key))];
@@ -131,7 +130,7 @@ export async function POST(
         rejected.push({ testKey: key, reason: "valor inválido" });
         continue;
       }
-      const at = item?.measuredAt ? new Date(String(item.measuredAt)).toISOString() : defaultAt;
+      const at = item?.measuredAt ? normalizeMeasuredAt(item.measuredAt) : defaultAt;
       const day = dayOf(at);
       const onConflict = item?.onConflict === "keep" || item?.onConflict === "update" ? item.onConflict : null;
 
@@ -200,7 +199,7 @@ export async function POST(
   if (!Number.isFinite(value)) {
     return NextResponse.json({ error: "Valor inválido." }, { status: 400 });
   }
-  const measuredAt = body.measuredAt ? new Date(String(body.measuredAt)).toISOString() : new Date().toISOString();
+  const measuredAt = normalizeMeasuredAt(body.measuredAt);
   const lab = await addLabResult({
     patientEmail: access.key,
     doctorId: doctorId || null,
