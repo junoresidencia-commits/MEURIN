@@ -63,15 +63,19 @@ export function AttendanceControl({ patientKey, bookingId, compact = false }: { 
 
   if (open === null) return null;
 
+  const actionClass = compact
+    ? "inline-flex h-10 min-h-10 items-center justify-center rounded-full bg-[var(--gold)] px-4 text-sm font-extrabold text-white disabled:opacity-50"
+    : "btn-gold text-sm";
+
   return (
     <div className={compact ? "" : "flex flex-col gap-1"}>
       <div className="flex flex-wrap items-center gap-2">
         {!open ? (
-          <button type="button" className="btn-gold text-sm" disabled={busy} onClick={start}>Iniciar atendimento</button>
+          <button type="button" className={actionClass} disabled={busy} onClick={start}>Iniciar atendimento</button>
         ) : (
           <>
             <span className="inline-flex items-center gap-1 rounded-full bg-[var(--gold-soft)] px-3 py-1 text-xs font-semibold text-[var(--gold)]">● Em andamento{startedAt ? ` · desde ${new Date(startedAt).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}` : ""}</span>
-            <button type="button" className="btn-gold text-sm" disabled={busy} onClick={() => setFinishOpen(true)}>Finalizar atendimento</button>
+            <button type="button" className={actionClass} disabled={busy} onClick={() => setFinishOpen(true)}>Finalizar atendimento</button>
           </>
         )}
       </div>
