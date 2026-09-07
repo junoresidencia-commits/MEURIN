@@ -45,7 +45,7 @@ export function SiteFooter() {
           Educação
         </Link>
         <Link href="/instalar" className="hover:text-[var(--gold)]">
-          Instalar no Mac
+          Instalar o app
         </Link>
         <Link href="/termos" className="hover:text-[var(--gold)]">
           Termos

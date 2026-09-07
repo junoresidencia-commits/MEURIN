@@ -2,7 +2,7 @@ Meu Rim para Mac
 ================
 
 Opção 1 (melhor, nativa do Safari)
-  Abra https://meurim.vercel.app no Safari
+  Abra https://meurin.vercel.app no Safari
   Menu Arquivo → Adicionar ao Dock…
 
 Opção 2 (este ZIP)

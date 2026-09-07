@@ -54,10 +54,10 @@ Rode a migration `supabase/migrations/20260810010000_notifications_pwa.sql` no S
 
 ## Como instalar no Mac (Safari)
 
-1. Abra https://meurim.vercel.app no Safari (macOS 14 Sonoma ou mais novo).
+1. Abra https://meurin.vercel.app no Safari (macOS 14 Sonoma ou mais novo).
 2. Menu **Arquivo → Adicionar ao Dock…**
 3. Confirme o nome Meu Rim. O ícone fica no Dock e em Aplicativos da Web.
-4. Alternativa: página `/instalar` (botão na home) com atalho `Meu-Rim-Mac.zip` para baixar.
+4. Alternativa: página `/instalar` (Instalar o app) com PWA no celular e `Meu-Rim-Mac.zip` para o Mac.
 
 ## Como testar no Android (Chrome)
 

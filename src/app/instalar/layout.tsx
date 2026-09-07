@@ -1,8 +1,8 @@
 import type { Metadata } from "next";
 
 export const metadata: Metadata = {
-  title: "Instalar no Mac",
-  description: "Coloque o Meu Rim no Dock do Mac ou baixe o atalho Meu Rim.app.",
+  title: "Instalar o app",
+  description: "Instale o Meu Rim no celular (PWA) ou no Mac (Dock e Meu Rim.app para baixar).",
 };
 
 export default function InstalarLayout({ children }: { children: React.ReactNode }) {

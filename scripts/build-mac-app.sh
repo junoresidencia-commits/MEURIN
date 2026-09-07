@@ -4,7 +4,7 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 OUT="$ROOT/public/downloads"
 APP="$OUT/Meu Rim.app"
-URL="${MEURIM_APP_URL:-https://meurim.vercel.app}"
+URL="${MEURIM_APP_URL:-https://meurin.vercel.app}"
 
 rm -rf "$APP"
 mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
@@ -55,7 +55,7 @@ Meu Rim para Mac
 ================
 
 Opção 1 (melhor, nativa do Safari)
-  Abra https://meurim.vercel.app no Safari
+  Abra https://meurin.vercel.app no Safari
   Menu Arquivo → Adicionar ao Dock…
 
 Opção 2 (este ZIP)

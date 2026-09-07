@@ -16,7 +16,7 @@ function isStandalone() {
 
 export function InstallAppButton({
   className,
-  label = "Instalar no Mac",
+  label = "Instalar o app",
   hideIfNoPrompt = false,
 }: {
   className?: string;

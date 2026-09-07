@@ -59,6 +59,7 @@ export default function MedicoMaisPage() {
       title: "Conta",
       items: [
         { href: "/medicos/configuracoes", label: "Configurações", desc: "Perfil, notificações, CNS e preferências." },
+        { href: "/instalar", label: "Instalar o app", desc: "PWA no celular e Meu Rim no Mac (Dock ou baixar o .app)." },
         ...(isAdmin ? [{ href: "/admin", label: "Administração", desc: "Área administrativa da plataforma.", external: true }] : []),
       ],
     },

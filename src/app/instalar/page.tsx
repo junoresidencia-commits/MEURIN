@@ -8,53 +8,54 @@ export default function InstalarPage() {
     <div className="mx-auto max-w-2xl px-5 py-12">
       <p className="text-xs font-bold uppercase tracking-[0.22em] text-[var(--gold)]">Aplicativo</p>
       <h1 className="font-display mt-2 text-4xl font-extrabold text-[var(--text)]">
-        Meu Rim no seu Mac
+        Instalar o Meu Rim
       </h1>
       <p className="mt-4 text-[var(--text-soft)]">
-        Você já está no site certo. No Mac, o Meu Rim vira um aplicativo no Dock — janela própria, sem a barra do Safari.
+        No celular vira PWA (ícone na tela inicial). No Mac, vai para o Dock — ou você baixa o <b>Meu Rim.app</b>.
       </p>
 
       <section className="panel mt-8 space-y-4">
-        <p className="text-xs font-bold uppercase tracking-wider text-[var(--gold)]">Recomendado no Safari</p>
-        <h2 className="font-display text-2xl font-extrabold text-[var(--text)]">Adicionar ao Dock</h2>
-        <ol className="list-decimal space-y-2 pl-5 text-[var(--text-soft)]">
-          <li>Deixe esta página aberta no <b>Safari</b> (macOS Sonoma 14 ou mais novo).</li>
-          <li>No menu de cima, clique em <b>Arquivo</b>.</li>
-          <li>Escolha <b>Adicionar ao Dock…</b></li>
-          <li>Confirme o nome <b>Meu Rim</b> e clique em <b>Adicionar</b>.</li>
-        </ol>
-        <p className="text-sm text-[var(--text-muted)]">
-          O ícone aparece no Dock e também em <b>Finder → Aplicativos → Aplicativos da Web</b>. Clique nele como qualquer app. Para tirar: clique com o botão direito no ícone → Remover do Dock.
-        </p>
-      </section>
-
-      <section className="panel mt-5 space-y-3">
-        <p className="text-xs font-bold uppercase tracking-wider text-[var(--gold)]">Chrome ou Edge</p>
-        <h2 className="font-display text-xl font-extrabold text-[var(--text)]">Instalar aplicativo</h2>
-        <p className="text-[var(--text-soft)]">
-          No Chrome, abra o menu <b>⋮</b> → <b>Instalar Meu Rim…</b> (ou use o botão abaixo, se o navegador oferecer).
-        </p>
+        <p className="text-xs font-bold uppercase tracking-wider text-[var(--gold)]">Celular — PWA</p>
+        <h2 className="font-display text-2xl font-extrabold text-[var(--text)]">Tela de início</h2>
+        <div className="space-y-3 text-[var(--text-soft)]">
+          <p>
+            <b>iPhone (Safari):</b> toque em Compartilhar → <b>Adicionar à Tela de Início</b> → Adicionar. Abra pelo ícone Meu Rim.
+          </p>
+          <p>
+            <b>Android (Chrome):</b> menu <b>⋮</b> → <b>Instalar aplicativo</b>, ou o botão abaixo se aparecer.
+          </p>
+        </div>
         <InstallAppButton className="btn-gold w-full sm:w-auto" label="Instalar aplicativo" hideIfNoPrompt />
       </section>
 
+      <section className="panel mt-5 space-y-4">
+        <p className="text-xs font-bold uppercase tracking-wider text-[var(--gold)]">Mac — Safari</p>
+        <h2 className="font-display text-2xl font-extrabold text-[var(--text)]">Adicionar ao Dock</h2>
+        <ol className="list-decimal space-y-2 pl-5 text-[var(--text-soft)]">
+          <li>Abra o Meu Rim no <b>Safari</b> (macOS Sonoma 14 ou mais novo).</li>
+          <li>Menu <b>Arquivo</b> → <b>Adicionar ao Dock…</b></li>
+          <li>Confirme o nome <b>Meu Rim</b> e clique em <b>Adicionar</b>.</li>
+        </ol>
+        <p className="text-sm text-[var(--text-muted)]">
+          O ícone fica no Dock e em <b>Finder → Aplicativos → Aplicativos da Web</b>. Para remover: botão direito no ícone → Remover do Dock.
+        </p>
+      </section>
+
       <section className="panel mt-5 space-y-3">
-        <p className="text-xs font-bold uppercase tracking-wider text-[var(--gold)]">Atalho para baixar</p>
+        <p className="text-xs font-bold uppercase tracking-wider text-[var(--gold)]">Mac — baixar</p>
         <h2 className="font-display text-xl font-extrabold text-[var(--text)]">Meu Rim.app</h2>
         <p className="text-[var(--text-soft)]">
-          Baixe o atalho, abra o ZIP e arraste <b>Meu Rim.app</b> para a pasta Aplicativos. Na primeira vez, clique com o botão direito → <b>Abrir</b> (o Mac avisa porque o atalho não é da App Store).
+          Baixe o ZIP, extraia e arraste <b>Meu Rim.app</b> para Aplicativos. Na primeira vez: botão direito → <b>Abrir</b> (o Mac avisa porque não veio da App Store).
         </p>
         <a href="/downloads/Meu-Rim-Mac.zip" className="btn-gold inline-flex" download>
           Baixar Meu Rim para Mac
         </a>
         <p className="text-sm text-[var(--text-muted)]">
-          O atalho abre o Meu Rim em janela de app (Chrome, se você tiver) ou no Safari. Preferir o modo nativo do Mac: use Adicionar ao Dock, acima.
+          O atalho abre o Meu Rim em janela de app. O modo nativo do Mac continua sendo Adicionar ao Dock, acima.
         </p>
       </section>
 
-      <p className="mt-8 text-sm text-[var(--text-muted)]">
-        No iPhone: Safari → Compartilhar → Adicionar à Tela de Início. No Android: Chrome → Instalar aplicativo.
-      </p>
-      <Link href="/" className="btn-ghost mt-6 inline-flex">
+      <Link href="/" className="btn-ghost mt-8 inline-flex">
         Voltar
       </Link>
     </div>
