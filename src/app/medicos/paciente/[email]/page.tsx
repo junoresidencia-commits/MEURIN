@@ -187,6 +187,8 @@ export default function ProntuarioPage() {
   const [clinicalReview, setClinicalReview] = useState<DetectedField[] | null>(null);
   const [shared, setShared] = useState(true);
   const [editingPatient, setEditingPatient] = useState(false);
+  const [toolsOpen, setToolsOpen] = useState(false);
+  const [moreOpen, setMoreOpen] = useState(false);
   const [saving, setSaving] = useState(false);
   const [saveMsg, setSaveMsg] = useState("");
   const [saveErr, setSaveErr] = useState("");
@@ -461,25 +463,34 @@ export default function ProntuarioPage() {
           <div className="flex flex-wrap items-center gap-2">
             <AttendanceControl patientKey={emailParam} compact />
             <EncaminharHeaderButton emailParam={emailParam} patientName={patient?.name} className={HEADER_ACTION} />
-            <details className="relative">
-              <summary className="flex h-10 w-10 cursor-pointer list-none items-center justify-center rounded-full border border-[var(--border)] bg-white text-lg font-extrabold text-[var(--text-muted)] marker:content-none [&::-webkit-details-marker]:hidden">
-                <span className="sr-only">Mais opções do paciente</span>
+            <div className="relative">
+              <button
+                type="button"
+                className="flex h-10 w-10 items-center justify-center rounded-full border border-[var(--border)] bg-white text-lg font-extrabold leading-none text-[var(--text-muted)]"
+                aria-expanded={toolsOpen}
+                aria-haspopup="menu"
+                aria-label="Mais opções do paciente"
+                onClick={() => { setToolsOpen((v) => !v); setMoreOpen(false); }}
+              >
                 ···
-              </summary>
-              <div className="absolute right-0 z-30 mt-2 w-52 overflow-hidden rounded-2xl border border-[var(--border)] bg-white py-1 shadow-[var(--shadow)]">
-                <button
-                  type="button"
-                  className="block w-full px-4 py-2.5 text-left text-sm font-semibold text-[var(--text)] hover:bg-[var(--gold-soft)]"
-                  onClick={(e) => {
-                    setEditingPatient((v) => !v);
-                    (e.currentTarget.closest("details") as HTMLDetailsElement | null)?.removeAttribute("open");
-                  }}
-                >
-                  {editingPatient ? "Fechar edição" : "Editar dados"}
-                </button>
-                <ResetAccessButton emailParam={emailParam} variant="menu" />
-              </div>
-            </details>
+              </button>
+              {toolsOpen && (
+                <div className="absolute right-0 z-30 mt-2 w-52 overflow-hidden rounded-2xl border border-[var(--border)] bg-white py-1 shadow-[var(--shadow)]" role="menu">
+                  <button
+                    type="button"
+                    role="menuitem"
+                    className="block w-full px-4 py-2.5 text-left text-sm font-semibold text-[var(--text)] hover:bg-[var(--gold-soft)]"
+                    onClick={() => {
+                      setEditingPatient((v) => !v);
+                      setToolsOpen(false);
+                    }}
+                  >
+                    {editingPatient ? "Fechar edição" : "Editar dados"}
+                  </button>
+                  <ResetAccessButton emailParam={emailParam} variant="menu" />
+                </div>
+              )}
+            </div>
           </div>
         </div>
       </div>
@@ -493,13 +504,13 @@ export default function ProntuarioPage() {
         />
       )}
 
-      <nav className="mt-4 border-b border-[var(--border)]" aria-label="Seções do prontuário">
-        <div className="flex items-end gap-0.5 overflow-x-auto">
+      <nav className="mt-4 flex items-end border-b border-[var(--border)]" aria-label="Seções do prontuário">
+        <div className="flex min-w-0 flex-1 items-end gap-0.5 overflow-x-auto">
           {PRIMARY_TABS.map((t) => (
             <button
               key={t.id}
               type="button"
-              onClick={() => setTab(t.id)}
+              onClick={() => { setTab(t.id); setMoreOpen(false); }}
               className={`whitespace-nowrap px-3 py-2.5 text-sm font-bold transition ${
                 tab === t.id
                   ? "border-b-2 border-[var(--gold)] text-[var(--gold)]"
@@ -509,35 +520,42 @@ export default function ProntuarioPage() {
               {t.label}
             </button>
           ))}
-          <details className="relative shrink-0">
-            <summary
-              className={`flex cursor-pointer list-none items-center gap-1 whitespace-nowrap px-3 py-2.5 text-sm font-bold marker:content-none [&::-webkit-details-marker]:hidden ${
-                moreActive
-                  ? "border-b-2 border-[var(--gold)] text-[var(--gold)]"
-                  : "border-b-2 border-transparent text-[var(--text-muted)] hover:text-[var(--text)]"
-              }`}
-            >
-              {moreActive ? moreActive.label : "Mais"}
-              <span aria-hidden className="text-[10px]">▾</span>
-            </summary>
-            <div className="absolute left-0 z-30 mt-1 w-52 overflow-hidden rounded-2xl border border-[var(--border)] bg-white py-1 shadow-[var(--shadow)]">
+        </div>
+        <div className="relative shrink-0">
+          <button
+            type="button"
+            aria-expanded={moreOpen}
+            aria-haspopup="menu"
+            onClick={() => { setMoreOpen((v) => !v); setToolsOpen(false); }}
+            className={`flex items-center gap-1 whitespace-nowrap px-3 py-2.5 text-sm font-bold ${
+              moreActive
+                ? "border-b-2 border-[var(--gold)] text-[var(--gold)]"
+                : "border-b-2 border-transparent text-[var(--text-muted)] hover:text-[var(--text)]"
+            }`}
+          >
+            {moreActive ? moreActive.label : "Mais"}
+            <span aria-hidden className="text-[10px]">▾</span>
+          </button>
+          {moreOpen && (
+            <div className="absolute right-0 z-30 mt-1 w-52 overflow-hidden rounded-2xl border border-[var(--border)] bg-white py-1 shadow-[var(--shadow)]" role="menu">
               {moreTabs.map((t) => (
                 <button
                   key={t.id}
                   type="button"
+                  role="menuitem"
                   className={`block w-full px-4 py-2.5 text-left text-sm font-semibold hover:bg-[var(--gold-soft)] ${
                     tab === t.id ? "text-[var(--gold)]" : "text-[var(--text)]"
                   }`}
-                  onClick={(e) => {
+                  onClick={() => {
                     setTab(t.id);
-                    (e.currentTarget.closest("details") as HTMLDetailsElement | null)?.removeAttribute("open");
+                    setMoreOpen(false);
                   }}
                 >
                   {t.label}
                 </button>
               ))}
             </div>
-          </details>
+          )}
         </div>
       </nav>
 
