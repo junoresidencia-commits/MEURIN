@@ -8,7 +8,7 @@ import { NEPHRO_LABS, labLabel, labUnit } from "@/lib/labs";
 import { LmeWizard } from "@/components/LmeWizard";
 import { ClinicalProfileEditor } from "@/components/ClinicalProfileEditor";
 import { ClinicalReviewModal } from "@/components/ClinicalReviewModal";
-import { extractClinicalFields, type DetectedField } from "@/lib/clinical-extractor";
+import { extractClinicalFields, findingsToChanges, splitByConfidence, type DetectedField } from "@/lib/clinical-extractor";
 import { ExamReviewModal } from "@/components/ExamReviewModal";
 import { parseLabGroups, type ParsedLabGroup } from "@/lib/lab-parser";
 import { labCollisionDay, persistLabDate } from "@/lib/lab-dates";
@@ -21,6 +21,7 @@ import { guessSexFromName } from "@/lib/sex-guess";
 import { CareTeamPatientCard, CareTimeline } from "@/components/CareTeamPatientCard";
 import { SharePatientWithDoctor } from "@/components/SharePatientWithDoctor";
 import { EncaminharHeaderButton } from "@/components/EncaminharHeaderButton";
+import { ClinicalSummaryBar } from "@/components/ClinicalSummaryBar";
 import { PdModule } from "@/components/PdModule";
 import { encodePatientParam, postJson, toFriendlyMessage } from "@/lib/user-errors";
 import { ageFromBirthdate } from "@/lib/egfr";
@@ -147,10 +148,13 @@ export default function ProntuarioPage() {
   const [lmeList, setLmeList] = useState<Lme[]>([]);
   const [tab, setTab] = useState<Tab>("evolucao");
   const [isPd, setIsPd] = useState(false);
+  const [profileData, setProfileData] = useState<Record<string, unknown>>({});
   const [egfrInfo, setEgfrInfo] = useState("");
   useEffect(() => {
     fetch(`/api/doctor/patients/${encodePatientParam(emailParam)}/profile`).then((r) => r.json()).then((d) => {
-      const v = d.profile?.dialise_peritoneal;
+      const profile = d.profile || {};
+      setProfileData(profile);
+      const v = profile.dialise_peritoneal;
       setIsPd(v === true || v === "sim");
     }).catch(() => {});
   }, [emailParam]);
@@ -333,28 +337,48 @@ export default function ProntuarioPage() {
       // Leitura automática: detecta exames (em VÁRIAS datas) E dados clínicos na evolução.
       const evolutionText = [form.chiefComplaint, form.history, form.assessment, form.plan].filter(Boolean).join("\n");
       const groups = parseLabGroups(evolutionText);
-      const detectedClinical = extractClinicalFields(evolutionText);
+      const detectedClinical = extractClinicalFields(
+        evolutionText,
+        labs.map((l) => ({ testKey: l.testKey, value: l.value, measuredAt: l.measuredAt }))
+      );
+      const { auto, review } = splitByConfidence(detectedClinical);
+      const autoChanges = findingsToChanges(auto);
+      if (Object.keys(autoChanges).length) {
+        await fetch(`/api/doctor/patients/${encodePatientParam(emailParam)}/profile`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ changes: autoChanges, source: "evolução" }),
+        }).catch(() => {});
+      }
       setForm({ chiefComplaint: "", history: "", assessment: "", plan: "" });
       let examNote = "";
       if (groups.length > 0) {
-        const auto = await tryAutoSaveLabs(groups, "evolução");
-        if (!auto.ok && auto.reason === "review") {
+        const autoLabs = await tryAutoSaveLabs(groups, "evolução");
+        if (!autoLabs.ok && autoLabs.reason === "review") {
           setReview({ groups });
-        } else if (auto.ok) {
+        } else if (autoLabs.ok) {
           const identified = groups.reduce((n, g) => n + g.labs.length, 0);
-          examNote = " " + examSaveSummary(auto.count, auto.duplicate, identified);
-          setImportMsg(examSaveSummary(auto.count, auto.duplicate, identified));
-          setTab("exames");
+          examNote = " " + examSaveSummary(autoLabs.count, autoLabs.duplicate, identified);
+          setImportMsg(examSaveSummary(autoLabs.count, autoLabs.duplicate, identified));
         }
       }
-      setSaveMsg("Evolução salva no prontuário." + (shared ? " Liberada ao paciente." : "") + examNote);
+      const intelNote =
+        auto.length || review.length
+          ? ` ${auto.length + review.length} informação(ões) lidas da evolução${auto.length ? ` (${auto.length} no perfil)` : ""}.`
+          : "";
+      setSaveMsg("Evolução salva no prontuário." + (shared ? " Liberada ao paciente." : "") + examNote + intelNote);
       try {
         await load();
+        const pr = await fetch(`/api/doctor/patients/${encodePatientParam(emailParam)}/profile`).then((r) => r.json());
+        if (pr?.profile) {
+          setProfileData(pr.profile);
+          setIsPd(pr.profile.dialise_peritoneal === true || pr.profile.dialise_peritoneal === "sim");
+        }
       } catch (reloadErr) {
         console.error("[evolucao] recarregar prontuário", reloadErr);
       }
-      if (detectedClinical.length > 0) {
-        setClinicalReview(detectedClinical);
+      if (review.length > 0) {
+        setClinicalReview(review);
       }
     } catch (e) {
       setSaveErr(toFriendlyMessage(e, "Não foi possível salvar a evolução. Tente novamente."));
@@ -558,6 +582,8 @@ export default function ProntuarioPage() {
           )}
         </div>
       </nav>
+
+      <ClinicalSummaryBar age={age} data={profileData} labs={labs} />
 
       <div className="mt-4">
         {tab === "resumo" && (
@@ -975,7 +1001,11 @@ export default function ProntuarioPage() {
           emailParam={emailParam}
           detected={clinicalReview}
           onClose={() => setClinicalReview(null)}
-          onSaved={async () => { await load(); }}
+          onSaved={async () => {
+            await load();
+            const pr = await fetch(`/api/doctor/patients/${encodePatientParam(emailParam)}/profile`).then((r) => r.json());
+            if (pr?.profile) setProfileData(pr.profile);
+          }}
         />
       )}
     </div>

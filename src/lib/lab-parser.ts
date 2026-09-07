@@ -102,8 +102,11 @@ const SYNONYMS: Record<string, string> = {
   "proteinas totais": "proteinas_totais",
   // Relações urinárias
   rac: "rac",
+  uacr: "rac",
+  acr: "rac",
   "rela\u00e7\u00e3o albumina/creatinina": "rac",
   "albumina/creatinina": "rac",
+  "microalbuminuria urinaria": "rac",
   rpc: "rpc",
   "rela\u00e7\u00e3o prote\u00edna/creatinina": "rpc",
   "proteina/creatinina": "rpc",
