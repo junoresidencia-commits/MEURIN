@@ -92,23 +92,29 @@ const REASON: Record<string, string> = {
   outro: "Outro",
 };
 
-const TABS = [
-  { id: "evolucao", label: "Evolução clínica" },
+const PRIMARY_TABS = [
+  { id: "evolucao", label: "Evolução" },
   { id: "exames", label: "Exames" },
   { id: "resumo", label: "Resumo" },
-  { id: "perfil", label: "Perfil clínico" },
+  { id: "perfil", label: "Perfil" },
   { id: "documentos", label: "Documentos" },
   { id: "lme", label: "LME / CEAF" },
+] as const;
+const MORE_TABS = [
   { id: "enviados", label: "Enviados" },
   { id: "sinais", label: "Sinais em casa" },
   { id: "alimentacao", label: "Alimentação" },
   { id: "timeline", label: "Linha do tempo" },
-  { id: "equipe", label: "Equipe assistente" },
+  { id: "equipe", label: "Equipe" },
   { id: "encaminhamentos", label: "Encaminhamentos" },
   { id: "consultas", label: "Consultas" },
   { id: "pesquisa", label: "Pesquisa" },
 ] as const;
+const TABS = [...PRIMARY_TABS, ...MORE_TABS] as const;
 type Tab = (typeof TABS)[number]["id"] | "dp";
+
+const HEADER_ACTION =
+  "inline-flex h-10 min-h-10 items-center justify-center rounded-full bg-[var(--gold)] px-4 text-sm font-extrabold text-white disabled:opacity-50";
 
 const DOC_TYPE_LABEL: Record<Doc["type"], string> = {
   receita: "Receita",
@@ -181,6 +187,8 @@ export default function ProntuarioPage() {
   const [clinicalReview, setClinicalReview] = useState<DetectedField[] | null>(null);
   const [shared, setShared] = useState(true);
   const [editingPatient, setEditingPatient] = useState(false);
+  const [toolsOpen, setToolsOpen] = useState(false);
+  const [moreOpen, setMoreOpen] = useState(false);
   const [saving, setSaving] = useState(false);
   const [saveMsg, setSaveMsg] = useState("");
   const [saveErr, setSaveErr] = useState("");
@@ -416,7 +424,9 @@ export default function ProntuarioPage() {
   const sinais = records.filter((r) => r.kind !== "symptom");
   const sintomas = records.filter((r) => r.kind === "symptom");
   const age = ageFromBirthdate(patient?.birthdate);
-  const patientLine = ["Paciente", age != null ? `${age} anos` : null, patient?.city].filter(Boolean).join(" · ");
+  const patientLine = [age != null ? `${age} anos` : null, patient?.city].filter(Boolean).join(" · ");
+  const moreTabs = [...MORE_TABS, ...(isPd ? [{ id: "dp" as const, label: "Diálise peritoneal" }] : [])];
+  const moreActive = moreTabs.find((t) => t.id === tab);
 
   if (loading) {
     return <div className="mx-auto max-w-3xl px-5 py-20 text-[var(--text-muted)]">Carregando prontuário…</div>;
@@ -441,16 +451,48 @@ export default function ProntuarioPage() {
         ← Painel
       </Link>
 
-      <div className="panel mt-3 flex flex-wrap items-center gap-4">
-        <span className="grid h-14 w-14 place-items-center rounded-2xl bg-[var(--gold-soft)] text-lg font-extrabold text-[var(--gold)]">
-          {patient?.name.slice(0, 2).toUpperCase()}
-        </span>
-        <div className="min-w-0 flex-1">
-          <h1 className="font-display text-2xl font-extrabold text-[var(--text)]">{patient?.name}</h1>
-          <p className="text-sm text-[var(--text-muted)]">{patientLine}</p>
+      <div className="panel mt-3 !py-4">
+        <div className="flex flex-wrap items-center gap-3">
+          <span className="grid h-12 w-12 shrink-0 place-items-center rounded-2xl bg-[var(--gold-soft)] text-sm font-extrabold text-[var(--gold)]">
+            {patient?.name.slice(0, 2).toUpperCase()}
+          </span>
+          <div className="min-w-0 flex-1">
+            <h1 className="font-display text-xl font-extrabold leading-tight text-[var(--text)] sm:text-2xl">{patient?.name}</h1>
+            {patientLine ? <p className="text-sm text-[var(--text-muted)]">{patientLine}</p> : null}
+          </div>
+          <div className="flex flex-wrap items-center gap-2">
+            <AttendanceControl patientKey={emailParam} compact />
+            <EncaminharHeaderButton emailParam={emailParam} patientName={patient?.name} className={HEADER_ACTION} />
+            <div className="relative">
+              <button
+                type="button"
+                className="flex h-10 w-10 items-center justify-center rounded-full border border-[var(--border)] bg-white text-lg font-extrabold leading-none text-[var(--text-muted)]"
+                aria-expanded={toolsOpen}
+                aria-haspopup="menu"
+                aria-label="Mais opções do paciente"
+                onClick={() => { setToolsOpen((v) => !v); setMoreOpen(false); }}
+              >
+                ···
+              </button>
+              {toolsOpen && (
+                <div className="absolute right-0 z-30 mt-2 w-52 overflow-hidden rounded-2xl border border-[var(--border)] bg-white py-1 shadow-[var(--shadow)]" role="menu">
+                  <button
+                    type="button"
+                    role="menuitem"
+                    className="block w-full px-4 py-2.5 text-left text-sm font-semibold text-[var(--text)] hover:bg-[var(--gold-soft)]"
+                    onClick={() => {
+                      setEditingPatient((v) => !v);
+                      setToolsOpen(false);
+                    }}
+                  >
+                    {editingPatient ? "Fechar edição" : "Editar dados"}
+                  </button>
+                  <ResetAccessButton emailParam={emailParam} variant="menu" />
+                </div>
+              )}
+            </div>
+          </div>
         </div>
-        <button type="button" className="btn-ghost text-sm" onClick={() => setEditingPatient((v) => !v)}>{editingPatient ? "Fechar edição" : "Editar dados"}</button>
-        <ResetAccessButton emailParam={emailParam} />
       </div>
 
       {editingPatient && patient && (
@@ -462,25 +504,60 @@ export default function ProntuarioPage() {
         />
       )}
 
-      <div className="mt-3 flex flex-wrap items-center gap-2">
-        <AttendanceControl patientKey={emailParam} compact />
-        <EncaminharHeaderButton emailParam={emailParam} patientName={patient?.name} />
-      </div>
-
-      <div className="mt-6 flex gap-2 overflow-x-auto pb-1">
-        {[...TABS, ...(isPd ? [{ id: "dp" as const, label: "Diálise peritoneal" }] : [])].map((t) => (
+      <nav className="mt-4 flex items-end border-b border-[var(--border)]" aria-label="Seções do prontuário">
+        <div className="flex min-w-0 flex-1 items-end gap-0.5 overflow-x-auto">
+          {PRIMARY_TABS.map((t) => (
+            <button
+              key={t.id}
+              type="button"
+              onClick={() => { setTab(t.id); setMoreOpen(false); }}
+              className={`whitespace-nowrap px-3 py-2.5 text-sm font-bold transition ${
+                tab === t.id
+                  ? "border-b-2 border-[var(--gold)] text-[var(--gold)]"
+                  : "border-b-2 border-transparent text-[var(--text-muted)] hover:text-[var(--text)]"
+              }`}
+            >
+              {t.label}
+            </button>
+          ))}
+        </div>
+        <div className="relative shrink-0">
           <button
-            key={t.id}
             type="button"
-            onClick={() => setTab(t.id)}
-            className={`whitespace-nowrap rounded-full px-4 py-2 text-sm font-bold transition ${
-              tab === t.id ? "bg-[var(--gold)] text-white" : "border border-[var(--border)] bg-white text-[var(--text-soft)]"
+            aria-expanded={moreOpen}
+            aria-haspopup="menu"
+            onClick={() => { setMoreOpen((v) => !v); setToolsOpen(false); }}
+            className={`flex items-center gap-1 whitespace-nowrap px-3 py-2.5 text-sm font-bold ${
+              moreActive
+                ? "border-b-2 border-[var(--gold)] text-[var(--gold)]"
+                : "border-b-2 border-transparent text-[var(--text-muted)] hover:text-[var(--text)]"
             }`}
           >
-            {t.label}
+            {moreActive ? moreActive.label : "Mais"}
+            <span aria-hidden className="text-[10px]">▾</span>
           </button>
-        ))}
-      </div>
+          {moreOpen && (
+            <div className="absolute right-0 z-30 mt-1 w-52 overflow-hidden rounded-2xl border border-[var(--border)] bg-white py-1 shadow-[var(--shadow)]" role="menu">
+              {moreTabs.map((t) => (
+                <button
+                  key={t.id}
+                  type="button"
+                  role="menuitem"
+                  className={`block w-full px-4 py-2.5 text-left text-sm font-semibold hover:bg-[var(--gold-soft)] ${
+                    tab === t.id ? "text-[var(--gold)]" : "text-[var(--text)]"
+                  }`}
+                  onClick={() => {
+                    setTab(t.id);
+                    setMoreOpen(false);
+                  }}
+                >
+                  {t.label}
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+      </nav>
 
       <div className="mt-4">
         {tab === "resumo" && (
@@ -1130,7 +1207,7 @@ function EgfrReadinessBanner({ emailParam, birthdate, sex, patientName, onFixed 
   );
 }
 
-function ResetAccessButton({ emailParam }: { emailParam: string }) {
+function ResetAccessButton({ emailParam, variant = "ghost" }: { emailParam: string; variant?: "ghost" | "menu" }) {
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState("");
   async function reset() {
@@ -1143,6 +1220,21 @@ function ResetAccessButton({ emailParam }: { emailParam: string }) {
       setMsg("Acesso redefinido para 123456.");
     } catch (e) { setMsg(e instanceof Error ? e.message : "Erro"); }
     finally { setBusy(false); setTimeout(() => setMsg(""), 3000); }
+  }
+  if (variant === "menu") {
+    return (
+      <>
+        <button
+          type="button"
+          className="block w-full px-4 py-2.5 text-left text-sm font-semibold text-[var(--text)] hover:bg-[var(--gold-soft)] disabled:opacity-50"
+          onClick={reset}
+          disabled={busy}
+        >
+          {busy ? "Redefinindo…" : "Redefinir acesso"}
+        </button>
+        {msg ? <p className="px-4 pb-2 text-[11px] font-semibold text-[var(--green,#0d9488)]">{msg}</p> : null}
+      </>
+    );
   }
   return (
     <div className="text-right">

@@ -52,7 +52,7 @@ export function SharePatientWithDoctor({ emailParam }: { emailParam: string; pat
       <div className="flex flex-wrap items-start justify-between gap-2">
         <div>
           <p className="text-xs font-bold uppercase tracking-wider text-[var(--gold)]">Equipe médica</p>
-          <p className="mt-0.5 text-sm text-[var(--text-muted)]">Quem já acompanha este prontuário. Para incluir alguém, use Encaminhar no topo.</p>
+          <p className="mt-0.5 text-sm text-[var(--text-muted)]">Quem já acompanha este prontuário.</p>
         </div>
       </div>
 
