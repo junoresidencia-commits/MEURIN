@@ -11,7 +11,7 @@ import { ClinicalReviewModal } from "@/components/ClinicalReviewModal";
 import { extractClinicalFields, findingsToChanges, splitByConfidence, type DetectedField } from "@/lib/clinical-extractor";
 import { ExamReviewModal } from "@/components/ExamReviewModal";
 import { parseLabGroups, type ParsedLabGroup } from "@/lib/lab-parser";
-import { labCollisionDay, persistLabDate } from "@/lib/lab-dates";
+import { labCollisionDay, persistLabDate, todayCivilBahia } from "@/lib/lab-dates";
 import { TemplatePicker } from "@/components/TemplatePicker";
 import { AttendanceControl } from "@/components/AttendanceControl";
 import { ReturnPicker } from "@/components/ReturnPicker";
@@ -336,10 +336,13 @@ export default function ProntuarioPage() {
       );
       // Leitura automática: detecta exames (em VÁRIAS datas) E dados clínicos na evolução.
       const evolutionText = [form.chiefComplaint, form.history, form.assessment, form.plan].filter(Boolean).join("\n");
-      const groups = parseLabGroups(evolutionText);
       const detectedClinical = extractClinicalFields(
         evolutionText,
-        labs.map((l) => ({ testKey: l.testKey, value: l.value, measuredAt: l.measuredAt }))
+        labs.map((l) => ({ testKey: l.testKey, value: l.value, measuredAt: l.measuredAt })),
+        profileData
+      );
+      const groups = parseLabGroups(evolutionText).map((g) =>
+        g.date ? g : { ...g, date: persistLabDate(todayCivilBahia()) }
       );
       const { auto, review } = splitByConfidence(detectedClinical);
       const autoChanges = findingsToChanges(auto);

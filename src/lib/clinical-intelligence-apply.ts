@@ -44,7 +44,7 @@ export async function reprocessPatient(
     .filter(Boolean)
     .join("\n\n");
 
-  const detected = extractClinicalFields(blob, labs.map((l) => ({ testKey: l.testKey, value: l.value, measuredAt: l.measuredAt })));
+  const detected = extractClinicalFields(blob, labs.map((l) => ({ testKey: l.testKey, value: l.value, measuredAt: l.measuredAt })), current?.data);
   const { auto, review } = splitByConfidence(detected);
   const changes = findingsToChanges([...auto, ...review.filter((r) => r.autoApply)]);
 

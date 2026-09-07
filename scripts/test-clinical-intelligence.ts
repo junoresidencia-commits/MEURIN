@@ -57,4 +57,15 @@ assert.equal(pack.tabagismo_cessacao_anos, "8");
 const { auto } = splitByConfidence(extractClinicalFields(sample));
 assert.ok(auto.length >= 6, `auto apply ${auto.length}`);
 
+const susp = extractClinicalFields(
+  "Paciente evoluiu com TFGe 22. Suspendo losartana devido hipercalemia.",
+  [{ testKey: "tfge", value: 38, measuredAt: "2026-01-01" }],
+  { medicamentos_em_uso: "losartana 100 mg; dapagliflozina 10 mg; atorvastatina 40 mg" }
+);
+const suspMap = Object.fromEntries(susp.map((x) => [x.key, x.value]));
+assert.equal(suspMap.estagio_g, "G4");
+assert.ok(String(suspMap.medicamentos_suspensos).includes("losartana"));
+assert.ok(!String(suspMap.medicamentos_em_uso).includes("losartana"));
+assert.ok(String(suspMap.medicamentos_em_uso).includes("dapagliflozina"));
+
 console.log("clinical-intelligence fixtures ok", Object.keys(s).length, "fields on sample");

@@ -209,7 +209,7 @@ const DRUGS = [
   "carvedilol", "bisoprolol", "atenolol", "clonidina", "hidralazina",
 ].sort((a, b) => b.length - a.length);
 
-function parseMeds(t: string, out: Map<string, DetectedField>) {
+function parseMeds(t: string, out: Map<string, DetectedField>, currentMeds?: string) {
   const items: string[] = [];
   const suspended: string[] = [];
   for (const drug of DRUGS) {
@@ -227,7 +227,25 @@ function parseMeds(t: string, out: Map<string, DetectedField>) {
       items.push(dose ? `${drug} ${dose}` : drug);
     }
   }
-  if (items.length) {
+  if (suspended.length) {
+    push(out, {
+      key: "medicamentos_suspensos",
+      value: Array.from(new Set(suspended)).join("; "),
+      label: "Medicamentos suspensos",
+      status: "confirmado",
+      confidence: "alta",
+      autoApply: true,
+    });
+    const base = items.length ? items : String(currentMeds || "").split(";").map((s) => s.trim()).filter(Boolean);
+    const kept = base.filter((line) => !suspended.some((s) => line.toLowerCase().includes(s)));
+    push(out, {
+      key: "medicamentos_em_uso",
+      value: kept.join("; "),
+      status: "confirmado",
+      confidence: "alta",
+      autoApply: true,
+    });
+  } else if (items.length) {
     push(out, {
       key: "medicamentos_em_uso",
       value: items.join("; "),
@@ -236,17 +254,8 @@ function parseMeds(t: string, out: Map<string, DetectedField>) {
       autoApply: true,
     });
   }
-  if (suspended.length) {
-    push(out, {
-      key: "medicamentos_suspensos",
-      value: suspended.join("; "),
-      label: "Medicamentos suspensos",
-      status: "confirmado",
-      confidence: "alta",
-      autoApply: true,
-    });
-  }
 }
+
 
 function parseEas(t: string, out: Map<string, DetectedField>) {
   const fitaMap = (raw: string): string | null => {
@@ -437,7 +446,8 @@ function applyLabsToProfile(
  */
 export function extractClinicalFields(
   text: string,
-  labHistory?: { testKey: string; value: number; measuredAt: string }[]
+  labHistory?: { testKey: string; value: number; measuredAt: string }[],
+  current?: Record<string, unknown>
 ): DetectedField[] {
   const t = norm(text || "");
   if (!t.trim()) return [];
@@ -446,7 +456,7 @@ export function extractClinicalFields(
   parseTerms(t, out);
   parseSmoking(t, out);
   parseAllergies(t, out);
-  parseMeds(t, out);
+  parseMeds(t, out, typeof current?.medicamentos_em_uso === "string" ? current.medicamentos_em_uso : undefined);
   parseEas(t, out);
 
   const occ = parseOccupation(t);
