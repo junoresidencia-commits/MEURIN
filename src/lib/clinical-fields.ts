@@ -13,7 +13,7 @@ export const TRI_OPTIONS: { value: TriState; label: string }[] = [
   { value: "desconhecido", label: "Desconhecido" },
 ];
 
-export const ESTAGIOS_G = ["G1", "G2", "G3a", "G3b", "G4", "G5"] as const;
+export const ESTAGIOS_G = ["G1", "G2", "G3", "G3a", "G3b", "G4", "G5"] as const;
 export const CATEGORIAS_A = ["A1", "A2", "A3"] as const;
 
 export const ETIOLOGIAS: { value: string; label: string }[] = [
@@ -73,6 +73,15 @@ export const CLINICAL_FIELDS: FieldDef[] = [
   { key: "peso_kg", label: "Peso", kind: "number", group: "Dados gerais", unit: "kg" },
   { key: "altura_cm", label: "Altura", kind: "number", group: "Dados gerais", unit: "cm" },
   { key: "tabagismo", label: "Tabagismo", kind: "tri", group: "Dados gerais" },
+  { key: "ex_tabagista", label: "Ex-tabagista", kind: "tri", group: "Dados gerais" },
+  { key: "carga_tabagica", label: "Carga tabágica", kind: "number", group: "Dados gerais", unit: "anos-maço" },
+  { key: "tabagismo_cessacao_anos", label: "Cessação do tabaco", kind: "number", group: "Dados gerais", unit: "anos" },
+  { key: "etilismo", label: "Etilismo", kind: "tri", group: "Dados gerais" },
+  { key: "profissao", label: "Profissão", kind: "text", group: "Dados gerais" },
+  { key: "alergias", label: "Alergias", kind: "text", group: "Dados gerais" },
+  { key: "alergias_negadas", label: "Nega alergias", kind: "tri", group: "Dados gerais" },
+  { key: "medicamentos_em_uso", label: "Medicamentos em uso", kind: "text", group: "Dados gerais" },
+  { key: "medicamentos_suspensos", label: "Medicamentos suspensos", kind: "text", group: "Dados gerais" },
   // Comorbidades
   { key: "has", label: "Hipertensão (HAS)", kind: "tri", group: "Comorbidades" },
   { key: "dm", label: "Diabetes (DM)", kind: "tri", group: "Comorbidades" },
@@ -83,6 +92,13 @@ export const CLINICAL_FIELDS: FieldDef[] = [
   { key: "dislipidemia", label: "Dislipidemia", kind: "tri", group: "Comorbidades" },
   { key: "hepatopatia", label: "Doença hepática", kind: "tri", group: "Comorbidades" },
   { key: "neoplasia", label: "Neoplasia", kind: "tri", group: "Comorbidades" },
+  { key: "dpoc", label: "DPOC", kind: "tri", group: "Comorbidades" },
+  { key: "asma", label: "Asma", kind: "tri", group: "Comorbidades" },
+  { key: "fa", label: "Fibrilação atrial", kind: "tri", group: "Comorbidades" },
+  { key: "doenca_autoimune", label: "Doença autoimune", kind: "tri", group: "Comorbidades" },
+  { key: "nitrito_urinario", label: "Nitrito (EAS)", kind: "text", group: "Exame de urina (fita)" },
+  { key: "densidade_urinaria", label: "Densidade urinária", kind: "text", group: "Exame de urina (fita)" },
+  { key: "leucocituria", label: "Leucocitúria", kind: "tri", group: "Exame de urina (fita)" },
   // Síndrome CKM (AHA) — diagnóstico integrador DCV + DRC + metabolismo
   {
     key: "ckm",

@@ -40,6 +40,7 @@ export default function MedicoMaisPage() {
       title: "Clínica e equipe",
       items: [
         { href: "/medicos/agenda/configurar", label: "Clínicas e horários", desc: "Locais de atendimento e períodos da agenda." },
+        { href: "/medicos/prontuario-inteligente", label: "Prontuário inteligente", desc: "Reprocessar evoluções antigas e revisar o que o sistema leu." },
         { href: "/medicos/equipe", label: "Atendentes", desc: "Sua equipe administrativa e permissões." },
         { href: "/medicos/equipe-assistencial", label: "Minha Equipe", desc: "Médicos, nutrição, psicologia e enfermagem." },
         { href: "/medicos/encaminhamentos", label: "Encaminhamentos", desc: "Pacientes compartilhados com você e os que você encaminhou." },

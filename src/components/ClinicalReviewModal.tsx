@@ -11,7 +11,7 @@ import {
 } from "@/lib/clinical-fields";
 import { encodePatientParam } from "@/lib/user-errors";
 
-type Detected = { key: string; value: string };
+type Detected = { key: string; value: string; label?: string; confidence?: string };
 type Row = Detected & { checked: boolean };
 
 const FIELD_BY_KEY = new Map(CLINICAL_FIELDS.map((f) => [f.key, f]));
@@ -43,6 +43,7 @@ export function ClinicalReviewModal({
   const [rows, setRows] = useState<Row[]>(detected.map((d) => ({ ...d, checked: true })));
   const [saving, setSaving] = useState(false);
   const [err, setErr] = useState("");
+  const [detail, setDetail] = useState(false);
 
   function update(i: number, patch: Partial<Row>) {
     setRows((rs) => rs.map((r, j) => (j === i ? { ...r, ...patch } : r)));
@@ -77,14 +78,29 @@ export function ClinicalReviewModal({
     <div className="fixed inset-0 z-[100] flex items-end justify-center bg-black/40 p-0 sm:items-center sm:p-5">
       <div className="max-h-[92vh] w-full max-w-lg overflow-y-auto rounded-t-[24px] bg-white p-5 shadow-[var(--shadow)] sm:rounded-[24px] sm:p-6">
         <div className="mb-1 flex items-center justify-between">
-          <p className="font-display text-lg font-extrabold text-[var(--text)]">Dados clínicos encontrados</p>
+          <p className="font-display text-lg font-extrabold text-[var(--text)]">
+            {detected.length} informação{detected.length === 1 ? "" : "ões"} identificada{detected.length === 1 ? "" : "s"}
+          </p>
           <button type="button" onClick={onClose} className="text-2xl leading-none text-[var(--text-muted)]">×</button>
         </div>
         <p className="mb-4 text-sm text-[var(--text-soft)]">
-          Foram identificados dados clínicos nesta evolução. Confirme antes de adicionar ao perfil
-          estruturado (fonte: <b>evolução</b>). Você pode editar ou desmarcar cada item.
+          Extraídas desta evolução. Confirme tudo ou revise um item.
         </p>
 
+        {!detail ? (
+          <ul className="space-y-1.5 text-sm text-[var(--text)]">
+            {rows.map((r, i) => (
+              <li key={i} className="flex items-start gap-2">
+                <span className="text-[var(--gold)]">✓</span>
+                <span>
+                  <b>{r.label || FIELD_BY_KEY.get(r.key)?.label || r.key}</b>
+                  {": "}
+                  {displayValue(r.key, r.value)}
+                </span>
+              </li>
+            ))}
+          </ul>
+        ) : (
         <div className="space-y-2">
           {rows.map((r, i) => {
             const f = FIELD_BY_KEY.get(r.key);
@@ -92,8 +108,8 @@ export function ClinicalReviewModal({
               <div key={i} className={`space-y-2 rounded-2xl border p-3 ${r.checked ? "border-[var(--border-gold)] bg-[var(--gold-soft)]/40" : "border-[var(--border)]"}`}>
                 <div className="flex items-center gap-2">
                   <input type="checkbox" className="h-5 w-5 shrink-0 accent-[var(--gold)]" checked={r.checked} onChange={(e) => update(i, { checked: e.target.checked })} />
-                  <span className="flex-1 text-sm font-semibold text-[var(--text)]">{f?.label || r.key}</span>
-                  <span className="text-xs text-[var(--text-muted)]">detectado: {displayValue(r.key, r.value)}</span>
+                  <span className="flex-1 text-sm font-semibold text-[var(--text)]">{r.label || f?.label || r.key}</span>
+                  <span className="text-xs text-[var(--text-muted)]">{displayValue(r.key, r.value)}</span>
                 </div>
                 <div className="pl-7">
                   {f?.kind === "tri" && (
@@ -117,21 +133,25 @@ export function ClinicalReviewModal({
                       ))}
                     </select>
                   )}
-                  {f?.kind === "number" && (
-                    <input inputMode="decimal" className="input-field !py-2 !w-32" value={r.value} onChange={(e) => update(i, { value: e.target.value })} />
+                  {(f?.kind === "number" || f?.kind === "text" || !f) && (
+                    <input className="input-field !py-2" value={r.value} onChange={(e) => update(i, { value: e.target.value })} />
                   )}
                 </div>
               </div>
             );
           })}
         </div>
+        )}
 
         {err && <p className="mt-3 rounded-xl border border-[var(--danger)]/30 bg-[var(--danger)]/10 px-3 py-2 text-sm text-[var(--danger)]">{err}</p>}
 
-        <div className="mt-5 flex gap-3">
+        <div className="mt-5 flex flex-wrap gap-3">
+          <button type="button" className="btn-ghost" onClick={() => setDetail((v) => !v)} disabled={saving}>
+            {detail ? "Lista simples" : "Revisar"}
+          </button>
           <button type="button" className="btn-ghost flex-1" onClick={onClose} disabled={saving}>Agora não</button>
           <button type="button" className="btn-gold flex-1" onClick={confirm} disabled={saving}>
-            {saving ? "Salvando…" : "Confirmar no perfil"}
+            {saving ? "Salvando…" : "Confirmar tudo"}
           </button>
         </div>
       </div>

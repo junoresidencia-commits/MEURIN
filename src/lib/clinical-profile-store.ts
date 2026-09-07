@@ -151,12 +151,21 @@ function sameValue(a: unknown, b: unknown): boolean {
  * Aplica alterações a campos específicos, registrando proveniência e histórico.
  * Não remove campos não citados (merge). Usado pela extração da evolução/PDF.
  */
+const SOURCE_RANK: Record<FieldSource, number> = {
+  manual: 5,
+  cálculo: 4,
+  pdf: 3,
+  importação: 3,
+  evolução: 2,
+};
+
 export async function applyProfileChanges(
   patientKey: string,
   doctorId: string | null,
   by: string | null,
   changes: Record<string, unknown>,
-  source: FieldSource
+  source: FieldSource,
+  opts?: { respectPriority?: boolean }
 ): Promise<ClinicalProfile> {
   const key = patientKey.toLowerCase().trim();
   const current = (await getProfile(key)) || normalize({ patientKey: key, doctorId });
@@ -164,11 +173,14 @@ export async function applyProfileChanges(
   const meta = { ...current.meta };
   const history = [...current.history];
   const now = new Date().toISOString();
+  const respect = opts?.respectPriority !== false;
 
   for (const [field, rawTo] of Object.entries(changes)) {
     const to = isEmpty(rawTo) ? undefined : rawTo;
     const from = data[field];
     if (sameValue(from, to)) continue;
+    const prevSource = meta[field]?.source;
+    if (respect && prevSource && SOURCE_RANK[prevSource] > SOURCE_RANK[source]) continue;
     history.push({ field, from: from ?? null, to: to ?? null, source, by, at: now });
     if (to === undefined) {
       delete data[field];
