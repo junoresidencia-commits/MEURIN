@@ -12,9 +12,11 @@ type Destino = "medico" | "assistencial";
 export function EncaminharHeaderButton({
   emailParam,
   patientName,
+  className = "btn-gold text-sm",
 }: {
   emailParam: string;
   patientName?: string;
+  className?: string;
 }) {
   const [open, setOpen] = useState(false);
   const [destino, setDestino] = useState<Destino | null>(null);
@@ -28,7 +30,7 @@ export function EncaminharHeaderButton({
     <>
       <button
         type="button"
-        className="btn-gold text-sm"
+        className={className}
         onClick={() => {
           setDestino(null);
           setOpen(true);

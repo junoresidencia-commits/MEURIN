@@ -114,7 +114,7 @@ export function CareTeamPatientCard({ emailParam }: { emailParam: string }) {
       <div className="flex flex-wrap items-start justify-between gap-2">
         <div>
           <p className="text-xs font-bold uppercase tracking-wider text-[var(--gold)]">Equipe assistencial</p>
-          <p className="mt-0.5 text-sm text-[var(--text-muted)]">Profissionais que acompanham este paciente. Para encaminhar, use Encaminhar no topo.</p>
+          <p className="mt-0.5 text-sm text-[var(--text-muted)]">Profissionais que acompanham este paciente.</p>
         </div>
         <button type="button" className="btn-ghost text-sm" onClick={() => setManage((v) => !v)}>Gerenciar equipe</button>
       </div>
