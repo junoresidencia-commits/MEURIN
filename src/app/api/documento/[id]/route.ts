@@ -3,6 +3,7 @@ import { getDoctorSessionId } from "@/lib/auth";
 import { getPatientEmail } from "@/lib/patient-session";
 import { getDocumentById } from "@/lib/patient-store";
 import { getDoctorById } from "@/lib/store";
+import { patientCanViewSharedDocument } from "@/lib/nutrition-plan-access";
 
 export async function GET(
   _req: Request,
@@ -18,13 +19,19 @@ export async function GET(
   const patientEmail = await getPatientEmail();
 
   const isOwnerDoctor = doctorId && doctorId === doc.doctorId;
-  const isPatientAllowed =
-    patientEmail &&
-    patientEmail.toLowerCase() === doc.patientEmail.toLowerCase() &&
-    doc.sharedWithPatient;
+  const isPatientAllowed = patientEmail
+    ? await patientCanViewSharedDocument(doc, patientEmail)
+    : false;
 
   if (!isOwnerDoctor && !isPatientAllowed) {
-    return NextResponse.json({ error: "Sem acesso a este documento." }, { status: 403 });
+    const unpaidPlan = patientEmail
+      && patientEmail.toLowerCase() === doc.patientEmail.toLowerCase()
+      && doc.sharedWithPatient
+      && doc.type === "plano_alimentar";
+    return NextResponse.json(
+      { error: unpaidPlan ? "O plano alimentar é liberado após a confirmação do pagamento da consulta." : "Sem acesso a este documento." },
+      { status: 403 }
+    );
   }
 
   // Anexa a logo do médico emissor para o cabeçalho do documento/PDF.

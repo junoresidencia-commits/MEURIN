@@ -130,7 +130,7 @@ export default function NutriPacientePage() {
       });
       const d = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(d.error || "Erro ao salvar.");
-      setOkMsg(share ? "Consulta salva e plano liberado ao paciente." : "Consulta salva. Plano gerado (não liberado ao paciente).");
+      setOkMsg(share ? "Consulta salva. O paciente vê o plano depois que o pagamento da consulta for confirmado." : "Consulta salva. Plano gerado (não liberado ao paciente).");
       setPdfUrl(d.pdfUrl || null);
     } catch (e) { setError(e instanceof Error ? e.message : "Erro"); }
     finally { setSaving(false); }
@@ -265,7 +265,7 @@ export default function NutriPacientePage() {
       <div className="mt-4 flex flex-wrap items-center gap-3">
         <label className="flex items-center gap-2 text-sm text-[var(--text-soft)]">
           <input type="checkbox" className="h-4 w-4 accent-[var(--gold)]" checked={share} onChange={(e) => setShare(e.target.checked)} />
-          Disponibilizar o plano ao paciente
+          Disponibilizar o plano ao paciente (liberado só após o pagamento confirmado)
         </label>
         <button type="button" className="btn-gold" onClick={save} disabled={saving}>{saving ? "Salvando…" : "Salvar consulta e gerar plano (PDF)"}</button>
       </div>
@@ -306,7 +306,7 @@ function ScheduleBox({ patientKey }: { patientKey: string }) {
   return (
     <section className="panel mt-4">
       <h2 className="font-display text-lg text-[var(--text)]">Agendar consulta nutricional</h2>
-      <p className="mt-1 text-sm text-[var(--text-muted)]">Cria a consulta e o cobrança por Pix direto. Configure seu valor e chave em <Link href="/nutricionista/configuracoes" className="font-semibold text-[var(--gold)]">Recebimentos</Link>.</p>
+      <p className="mt-1 text-sm text-[var(--text-muted)]">Cria a consulta (teleconsulta ou presencial) e a cobrança por Pix. O plano alimentar só aparece para o paciente depois que você confirmar o pagamento. Configure telefone, valor e chave em <Link href="/nutricionista/configuracoes" className="font-semibold text-[var(--gold)]">Recebimentos</Link>.</p>
       <div className="mt-2 grid gap-3 sm:grid-cols-3">
         <label className="block"><span className="mb-1 block text-xs font-semibold text-[var(--text-muted)]">Modalidade</span>
           <select className="input-field" value={modality} onChange={(e) => setModality(e.target.value)}>

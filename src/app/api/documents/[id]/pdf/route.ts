@@ -4,6 +4,7 @@ import { getPatientEmail } from "@/lib/patient-session";
 import { getNutritionistId } from "@/lib/nutrition-session";
 import { getDocumentById, markPatientViewed } from "@/lib/patient-store";
 import { DOCPDF_BUCKET, readFile } from "@/lib/doc-storage";
+import { patientCanViewSharedDocument } from "@/lib/nutrition-plan-access";
 
 /** Serve o PDF final com verificação de permissão (nunca URL pública permanente). */
 export async function GET(_req: Request, ctx: { params: Promise<{ id: string }> }) {
@@ -17,9 +18,18 @@ export async function GET(_req: Request, ctx: { params: Promise<{ id: string }> 
   const isOwnerDoctor = doctorId && doctorId === doc.doctorId;
   // Nutricionista autora do documento (documentos de nutrição usam doctorId = id da nutricionista).
   const isAuthorNutritionist = nutritionistId && nutritionistId === doc.doctorId;
-  const isPatientAllowed = patientEmail && patientEmail.toLowerCase() === doc.patientEmail.toLowerCase() && doc.sharedWithPatient;
+  const isPatientAllowed = patientEmail
+    ? await patientCanViewSharedDocument(doc, patientEmail)
+    : false;
   if (!isOwnerDoctor && !isAuthorNutritionist && !isPatientAllowed) {
-    return NextResponse.json({ error: "Sem acesso a este documento." }, { status: 403 });
+    const unpaidPlan = patientEmail
+      && patientEmail.toLowerCase() === doc.patientEmail.toLowerCase()
+      && doc.sharedWithPatient
+      && doc.type === "plano_alimentar";
+    return NextResponse.json(
+      { error: unpaidPlan ? "O plano alimentar é liberado após a confirmação do pagamento da consulta." : "Sem acesso a este documento." },
+      { status: 403 }
+    );
   }
 
   const file = await readFile(DOCPDF_BUCKET, (doc.pdfStorage as "supabase" | "local") || "supabase", doc.pdfPath);
