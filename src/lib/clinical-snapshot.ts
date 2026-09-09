@@ -6,7 +6,7 @@ import { getPatient } from "./patients-store";
 import { NEPHRO_LABS } from "./labs";
 import type { AlliedRole } from "./allied-types";
 
-const NUTRI_LABS = ["creatinina", "tfge", "ureia", "potassio", "fosforo", "calcio", "albumina", "hemoglobina", "proteinuria_24h", "rac", "glicemia", "glicemia_jejum", "hba1c"];
+const NUTRI_LABS = ["creatinina", "tfge", "ureia", "potassio", "fosforo", "calcio", "albumina", "hemoglobina", "proteinuria_24h", "rac", "albuminuria_24h", "microalbuminuria", "glicemia", "glicemia_jejum", "hba1c"];
 const NURSE_LABS = ["creatinina", "tfge", "ureia", "potassio", "calcio", "fosforo", "albumina", "hemoglobina", "pth", "glicemia", "glicemia_jejum"];
 const PSY_LABS: string[] = [];
 

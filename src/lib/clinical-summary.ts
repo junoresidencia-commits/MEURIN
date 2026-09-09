@@ -56,6 +56,12 @@ export function buildClinicalSummary(opts: {
   if (cr) renal.push(`Cr ${cr}`);
   const rac = lab(labs, "rac");
   if (rac) renal.push(`RAC ${rac}`);
+  const pu24 = lab(labs, "proteinuria_24h");
+  if (pu24) renal.push(`Proteinúria 24h ${pu24}`);
+  const au24 = lab(labs, "albuminuria_24h");
+  if (au24) renal.push(`Albuminúria 24h ${au24}`);
+  const ua = lab(labs, "microalbuminuria");
+  if (ua) renal.push(`Albumina urinária ${ua}`);
   const k = lab(labs, "potassio");
   if (k) renal.push(`K ${k}`);
   const hb = lab(labs, "hemoglobina");

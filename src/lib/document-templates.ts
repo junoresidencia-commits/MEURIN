@@ -130,6 +130,7 @@ export const BUILTIN_TEMPLATES: DocTemplate[] = [
     "Relação proteína/creatinina (RPC)",
     "Relação albumina/creatinina (RAC)",
     "Proteinúria de 24 horas",
+    "Albuminúria de 24 horas",
     "Albumina sérica, perfil lipídico",
     "Urina tipo 1 (EAS)",
   ].join("\n")),

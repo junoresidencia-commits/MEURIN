@@ -7,7 +7,7 @@ type Lab = { value: number; unit: string | null; date: string; trend: "up" | "do
 type Summary = {
   patient: { name: string; city: string; age: number | null; sex: string | null };
   drc: { g: string | null; a: string | null };
-  labs: { tfge: Lab; tfge_cistatina: Lab; creatinina: Lab; rac: Lab; proteinuria_24h: Lab; potassio: Lab; hemoglobina: Lab };
+  labs: { tfge: Lab; tfge_cistatina: Lab; creatinina: Lab; rac: Lab; proteinuria_24h: Lab; albuminuria_24h: Lab; microalbuminuria: Lab; potassio: Lab; hemoglobina: Lab };
   vitals: { pa: { text: string; date: string } | null; peso: { value: number; date: string } | null };
   lastConsultation: string | null;
   nextConsultation: string | null;
@@ -87,6 +87,8 @@ export function PatientQuickSheet({ patientKey, onClose }: { patientKey: string;
               <LabCell label="Creatinina" lab={data.labs.creatinina} />
               <LabCell label="RAC" lab={data.labs.rac} />
               <LabCell label="Proteinúria 24h" lab={data.labs.proteinuria_24h} />
+              <LabCell label="Albuminúria 24h" lab={data.labs.albuminuria_24h} />
+              <LabCell label="Albumina urinária" lab={data.labs.microalbuminuria} />
               <LabCell label="Potássio" lab={data.labs.potassio} />
               <LabCell label="Hemoglobina" lab={data.labs.hemoglobina} />
               {data.vitals.pa && (
