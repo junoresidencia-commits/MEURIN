@@ -712,14 +712,14 @@ export default function ProntuarioPage() {
                 Importar exames de texto (várias datas)
               </p>
               <p className="text-sm text-[var(--text-soft)]">
-                Cole um laudo com a <b>data em cima</b> e os exames embaixo (pode ter várias datas). O sistema
-                identifica e já lança no histórico — só pede conferência se faltar data ou houver conflito.
+                Cole um laudo com a <b>data em cima</b> e os exames embaixo (pode ter várias datas). Proteinúria 24h,
+                RAC, albumina urinária (mg/L) e albuminúria 24h entram em campos separados.
               </p>
               <textarea
                 className="input-field min-h-[120px] font-mono text-[13px]"
                 value={importText}
                 onChange={(e) => setImportText(e.target.value)}
-                placeholder={"Ex.:\n21/08/2026\nCR: 3,51\nU: 94\nK: 5,8\nNA: 141\nTFGE: 19\n\n17/07/2026\nHB: 12\nHT: 37\nLeuco: 14840\nPlaqueta: 375 mil\nCR: 2,99"}
+                placeholder={"Ex.:\n18/08/2026\nProteinúria 24h: 12.013 mg/24h\nAlbuminúria 24h: 6.379 mg/24h\n\n13/08/2026\nRAC: 806,6 mg/g\nAlbumina urinária: 40 mg/L"}
               />
               {importErr && <p className="text-sm text-[var(--danger)]">{importErr}</p>}
               {importMsg && <p className="rounded-xl border border-[var(--green)]/30 bg-[var(--green)]/10 px-3 py-2 text-sm text-[var(--green)]">{importMsg}</p>}

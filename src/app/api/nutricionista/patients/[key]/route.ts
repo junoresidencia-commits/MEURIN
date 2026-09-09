@@ -7,7 +7,7 @@ import { NEPHRO_LABS } from "@/lib/labs";
 import { listConsultationsForPatient, getNutritionLink } from "@/lib/nutritionists-store";
 
 // Exames relevantes para a avaliação nutricional renal.
-const RELEVANT = ["creatinina", "tfge", "potassio", "fosforo", "calcio", "albumina", "ureia", "glicemia", "glicemia_jejum", "hba1c", "colesterol_total", "ldl", "hdl", "triglicerideos", "proteinuria_24h", "rac"];
+const RELEVANT = ["creatinina", "tfge", "potassio", "fosforo", "calcio", "albumina", "ureia", "glicemia", "glicemia_jejum", "hba1c", "colesterol_total", "ldl", "hdl", "triglicerideos", "proteinuria_24h", "rac", "albuminuria_24h", "microalbuminuria"];
 
 export async function GET(_req: Request, { params }: { params: Promise<{ key: string }> }) {
   const { key } = await params;
