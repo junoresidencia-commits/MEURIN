@@ -44,6 +44,9 @@ export function SiteFooter() {
         <Link href="/educacao" className="hover:text-[var(--gold)]">
           Educação
         </Link>
+        <Link href="/instalar" className="hover:text-[var(--gold)]">
+          Instalar o app
+        </Link>
         <Link href="/termos" className="hover:text-[var(--gold)]">
           Termos
         </Link>
