@@ -49,7 +49,7 @@ const MORE: { href: string; label: string; icon: keyof typeof PATHS }[] = [
 export function DoctorSidebar() {
   const pathname = usePathname();
   const router = useRouter();
-  const [doctor, setDoctor] = useState<{ name?: string; crm?: string; specialty?: string; logoUrl?: string; photoUrl?: string } | null>(null);
+  const [doctor, setDoctor] = useState<{ name?: string; crm?: string; specialty?: string; logoUrl?: string; photoUrl?: string; platformRoles?: string[] } | null>(null);
 
   useEffect(() => {
     fetch("/api/auth").then((r) => r.json()).then((d) => { if (d?.doctor) setDoctor(d.doctor); }).catch(() => {});
@@ -109,6 +109,11 @@ export function DoctorSidebar() {
         </nav>
 
         <div className="mt-3 border-t border-[var(--border)] pt-3">
+          {doctor?.platformRoles?.includes("SUPER_ADMIN") && (
+            <Link href="/plataforma" className="flex items-center gap-3 rounded-xl px-3 py-2 text-sm font-semibold text-[var(--text-soft)] transition hover:bg-[var(--gold-soft)] hover:text-[var(--gold)]">
+              <Icon name="gear" className="h-5 w-5" /> Administração Meu Rim
+            </Link>
+          )}
           <a href="https://wa.me/?text=Preciso%20de%20ajuda%20no%20Meu%20Rim" target="_blank" rel="noopener noreferrer" className="flex items-center gap-3 rounded-xl px-3 py-2 text-sm font-semibold text-[var(--text-soft)] transition hover:bg-[var(--gold-soft)] hover:text-[var(--gold)]">
             <Icon name="heart" className="h-5 w-5" /> Suporte
           </a>

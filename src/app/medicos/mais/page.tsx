@@ -13,11 +13,13 @@ export default function MedicoMaisPage() {
   const router = useRouter();
   const [ready, setReady] = useState(false);
   const [isAdmin, setIsAdmin] = useState(false);
+  const [isSuperAdmin, setIsSuperAdmin] = useState(false);
 
   useEffect(() => {
     fetch("/api/auth").then((r) => r.json()).then((d) => {
       if (!d.doctor) { router.replace("/medicos/login"); return; }
       setReady(true);
+      setIsSuperAdmin(Array.isArray(d.doctor.platformRoles) && d.doctor.platformRoles.includes("SUPER_ADMIN"));
       fetch("/api/admin/session").then((r) => r.json()).then((x) => setIsAdmin(Boolean(x.admin))).catch(() => {});
     });
   }, [router]);
@@ -59,6 +61,7 @@ export default function MedicoMaisPage() {
       title: "Conta",
       items: [
         { href: "/medicos/configuracoes", label: "Configurações", desc: "Perfil, notificações, CNS e preferências." },
+        ...(isSuperAdmin ? [{ href: "/plataforma", label: "Administração Meu Rim", desc: "Clínicas, usuários e integridade — separado da área médica." }] : []),
         ...(isAdmin ? [{ href: "/admin", label: "Administração", desc: "Área administrativa da plataforma.", external: true }] : []),
       ],
     },
