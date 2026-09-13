@@ -18,7 +18,13 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
     if (!report) return NextResponse.json({ error: "Clínica não encontrada." }, { status: 404 });
     if (format !== "pdf") return NextResponse.json({ report });
     const bytes = await officialClinicReportPdf(report);
-    const filename = `prestacao-contas-${report.clinic.name.replace(/[^\w]+/g, "-").toLowerCase()}-${from}-${to}.pdf`;
+    const slug = report.clinic.name
+      .normalize("NFD")
+      .replace(/\p{M}/gu, "")
+      .replace(/[^a-zA-Z0-9]+/g, "-")
+      .replace(/^-|-$/g, "")
+      .toLowerCase();
+    const filename = `prestacao-contas-${slug || "clinica"}-${from}-${to}.pdf`;
     return new NextResponse(Buffer.from(bytes), {
       headers: {
         "Content-Type": "application/pdf",
