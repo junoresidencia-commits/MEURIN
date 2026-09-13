@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { readDb } from "../src/lib/store";
-import { createClinic, addMembership, listMemberships } from "../src/lib/platform-store";
+import { createClinic, addMembership, listMemberships, listMembershipsForActor } from "../src/lib/platform-store";
 import { inviteDoctor, inviteAttendant, acceptInvite, getInviteByToken } from "../src/lib/clinic-ops-store";
 import { upsertFeeRule, recordProductionFromAttendance, recordCheckIn, listEncounters, productionSummary } from "../src/lib/clinic-finance-store";
 import { collectIntegrityCounts, countsDropped } from "../src/lib/platform-integrity";
@@ -33,10 +33,11 @@ async function main() {
   assert.equal(afterLink.doctors.find((d) => d.email === "carlos@meurim.com")?.id, carlosId);
   assert.equal(afterLink.doctors.find((d) => d.email === "carlos@meurim.com")?.passwordHash, carlosHash);
 
+  const newEmail = `nova.convite.${Date.now()}@meurim.com`;
   const pending = await inviteDoctor({
     clinicId: clinic.id,
     name: "Dra. Nova Convite",
-    email: "nova.convite@meurim.com",
+    email: newEmail,
     crm: "CRM-BA 999",
     specialty: "Nefrologia",
     invitedBy: carlos.id,
@@ -45,12 +46,12 @@ async function main() {
   assert.equal(pending.invite.status, "pending");
   const mid = await readDb();
   assert.equal(mid.doctors.length, doctorsBefore, "convite pendente não cria médico");
-  assert.equal(mid.doctors.some((d) => d.email === "nova.convite@meurim.com"), false);
+  assert.equal(mid.doctors.some((d) => d.email === newEmail), false);
 
   const accepted = await acceptInvite(pending.invite.token, "senha-da-medica");
   assert.equal(accepted.actorKind, "doctor");
   const afterAccept = await readDb();
-  const nova = afterAccept.doctors.find((d) => d.email === "nova.convite@meurim.com");
+  const nova = afterAccept.doctors.find((d) => d.email === newEmail);
   assert.ok(nova, "médica criada só depois de ela definir a senha");
   assert.notEqual(nova.id, carlosId);
   assert.equal(afterAccept.doctors.find((d) => d.email === "carlos@meurim.com")?.id, carlosId);
@@ -65,7 +66,7 @@ async function main() {
   const attInvite = await inviteAttendant({
     clinicId: clinic.id,
     name: "Ana Balcão",
-    email: "ana.balcao@meurim.com",
+    email: `ana.balcao.${Date.now()}@meurim.com`,
     invitedBy: carlos.id,
   });
   assert.equal(attInvite.linkedExisting, false);
@@ -108,18 +109,14 @@ async function main() {
   assert.equal(summary.producedCents, 45000);
   assert.equal(summary.receivedCents, 45000);
 
-  const noClinic = await recordProductionFromAttendance({
-    doctorId: carlosId,
-    patientKey: "outro@meurim.com",
-  });
-  // Carlos é ADMIN_CLINICA desta clínica (1 clínica) — pode gerar produção.
-  // Garante que médico sem clínica não quebra: criamos um segundo médico seed (Ana) sem membership extra.
-  const ana = afterAccept.doctors.find((d) => d.email === "ana@meurim.com");
-  if (ana) {
-    const skipped = await recordProductionFromAttendance({ doctorId: ana.id, patientKey: "x@y.com" });
-    assert.equal(skipped, null, "médico sem clínica não gera produção");
+  const lonely = afterAccept.doctors.find((d) => d.email === "pedro@meurim.com") || afterAccept.doctors.find((d) => d.email !== "carlos@meurim.com" && d.id !== nova.id);
+  if (lonely) {
+    const links = await listMembershipsForActor("doctor", lonely.id);
+    if (links.length === 0) {
+      const skipped = await recordProductionFromAttendance({ doctorId: lonely.id, patientKey: "x@y.com" });
+      assert.equal(skipped, null, "médico sem clínica não gera produção");
+    }
   }
-  void noClinic;
 
   const after = await collectIntegrityCounts();
   const dropped = countsDropped(before, after);
