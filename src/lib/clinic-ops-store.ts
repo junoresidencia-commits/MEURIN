@@ -10,6 +10,7 @@ import { emailsMatch } from "./login-email";
 import { defaultAvailability } from "./scheduling";
 import { createAttendant, findAttendantByCpfOrEmail, upsertLink } from "./attendants-store";
 import { addMembership, listMemberships, writeAudit } from "./platform-store";
+import { listFinanceEvents, upsertFeeRule, writeFinanceEvent } from "./clinic-finance-store";
 import type { ClinicInvite, InviteKind, InviteStatus } from "./platform-types";
 import type { Doctor } from "./types";
 
@@ -59,6 +60,11 @@ function mapInvite(r: Record<string, unknown>): ClinicInvite {
     acceptedActorId: (r.accepted_actor_id as string) ?? (r.acceptedActorId as string) ?? null,
     createdAt: String(r.created_at ?? r.createdAt),
     acceptedAt: (r.accepted_at as string) ?? (r.acceptedAt as string) ?? null,
+    feeCents: r.fee_cents == null && r.feeCents == null ? null : Number(r.fee_cents ?? r.feeCents),
+    clinicSharePercent:
+      r.clinic_share_percent == null && r.clinicSharePercent == null
+        ? null
+        : Number(r.clinic_share_percent ?? r.clinicSharePercent),
   };
 }
 
@@ -98,7 +104,7 @@ export async function getInviteByToken(token: string): Promise<ClinicInvite | nu
 async function persistInvite(row: ClinicInvite): Promise<ClinicInvite> {
   if (active()) {
     const sb = getSupabaseAdmin()!;
-    const { error } = await sb.from("clinic_invites").insert({
+    const base = {
       id: row.id,
       clinic_id: row.clinicId,
       kind: row.kind,
@@ -112,7 +118,16 @@ async function persistInvite(row: ClinicInvite): Promise<ClinicInvite> {
       accepted_actor_id: row.acceptedActorId,
       created_at: row.createdAt,
       accepted_at: row.acceptedAt,
-    });
+    };
+    const withFee = {
+      ...base,
+      fee_cents: row.feeCents ?? null,
+      clinic_share_percent: row.clinicSharePercent ?? null,
+    };
+    let { error } = await sb.from("clinic_invites").insert(withFee);
+    if (error && /fee_cents|clinic_share_percent|schema cache|column/i.test(error.message || "")) {
+      ({ error } = await sb.from("clinic_invites").insert(base));
+    }
     if (error && !isMissing(error)) throw error;
     if (error && isMissing(error)) tableMissing = true;
     else if (!error) return row;
@@ -152,6 +167,37 @@ export type InviteResult = {
 };
 
 /** Convida médico. Se já existe, só cria membership no mesmo ID. Gestora nunca define senha. */
+async function applyHonorario(
+  clinicId: string,
+  doctorId: string,
+  feeCents: number,
+  clinicSharePercent: number,
+  invitedBy: string,
+  email: string
+) {
+  await upsertFeeRule({
+    clinicId,
+    doctorId,
+    feeCents,
+    clinicSharePercent,
+    reason: "Definido no cadastro do médico nesta clínica.",
+    actorKind: "doctor",
+    actorId: invitedBy,
+    actorEmail: email,
+  });
+}
+
+async function honorarioFromInvite(invite: ClinicInvite): Promise<{ feeCents: number; clinicSharePercent: number } | null> {
+  if (invite.feeCents != null && Number.isFinite(invite.feeCents)) {
+    return { feeCents: invite.feeCents, clinicSharePercent: Number(invite.clinicSharePercent ?? 0) };
+  }
+  const events = await listFinanceEvents(invite.clinicId, 80);
+  const ev = events.find((e) => e.entity === "clinic_invite" && e.entityId === invite.id && e.kind === "fee_rule");
+  if (!ev || ev.afterCents == null) return null;
+  const m = String(ev.reason || "").match(/share:(\d+(?:\.\d+)?)/);
+  return { feeCents: ev.afterCents, clinicSharePercent: m ? Number(m[1]) : 0 };
+}
+
 export async function inviteDoctor(input: {
   clinicId: string;
   name: string;
@@ -159,10 +205,21 @@ export async function inviteDoctor(input: {
   crm?: string;
   specialty?: string;
   invitedBy: string;
+  feeCents?: number;
+  clinicSharePercent?: number;
 }): Promise<InviteResult> {
   const email = input.email.toLowerCase().trim();
   const name = input.name.trim();
   if (!email || !name) throw new Error("Nome e e-mail são obrigatórios.");
+  const feeCents = input.feeCents == null ? null : Math.round(Number(input.feeCents));
+  const clinicSharePercent =
+    input.clinicSharePercent == null ? null : Number(input.clinicSharePercent);
+  if (feeCents == null || !Number.isFinite(feeCents) || feeCents < 0) {
+    throw new Error("Informe o valor da consulta nesta clínica.");
+  }
+  if (clinicSharePercent == null || !Number.isFinite(clinicSharePercent) || clinicSharePercent < 0 || clinicSharePercent > 100) {
+    throw new Error("Informe o percentual da clínica (0 a 100) neste vínculo.");
+  }
   const doctors = await listDoctors();
   const existing = doctors.find((d) => emailsMatch(d.email, email));
   const now = new Date().toISOString();
@@ -180,10 +237,13 @@ export async function inviteDoctor(input: {
     acceptedActorId: existing?.id ?? null,
     createdAt: now,
     acceptedAt: existing ? now : null,
+    feeCents,
+    clinicSharePercent,
   };
   await persistInvite(invite);
   if (existing) {
     await addMembership({ clinicId: input.clinicId, actorKind: "doctor", actorId: existing.id, role: "MEDICO" });
+    await applyHonorario(input.clinicId, existing.id, feeCents, clinicSharePercent, input.invitedBy, email);
     await writeAudit({
       actorKind: "doctor",
       actorId: input.invitedBy,
@@ -191,10 +251,22 @@ export async function inviteDoctor(input: {
       action: "clinic_link_existing_doctor",
       entity: "clinic_membership",
       entityId: input.clinicId,
-      detail: `Médico já existente ${existing.id} vinculado. Sem novo usuário.`,
+      detail: `Médico já existente ${existing.id} vinculado. Sem novo usuário. Honorário R$ ${(feeCents / 100).toFixed(2)} / clínica ${clinicSharePercent}%.`,
     });
     return { invite, linkedExisting: true, actorId: existing.id };
   }
+  await writeFinanceEvent({
+    clinicId: input.clinicId,
+    kind: "fee_rule",
+    entity: "clinic_invite",
+    entityId: invite.id,
+    beforeCents: null,
+    afterCents: feeCents,
+    reason: `share:${clinicSharePercent}`,
+    actorKind: "doctor",
+    actorId: input.invitedBy,
+    actorEmail: email,
+  });
   await writeAudit({
     actorKind: "doctor",
     actorId: input.invitedBy,
@@ -283,6 +355,8 @@ export async function acceptInvite(token: string, password: string): Promise<{ a
     const already = doctors.find((d) => emailsMatch(d.email, invite.email));
     if (already) {
       await addMembership({ clinicId: invite.clinicId, actorKind: "doctor", actorId: already.id, role: "MEDICO" });
+      const fee = await honorarioFromInvite(invite);
+      if (fee) await applyHonorario(invite.clinicId, already.id, fee.feeCents, fee.clinicSharePercent, invite.invitedBy || already.id, invite.email);
       await markAccepted(invite.id, already.id);
       return { actorKind: "doctor", actorId: already.id };
     }
@@ -303,6 +377,8 @@ export async function acceptInvite(token: string, password: string): Promise<{ a
     };
     await updateDb((current) => ({ ...current, doctors: [...current.doctors, doctor] }));
     await addMembership({ clinicId: invite.clinicId, actorKind: "doctor", actorId: doctor.id, role: "MEDICO" });
+    const fee = await honorarioFromInvite(invite);
+    if (fee) await applyHonorario(invite.clinicId, doctor.id, fee.feeCents, fee.clinicSharePercent, invite.invitedBy || doctor.id, invite.email);
     await markAccepted(invite.id, doctor.id);
     await writeAudit({
       actorKind: "doctor",
