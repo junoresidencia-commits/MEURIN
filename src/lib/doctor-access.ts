@@ -1,6 +1,6 @@
 import "server-only";
 import { getDoctorSessionId } from "./auth";
-import { readDb } from "./store";
+import { listBookingsForDoctor } from "./store";
 import { clinicalKey, getPatient, findByEmailAny, findPatientByClinicalKey, type Patient } from "./patients-store";
 import { hasActiveShareAny } from "./patient-shares-store";
 
@@ -78,11 +78,11 @@ export async function resolvePatientAccess(param: string): Promise<PatientAccess
   if (!doctorId) return null;
 
   const decoded = decodeURIComponent(param).trim();
-  const db = await readDb();
+  const mine = await listBookingsForDoctor(doctorId);
 
   function bookingsForEmail(email: string) {
-    return db.bookings
-      .filter((b) => b.doctorId === doctorId && b.patientEmail.toLowerCase() === email.toLowerCase())
+    return mine
+      .filter((b) => b.patientEmail.toLowerCase() === email.toLowerCase())
       .sort((a, b) => b.slotStart.localeCompare(a.slotStart))
       .map((b) => ({
         id: b.id,
@@ -97,25 +97,25 @@ export async function resolvePatientAccess(param: string): Promise<PatientAccess
     const email = decoded.toLowerCase();
     const bks = bookingsForEmail(email);
     if (bks.length > 0) {
-      const latest = db.bookings
-        .filter((b) => b.doctorId === doctorId && b.patientEmail.toLowerCase() === email)
+      const latest = mine
+        .filter((b) => b.patientEmail.toLowerCase() === email)
         .sort((a, b) => b.slotStart.localeCompare(a.slotStart))[0];
       // Se o médico também tem o CADASTRO desse e-mail, enriquece com os dados do prontuário.
       const owned = await findByEmailAny(email);
-      const mine = owned && owned.doctorId === doctorId ? owned : null;
+      const ownedPatient = owned && owned.doctorId === doctorId ? owned : null;
       return {
         allowed: true,
         key: email,
-        name: mine?.name || latest.patientName,
-        city: mine?.address || latest.patientCity,
-        phone: mine?.phone || latest.patientPhone,
+        name: ownedPatient?.name || latest.patientName,
+        city: ownedPatient?.address || latest.patientCity,
+        phone: ownedPatient?.phone || latest.patientPhone,
         email,
-        birthdate: mine?.birthdate || null,
-        sex: mine?.sex || null,
-        cpf: mine?.cpf || null,
-        cns: mine?.cns || null,
-        motherName: mine?.motherName || null,
-        isCreated: Boolean(mine),
+        birthdate: ownedPatient?.birthdate || null,
+        sex: ownedPatient?.sex || null,
+        cpf: ownedPatient?.cpf || null,
+        cns: ownedPatient?.cns || null,
+        motherName: ownedPatient?.motherName || null,
+        isCreated: Boolean(ownedPatient),
         bookings: bks,
       };
     }

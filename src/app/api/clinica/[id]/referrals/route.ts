@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { requireClinicAdmin } from "@/lib/platform-access";
 import { listMemberships } from "@/lib/platform-store";
-import { readDb } from "@/lib/store";
+import { listDoctorsByIds } from "@/lib/store";
 import { countPatientLinks, listReferrals } from "@/lib/clinic-referral-store";
 
 export async function GET(_req: Request, { params }: { params: Promise<{ id: string }> }) {
@@ -9,17 +9,19 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
   const staff = await requireClinicAdmin(id);
   if (!staff) return NextResponse.json({ error: "Sem permissão." }, { status: 403 });
 
-  const [referrals, memberships, db, linkedPatients] = await Promise.all([
+  const [referrals, memberships, linkedPatients] = await Promise.all([
     listReferrals(id),
     listMemberships(id),
-    readDb(),
     countPatientLinks(id),
   ]);
+  const doctorIds = memberships.filter((m) => m.actorKind === "doctor" && m.status === "active").map((m) => m.actorId);
+  const docs = await listDoctorsByIds(doctorIds);
+  const docById = new Map(docs.map((d) => [d.id, d]));
 
   const doctors = memberships
     .filter((m) => m.actorKind === "doctor" && m.status === "active")
     .map((m) => {
-      const doc = db.doctors.find((d) => d.id === m.actorId);
+      const doc = docById.get(m.actorId);
       return {
         id: m.actorId,
         role: m.role,

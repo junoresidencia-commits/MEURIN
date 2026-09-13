@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { requireAttendantForDoctor, hasPerm } from "@/lib/attendant-context";
-import { readDb, updateBooking, getDoctorById } from "@/lib/store";
+import { getBookingById, updateBooking, getDoctorById } from "@/lib/store";
 import { logAttendantAudit } from "@/lib/attendants-store";
 import { sendNotification, patientKey, links, fmtDateTime } from "@/lib/notify";
 import type { ConsultationEvent } from "@/lib/types";
@@ -21,8 +21,8 @@ export async function PATCH(req: Request) {
   const ctx = await requireAttendantForDoctor(doctorId);
   if (!ctx) return NextResponse.json({ error: "Sem acesso a este médico." }, { status: 403 });
 
-  const db = await readDb();
-  const booking = db.bookings.find((x) => x.id === id && x.doctorId === doctorId);
+  const found = await getBookingById(id);
+  const booking = found && found.doctorId === doctorId ? found : null;
   const doctor = await getDoctorById(doctorId);
   if (!booking || !doctor) return NextResponse.json({ error: "Consulta não encontrada." }, { status: 404 });
   const events = booking.events ?? [];

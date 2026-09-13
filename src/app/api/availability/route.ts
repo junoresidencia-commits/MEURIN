@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { getDoctorSessionId } from "@/lib/auth";
 import { generateSlotsForDoctor, generateAvailableSlots } from "@/lib/scheduling";
-import { logFinancialEvent, readDb, updateDb } from "@/lib/store";
+import { getDoctorById, listBookingsForDoctor, logFinancialEvent, readDb, updateDb } from "@/lib/store";
 import { activeHoldStarts } from "@/lib/holds-store";
 import type { AvailabilityPeriod, Modality, WeeklySlot } from "@/lib/types";
 
@@ -13,15 +13,14 @@ export async function GET(req: Request) {
   if (!doctorId) {
     return NextResponse.json({ error: "doctorId obrigatório" }, { status: 400 });
   }
-  const db = await readDb();
-  const doctor = db.doctors.find((d) => d.id === doctorId);
+  const [doctor, mine] = await Promise.all([getDoctorById(doctorId), listBookingsForDoctor(doctorId)]);
   if (!doctor) {
     return NextResponse.json({ error: "Médico não encontrado" }, { status: 404 });
   }
 
   // Horários ocupados (consultas ativas) + reservados temporariamente (holds).
-  const bookedStarts = db.bookings
-    .filter((b) => b.doctorId === doctorId && ["pending_payment", "paid", "confirmed"].includes(b.status))
+  const bookedStarts = mine
+    .filter((b) => ["pending_payment", "paid", "confirmed"].includes(b.status))
     .map((b) => new Date(b.slotStart).toISOString());
   const held = await activeHoldStarts(doctorId);
   const excludeStarts = new Set<string>([...bookedStarts, ...held]);

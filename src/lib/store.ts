@@ -257,10 +257,10 @@ export function toDoctorPublicCard(d: Doctor): DoctorPublicCard {
 
 /** Busca médicos aprovados da plataforma (nome, especialidade ou CRM). Nunca lista pacientes. */
 export async function searchApprovedDoctors(q: string, excludeId: string, specialty?: string): Promise<DoctorPublicCard[]> {
-  const db = await readDb();
+  const doctors = await listDoctors();
   const n = (q || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().trim();
   const spec = (specialty || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().trim();
-  return db.doctors
+  return doctors
     .filter((d) => d.id !== excludeId && (d.status ?? "approved") === "approved")
     .filter((d) => {
       if (spec && !(d.specialty || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().includes(spec)) return false;
@@ -602,6 +602,124 @@ export async function listBookingsForDoctor(doctorId: string, from?: string, to?
       return true;
     })
     .sort((a, b) => a.slotStart.localeCompare(b.slotStart));
+}
+
+export async function getBookingById(id: string): Promise<Booking | null> {
+  const sb = getSupabaseAdmin();
+  if (sb) {
+    const { data, error } = await sb.from("bookings").select("*").eq("id", id).maybeSingle();
+    if (error || !data) return null;
+    return mapBookingRow(data as Record<string, unknown>);
+  }
+  return (await readDb()).bookings.find((b) => b.id === id) ?? null;
+}
+
+export async function listBookingsByPatientEmail(email: string, limit = 10): Promise<Booking[]> {
+  const norm = email.toLowerCase().trim();
+  if (!norm) return [];
+  const sb = getSupabaseAdmin();
+  if (sb) {
+    const { data, error } = await sb
+      .from("bookings")
+      .select("*")
+      .eq("patient_email", norm)
+      .order("created_at", { ascending: false })
+      .limit(limit);
+    if (!error) return (data || []).map((r) => mapBookingRow(r as Record<string, unknown>));
+  }
+  return (await readDb()).bookings
+    .filter((b) => b.patientEmail.toLowerCase() === norm)
+    .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
+    .slice(0, limit);
+}
+
+export async function getBookingByRoomId(roomId: string): Promise<Booking | null> {
+  const sb = getSupabaseAdmin();
+  if (sb) {
+    const { data, error } = await sb.from("bookings").select("*").eq("meeting_room_id", roomId).maybeSingle();
+    if (error || !data) return null;
+    return mapBookingRow(data as Record<string, unknown>);
+  }
+  return (await readDb()).bookings.find((b) => b.meetingRoomId === roomId) ?? null;
+}
+
+export async function listDoctorsByIds(ids: string[]): Promise<Doctor[]> {
+  const uniq = Array.from(new Set(ids.filter(Boolean)));
+  if (uniq.length === 0) return [];
+  const sb = getSupabaseAdmin();
+  if (sb) {
+    const { data, error } = await sb.from("doctors").select("*").in("id", uniq);
+    if (error) throw error;
+    return (data ?? []).map((row) => mapDoctorRow(row as Record<string, unknown>));
+  }
+  const set = new Set(uniq);
+  return (await readDb()).doctors.filter((d) => set.has(d.id));
+}
+
+export async function getDoctorByEmail(email: string): Promise<Doctor | null> {
+  const norm = email.toLowerCase().trim();
+  if (!norm) return null;
+  const sb = getSupabaseAdmin();
+  if (sb) {
+    const { data, error } = await sb.from("doctors").select("*").ilike("email", norm).maybeSingle();
+    if (error || !data) return null;
+    return mapDoctorRow(data as Record<string, unknown>);
+  }
+  return (await readDb()).doctors.find((d) => d.email.toLowerCase() === norm) ?? null;
+}
+
+export async function listSignalingForRoom(roomId: string, after = ""): Promise<SignalingMessage[]> {
+  const sb = getSupabaseAdmin();
+  if (sb) {
+    let q = sb
+      .from("signaling_messages")
+      .select("*")
+      .eq("room_id", roomId)
+      .order("created_at", { ascending: true });
+    if (after) q = q.gt("created_at", after);
+    const { data, error } = await q;
+    if (error) throw error;
+    return (data ?? []).map((row) => mapSignalRow(row as Record<string, unknown>));
+  }
+  return (await readDb()).signaling
+    .filter((m) => m.roomId === roomId && m.createdAt > after)
+    .sort((a, b) => a.createdAt.localeCompare(b.createdAt));
+}
+
+/** Grava um sinal WebRTC só daquela sala. Não relê nem reescreve o banco inteiro. */
+export async function appendSignalingMessage(message: SignalingMessage): Promise<void> {
+  const sb = getSupabaseAdmin();
+  if (sb) {
+    const { error } = await sb.from("signaling_messages").insert({
+      id: message.id,
+      room_id: message.roomId,
+      from_role: message.from,
+      type: message.type,
+      payload: message.payload,
+      created_at: message.createdAt,
+    });
+    if (error) throw error;
+    const { data: extra } = await sb
+      .from("signaling_messages")
+      .select("id")
+      .eq("room_id", message.roomId)
+      .order("created_at", { ascending: false })
+      .range(50, 199);
+    if (extra && extra.length > 0) {
+      await sb.from("signaling_messages").delete().in(
+        "id",
+        extra.map((row) => String(row.id))
+      );
+    }
+    return;
+  }
+  await updateDb((db) => ({
+    ...db,
+    signaling: [
+      ...db.signaling.filter((m) => m.roomId !== message.roomId),
+      ...[...db.signaling.filter((m) => m.roomId === message.roomId), message].slice(-50),
+    ],
+  }));
 }
 
 function mapPaymentRow(row: Record<string, unknown>): PaymentRecord {

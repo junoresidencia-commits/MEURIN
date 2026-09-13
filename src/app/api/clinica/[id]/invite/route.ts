@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { requireClinicAdmin } from "@/lib/platform-access";
 import { inviteAttendant, inviteDoctor, listInvites } from "@/lib/clinic-ops-store";
 import { listMemberships } from "@/lib/platform-store";
-import { readDb } from "@/lib/store";
+import { getDoctorById } from "@/lib/store";
 import { getAttendant } from "@/lib/attendants-store";
 import { siteUrl } from "@/lib/site";
 
@@ -11,11 +11,10 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
   const staff = await requireClinicAdmin(id);
   if (!staff) return NextResponse.json({ error: "Sem permissão." }, { status: 403 });
   const [invites, memberships] = await Promise.all([listInvites(id), listMemberships(id)]);
-  const db = await readDb();
   const members = await Promise.all(
     memberships.map(async (m) => {
       if (m.actorKind === "doctor") {
-        const d = db.doctors.find((x) => x.id === m.actorId);
+        const d = await getDoctorById(m.actorId);
         return { ...m, name: d?.name || "Médico", email: d?.email || null };
       }
       const a = await getAttendant(m.actorId);

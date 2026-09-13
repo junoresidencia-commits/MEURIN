@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { getDoctorSessionId } from "@/lib/auth";
-import { readDb } from "@/lib/store";
+import { listBookingsForDoctor } from "@/lib/store";
 import { listReturnsByDoctor, setReturnStatus } from "@/lib/care-store";
 
 type Eff = "atrasado" | "prox7" | "prox30" | "programado" | "agendado";
@@ -9,23 +9,22 @@ export async function GET() {
   const doctorId = await getDoctorSessionId();
   if (!doctorId) return NextResponse.json({ error: "Não autenticado." }, { status: 401 });
 
-  const [returns, db] = await Promise.all([listReturnsByDoctor(doctorId, "open"), readDb()]);
+  const [returns, mine] = await Promise.all([listReturnsByDoctor(doctorId, "open"), listBookingsForDoctor(doctorId)]);
   const now = Date.now();
   const in7 = now + 7 * 86400000;
   const in30 = now + 30 * 86400000;
 
   // Próxima consulta futura por paciente (a Agenda é a fonte da verdade).
   const futureByPatient = new Map<string, string>();
-  for (const b of db.bookings) {
-    if (b.doctorId !== doctorId || b.status === "cancelled") continue;
+  for (const b of mine) {
+    if (b.status === "cancelled") continue;
     if (new Date(b.slotStart).getTime() <= now) continue;
     const key = b.patientEmail.toLowerCase();
     const cur = futureByPatient.get(key);
     if (!cur || b.slotStart < cur) futureByPatient.set(key, b.slotStart);
   }
   const phoneByPatient = new Map<string, string>();
-  for (const b of db.bookings) {
-    if (b.doctorId !== doctorId) continue;
+  for (const b of mine) {
     if (b.patientPhone) phoneByPatient.set(b.patientEmail.toLowerCase(), b.patientPhone);
   }
 

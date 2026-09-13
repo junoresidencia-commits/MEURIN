@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { requireClinicAdmin } from "@/lib/platform-access";
 import { listEncounters, productionSummary } from "@/lib/clinic-finance-store";
-import { readDb } from "@/lib/store";
+import { listDoctorsByIds } from "@/lib/store";
 
 export async function GET(req: Request, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -13,10 +13,11 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
   const doctorId = url.searchParams.get("doctorId") || undefined;
   let encounters = await listEncounters(id, from, to ? `${to}T23:59:59.999Z` : undefined);
   if (doctorId) encounters = encounters.filter((e) => e.doctorId === doctorId);
-  const db = await readDb();
+  const doctors = await listDoctorsByIds(encounters.map((e) => e.doctorId));
+  const nameById = new Map(doctors.map((d) => [d.id, d.name]));
   const named = encounters.map((e) => ({
     ...e,
-    doctorName: db.doctors.find((d) => d.id === e.doctorId)?.name || "Médico",
+    doctorName: nameById.get(e.doctorId) || "Médico",
   }));
   const summary = productionSummary(encounters);
   return NextResponse.json({
@@ -25,7 +26,7 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
       ...summary,
       byDoctor: summary.byDoctor.map((row) => ({
         ...row,
-        doctorName: db.doctors.find((d) => d.id === row.doctorId)?.name || "Médico",
+        doctorName: nameById.get(row.doctorId) || "Médico",
       })),
     },
   });

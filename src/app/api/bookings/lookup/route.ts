@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { readDb } from "@/lib/store";
+import { getDoctorById, listBookingsByPatientEmail } from "@/lib/store";
 
 export async function GET(req: Request) {
   const email = new URL(req.url).searchParams.get("email")?.toLowerCase().trim();
@@ -7,13 +7,10 @@ export async function GET(req: Request) {
     return NextResponse.json({ error: "Informe o e-mail." }, { status: 400 });
   }
 
-  const db = await readDb();
-  const bookings = db.bookings
-    .filter((b) => b.patientEmail === email)
-    .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
-    .slice(0, 10)
-    .map((b) => {
-      const doctor = db.doctors.find((d) => d.id === b.doctorId);
+  const found = await listBookingsByPatientEmail(email, 10);
+  const bookings = await Promise.all(
+    found.map(async (b) => {
+      const doctor = await getDoctorById(b.doctorId);
       // Privacidade: o número INTERNO de notificações NUNCA é exposto. Só o número de
       // contato dos pacientes (que pode ser secretária/clínica), e apenas se habilitado.
       const doctorWhatsapp = doctor?.allowPatientContact ? doctor?.patientContactWhatsapp || null : null;
@@ -35,7 +32,8 @@ export async function GET(req: Request) {
         proposalMessage: b.proposalMessage ?? null,
         events: b.events ?? [],
       };
-    });
+    })
+  );
 
   return NextResponse.json({ bookings });
 }

@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { readDb } from "@/lib/store";
+import { getDoctorById, listBookingsForDoctor } from "@/lib/store";
 import { activeHoldStarts, createHold, isHeldByOther, releaseHold } from "@/lib/holds-store";
 import { generateAvailableSlots } from "@/lib/scheduling";
 
@@ -15,13 +15,12 @@ export async function POST(req: Request) {
   if (!doctorId || !slotStart || !holder) {
     return NextResponse.json({ error: "Dados incompletos." }, { status: 400 });
   }
-  const db = await readDb();
-  const doctor = db.doctors.find((d) => d.id === doctorId);
+  const [doctor, mine] = await Promise.all([getDoctorById(doctorId), listBookingsForDoctor(doctorId)]);
   if (!doctor) return NextResponse.json({ error: "Médico não encontrado." }, { status: 404 });
 
   const iso = new Date(slotStart).toISOString();
-  const booked = db.bookings.some(
-    (x) => x.doctorId === doctorId && new Date(x.slotStart).toISOString() === iso && ["pending_payment", "paid", "confirmed"].includes(x.status)
+  const booked = mine.some(
+    (x) => new Date(x.slotStart).toISOString() === iso && ["pending_payment", "paid", "confirmed"].includes(x.status)
   );
   if (booked || (await isHeldByOther(doctorId, iso, holder))) {
     return NextResponse.json({ error: "Este horário acabou de ficar indisponível. Escolha outro." }, { status: 409 });

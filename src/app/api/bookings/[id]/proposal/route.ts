@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { readDb, updateBooking } from "@/lib/store";
+import { getBookingById, getDoctorById, updateBooking } from "@/lib/store";
 import { appOrigin } from "@/lib/payments";
 import { buildConfirmationEmail, sendEmail } from "@/lib/email";
 import { sendNotification, links, fmtDateTime, firstName } from "@/lib/notify";
@@ -14,13 +14,12 @@ export async function POST(req: Request, context: { params: Promise<{ id: string
   const { id } = await context.params;
   const body = await req.json().catch(() => ({}));
   const action = String(body.action || "");
-  const db = await readDb();
-  const booking = db.bookings.find((b) => b.id === id);
+  const booking = await getBookingById(id);
   if (!booking) return NextResponse.json({ error: "Consulta não encontrada." }, { status: 404 });
   if (booking.stage !== "proposto_novo_horario" || !booking.proposedSlotStart) {
     return NextResponse.json({ error: "Não há proposta de horário pendente." }, { status: 400 });
   }
-  const doctor = db.doctors.find((d) => d.id === booking.doctorId);
+  const doctor = await getDoctorById(booking.doctorId);
   const events = booking.events ?? [];
 
   if (action === "accept") {

@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { requireSuperAdmin } from "@/lib/platform-access";
 import { addMembership, getClinic, grantRole, listMemberships, writeAudit } from "@/lib/platform-store";
-import { readDb } from "@/lib/store";
+import { getDoctorByEmail, listDoctorsByIds } from "@/lib/store";
 import type { PlatformRole } from "@/lib/platform-types";
 
 const ASSIGNABLE: PlatformRole[] = ["ADMIN_CLINICA", "MEDICO"];
@@ -13,9 +13,10 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
   const clinic = await getClinic(id);
   if (!clinic) return NextResponse.json({ error: "Clínica não encontrada." }, { status: 404 });
   const memberships = await listMemberships(id);
-  const db = await readDb();
+  const docs = await listDoctorsByIds(memberships.filter((m) => m.actorKind === "doctor").map((m) => m.actorId));
+  const docById = new Map(docs.map((d) => [d.id, d]));
   const members = memberships.map((m) => {
-    const doc = m.actorKind === "doctor" ? db.doctors.find((d) => d.id === m.actorId) : null;
+    const doc = m.actorKind === "doctor" ? docById.get(m.actorId) || null : null;
     return {
       ...m,
       name: doc?.name || null,
@@ -36,8 +37,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
   const email = String(body.email || "").toLowerCase().trim();
   const role = String(body.role || "ADMIN_CLINICA") as PlatformRole;
   if (!ASSIGNABLE.includes(role)) return NextResponse.json({ error: "Papel inválido." }, { status: 400 });
-  const db = await readDb();
-  const doctor = db.doctors.find((d) => d.email.toLowerCase() === email);
+  const doctor = await getDoctorByEmail(email);
   if (!doctor) return NextResponse.json({ error: "Médico não encontrado. Use o e-mail já cadastrado — não criamos conta nova." }, { status: 404 });
   const membership = await addMembership({ clinicId: id, actorKind: "doctor", actorId: doctor.id, role });
   if (role === "ADMIN_CLINICA") await grantRole("doctor", doctor.id, "ADMIN_CLINICA", actor.doctorId);
