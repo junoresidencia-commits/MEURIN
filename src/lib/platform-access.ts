@@ -24,16 +24,29 @@ export type PlatformActor = {
 export async function getPlatformActor(): Promise<PlatformActor | null> {
   const doctorId = await getDoctorSessionId();
   if (!doctorId) return null;
-  await ensureFounderSuperAdmin();
   const db = await readDb();
   const doctor = db.doctors.find((d) => d.id === doctorId);
   if (!doctor) return null;
-  const roles = await listActiveRoles("doctor", doctor.id);
-  const memberships = await listMembershipsForActor("doctor", doctor.id);
+  try {
+    await ensureFounderSuperAdmin();
+  } catch (err) {
+    console.error("[platform-access] bootstrap ignorado", err);
+  }
+  let roles: PlatformRole[] = [];
+  try {
+    roles = await listActiveRoles("doctor", doctor.id);
+  } catch (err) {
+    console.error("[platform-access] papéis ignorados", err);
+  }
   const clinicAdmin: ClinicSummary[] = [];
-  for (const m of memberships.filter((x) => x.role === "ADMIN_CLINICA")) {
-    const clinic = await getClinic(m.clinicId);
-    if (clinic) clinicAdmin.push({ clinicId: clinic.id, clinicName: clinic.name, role: m.role });
+  try {
+    const memberships = await listMembershipsForActor("doctor", doctor.id);
+    for (const m of memberships.filter((x) => x.role === "ADMIN_CLINICA")) {
+      const clinic = await getClinic(m.clinicId);
+      if (clinic) clinicAdmin.push({ clinicId: clinic.id, clinicName: clinic.name, role: m.role });
+    }
+  } catch (err) {
+    console.error("[platform-access] clínicas ignoradas", err);
   }
   return {
     doctorId: doctor.id,

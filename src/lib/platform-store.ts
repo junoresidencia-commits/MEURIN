@@ -4,6 +4,7 @@ import path from "path";
 import { v4 as uuid } from "uuid";
 import { getSupabaseAdmin } from "./supabase-admin";
 import { readDb } from "./store";
+import { emailsMatch } from "./login-email";
 import {
   FOUNDER_SUPER_ADMIN_EMAIL,
   type ActorKind,
@@ -43,8 +44,13 @@ async function readLocal(): Promise<LocalDb> {
   }
 }
 async function writeLocal(db: LocalDb) {
-  await fs.mkdir(DATA_DIR, { recursive: true });
-  await fs.writeFile(FILE, JSON.stringify(db, null, 2), "utf8");
+  try {
+    await fs.mkdir(DATA_DIR, { recursive: true });
+    await fs.writeFile(FILE, JSON.stringify(db, null, 2), "utf8");
+  } catch (err) {
+    // Vercel/produção: FS só-leitura. Nunca pode derrubar o login do médico.
+    console.error("[platform-store] persistência local indisponível", err);
+  }
 }
 
 function mapRole(r: Record<string, unknown>): PlatformRoleAssignment {
@@ -87,7 +93,7 @@ function mapMembership(r: Record<string, unknown>): ClinicMembership {
 /** Garante SUPER_ADMIN no médico já existente com o e-mail fundador. Nunca cria conta nova. */
 export async function ensureFounderSuperAdmin(): Promise<{ granted: boolean; doctorId: string | null }> {
   const db = await readDb();
-  const doctor = db.doctors.find((d) => d.email.toLowerCase() === FOUNDER_SUPER_ADMIN_EMAIL);
+  const doctor = db.doctors.find((d) => emailsMatch(d.email, FOUNDER_SUPER_ADMIN_EMAIL));
   if (!doctor) return { granted: false, doctorId: null };
   const roles = await listActiveRoles("doctor", doctor.id);
   if (roles.includes("SUPER_ADMIN")) return { granted: false, doctorId: doctor.id };

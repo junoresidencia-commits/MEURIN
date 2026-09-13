@@ -2,8 +2,19 @@ import { NextResponse } from "next/server";
 import bcrypt from "bcryptjs";
 import { COOKIE, DOCTOR_MAX_AGE, createSessionToken, getDoctorSessionId } from "@/lib/auth";
 import { readDb } from "@/lib/store";
+import { emailsMatch } from "@/lib/login-email";
 import { getPlatformActor } from "@/lib/platform-access";
 import { ensureFounderSuperAdmin, listActiveRoles } from "@/lib/platform-store";
+
+async function platformRolesSafe(doctorId: string): Promise<string[]> {
+  try {
+    await ensureFounderSuperAdmin();
+    return await listActiveRoles("doctor", doctorId);
+  } catch (err) {
+    console.error("[auth] papéis da plataforma ignorados", err);
+    return [];
+  }
+}
 
 export async function GET() {
   const doctorId = await getDoctorSessionId();
@@ -15,8 +26,13 @@ export async function GET() {
   if (!doctor) return NextResponse.json({ doctor: null });
   const { passwordHash, mpAccessToken, ...safe } = doctor;
   void passwordHash;
-  const actor = await getPlatformActor();
-  const platformRoles = actor?.roles ?? (await listActiveRoles("doctor", doctor.id));
+  let actor = null;
+  try {
+    actor = await getPlatformActor();
+  } catch (err) {
+    console.error("[auth] ator da plataforma ignorado", err);
+  }
+  const platformRoles = actor?.roles ?? (await platformRolesSafe(doctor.id));
   // Nunca devolvemos o token do Mercado Pago ao navegador — só se está conectado.
   return NextResponse.json({
     doctor: {
@@ -31,10 +47,16 @@ export async function GET() {
 export async function POST(req: Request) {
   const { email, password } = await req.json();
   const db = await readDb();
-  const doctor = db.doctors.find(
-    (d) => d.email.toLowerCase() === String(email || "").toLowerCase()
-  );
-  if (!doctor || !(await bcrypt.compare(String(password || ""), doctor.passwordHash))) {
+  const doctor = db.doctors.find((d) => emailsMatch(d.email, String(email || "")));
+  const pass = String(password || "").trim();
+  let passwordOk = false;
+  try {
+    passwordOk = Boolean(doctor?.passwordHash && pass && (await bcrypt.compare(pass, doctor.passwordHash)));
+  } catch (err) {
+    console.error("[auth] falha ao conferir senha", err);
+    passwordOk = false;
+  }
+  if (!doctor || !passwordOk) {
     return NextResponse.json({ error: "E-mail ou senha inválidos." }, { status: 401 });
   }
 
@@ -53,8 +75,7 @@ export async function POST(req: Request) {
   }
 
   const token = createSessionToken(doctor.id);
-  await ensureFounderSuperAdmin();
-  const platformRoles = await listActiveRoles("doctor", doctor.id);
+  const platformRoles = await platformRolesSafe(doctor.id);
   const res = NextResponse.json({
     ok: true,
     doctor: {

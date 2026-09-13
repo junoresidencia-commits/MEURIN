@@ -35,8 +35,12 @@ async function readLocal(): Promise<LocalDb> {
   }
 }
 async function writeLocal(db: LocalDb) {
-  await fs.mkdir(DATA_DIR, { recursive: true });
-  await fs.writeFile(FILE, JSON.stringify(db, null, 2), "utf8");
+  try {
+    await fs.mkdir(DATA_DIR, { recursive: true });
+    await fs.writeFile(FILE, JSON.stringify(db, null, 2), "utf8");
+  } catch (err) {
+    console.error("[clinic-ops] persistência local indisponível", err);
+  }
 }
 
 function mapInvite(r: Record<string, unknown>): ClinicInvite {
