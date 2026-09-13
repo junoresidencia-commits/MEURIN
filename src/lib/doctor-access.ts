@@ -102,20 +102,20 @@ export async function resolvePatientAccess(param: string): Promise<PatientAccess
         .sort((a, b) => b.slotStart.localeCompare(a.slotStart))[0];
       // Se o médico também tem o CADASTRO desse e-mail, enriquece com os dados do prontuário.
       const owned = await findByEmailAny(email);
-      const mine = owned && owned.doctorId === doctorId ? owned : null;
+      const ownedPatient = owned && owned.doctorId === doctorId ? owned : null;
       return {
         allowed: true,
         key: email,
-        name: mine?.name || latest.patientName,
-        city: mine?.address || latest.patientCity,
-        phone: mine?.phone || latest.patientPhone,
+        name: ownedPatient?.name || latest.patientName,
+        city: ownedPatient?.address || latest.patientCity,
+        phone: ownedPatient?.phone || latest.patientPhone,
         email,
-        birthdate: mine?.birthdate || null,
-        sex: mine?.sex || null,
-        cpf: mine?.cpf || null,
-        cns: mine?.cns || null,
-        motherName: mine?.motherName || null,
-        isCreated: Boolean(mine),
+        birthdate: ownedPatient?.birthdate || null,
+        sex: ownedPatient?.sex || null,
+        cpf: ownedPatient?.cpf || null,
+        cns: ownedPatient?.cns || null,
+        motherName: ownedPatient?.motherName || null,
+        isCreated: Boolean(ownedPatient),
         bookings: bks,
       };
     }
