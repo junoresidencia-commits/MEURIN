@@ -10,6 +10,7 @@ type TeamDoctor = {
   name: string;
   specialty: string;
   crm?: string;
+  clinicId?: string;
   clinicName?: string;
   source?: "peer" | "clinic" | "both";
 };
@@ -62,13 +63,14 @@ export function EncaminharPacienteForm({
       for (const d of (peersRes.doctors || []) as TeamDoctor[]) {
         byId.set(d.id, { ...d, source: "peer" });
       }
-      for (const d of (clinicRes.doctors || []) as Array<TeamDoctor & { clinics?: { name: string }[] }>) {
+      for (const d of (clinicRes.doctors || []) as Array<TeamDoctor & { clinics?: { id: string; name: string }[] }>) {
+        const clinicId = d.clinics?.[0]?.id || d.clinicId;
         const clinicName = d.clinics?.[0]?.name || d.clinicName;
         const existing = byId.get(d.id);
         if (existing) {
-          byId.set(d.id, { ...existing, clinicName, source: "both" });
+          byId.set(d.id, { ...existing, clinicId, clinicName, source: "both" });
         } else {
-          byId.set(d.id, { ...d, clinicName, source: "clinic" });
+          byId.set(d.id, { ...d, clinicId, clinicName, source: "clinic" });
         }
       }
       setPeers([...byId.values()]);
@@ -111,9 +113,10 @@ export function EncaminharPacienteForm({
         if (!res.ok) throw new Error(d.error || "Não foi possível encaminhar.");
         setMsg("Paciente encaminhado. Ele aparece na área daquele profissional.");
       } else {
+        const clinicId = selected && "clinicId" in selected ? selected.clinicId : undefined;
         const res = await fetch("/api/doctor/shares", {
           method: "POST", headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ patientKey: emailParam, toDoctorId: professionalId, reason }),
+          body: JSON.stringify({ patientKey: emailParam, toDoctorId: professionalId, reason, clinicId }),
         });
         const d = await res.json().catch(() => ({}));
         if (!res.ok) throw new Error(d.error || "Não foi possível encaminhar.");
