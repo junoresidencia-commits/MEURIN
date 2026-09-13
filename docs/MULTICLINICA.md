@@ -53,6 +53,8 @@ Colunas opcionais futuras (nunca obrigatórias nos registros atuais): `clinic_id
 6. **`20260913060000_intelligence_prefs.sql` (Fase 6)** — `intelligence_preferences` (médico/clínica). Sempre `review_only`.
 7. **`20260913070000_research_governance.sql` (Fase 7)** — `research_protocols`, `research_consents`, `research_export_log`. Sem ALTER em `research_studies`.
 
+As migrations 1–7 já estão no repo e as tabelas novas já existem em produção. Código das fases 1–7 está na `main`.
+
 **Não aplicar em produção nesta PR.** Arquivo de migration vai no repo; staging/dev primeiro. Backup obrigatório antes de rodar no Postgres de produção.
 
 ## 4. Riscos
@@ -83,6 +85,6 @@ Colunas opcionais futuras (nunca obrigatórias nos registros atuais): `clinic_id
 5. **Encaminhamentos intra-clínica + rede de cuidado (nesta entrega)** — médicos da mesma clínica aparecem no Encaminhar; a gestora vê a rede em `/clinica/[id]/rede`. O cadastro do paciente **não muda** de `doctor_id`. Vínculo pontual em `clinic_patient_links` só no encaminhamento (sem migrar os 200+).
 6. **Inteligência clínica configurável (nesta entrega, nunca automático)** — médico e clínica escolhem o que sugerir. Salvar evolução e reler prontuário **não gravam** no perfil; o modal de revisão confirma.
 7. **Pesquisa com governança própria (nesta entrega)** — CEP/CONEP ou dispensa no estudo; exportação bloqueada sem isso. Consentimento pontual. Área `/plataforma/pesquisa` só com metadados. Separada do financeiro da clínica. Sem migrar pacientes.
-8. **SaaS Meu Rim** (planos/licenças/MRR) — separado do financeiro da clínica.
+8. **SaaS Meu Rim** (planos/licenças/MRR) — **próxima entrega**. Separado do financeiro da clínica. Sem licença, a área médica continua liberada (não trava login nem pacientes).
 
 Critério de bloqueio: se login, pacientes, prontuário, exames, documentos ou agenda do Dr. Juno quebrarem, **não avançar de fase**.

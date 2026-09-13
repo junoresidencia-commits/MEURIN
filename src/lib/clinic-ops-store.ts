@@ -5,7 +5,8 @@ import { randomBytes } from "crypto";
 import { v4 as uuid } from "uuid";
 import bcrypt from "bcryptjs";
 import { getSupabaseAdmin } from "./supabase-admin";
-import { readDb, updateDb } from "./store";
+import { listDoctors, updateDb } from "./store";
+import { emailsMatch } from "./login-email";
 import { defaultAvailability } from "./scheduling";
 import { createAttendant, findAttendantByCpfOrEmail, upsertLink } from "./attendants-store";
 import { addMembership, listMemberships, writeAudit } from "./platform-store";
@@ -162,8 +163,8 @@ export async function inviteDoctor(input: {
   const email = input.email.toLowerCase().trim();
   const name = input.name.trim();
   if (!email || !name) throw new Error("Nome e e-mail são obrigatórios.");
-  const db = await readDb();
-  const existing = db.doctors.find((d) => d.email.toLowerCase() === email);
+  const doctors = await listDoctors();
+  const existing = doctors.find((d) => emailsMatch(d.email, email));
   const now = new Date().toISOString();
   const invite: ClinicInvite = {
     id: uuid(),
@@ -278,8 +279,8 @@ export async function acceptInvite(token: string, password: string): Promise<{ a
   if (!password || password.length < 6) throw new Error("Defina uma senha com pelo menos 6 caracteres.");
 
   if (invite.kind === "doctor") {
-    const db = await readDb();
-    const already = db.doctors.find((d) => d.email.toLowerCase() === invite.email);
+    const doctors = await listDoctors();
+    const already = doctors.find((d) => emailsMatch(d.email, invite.email));
     if (already) {
       await addMembership({ clinicId: invite.clinicId, actorKind: "doctor", actorId: already.id, role: "MEDICO" });
       await markAccepted(invite.id, already.id);

@@ -3,8 +3,8 @@ import { promises as fs } from "fs";
 import path from "path";
 import { v4 as uuid } from "uuid";
 import { getSupabaseAdmin } from "./supabase-admin";
-import { getClinic, listMemberships, listMembershipsForActor, writeAudit } from "./platform-store";
-import { getDoctorById } from "./store";
+import { getClinic, getClinicsByIds, listMemberships, listMembershipsForActor, writeAudit } from "./platform-store";
+import { listDoctors } from "./store";
 import type {
   Clinic,
   ClinicPatientLink,
@@ -96,15 +96,22 @@ export async function listClinicPeersForDoctor(doctorId: string): Promise<Clinic
   if (!doctorId) return [];
   try {
     const mine = (await listMembershipsForActor("doctor", doctorId)).filter((m) => isClinicDoctorRole(m.role));
+    const clinics = await getClinicsByIds(mine.map((m) => m.clinicId));
+    const clinicById = new Map(clinics.filter((c) => c.status === "active").map((c) => [c.id, c]));
+    const [doctors, membershipLists] = await Promise.all([
+      listDoctors(),
+      Promise.all(mine.map((m) => listMemberships(m.clinicId))),
+    ]);
+    const doctorById = new Map(doctors.map((d) => [d.id, d]));
     const byPeer = new Map<string, ClinicPeerDoctor>();
-    for (const m of mine) {
-      const clinic = await getClinic(m.clinicId);
-      if (!clinic || clinic.status !== "active") continue;
-      const members = (await listMemberships(m.clinicId)).filter(
+    mine.forEach((m, idx) => {
+      const clinic = clinicById.get(m.clinicId);
+      if (!clinic) return;
+      const members = (membershipLists[idx] || []).filter(
         (x) => x.actorKind === "doctor" && x.status === "active" && isClinicDoctorRole(x.role) && x.actorId !== doctorId
       );
       for (const peer of members) {
-        const doc = await getDoctorById(peer.actorId);
+        const doc = doctorById.get(peer.actorId);
         if (!doc || (doc.status ?? "approved") !== "approved") continue;
         const existing = byPeer.get(doc.id);
         if (existing) {
@@ -121,7 +128,7 @@ export async function listClinicPeersForDoctor(doctorId: string): Promise<Clinic
           });
         }
       }
-    }
+    });
     return [...byPeer.values()].sort((a, b) => a.name.localeCompare(b.name, "pt-BR"));
   } catch (err) {
     console.error("[clinic-referral] pares da clínica", err);

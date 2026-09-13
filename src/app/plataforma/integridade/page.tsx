@@ -18,11 +18,19 @@ const LABELS: Record<string, string> = {
 export default function IntegridadePage() {
   const [counts, setCounts] = useState<Counts | null>(null);
   const [at, setAt] = useState("");
+  const [dropped, setDropped] = useState<string[]>([]);
+  const [err, setErr] = useState("");
+
   useEffect(() => {
     fetch("/api/plataforma/integrity")
-      .then((r) => r.json())
-      .then((d) => { setCounts(d.counts || null); setAt(d.at || ""); })
-      .catch(() => {});
+      .then(async (r) => {
+        const d = await r.json();
+        if (!r.ok) throw new Error(d.error || "Não foi possível carregar.");
+        setCounts(d.counts || null);
+        setAt(d.at || "");
+        setDropped(Array.isArray(d.dropped) ? d.dropped : []);
+      })
+      .catch((e) => setErr(e instanceof Error ? e.message : "Erro"));
   }, []);
 
   return (
@@ -31,6 +39,12 @@ export default function IntegridadePage() {
       <p className="mt-1 text-sm text-[var(--text-muted)]">
         Somente leitura. Se alguma contagem clínica diminuir após uma migration, a migration deve ser abortada.
       </p>
+      {err && <p className="mt-4 text-sm text-[var(--danger)]">{err}</p>}
+      {dropped.length > 0 && (
+        <p className="mt-3 rounded-xl border border-[var(--danger)]/30 bg-[var(--danger)]/10 px-3 py-2 text-sm text-[var(--danger)]">
+          Queda em relação ao último snapshot: {dropped.join(" · ")}
+        </p>
+      )}
       {at && <p className="mt-2 text-xs text-[var(--text-muted)]">Atualizado em {new Date(at).toLocaleString("pt-BR")}</p>}
       <div className="mt-4 grid gap-3 sm:grid-cols-3">
         {counts && Object.entries(LABELS).map(([k, label]) => (

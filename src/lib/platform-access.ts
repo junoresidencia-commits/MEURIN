@@ -2,8 +2,8 @@ import "server-only";
 import { getDoctorSessionId } from "./auth";
 import { getAttendantId } from "./attendant-session";
 import { getAttendant } from "./attendants-store";
-import { readDb } from "./store";
-import { ensureFounderSuperAdmin, getClinic, listActiveRoles, listMemberships, listMembershipsForActor } from "./platform-store";
+import { getDoctorById } from "./store";
+import { ensureFounderSuperAdmin, getClinic, getClinicsByIds, listActiveRoles, listMemberships, listMembershipsForActor } from "./platform-store";
 import type { Clinic, ClinicMembership, PlatformRole } from "./platform-types";
 
 export type ClinicSummary = {
@@ -21,30 +21,35 @@ export type PlatformActor = {
   clinicAdmin: ClinicSummary[];
 };
 
-export async function getPlatformActor(): Promise<PlatformActor | null> {
-  const doctorId = await getDoctorSessionId();
-  if (!doctorId) return null;
-  const db = await readDb();
-  const doctor = db.doctors.find((d) => d.id === doctorId);
-  if (!doctor) return null;
+export async function buildPlatformActor(doctor: {
+  id: string;
+  email: string;
+  name: string;
+}): Promise<PlatformActor> {
   try {
     await ensureFounderSuperAdmin();
   } catch (err) {
     console.error("[platform-access] bootstrap ignorado", err);
   }
   let roles: PlatformRole[] = [];
+  let memberships: ClinicMembership[] = [];
   try {
-    roles = await listActiveRoles("doctor", doctor.id);
+    [roles, memberships] = await Promise.all([
+      listActiveRoles("doctor", doctor.id),
+      listMembershipsForActor("doctor", doctor.id),
+    ]);
   } catch (err) {
-    console.error("[platform-access] papéis ignorados", err);
+    console.error("[platform-access] papéis/clínicas ignorados", err);
   }
-  const clinicAdmin: ClinicSummary[] = [];
+  const adminMs = memberships.filter((x) => x.role === "ADMIN_CLINICA");
+  let clinicAdmin: ClinicSummary[] = [];
   try {
-    const memberships = await listMembershipsForActor("doctor", doctor.id);
-    for (const m of memberships.filter((x) => x.role === "ADMIN_CLINICA")) {
-      const clinic = await getClinic(m.clinicId);
-      if (clinic) clinicAdmin.push({ clinicId: clinic.id, clinicName: clinic.name, role: m.role });
-    }
+    const clinics = await getClinicsByIds(adminMs.map((m) => m.clinicId));
+    const byId = new Map(clinics.map((c) => [c.id, c]));
+    clinicAdmin = adminMs.flatMap((m) => {
+      const clinic = byId.get(m.clinicId);
+      return clinic ? [{ clinicId: clinic.id, clinicName: clinic.name, role: m.role }] : [];
+    });
   } catch (err) {
     console.error("[platform-access] clínicas ignoradas", err);
   }
@@ -56,6 +61,14 @@ export async function getPlatformActor(): Promise<PlatformActor | null> {
     isSuperAdmin: roles.includes("SUPER_ADMIN"),
     clinicAdmin,
   };
+}
+
+export async function getPlatformActor(): Promise<PlatformActor | null> {
+  const doctorId = await getDoctorSessionId();
+  if (!doctorId) return null;
+  const doctor = await getDoctorById(doctorId);
+  if (!doctor) return null;
+  return buildPlatformActor(doctor);
 }
 
 export async function requireSuperAdmin(): Promise<PlatformActor | null> {

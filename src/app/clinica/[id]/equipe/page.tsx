@@ -106,6 +106,9 @@ export default function ClinicaEquipePage() {
           <div key={i.id} className="panel">
             <p className="font-bold">{i.name}</p>
             <p className="text-sm text-[var(--text-soft)]">{i.email} · {i.kind} · {i.status}</p>
+            {i.status === "pending" && i.token && (
+              <p className="mt-1 break-all text-xs text-[var(--gold)]">/convite/{i.token}</p>
+            )}
           </div>
         ))}
       </div>

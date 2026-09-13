@@ -3,7 +3,7 @@ import { promises as fs } from "fs";
 import path from "path";
 import { v4 as uuid } from "uuid";
 import { getSupabaseAdmin } from "./supabase-admin";
-import { readDb } from "./store";
+import { listDoctors } from "./store";
 import { emailsMatch } from "./login-email";
 import {
   FOUNDER_SUPER_ADMIN_EMAIL,
@@ -90,13 +90,25 @@ function mapMembership(r: Record<string, unknown>): ClinicMembership {
   };
 }
 
+let founderOkUntil = 0;
+let founderIdCache: string | null = null;
+
 /** Garante SUPER_ADMIN no médico já existente com o e-mail fundador. Nunca cria conta nova. */
 export async function ensureFounderSuperAdmin(): Promise<{ granted: boolean; doctorId: string | null }> {
-  const db = await readDb();
-  const doctor = db.doctors.find((d) => emailsMatch(d.email, FOUNDER_SUPER_ADMIN_EMAIL));
-  if (!doctor) return { granted: false, doctorId: null };
+  if (Date.now() < founderOkUntil) return { granted: false, doctorId: founderIdCache };
+  const doctors = await listDoctors();
+  const doctor = doctors.find((d) => emailsMatch(d.email, FOUNDER_SUPER_ADMIN_EMAIL));
+  if (!doctor) {
+    founderIdCache = null;
+    founderOkUntil = Date.now() + 30_000;
+    return { granted: false, doctorId: null };
+  }
   const roles = await listActiveRoles("doctor", doctor.id);
-  if (roles.includes("SUPER_ADMIN")) return { granted: false, doctorId: doctor.id };
+  if (roles.includes("SUPER_ADMIN")) {
+    founderIdCache = doctor.id;
+    founderOkUntil = Date.now() + 120_000;
+    return { granted: false, doctorId: doctor.id };
+  }
   await grantRole("doctor", doctor.id, "SUPER_ADMIN", "system:founder-bootstrap");
   await writeAudit({
     actorKind: "system",
@@ -107,6 +119,8 @@ export async function ensureFounderSuperAdmin(): Promise<{ granted: boolean; doc
     entityId: doctor.id,
     detail: "Papel SUPER_ADMIN no usuário médico já existente. ID preservado.",
   });
+  founderIdCache = doctor.id;
+  founderOkUntil = Date.now() + 120_000;
   return { granted: true, doctorId: doctor.id };
 }
 
@@ -130,6 +144,41 @@ export async function listActiveRoles(actorKind: ActorKind, actorId: string): Pr
   return local.roles
     .filter((r) => r.actorKind === actorKind && r.actorId === actorId && !r.revokedAt)
     .map((r) => r.role);
+}
+
+export async function listActiveRolesByActors(
+  actorKind: ActorKind,
+  actorIds: string[]
+): Promise<Record<string, PlatformRole[]>> {
+  const unique = [...new Set(actorIds.filter(Boolean))];
+  const out: Record<string, PlatformRole[]> = {};
+  for (const id of unique) out[id] = [];
+  if (unique.length === 0) return out;
+  if (active()) {
+    const sb = getSupabaseAdmin()!;
+    const { data, error } = await sb
+      .from("platform_role_assignments")
+      .select("*")
+      .eq("actor_kind", actorKind)
+      .in("actor_id", unique)
+      .is("revoked_at", null);
+    if (error) {
+      if (isMissing(error)) tableMissing = true;
+      else return out;
+    } else {
+      for (const raw of data || []) {
+        const row = mapRole(raw as Record<string, unknown>);
+        if (!out[row.actorId]) out[row.actorId] = [];
+        out[row.actorId].push(row.role);
+      }
+      return out;
+    }
+  }
+  const local = await readLocal();
+  for (const r of local.roles) {
+    if (r.actorKind === actorKind && out[r.actorId] && !r.revokedAt) out[r.actorId].push(r.role);
+  }
+  return out;
 }
 
 export async function grantRole(
@@ -181,6 +230,23 @@ export async function getClinic(id: string): Promise<Clinic | null> {
     }
   }
   return (await readLocal()).clinics.find((c) => c.id === id) ?? null;
+}
+
+export async function getClinicsByIds(ids: string[]): Promise<Clinic[]> {
+  const unique = [...new Set(ids.filter(Boolean))];
+  if (unique.length === 0) return [];
+  if (active()) {
+    const sb = getSupabaseAdmin()!;
+    const { data, error } = await sb.from("clinics").select("*").in("id", unique);
+    if (error) {
+      if (isMissing(error)) tableMissing = true;
+      else return [];
+    } else {
+      return (data || []).map((r) => mapClinic(r as Record<string, unknown>));
+    }
+  }
+  const local = await readLocal();
+  return local.clinics.filter((c) => unique.includes(c.id));
 }
 
 export async function listClinics(): Promise<Clinic[]> {
@@ -254,8 +320,23 @@ export async function listMemberships(clinicId?: string): Promise<ClinicMembersh
 }
 
 export async function listMembershipsForActor(actorKind: ActorKind, actorId: string): Promise<ClinicMembership[]> {
-  const all = await listMemberships();
-  return all.filter((m) => m.actorKind === actorKind && m.actorId === actorId && m.status === "active");
+  if (active()) {
+    const sb = getSupabaseAdmin()!;
+    const { data, error } = await sb
+      .from("clinic_memberships")
+      .select("*")
+      .eq("actor_kind", actorKind)
+      .eq("actor_id", actorId)
+      .eq("status", "active");
+    if (error) {
+      if (isMissing(error)) tableMissing = true;
+      else return [];
+    } else {
+      return (data || []).map((r) => mapMembership(r as Record<string, unknown>));
+    }
+  }
+  const local = await readLocal();
+  return local.memberships.filter((m) => m.actorKind === actorKind && m.actorId === actorId && m.status === "active");
 }
 
 export async function addMembership(input: {

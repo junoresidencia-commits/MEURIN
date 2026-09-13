@@ -29,7 +29,7 @@ export default function ClinicaLayout({ children }: { children: React.ReactNode 
       .then((r) => r.json())
       .then((d) => {
         if (!d?.clinic) {
-          router.replace("/");
+          router.replace("/medicos/login");
           return;
         }
         setClinic(d.clinic.name);
@@ -38,7 +38,7 @@ export default function ClinicaLayout({ children }: { children: React.ReactNode 
         setHome(d.staff.kind === "attendant" ? "/atendente/painel" : "/medicos/painel");
         setReady(true);
       })
-      .catch(() => router.replace("/"));
+      .catch(() => router.replace("/medicos/login"));
   }, [params.id, router]);
 
   if (!ready) {

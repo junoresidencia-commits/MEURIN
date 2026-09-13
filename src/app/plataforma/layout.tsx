@@ -9,6 +9,7 @@ const NAV = [
   { href: "/plataforma/clinicas", label: "Clínicas" },
   { href: "/plataforma/usuarios", label: "Usuários" },
   { href: "/plataforma/integridade", label: "Integridade" },
+  { href: "/plataforma/auditoria", label: "Auditoria" },
   { href: "/plataforma/pesquisa", label: "Pesquisa" },
 ];
 
