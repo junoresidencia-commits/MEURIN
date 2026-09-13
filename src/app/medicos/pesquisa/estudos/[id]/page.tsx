@@ -10,6 +10,8 @@ import {
   OPERATORS_CAT, OPERATORS_NUM, type Operator,
 } from "@/lib/research-fields";
 import { STUDY_TYPE_LABEL, STUDY_STATUS_LABEL, STUDY_STATUSES, type StudyLite } from "../../studyMeta";
+import { ResearchGovernancePanel } from "@/components/ResearchGovernancePanel";
+import { emptyProtocol, type ResearchConsent, type ResearchProtocol } from "@/lib/research-governance";
 import { guessSexFromName } from "@/lib/sex-guess";
 
 type Filter = { field: string; op: Operator; value: string; value2?: string };
@@ -40,6 +42,9 @@ export default function EstudoDetailPage() {
   const [saving, setSaving] = useState(false);
   const [pickVars, setPickVars] = useState(false);
   const [notFound, setNotFound] = useState(false);
+  const [protocol, setProtocol] = useState<ResearchProtocol | null>(null);
+  const [consents, setConsents] = useState<ResearchConsent[]>([]);
+  const [exportGate, setExportGate] = useState({ ok: false, reason: "Registre a governança antes de exportar." });
 
   useEffect(() => {
     fetch("/api/auth").then((r) => r.json()).then((d) => {
@@ -57,6 +62,13 @@ export default function EstudoDetailPage() {
     setStudy(data.study);
     setFilters(data.study.filters || []);
     setVariables(data.study.variables || []);
+    if (data.governance) {
+      setProtocol(data.governance.protocol);
+      setConsents(data.governance.consents || []);
+      if (data.governance.export) setExportGate(data.governance.export);
+    } else {
+      setProtocol(emptyProtocol(id, ""));
+    }
     loadAnalysis();
   }
   async function loadAnalysis() {
@@ -117,19 +129,38 @@ export default function EstudoDetailPage() {
     const rows = analysis.patients.map((p) => cols.map((c) => { const v = p[c]; return v === null || v === undefined ? "" : (v as string | number); }));
     return [header, ...rows];
   }
-  function exportCsv() {
-    const rows = buildRows();
-    const csv = rows.map((r) => r.map((c) => `"${String(c).replace(/"/g, '""')}"`).join(";")).join("\n");
-    const blob = new Blob(["\ufeff" + csv], { type: "text/csv;charset=utf-8;" });
-    const url = URL.createObjectURL(blob); const a = document.createElement("a"); a.href = url; a.download = "estudo-anonimizado.csv"; a.click(); URL.revokeObjectURL(url);
+  async function allowExport(format: string, rowCount: number) {
+    const res = await fetch(`/api/pesquisa/studies/${id}/export`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ format, rowCount }),
+    });
+    const d = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(d.error || "Exportação bloqueada pela governança.");
+  }
+  async function exportCsv() {
+    try {
+      const rows = buildRows();
+      await allowExport("csv", Math.max(0, rows.length - 1));
+      const csv = rows.map((r) => r.map((c) => `"${String(c).replace(/"/g, '""')}"`).join(";")).join("\n");
+      const blob = new Blob(["\ufeff" + csv], { type: "text/csv;charset=utf-8;" });
+      const url = URL.createObjectURL(blob); const a = document.createElement("a"); a.href = url; a.download = "estudo-anonimizado.csv"; a.click(); URL.revokeObjectURL(url);
+    } catch (e) {
+      window.alert(e instanceof Error ? e.message : "Exportação bloqueada.");
+    }
   }
   async function exportXlsx() {
-    const rows = buildRows();
-    const XLSX = await import("xlsx");
-    const ws = XLSX.utils.aoa_to_sheet(rows);
-    const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, "Estudo");
-    XLSX.writeFile(wb, "estudo-anonimizado.xlsx");
+    try {
+      const rows = buildRows();
+      await allowExport("xlsx", Math.max(0, rows.length - 1));
+      const XLSX = await import("xlsx");
+      const ws = XLSX.utils.aoa_to_sheet(rows);
+      const wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, ws, "Estudo");
+      XLSX.writeFile(wb, "estudo-anonimizado.xlsx");
+    } catch (e) {
+      window.alert(e instanceof Error ? e.message : "Exportação bloqueada.");
+    }
   }
 
   if (!ready) return <div className="mx-auto max-w-4xl px-5 py-20 text-[var(--text-muted)]">Carregando…</div>;
@@ -176,6 +207,16 @@ export default function EstudoDetailPage() {
               {saving && <span className="text-xs text-[var(--text-muted)]">salvando…</span>}
             </div>
           </div>
+
+          {protocol && (
+            <ResearchGovernancePanel
+              studyId={id}
+              protocol={protocol}
+              consents={consents}
+              gate={exportGate}
+              onRefresh={loadStudy}
+            />
+          )}
 
           {/* Critérios (filtros) */}
           <div className="panel mt-4 space-y-3">
@@ -358,10 +399,12 @@ export default function EstudoDetailPage() {
               <div className="panel mt-4 space-y-2">
                 <p className="text-xs font-bold uppercase tracking-wider text-[var(--gold)]">Exportar banco (anonimizado — P0001…)</p>
                 <div className="flex flex-wrap gap-2">
-                  <button type="button" className="btn-gold" onClick={exportXlsx} disabled={analysis.n === 0}>Exportar XLSX</button>
-                  <button type="button" className="btn-ghost" onClick={exportCsv} disabled={analysis.n === 0}>Exportar CSV</button>
+                  <button type="button" className="btn-gold" onClick={exportXlsx} disabled={analysis.n === 0 || !exportGate.ok}>Exportar XLSX</button>
+                  <button type="button" className="btn-ghost" onClick={exportCsv} disabled={analysis.n === 0 || !exportGate.ok}>Exportar CSV</button>
                 </div>
-                <p className="text-xs text-[var(--text-muted)]">Sem nome/CPF/CNS/contato. A anonimização não substitui consentimento nem aprovação ética (CEP/CONEP quando aplicável).</p>
+                <p className="text-xs text-[var(--text-muted)]">
+                  Sem nome/CPF/CNS/contato. {exportGate.ok ? exportGate.reason : exportGate.reason}
+                </p>
               </div>
             </>
           )}

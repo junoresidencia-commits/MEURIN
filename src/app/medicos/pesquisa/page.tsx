@@ -94,7 +94,7 @@ export default function PesquisaHubPage() {
           <p className="mt-8 rounded-2xl border border-[var(--border)] bg-[var(--gold-soft)]/40 px-4 py-3 text-xs text-[var(--text-muted)]">
             Privacidade e ética: o banco científico é anonimizado (P0001…) e separado dos dados identificáveis do prontuário.
             A anonimização não substitui consentimento, aprovação de CEP/CONEP quando aplicável, nem autorização para uso de imagens.
-            Cada médico vê apenas os seus próprios pacientes e estudos.
+            Cada médico vê apenas os seus próprios pacientes e estudos. Exportar arquivo exige governança (CEP ou dispensa).
           </p>
         </div>
       </div>

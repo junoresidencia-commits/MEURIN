@@ -25,6 +25,10 @@ export default function PlataformaHomePage() {
           <p className="font-bold">Integridade</p>
           <p className="mt-1 text-sm text-[var(--text-muted)]">Contagens de pacientes, médicos, consultas, evoluções e exames.</p>
         </Link>
+        <Link href="/plataforma/pesquisa" className="panel block">
+          <p className="font-bold">Pesquisa</p>
+          <p className="mt-1 text-sm text-[var(--text-muted)]">CEP/CONEP e dispensa. Sem prontuário e sem financeiro da clínica.</p>
+        </Link>
       </div>
     </div>
   );

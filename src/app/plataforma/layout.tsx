@@ -9,6 +9,7 @@ const NAV = [
   { href: "/plataforma/clinicas", label: "Clínicas" },
   { href: "/plataforma/usuarios", label: "Usuários" },
   { href: "/plataforma/integridade", label: "Integridade" },
+  { href: "/plataforma/pesquisa", label: "Pesquisa" },
 ];
 
 export default function PlataformaLayout({ children }: { children: React.ReactNode }) {
