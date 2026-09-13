@@ -60,6 +60,141 @@ export type PlatformAuditEntry = {
   createdAt: string;
 };
 
+export type InviteKind = "doctor" | "attendant";
+export type InviteStatus = "pending" | "accepted" | "cancelled" | "expired";
+
+export type ClinicInvite = {
+  id: string;
+  clinicId: string;
+  kind: InviteKind;
+  email: string;
+  name: string;
+  crm: string | null;
+  specialty: string | null;
+  token: string;
+  status: InviteStatus;
+  invitedBy: string | null;
+  acceptedActorId: string | null;
+  createdAt: string;
+  acceptedAt: string | null;
+};
+
+export type ClinicFeeRule = {
+  id: string;
+  clinicId: string;
+  doctorId: string;
+  feeCents: number;
+  clinicSharePercent: number;
+  active: boolean;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type EncounterPaymentStatus = "pending" | "paid" | "partial" | "courtesy";
+export type ClinicPaymentMethod = "pix" | "card" | "cash" | "courtesy" | "other";
+
+export type ClinicEncounter = {
+  id: string;
+  clinicId: string;
+  doctorId: string;
+  patientKey: string;
+  patientName: string | null;
+  bookingId: string | null;
+  feeCents: number;
+  clinicShareCents: number;
+  doctorShareCents: number;
+  receivedCents: number;
+  paymentStatus: EncounterPaymentStatus;
+  attendedAt: string;
+  createdAt: string;
+};
+
+export type ClosingStatus = "closed" | "paid";
+export type AdjustmentKind = "credit" | "debit" | "correction";
+
+export type ClinicClosing = {
+  id: string;
+  clinicId: string;
+  doctorId: string;
+  code: string;
+  periodFrom: string;
+  periodTo: string;
+  encounterIds: string[];
+  producedCents: number;
+  receivedCents: number;
+  clinicShareCents: number;
+  doctorShareCents: number;
+  status: ClosingStatus;
+  createdBy: string | null;
+  paidAt: string | null;
+  paidBy: string | null;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type ClinicClosingAdjustment = {
+  id: string;
+  closingId: string;
+  clinicId: string;
+  kind: AdjustmentKind;
+  amountCents: number;
+  reason: string;
+  createdByKind: string | null;
+  createdById: string | null;
+  createdByEmail: string | null;
+  createdAt: string;
+};
+
+export type ClinicPayment = {
+  id: string;
+  clinicId: string;
+  encounterId: string;
+  method: ClinicPaymentMethod;
+  amountCents: number;
+  discountCents: number;
+  status: EncounterPaymentStatus;
+  note: string | null;
+  recordedByKind: string | null;
+  recordedById: string | null;
+  createdAt: string;
+};
+
+export type ClinicReferralStatus = "active" | "cancelled";
+
+export type ClinicReferral = {
+  id: string;
+  clinicId: string;
+  shareId: string | null;
+  patientKey: string;
+  patientName: string | null;
+  fromDoctorId: string;
+  fromDoctorName: string | null;
+  fromSpecialty: string | null;
+  toDoctorId: string;
+  toDoctorName: string | null;
+  toSpecialty: string | null;
+  reason: string | null;
+  status: ClinicReferralStatus;
+  createdAt: string;
+  cancelledAt: string | null;
+};
+
+export type ClinicPatientLink = {
+  id: string;
+  clinicId: string;
+  patientKey: string;
+  source: string;
+  createdAt: string;
+};
+
+export type ClinicPeerDoctor = {
+  id: string;
+  name: string;
+  specialty: string;
+  crm?: string;
+  clinics: { id: string; name: string }[];
+};
+
 export type IntegrityCounts = {
   doctors: number;
   patients: number;

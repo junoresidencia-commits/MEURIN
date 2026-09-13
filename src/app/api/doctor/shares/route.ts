@@ -13,12 +13,19 @@ import {
   writeAudit,
 } from "@/lib/patient-shares-store";
 import { sendNotification } from "@/lib/notify";
+import { cancelReferralsForShare, listReferralsForDoctor, recordIntraClinicReferral } from "@/lib/clinic-referral-store";
 
 export async function GET() {
   const doctorId = await getDoctorSessionId();
   if (!doctorId) return NextResponse.json({ error: "Não autenticado." }, { status: 401 });
   const lists = await listSharesForDoctor(doctorId);
-  return NextResponse.json(lists);
+  let clinicReferrals: unknown[] = [];
+  try {
+    clinicReferrals = await listReferralsForDoctor(doctorId);
+  } catch (err) {
+    console.error("[shares] rede da clínica ignorada", err);
+  }
+  return NextResponse.json({ ...lists, clinicReferrals });
 }
 
 export async function POST(req: Request) {
@@ -51,7 +58,16 @@ export async function POST(req: Request) {
 
   const existing = await findActiveShare(toDoctorId, access.key);
   if (existing) {
-    return NextResponse.json({ share: existing, alreadyShared: true });
+    let clinicReferral = null;
+    try {
+      clinicReferral = await recordIntraClinicReferral({
+        share: existing,
+        preferredClinicId: typeof body.clinicId === "string" ? body.clinicId : null,
+      });
+    } catch (err) {
+      console.error("[shares] intra-clínica em share existente", err);
+    }
+    return NextResponse.json({ share: existing, alreadyShared: true, clinicReferral });
   }
 
   const share = await createShare({
@@ -68,6 +84,15 @@ export async function POST(req: Request) {
 
   await upsertPeer(from.id, to.id);
   await upsertPeer(to.id, from.id);
+  let clinicReferral = null;
+  try {
+    clinicReferral = await recordIntraClinicReferral({
+      share,
+      preferredClinicId: typeof body.clinicId === "string" ? body.clinicId : null,
+    });
+  } catch (err) {
+    console.error("[shares] encaminhamento intra-clínica ignorado", err);
+  }
   try {
     await writeAudit({
       doctorId: from.id,
@@ -95,7 +120,7 @@ export async function POST(req: Request) {
     relatedId: share.id,
   });
 
-  return NextResponse.json({ share }, { status: 201 });
+  return NextResponse.json({ share, clinicReferral }, { status: 201 });
 }
 
 export async function PATCH(req: Request) {
@@ -117,6 +142,11 @@ export async function PATCH(req: Request) {
   }
 
   const revoked = await revokeShare(id, doctorId);
+  try {
+    await cancelReferralsForShare(id);
+  } catch (err) {
+    console.error("[shares] cancelar rede da clínica", err);
+  }
   const actor = await getDoctorById(doctorId);
   try {
     await writeAudit({

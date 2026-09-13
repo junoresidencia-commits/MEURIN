@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { getDoctorSessionId } from "@/lib/auth";
 import { getStudy, updateStudy, deleteStudy, type StudyStatus, type StudyType } from "@/lib/research-studies-store";
+import { exportGate, getProtocol, listConsents } from "@/lib/research-governance-store";
 
 const STATUSES: StudyStatus[] = ["rascunho", "coleta", "analise", "escrita", "submetido", "concluido"];
 const TYPES: StudyType[] = [
@@ -14,7 +15,16 @@ export async function GET(_req: Request, ctx: { params: Promise<{ id: string }> 
   const { id } = await ctx.params;
   const study = await getStudy(doctorId, id);
   if (!study) return NextResponse.json({ error: "Estudo não encontrado." }, { status: 404 });
-  return NextResponse.json({ study });
+  let governance = null;
+  try {
+    const protocol = await getProtocol(id, doctorId);
+    const consents = await listConsents(id, doctorId);
+    const gate = await exportGate(id, doctorId, study.type);
+    governance = { protocol, consents, export: gate };
+  } catch (err) {
+    console.error("[pesquisa] governança ignorada", err);
+  }
+  return NextResponse.json({ study, governance });
 }
 
 export async function PUT(req: Request, ctx: { params: Promise<{ id: string }> }) {

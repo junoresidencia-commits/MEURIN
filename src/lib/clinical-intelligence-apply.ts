@@ -1,11 +1,12 @@
 import "server-only";
-import { extractClinicalFields, findingsToChanges, splitByConfidence } from "./clinical-intelligence";
-import { applyProfileChanges, getProfile } from "./clinical-profile-store";
-import { aFromRac, refineG } from "./kdigo";
+import { extractClinicalFields } from "./clinical-intelligence";
+import { getProfile } from "./clinical-profile-store";
 import { getClinicalNotes, getLabResults } from "./patient-store";
 import { clinicalKey, findPatientByClinicalKey, listPatientsByDoctor } from "./patients-store";
 import { readDb } from "./store";
 import { listSharesForDoctor } from "./patient-shares-store";
+import { getEffectivePrefs } from "./intelligence-prefs-store";
+import { suggestForReview } from "./intelligence-prefs";
 
 export type IntelligenceAuditRow = {
   patientKey: string;
@@ -45,44 +46,28 @@ export async function reprocessPatient(
     .join("\n\n");
 
   const detected = extractClinicalFields(blob, labs.map((l) => ({ testKey: l.testKey, value: l.value, measuredAt: l.measuredAt })), current?.data);
-  const { auto, review } = splitByConfidence(detected);
-  const changes = findingsToChanges([...auto, ...review.filter((r) => r.autoApply)]);
-
-  const latestTfge = [...labs].filter((l) => l.testKey === "tfge").sort((a, b) => b.measuredAt.localeCompare(a.measuredAt))[0];
-  const latestRac = [...labs].filter((l) => l.testKey === "rac").sort((a, b) => b.measuredAt.localeCompare(a.measuredAt))[0];
-  if (latestRac) {
-    const a = aFromRac(latestRac.value);
-    if (a) changes.categoria_a = a;
-  }
-  if (latestTfge) {
-    const g = refineG(typeof changes.estagio_g === "string" ? changes.estagio_g : String(current?.data.estagio_g || ""), latestTfge.value);
-    if (g) changes.estagio_g = g;
-  }
+  const prefs = doctorId ? await getEffectivePrefs(doctorId) : null;
+  const suggest = prefs ? suggestForReview(detected, prefs) : detected.filter((d) => d.confidence !== "baixa");
 
   const before = current?.data || {};
   let conflicts = 0;
   if (current?.meta) {
-    for (const field of Object.keys(changes)) {
-      if (current.meta[field]?.source === "manual" && String(before[field] ?? "") !== String(changes[field] ?? "")) {
+    for (const field of suggest) {
+      if (current.meta[field.key]?.source === "manual" && String(before[field.key] ?? "") !== String(field.value ?? "")) {
         conflicts++;
       }
     }
   }
 
-  await applyProfileChanges(key, doctorId, doctorId, changes, "evolução", { respectPriority: true });
-  if (latestTfge && changes.estagio_g) {
-    await applyProfileChanges(key, doctorId, doctorId, { estagio_g: changes.estagio_g }, "cálculo", { respectPriority: true });
-  }
-
-  const pending = review.filter((r) => !r.autoApply).length;
+  // Nunca grava no perfil aqui. Relê só para o médico revisar.
   return {
     patientKey: key,
     name: nameHint || cadastro?.name || key,
     extracted: detected.length,
-    applied: Object.keys(changes).length,
-    pending,
+    applied: 0,
+    pending: suggest.length,
     conflicts,
-    status: pending || conflicts ? "review" : "ok",
+    status: suggest.length || conflicts ? "review" : "ok",
     at: new Date().toISOString(),
   };
 }
@@ -115,6 +100,8 @@ export async function listDoctorPatientKeys(doctorId: string): Promise<{ key: st
 }
 
 export async function reprocessDoctorPatients(doctorId: string): Promise<IntelligenceAuditRow[]> {
+  const prefs = await getEffectivePrefs(doctorId);
+  if (!prefs.allowBackfill) return [];
   const list = await listDoctorPatientKeys(doctorId);
   const out: IntelligenceAuditRow[] = [];
   for (const p of list) {

@@ -14,12 +14,14 @@ export default function MedicoMaisPage() {
   const [ready, setReady] = useState(false);
   const [isAdmin, setIsAdmin] = useState(false);
   const [isSuperAdmin, setIsSuperAdmin] = useState(false);
+  const [clinicAdmin, setClinicAdmin] = useState<{ clinicId: string; clinicName: string }[]>([]);
 
   useEffect(() => {
     fetch("/api/auth").then((r) => r.json()).then((d) => {
       if (!d.doctor) { router.replace("/medicos/login"); return; }
       setReady(true);
       setIsSuperAdmin(Array.isArray(d.doctor.platformRoles) && d.doctor.platformRoles.includes("SUPER_ADMIN"));
+      setClinicAdmin(Array.isArray(d.doctor.clinicAdmin) ? d.doctor.clinicAdmin : []);
       fetch("/api/admin/session").then((r) => r.json()).then((x) => setIsAdmin(Boolean(x.admin))).catch(() => {});
     });
   }, [router]);
@@ -42,10 +44,11 @@ export default function MedicoMaisPage() {
       title: "Clínica e equipe",
       items: [
         { href: "/medicos/agenda/configurar", label: "Clínicas e horários", desc: "Locais de atendimento e períodos da agenda." },
-        { href: "/medicos/prontuario-inteligente", label: "Revisão de prontuário inteligente", desc: "Reprocessar evoluções antigas e revisar o que o sistema leu." },
+        { href: "/medicos/prontuario-inteligente", label: "Revisão de prontuário inteligente", desc: "Escolher o que sugerir e reler evoluções — nada entra no perfil sozinho." },
         { href: "/medicos/equipe", label: "Atendentes", desc: "Sua equipe administrativa e permissões." },
+        ...clinicAdmin.map((c) => ({ href: `/clinica/${c.clinicId}`, label: `Gestão · ${c.clinicName}`, desc: "Equipe, produção e check-in da clínica — separado do prontuário." })),
         { href: "/medicos/equipe-assistencial", label: "Minha Equipe", desc: "Médicos, nutrição, psicologia e enfermagem." },
-        { href: "/medicos/encaminhamentos", label: "Encaminhamentos", desc: "Pacientes compartilhados com você e os que você encaminhou." },
+        { href: "/medicos/encaminhamentos", label: "Encaminhamentos", desc: "Pacientes compartilhados com você e os da clínica. O cadastro não muda de médico." },
       ],
     },
     {

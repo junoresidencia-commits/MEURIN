@@ -32,6 +32,7 @@ export default function AtendentePainelPage() {
   const [photoUrl, setPhotoUrl] = useState<string | null>(null);
   const [showPhoto, setShowPhoto] = useState(false);
   const [doctors, setDoctors] = useState<DoctorLink[]>([]);
+  const [clinics, setClinics] = useState<{ clinicId: string; clinicName: string }[]>([]);
   const [doctorId, setDoctorId] = useState("");
   const [bookings, setBookings] = useState<Booking[]>([]);
   const [loading, setLoading] = useState(true);
@@ -50,6 +51,7 @@ export default function AtendentePainelPage() {
       setName(me.attendant.name);
       setPhotoUrl(me.attendant.photoUrl ?? null);
       setDoctors(me.doctors || []);
+      setClinics(me.clinics || []);
       const first = me.doctors?.[0]?.doctorId || "";
       setDoctorId(first);
       if (first) await loadAgenda(first);
@@ -110,6 +112,9 @@ export default function AtendentePainelPage() {
 
       <div className="mt-4 flex flex-wrap gap-2">
         <Link href={`/atendente/agendar?doctorId=${doctorId}`} className="btn-gold">+ Novo agendamento</Link>
+        {clinics.map((c) => (
+          <Link key={c.clinicId} href={`/clinica/${c.clinicId}/caixa`} className="btn-ghost">Check-in · {c.clinicName}</Link>
+        ))}
       </div>
 
       <Section title={`Agenda de hoje (${todays.length})`}>

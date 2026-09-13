@@ -5,6 +5,8 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { DoctorSidebar } from "@/components/DoctorSidebar";
 import { DoctorMobileNav } from "@/components/DoctorMobileNav";
+import { IntelPrefsForm } from "@/components/IntelPrefsForm";
+import { DEFAULT_INTEL_PREFS, type IntelligencePrefs } from "@/lib/intelligence-prefs";
 
 type Row = {
   patientKey: string;
@@ -21,6 +23,9 @@ export default function ProntuarioInteligenteAuditPage() {
   const [rows, setRows] = useState<Row[] | null>(null);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState("");
+  const [prefs, setPrefs] = useState<IntelligencePrefs>(DEFAULT_INTEL_PREFS);
+  const [prefSaving, setPrefSaving] = useState(false);
+  const [prefMsg, setPrefMsg] = useState("");
 
   useEffect(() => {
     fetch("/api/doctor/intelligence/backfill")
@@ -30,7 +35,33 @@ export default function ProntuarioInteligenteAuditPage() {
       })
       .then((d) => { if (d) setRows(d.rows || []); })
       .catch(() => setRows([]));
+    fetch("/api/doctor/intelligence/prefs")
+      .then((r) => r.json())
+      .then((d) => {
+        if (d?.prefs) setPrefs({ ...DEFAULT_INTEL_PREFS, ...d.prefs, applyMode: "review_only" });
+      })
+      .catch(() => {});
   }, [router]);
+
+  async function savePrefs() {
+    setPrefSaving(true);
+    setPrefMsg("");
+    try {
+      const res = await fetch("/api/doctor/intelligence/prefs", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(prefs),
+      });
+      const d = await res.json();
+      if (!res.ok) throw new Error(d.error || "Não foi possível salvar.");
+      if (d.prefs) setPrefs({ ...DEFAULT_INTEL_PREFS, ...d.prefs, applyMode: "review_only" });
+      setPrefMsg("Preferências salvas. A inteligência continua só sugerindo.");
+    } catch (e) {
+      setPrefMsg(e instanceof Error ? e.message : "Erro");
+    } finally {
+      setPrefSaving(false);
+    }
+  }
 
   async function run() {
     setBusy(true);
@@ -55,10 +86,13 @@ export default function ProntuarioInteligenteAuditPage() {
           <Link href="/medicos/mais" className="text-sm font-semibold text-[var(--gold)]">← Mais</Link>
           <h1 className="font-display mt-2 text-3xl font-extrabold text-[var(--text)]">Revisão do prontuário inteligente</h1>
           <p className="mt-2 text-sm text-[var(--text-soft)]">
-            Lê evoluções, exames e cadastro de todos os seus pacientes e atualiza o perfil — sem duplicar e sem sobrescrever o que você confirmou na mão.
+            Lê evoluções e lista o que revisar. <b>Não grava no perfil sozinha</b> — você confirma no prontuário.
           </p>
-          <button type="button" className="btn-gold mt-4" onClick={run} disabled={busy}>
-            {busy ? "Reprocessando…" : "Reprocessar todos os pacientes"}
+          <div className="mt-5">
+            <IntelPrefsForm prefs={prefs} onChange={setPrefs} saving={prefSaving} onSave={savePrefs} msg={prefMsg} />
+          </div>
+          <button type="button" className="btn-gold mt-4" onClick={run} disabled={busy || !prefs.allowBackfill}>
+            {busy ? "Relendo…" : "Reler todos os pacientes (não grava)"}
           </button>
           {err && <p className="mt-3 text-sm text-[var(--danger)]">{err}</p>}
 

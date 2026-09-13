@@ -3,6 +3,7 @@ import bcrypt from "bcryptjs";
 import { COOKIE, DOCTOR_MAX_AGE, createSessionToken, getDoctorSessionId } from "@/lib/auth";
 import { readDb } from "@/lib/store";
 import { emailsMatch } from "@/lib/login-email";
+import { getPlatformActor } from "@/lib/platform-access";
 import { ensureFounderSuperAdmin, listActiveRoles } from "@/lib/platform-store";
 
 async function platformRolesSafe(doctorId: string): Promise<string[]> {
@@ -25,10 +26,21 @@ export async function GET() {
   if (!doctor) return NextResponse.json({ doctor: null });
   const { passwordHash, mpAccessToken, ...safe } = doctor;
   void passwordHash;
-  const platformRoles = await platformRolesSafe(doctor.id);
+  let actor = null;
+  try {
+    actor = await getPlatformActor();
+  } catch (err) {
+    console.error("[auth] ator da plataforma ignorado", err);
+  }
+  const platformRoles = actor?.roles ?? (await platformRolesSafe(doctor.id));
   // Nunca devolvemos o token do Mercado Pago ao navegador — só se está conectado.
   return NextResponse.json({
-    doctor: { ...safe, mpConnected: Boolean(mpAccessToken?.trim()), platformRoles },
+    doctor: {
+      ...safe,
+      mpConnected: Boolean(mpAccessToken?.trim()),
+      platformRoles,
+      clinicAdmin: actor?.clinicAdmin ?? [],
+    },
   });
 }
 

@@ -84,7 +84,7 @@ export function ClinicalReviewModal({
           <button type="button" onClick={onClose} className="text-2xl leading-none text-[var(--text-muted)]">×</button>
         </div>
         <p className="mb-4 text-sm text-[var(--text-soft)]">
-          Extraídas desta evolução. Confirme tudo ou revise um item.
+          A inteligência só sugere. Nada entra no perfil sem você confirmar.
         </p>
 
         {!detail ? (

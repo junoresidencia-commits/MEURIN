@@ -148,7 +148,7 @@ async function listAttendance(doctorId: string): Promise<Attendance[]> {
   return data.attendance.filter((a) => a.doctorId === doctorId);
 }
 
-export async function finishAttendance(input: { doctorId: string; patientKey: string; bookingId?: string | null }): Promise<void> {
+export async function finishAttendance(input: { doctorId: string; patientKey: string; bookingId?: string | null; patientName?: string | null }): Promise<void> {
   const key = input.patientKey.toLowerCase().trim();
   const finishedAt = new Date().toISOString();
   if (active("care_attendance")) {
@@ -156,13 +156,27 @@ export async function finishAttendance(input: { doctorId: string; patientKey: st
     const { error } = await supabase.from("care_attendance").update({ finished_at: finishedAt })
       .eq("doctor_id", input.doctorId).eq("patient_key", key).is("finished_at", null);
     if (error) { if (isMissing(error)) missing.add("care_attendance"); else throw error; }
-    else return;
+    else {
+      await recordClinicProductionSafe(input);
+      return;
+    }
   }
   const data = await readFile();
   for (const a of data.attendance) {
     if (a.doctorId === input.doctorId && a.patientKey === key && !a.finishedAt) a.finishedAt = finishedAt;
   }
   await writeFile(data);
+  await recordClinicProductionSafe(input);
+}
+
+/** Produção da clínica: falha nunca interrompe o finalizar atendimento médico. */
+async function recordClinicProductionSafe(input: { doctorId: string; patientKey: string; bookingId?: string | null; patientName?: string | null }) {
+  try {
+    const { recordProductionFromAttendance } = await import("./clinic-finance-store");
+    await recordProductionFromAttendance(input);
+  } catch (err) {
+    console.error("[clinic-finance] produção não registrada", err);
+  }
 }
 
 /* --------------------------------- Retornos -------------------------------- */

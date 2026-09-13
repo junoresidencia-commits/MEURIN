@@ -61,8 +61,8 @@ export function EncaminharHeaderButton({
                   className="w-full rounded-[20px] border border-[var(--border)] p-4 text-left transition hover:border-[var(--gold)]"
                   onClick={() => setDestino("medico")}
                 >
-                  <span className="block text-sm font-extrabold text-[var(--text)]">Médico da equipe</span>
-                  <span className="mt-0.5 block text-sm text-[var(--text-muted)]">Cardiologista, endocrinologista, outro nefrologista…</span>
+                  <span className="block text-sm font-extrabold text-[var(--text)]">Médico da equipe ou da clínica</span>
+                  <span className="mt-0.5 block text-sm text-[var(--text-muted)]">Cardiologista, endocrinologista, outro nefrologista da clínica…</span>
                 </button>
                 <button
                   type="button"

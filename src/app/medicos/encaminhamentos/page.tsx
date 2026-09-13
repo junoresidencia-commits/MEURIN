@@ -18,11 +18,13 @@ type Share = {
   status: string;
   createdAt: string;
 };
+type ClinicReferral = { shareId: string | null; clinicId: string; status: string };
 
 export default function EncaminhamentosPage() {
   const router = useRouter();
   const [incoming, setIncoming] = useState<Share[]>([]);
   const [outgoing, setOutgoing] = useState<Share[]>([]);
+  const [clinicReferrals, setClinicReferrals] = useState<ClinicReferral[]>([]);
   const [tab, setTab] = useState<"incoming" | "outgoing">("incoming");
 
   useEffect(() => {
@@ -31,6 +33,7 @@ export default function EncaminhamentosPage() {
       fetch("/api/doctor/shares").then((r) => r.json()).then((x) => {
         setIncoming(x.incoming || []);
         setOutgoing(x.outgoing || []);
+        setClinicReferrals(x.clinicReferrals || []);
       });
     });
   }, [router]);
@@ -44,7 +47,7 @@ export default function EncaminhamentosPage() {
         <div className="mx-auto max-w-3xl px-5 pb-28 pt-8 lg:pb-8">
           <p className="text-sm font-semibold text-[var(--gold)]">Médico</p>
           <h1 className="font-display text-3xl font-extrabold text-[var(--text)]">Encaminhamentos</h1>
-          <p className="mt-1 text-[var(--text-muted)]">Pacientes compartilhados com você e os que você encaminhou. O prontuário é o mesmo.</p>
+          <p className="mt-1 text-[var(--text-muted)]">Pacientes compartilhados com você e os que você encaminhou. O prontuário é o mesmo — encaminhar na clínica não muda o cadastro.</p>
 
           <div className="mt-5 flex gap-2">
             <button type="button" onClick={() => setTab("incoming")} className={`rounded-full px-4 py-2 text-sm font-bold ${tab === "incoming" ? "bg-[var(--gold)] text-white" : "border border-[var(--border)] bg-white"}`}>Recebidos</button>
@@ -56,7 +59,9 @@ export default function EncaminhamentosPage() {
             {list.map((s) => (
               <div key={s.id} className="panel">
                 <p className="text-xs font-bold uppercase tracking-wider text-[var(--gold)]">
-                  {s.status === "active" ? "Ativo" : "Acesso removido"} · {new Date(s.createdAt).toLocaleString("pt-BR")}
+                  {s.status === "active" ? "Ativo" : "Acesso removido"}
+                  {clinicReferrals.some((r) => r.shareId === s.id && r.status === "active") ? " · Da clínica" : ""}
+                  {" · "}{new Date(s.createdAt).toLocaleString("pt-BR")}
                 </p>
                 <p className="font-display text-lg font-bold text-[var(--text)]">{s.patientName || s.patientKey}</p>
                 <p className="mt-1 text-sm text-[var(--text-soft)]">

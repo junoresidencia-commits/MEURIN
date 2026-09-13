@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { getAttendantId } from "@/lib/attendant-session";
 import { getAttendant, listLinksForAttendant } from "@/lib/attendants-store";
 import { getDoctorById } from "@/lib/store";
+import { getClinic, listMembershipsForActor } from "@/lib/platform-store";
 
 export async function GET() {
   const id = await getAttendantId();
@@ -13,5 +14,11 @@ export async function GET() {
     const d = await getDoctorById(l.doctorId);
     return { doctorId: l.doctorId, doctorName: d?.name || "Médico", specialty: d?.specialty || "", permissions: l.permissions };
   }));
-  return NextResponse.json({ attendant: { id: att.id, name: att.name, photoUrl: att.photoUrl ?? null }, doctors });
+  const memberships = await listMembershipsForActor("attendant", att.id);
+  const clinics = [];
+  for (const m of memberships.filter((x) => x.role === "ATENDENTE")) {
+    const clinic = await getClinic(m.clinicId);
+    if (clinic) clinics.push({ clinicId: clinic.id, clinicName: clinic.name });
+  }
+  return NextResponse.json({ attendant: { id: att.id, name: att.name, photoUrl: att.photoUrl ?? null }, doctors, clinics });
 }

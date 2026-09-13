@@ -5,7 +5,15 @@ import Link from "next/link";
 import { MEDICAL_SPECIALTIES } from "@/lib/medical-specialties";
 import { encodePatientParam } from "@/lib/user-errors";
 
-type TeamDoctor = { id: string; name: string; specialty: string; crm?: string };
+type TeamDoctor = {
+  id: string;
+  name: string;
+  specialty: string;
+  crm?: string;
+  clinicId?: string;
+  clinicName?: string;
+  source?: "peer" | "clinic" | "both";
+};
 type Allied = { id: string; name: string; registry?: string | null; active?: boolean };
 
 const ALLIED = [
@@ -47,7 +55,26 @@ export function EncaminharPacienteForm({
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
-    fetch("/api/doctor/peers").then((r) => r.json()).then((d) => setPeers(d.doctors || [])).catch(() => {});
+    Promise.all([
+      fetch("/api/doctor/peers").then((r) => r.json()).catch(() => ({ doctors: [] })),
+      fetch("/api/doctor/clinic-peers").then((r) => r.json()).catch(() => ({ doctors: [] })),
+    ]).then(([peersRes, clinicRes]) => {
+      const byId = new Map<string, TeamDoctor>();
+      for (const d of (peersRes.doctors || []) as TeamDoctor[]) {
+        byId.set(d.id, { ...d, source: "peer" });
+      }
+      for (const d of (clinicRes.doctors || []) as Array<TeamDoctor & { clinics?: { id: string; name: string }[] }>) {
+        const clinicId = d.clinics?.[0]?.id || d.clinicId;
+        const clinicName = d.clinics?.[0]?.name || d.clinicName;
+        const existing = byId.get(d.id);
+        if (existing) {
+          byId.set(d.id, { ...existing, clinicId, clinicName, source: "both" });
+        } else {
+          byId.set(d.id, { ...d, clinicId, clinicName, source: "clinic" });
+        }
+      }
+      setPeers([...byId.values()]);
+    }).catch(() => {});
     fetch("/api/doctor/care-team").then((r) => r.json()).then((d) => {
       setAllied({
         nutrition: (d.mine?.nutrition || []).filter((p: Allied) => p.active !== false),
@@ -86,9 +113,10 @@ export function EncaminharPacienteForm({
         if (!res.ok) throw new Error(d.error || "Não foi possível encaminhar.");
         setMsg("Paciente encaminhado. Ele aparece na área daquele profissional.");
       } else {
+        const clinicId = selected && "clinicId" in selected ? selected.clinicId : undefined;
         const res = await fetch("/api/doctor/shares", {
           method: "POST", headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ patientKey: emailParam, toDoctorId: professionalId, reason }),
+          body: JSON.stringify({ patientKey: emailParam, toDoctorId: professionalId, reason, clinicId }),
         });
         const d = await res.json().catch(() => ({}));
         if (!res.ok) throw new Error(d.error || "Não foi possível encaminhar.");
@@ -124,21 +152,21 @@ export function EncaminharPacienteForm({
         </select>
       </label>
       <label className="block">
-        <span className="mb-1 block text-xs font-semibold text-[var(--text-muted)]">Profissional da sua equipe</span>
+        <span className="mb-1 block text-xs font-semibold text-[var(--text-muted)]">Profissional</span>
         <select className="input-field" value={professionalId} onChange={(e) => setProfessionalId(e.target.value)} disabled={!specialty}>
-          <option value="">{specialty ? (people.length ? "Selecione" : "Ninguém desta especialidade na equipe") : "Escolha a especialidade primeiro"}</option>
+          <option value="">{specialty ? (people.length ? "Selecione" : "Ninguém desta especialidade na equipe ou na clínica") : "Escolha a especialidade primeiro"}</option>
           {people.map((p) => (
             <option key={p.id} value={p.id}>
-              {p.name}{"specialty" in p && p.specialty ? ` — ${p.specialty}` : ""}{"registry" in p && p.registry ? ` · ${p.registry}` : ""}{"crm" in p && p.crm ? ` · ${p.crm}` : ""}
+              {p.name}{"specialty" in p && p.specialty ? ` — ${p.specialty}` : ""}{"registry" in p && p.registry ? ` · ${p.registry}` : ""}{"crm" in p && p.crm ? ` · ${p.crm}` : ""}{"clinicName" in p && p.clinicName ? ` · ${p.clinicName}` : ""}
             </option>
           ))}
         </select>
       </label>
       {specialty && people.length === 0 && (
         <p className="sm:col-span-2 text-sm text-[var(--text-muted)]">
-          Ninguém desta especialidade em Minha Equipe. Cadastre em{" "}
+          Ninguém desta especialidade em Minha Equipe nem na clínica. Cadastre em{" "}
           <Link href="/medicos/equipe-assistencial" className="font-semibold text-[var(--gold)]">Minha Equipe</Link>
-          {" "}e volte aqui para encaminhar.
+          {" "}ou convide o médico na gestão da clínica.
         </p>
       )}
       {selected && (
