@@ -13,6 +13,14 @@ export default function PlataformaHomePage() {
         Nada aqui move pacientes nem altera o seu login.
       </p>
       <div className="mt-6 grid gap-3 sm:grid-cols-2">
+        <Link href="/plataforma/saude" className="panel block">
+          <p className="font-bold">Saúde do Meu Rim</p>
+          <p className="mt-1 text-sm text-[var(--text-muted)]">Banco, secrets, backup, clínicas piloto e o que precisa de atenção.</p>
+        </Link>
+        <Link href="/plataforma/prontidao" className="panel block">
+          <p className="font-bold">Prontidão</p>
+          <p className="mt-1 text-sm text-[var(--text-muted)]">Checklist antes de liberar uma clínica real. Item crítico falhando = não pronto.</p>
+        </Link>
         <Link href="/plataforma/clinicas" className="panel block">
           <p className="font-bold">Clínicas</p>
           <p className="mt-1 text-sm text-[var(--text-muted)]">Cadastro, gestora e gestão. Sem vínculo automático dos pacientes atuais.</p>
@@ -28,6 +36,10 @@ export default function PlataformaHomePage() {
         <Link href="/plataforma/auditoria" className="panel block">
           <p className="font-bold">Auditoria</p>
           <p className="mt-1 text-sm text-[var(--text-muted)]">Quem criou clínica, convite ou papel. Sem dados clínicos.</p>
+        </Link>
+        <Link href="/plataforma/metricas" className="panel block">
+          <p className="font-bold">Métricas de uso</p>
+          <p className="mt-1 text-sm text-[var(--text-muted)]">Fechamentos, check-ins e clínicas. Sem conteúdo clínico.</p>
         </Link>
         <Link href="/plataforma/pesquisa" className="panel block">
           <p className="font-bold">Pesquisa</p>

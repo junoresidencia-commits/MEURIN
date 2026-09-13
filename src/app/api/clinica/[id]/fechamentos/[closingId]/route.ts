@@ -3,7 +3,7 @@ import { requireClinicAdmin } from "@/lib/platform-access";
 import { addClosingAdjustment, getClosing, listAdjustments, markClosingPaid, netDoctorPayout } from "@/lib/clinic-closing-store";
 import { listEncounters } from "@/lib/clinic-finance-store";
 import { writeAudit } from "@/lib/platform-store";
-import { readDb } from "@/lib/store";
+import { listDoctors } from "@/lib/store";
 import type { AdjustmentKind } from "@/lib/platform-types";
 
 const KINDS: AdjustmentKind[] = ["credit", "debit", "correction"];
@@ -16,11 +16,11 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
   if (!closing || closing.clinicId !== id) return NextResponse.json({ error: "Fechamento não encontrado." }, { status: 404 });
   const [adjustments, allEnc] = await Promise.all([listAdjustments(closing.id), listEncounters(id)]);
   const encounters = allEnc.filter((e) => closing.encounterIds.includes(e.id));
-  const db = await readDb();
+  const doctors = await listDoctors();
   return NextResponse.json({
     closing: {
       ...closing,
-      doctorName: db.doctors.find((d) => d.id === closing.doctorId)?.name || "Médico",
+      doctorName: doctors.find((d) => d.id === closing.doctorId)?.name || "Médico",
       netCents: netDoctorPayout(closing, adjustments),
     },
     adjustments,
@@ -36,7 +36,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
   const action = String(body.action || "");
   try {
     if (action === "pay") {
-      const closing = await markClosingPaid(closingId, staff.actorId);
+      const closing = await markClosingPaid(closingId, staff.actorId, id);
       await writeAudit({
         actorKind: staff.kind,
         actorId: staff.actorId,

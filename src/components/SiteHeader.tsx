@@ -39,7 +39,9 @@ export function SiteHeader() {
     pathname?.startsWith("/enfermeiro") ||
     pathname?.startsWith("/consulta") ||
     pathname?.startsWith("/lme") ||
-    pathname?.startsWith("/documento")
+    pathname?.startsWith("/documento") ||
+    pathname?.startsWith("/plataforma") ||
+    pathname?.startsWith("/clinica")
   ) {
     return null;
   }

@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { requireClinicAdmin } from "@/lib/platform-access";
-import { listFeeRules, upsertFeeRule } from "@/lib/clinic-finance-store";
+import { getFeeRule, listFeeRules, upsertFeeRule } from "@/lib/clinic-finance-store";
 import { writeAudit } from "@/lib/platform-store";
 
 export async function GET(_req: Request, { params }: { params: Promise<{ id: string }> }) {
@@ -24,7 +24,27 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
   if (!Number.isFinite(clinicSharePercent) || clinicSharePercent < 0 || clinicSharePercent > 100) {
     return NextResponse.json({ error: "Percentual da clínica deve ser 0–100." }, { status: 400 });
   }
-  const rule = await upsertFeeRule({ clinicId: id, doctorId, feeCents, clinicSharePercent });
+  const previous = await getFeeRule(id, doctorId);
+  const reason = String(body.reason || "").trim();
+  if (
+    previous &&
+    (previous.feeCents !== feeCents || previous.clinicSharePercent !== clinicSharePercent) &&
+    reason.length < 3
+  ) {
+    return NextResponse.json({ error: "Informe o motivo da alteração do valor." }, { status: 400 });
+  }
+  const rule = await upsertFeeRule({
+    clinicId: id,
+    doctorId,
+    feeCents,
+    clinicSharePercent,
+    reason,
+    actorKind: staff.kind,
+    actorId: staff.actorId,
+    actorEmail: staff.email ?? undefined,
+  });
+  const before = previous ? `R$ ${(previous.feeCents / 100).toFixed(2)} (${previous.clinicSharePercent}%)` : "nova";
+  const after = `R$ ${(feeCents / 100).toFixed(2)} (${clinicSharePercent}%)`;
   await writeAudit({
     actorKind: staff.kind,
     actorId: staff.actorId,
@@ -32,7 +52,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     action: "upsert_fee_rule",
     entity: "clinic_fee_rule",
     entityId: rule.id,
-    detail: `R$ ${(feeCents / 100).toFixed(2)} · clínica ${clinicSharePercent}%`,
+    detail: `${before} → ${after}${reason ? ` · ${reason}` : ""} · ${staff.email || staff.actorId} · ${new Date().toISOString()}`,
   });
-  return NextResponse.json({ rule });
+  return NextResponse.json({ rule, previous: previous ? { feeCents: previous.feeCents, clinicSharePercent: previous.clinicSharePercent } : null });
 }

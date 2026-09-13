@@ -3,7 +3,7 @@ import { promises as fs } from "fs";
 import path from "path";
 import { v4 as uuid } from "uuid";
 import { getSupabaseAdmin } from "./supabase-admin";
-import { listEncounters } from "./clinic-finance-store";
+import { getFeeRule, listEncounters, writeFinanceEvent } from "./clinic-finance-store";
 import type {
   AdjustmentKind,
   ClinicClosing,
@@ -145,6 +145,36 @@ async function nextCode(year: number): Promise<string> {
   return `${prefix}${String(max + 1).padStart(6, "0")}`;
 }
 
+async function logClosingFinanceEvent(input: {
+  clinicId: string;
+  kind: "closing" | "payout" | "adjustment";
+  entity: string;
+  entityId: string;
+  beforeCents?: number | null;
+  afterCents?: number | null;
+  reason?: string | null;
+  actorKind?: string | null;
+  actorId?: string | null;
+  actorEmail?: string | null;
+}) {
+  try {
+    await writeFinanceEvent({
+      clinicId: input.clinicId,
+      kind: input.kind,
+      entity: input.entity,
+      entityId: input.entityId,
+      beforeCents: input.beforeCents ?? null,
+      afterCents: input.afterCents ?? null,
+      reason: input.reason ?? null,
+      actorKind: input.actorKind ?? null,
+      actorId: input.actorId ?? null,
+      actorEmail: input.actorEmail ?? null,
+    });
+  } catch (err) {
+    console.error("[clinic-closing] histórico financeiro indisponível", err);
+  }
+}
+
 export function netDoctorPayout(closing: ClinicClosing, adjustments: ClinicClosingAdjustment[]): number {
   let extra = 0;
   for (const a of adjustments) {
@@ -152,6 +182,102 @@ export function netDoctorPayout(closing: ClinicClosing, adjustments: ClinicClosi
     else extra += a.amountCents;
   }
   return closing.doctorShareCents + extra;
+}
+
+function periodsOverlap(aFrom: string, aTo: string, bFrom: string, bTo: string): boolean {
+  return aFrom <= bTo && bFrom <= aTo;
+}
+
+export function findOverlappingClosing(
+  closings: ClinicClosing[],
+  doctorId: string,
+  periodFrom: string,
+  periodTo: string
+): ClinicClosing | null {
+  return (
+    closings.find(
+      (c) => c.doctorId === doctorId && periodsOverlap(c.periodFrom, c.periodTo, periodFrom, periodTo)
+    ) ?? null
+  );
+}
+
+export type ClosingPreview = {
+  doctorId: string;
+  periodFrom: string;
+  periodTo: string;
+  encounterCount: number;
+  producedCents: number;
+  receivedCents: number;
+  pendingCents: number;
+  clinicShareCents: number;
+  doctorShareCents: number;
+  existing: ClinicClosing | null;
+  warnings: string[];
+  encounters: {
+    id: string;
+    patientName: string | null;
+    feeCents: number;
+    receivedCents: number;
+    paymentStatus: string;
+    attendedAt: string;
+  }[];
+};
+
+export async function previewClosing(input: {
+  clinicId: string;
+  doctorId: string;
+  periodFrom: string;
+  periodTo: string;
+}): Promise<ClosingPreview> {
+  const from = input.periodFrom.slice(0, 10);
+  const to = input.periodTo.slice(0, 10);
+  if (!from || !to || from > to) throw new Error("Informe o período (de / até).");
+  if (!input.doctorId) throw new Error("Informe o médico.");
+  const encounters = (await listEncounters(input.clinicId, from, `${to}T23:59:59.999Z`)).filter((e) => e.doctorId === input.doctorId);
+  const existingList = await listClosings(input.clinicId);
+  const existing = findOverlappingClosing(existingList, input.doctorId, from, to);
+  const taken = new Set(existingList.flatMap((c) => c.encounterIds));
+  const fresh = existing ? [] : encounters.filter((e) => !taken.has(e.id));
+  const warnings: string[] = [];
+  if (existing) warnings.push(`Já existe um fechamento para este médico e período (${existing.code}).`);
+  if (!existing && encounters.length === 0) warnings.push("Não há produção neste período para este médico.");
+  if (!existing && encounters.length > 0 && fresh.length === 0) {
+    warnings.push("Essa produção já está em outro fechamento.");
+  }
+  const unpaid = fresh.filter((e) => e.paymentStatus === "pending" || e.paymentStatus === "partial");
+  if (unpaid.length) warnings.push(`${unpaid.length} atendimento(s) com pagamento pendente ou parcial.`);
+  const zeroFee = fresh.filter((e) => e.feeCents <= 0);
+  if (zeroFee.length) warnings.push(`${zeroFee.length} atendimento(s) sem valor configurado.`);
+  const rule = await getFeeRule(input.clinicId, input.doctorId);
+  if (!rule) warnings.push("Nenhuma regra de honorário ativa para este médico.");
+  if (rule && rule.feeCents === 0) {
+    warnings.push("A regra deste médico está em R$ 0. Confirme se é retorno ou cortesia.");
+  }
+  if (fresh.some((e) => !e.doctorId)) warnings.push("Há atendimentos sem médico identificado.");
+  if (fresh.some((e) => e.clinicId !== input.clinicId)) {
+    warnings.push("Há atendimentos que não pertencem a esta clínica.");
+  }
+  return {
+    doctorId: input.doctorId,
+    periodFrom: from,
+    periodTo: to,
+    encounterCount: fresh.length,
+    producedCents: fresh.reduce((s, e) => s + e.feeCents, 0),
+    receivedCents: fresh.reduce((s, e) => s + e.receivedCents, 0),
+    pendingCents: fresh.reduce((s, e) => s + Math.max(0, e.feeCents - e.receivedCents), 0),
+    clinicShareCents: fresh.reduce((s, e) => s + e.clinicShareCents, 0),
+    doctorShareCents: fresh.reduce((s, e) => s + e.doctorShareCents, 0),
+    existing,
+    warnings,
+    encounters: fresh.map((e) => ({
+      id: e.id,
+      patientName: e.patientName,
+      feeCents: e.feeCents,
+      receivedCents: e.receivedCents,
+      paymentStatus: e.paymentStatus,
+      attendedAt: e.attendedAt,
+    })),
+  };
 }
 
 export async function createClosing(input: {
@@ -164,10 +290,14 @@ export async function createClosing(input: {
   const from = input.periodFrom.slice(0, 10);
   const to = input.periodTo.slice(0, 10);
   if (!from || !to || from > to) throw new Error("Informe o período (de / até).");
+  const existingList = await listClosings(input.clinicId);
+  const overlap = findOverlappingClosing(existingList, input.doctorId, from, to);
+  if (overlap) {
+    throw new Error(`Já existe um fechamento para este médico e período (${overlap.code}).`);
+  }
   const encounters = (await listEncounters(input.clinicId, from, `${to}T23:59:59.999Z`)).filter((e) => e.doctorId === input.doctorId);
   if (encounters.length === 0) throw new Error("Não há produção neste período para este médico.");
-  const existing = await listClosings(input.clinicId);
-  const taken = new Set(existing.flatMap((c) => c.encounterIds));
+  const taken = new Set(existingList.flatMap((c) => c.encounterIds));
   const fresh = encounters.filter((e) => !taken.has(e.id));
   if (fresh.length === 0) throw new Error("Essa produção já está em outro fechamento.");
   const year = Number(to.slice(0, 4)) || new Date().getFullYear();
@@ -212,17 +342,37 @@ export async function createClosing(input: {
     });
     if (error && !isMissing(error)) throw error;
     if (error && isMissing(error)) tableMissing = true;
-    else if (!error) return row;
+    else if (!error) {
+      await logClosingFinanceEvent({
+        clinicId: input.clinicId,
+        kind: "closing",
+        entity: "clinic_closing",
+        entityId: row.id,
+        afterCents: row.doctorShareCents,
+        reason: row.code,
+        actorId: input.createdBy,
+      });
+      return row;
+    }
   }
   const local = await readLocal();
   local.closings.unshift(row);
   await writeLocal(local);
+  await logClosingFinanceEvent({
+    clinicId: input.clinicId,
+    kind: "closing",
+    entity: "clinic_closing",
+    entityId: row.id,
+    afterCents: row.doctorShareCents,
+    reason: row.code,
+    actorId: input.createdBy,
+  });
   return row;
 }
 
-export async function markClosingPaid(closingId: string, paidBy: string): Promise<ClinicClosing> {
+export async function markClosingPaid(closingId: string, paidBy: string, clinicId?: string): Promise<ClinicClosing> {
   const row = await getClosing(closingId);
-  if (!row) throw new Error("Fechamento não encontrado.");
+  if (!row || (clinicId && row.clinicId !== clinicId)) throw new Error("Fechamento não encontrado.");
   if (row.status === "paid") return row;
   const now = new Date().toISOString();
   const next: ClinicClosing = { ...row, status: "paid", paidAt: now, paidBy, updatedAt: now };
@@ -231,12 +381,32 @@ export async function markClosingPaid(closingId: string, paidBy: string): Promis
     const { error } = await sb.from("clinic_closings").update({ status: "paid", paid_at: now, paid_by: paidBy, updated_at: now }).eq("id", closingId);
     if (error && !isMissing(error)) throw error;
     if (error && isMissing(error)) tableMissing = true;
-    else if (!error) return next;
+    else if (!error) {
+      await logClosingFinanceEvent({
+        clinicId: row.clinicId,
+        kind: "payout",
+        entity: "clinic_closing",
+        entityId: row.id,
+        afterCents: row.doctorShareCents,
+        reason: row.code,
+        actorId: paidBy,
+      });
+      return next;
+    }
   }
   const local = await readLocal();
   const idx = local.closings.findIndex((c) => c.id === closingId);
   if (idx >= 0) local.closings[idx] = next;
   await writeLocal(local);
+  await logClosingFinanceEvent({
+    clinicId: row.clinicId,
+    kind: "payout",
+    entity: "clinic_closing",
+    entityId: row.id,
+    afterCents: row.doctorShareCents,
+    reason: row.code,
+    actorId: paidBy,
+  });
   return next;
 }
 
@@ -285,10 +455,34 @@ export async function addClosingAdjustment(input: {
     });
     if (error && !isMissing(error)) throw error;
     if (error && isMissing(error)) tableMissing = true;
-    else if (!error) return row;
+    else if (!error) {
+      await logClosingFinanceEvent({
+        clinicId: input.clinicId,
+        kind: "adjustment",
+        entity: "clinic_closing_adjustment",
+        entityId: row.id,
+        afterCents: row.kind === "debit" ? -row.amountCents : row.amountCents,
+        reason: row.reason,
+        actorKind: row.createdByKind,
+        actorId: row.createdById,
+        actorEmail: row.createdByEmail,
+      });
+      return row;
+    }
   }
   const local = await readLocal();
   local.adjustments.unshift(row);
   await writeLocal(local);
+  await logClosingFinanceEvent({
+    clinicId: input.clinicId,
+    kind: "adjustment",
+    entity: "clinic_closing_adjustment",
+    entityId: row.id,
+    afterCents: row.kind === "debit" ? -row.amountCents : row.amountCents,
+    reason: row.reason,
+    actorKind: row.createdByKind,
+    actorId: row.createdById,
+    actorEmail: row.createdByEmail,
+  });
   return row;
 }

@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { v4 as uuid } from "uuid";
 import { getDoctorSessionId } from "@/lib/auth";
-import { readDb, updateDb, updateBooking, deleteBooking } from "@/lib/store";
+import { listBookingsForDoctor, readDb, updateDb, updateBooking, deleteBooking } from "@/lib/store";
 import { appOrigin } from "@/lib/payments";
 import { buildConfirmationEmail, sendEmail } from "@/lib/email";
 import { generateAvailableSlots } from "@/lib/scheduling";
@@ -22,20 +22,15 @@ function isFutureIso(v: unknown): v is string {
   return !Number.isNaN(t);
 }
 
-export async function GET() {
+export async function GET(req: Request) {
   const doctorId = await getDoctorSessionId();
-  const db = await readDb();
-
-  if (doctorId) {
-    const mine = db.bookings
-      .filter((b) => b.doctorId === doctorId)
-      .sort((a, b) => a.slotStart.localeCompare(b.slotStart));
-    // Dispara lembretes 24h/2h pendentes (best-effort ao abrir a agenda).
-    const processed = await processReminders(mine);
-    return NextResponse.json({ bookings: processed });
-  }
-
-  return NextResponse.json({ bookings: [] });
+  if (!doctorId) return NextResponse.json({ bookings: [] });
+  const url = new URL(req.url);
+  const from = url.searchParams.get("from") || undefined;
+  const to = url.searchParams.get("to") || undefined;
+  const mine = await listBookingsForDoctor(doctorId, from, to);
+  const processed = await processReminders(mine);
+  return NextResponse.json({ bookings: processed });
 }
 
 export async function POST(req: Request) {

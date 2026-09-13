@@ -1,21 +1,35 @@
 import { NextResponse } from "next/server";
 import { requireClinicAdmin } from "@/lib/platform-access";
-import { createClosing, listAdjustments, listClosings, netDoctorPayout } from "@/lib/clinic-closing-store";
+import { createClosing, listAdjustments, listClosings, netDoctorPayout, previewClosing } from "@/lib/clinic-closing-store";
 import { writeAudit } from "@/lib/platform-store";
-import { readDb } from "@/lib/store";
+import { listDoctors } from "@/lib/store";
 
-export async function GET(_req: Request, { params }: { params: Promise<{ id: string }> }) {
+export async function GET(req: Request, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const staff = await requireClinicAdmin(id);
   if (!staff) return NextResponse.json({ error: "Sem permissão." }, { status: 403 });
+  const url = new URL(req.url);
+  if (url.searchParams.get("preview") === "1") {
+    try {
+      const preview = await previewClosing({
+        clinicId: id,
+        doctorId: String(url.searchParams.get("doctorId") || ""),
+        periodFrom: String(url.searchParams.get("periodFrom") || ""),
+        periodTo: String(url.searchParams.get("periodTo") || ""),
+      });
+      return NextResponse.json({ preview });
+    } catch (e) {
+      return NextResponse.json({ error: e instanceof Error ? e.message : "Não foi possível conferir." }, { status: 400 });
+    }
+  }
   const closings = await listClosings(id);
-  const db = await readDb();
+  const doctors = await listDoctors();
   const rows = await Promise.all(
     closings.map(async (c) => {
       const adjustments = await listAdjustments(c.id);
       return {
         ...c,
-        doctorName: db.doctors.find((d) => d.id === c.doctorId)?.name || "Médico",
+        doctorName: doctors.find((d) => d.id === c.doctorId)?.name || "Médico",
         netCents: netDoctorPayout(c, adjustments),
         adjustmentCount: adjustments.length,
       };
@@ -48,6 +62,8 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     });
     return NextResponse.json({ closing }, { status: 201 });
   } catch (e) {
-    return NextResponse.json({ error: e instanceof Error ? e.message : "Não foi possível fechar." }, { status: 400 });
+    const msg = e instanceof Error ? e.message : "Não foi possível fechar.";
+    const existing = msg.includes("Já existe um fechamento");
+    return NextResponse.json({ error: msg, existing: existing || undefined }, { status: existing ? 409 : 400 });
   }
 }

@@ -36,6 +36,8 @@ export default function FechamentoDetalhePage() {
   const [msg, setMsg] = useState("");
   const [err, setErr] = useState("");
   const [loaded, setLoaded] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [pdfBusy, setPdfBusy] = useState(false);
 
   function load() {
     fetch(`/api/clinica/${params.id}/fechamentos/${params.closingId}`)
@@ -55,19 +57,52 @@ export default function FechamentoDetalhePage() {
   useEffect(() => { load(); }, [params.id, params.closingId]);
 
   async function act(action: string, extra: Record<string, unknown> = {}) {
+    if (saving) return;
+    if (action === "pay") {
+      const ok = window.confirm("Marcar este repasse como pago? O fechamento fica consistente como pago.");
+      if (!ok) return;
+    }
+    setSaving(true);
     setMsg("");
     setErr("");
-    const res = await fetch(`/api/clinica/${params.id}/fechamentos/${params.closingId}`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ action, ...extra }),
-    });
-    const data = await res.json();
-    if (!res.ok) { setErr(data.error || "Erro"); return; }
-    setMsg(action === "pay" ? "Repasse marcado como pago." : "Ajuste auditado registrado.");
-    setReason("");
-    setAmount("");
-    load();
+    try {
+      const res = await fetch(`/api/clinica/${params.id}/fechamentos/${params.closingId}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action, ...extra }),
+      });
+      const data = await res.json();
+      if (!res.ok) { setErr(data.error || "Não foi possível concluir agora."); return; }
+      setMsg(action === "pay" ? "Repasse marcado como pago." : "Ajuste auditado registrado.");
+      setReason("");
+      setAmount("");
+      load();
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function downloadPdf(kind: "pdf" | "comprovante") {
+    setPdfBusy(true);
+    setErr("");
+    try {
+      const res = await fetch(`/api/clinica/${params.id}/fechamentos/${params.closingId}/${kind}`);
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data.error || "Estamos com dificuldade temporária para gerar PDFs. Seus dados estão salvos.");
+      }
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = kind === "pdf" ? `${closing?.code || "fechamento"}.pdf` : `${closing?.code || "repasse"}-comprovante.pdf`;
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch (e) {
+      setErr(e instanceof Error ? e.message : "Não foi possível gerar o PDF agora.");
+    } finally {
+      setPdfBusy(false);
+    }
   }
 
   if (!loaded) return <p className="text-[var(--text-muted)]">Carregando fechamento…</p>;
@@ -92,13 +127,20 @@ export default function FechamentoDetalhePage() {
         <div className="panel"><p className="text-xs uppercase text-[var(--text-muted)]">Líquido ao médico</p><p className="font-display text-2xl font-extrabold">{brl(closing.netCents)}</p></div>
       </div>
       <div className="mt-4 flex flex-wrap gap-2">
-        <a className="btn-gold" href={`/api/clinica/${params.id}/fechamentos/${params.closingId}/pdf`}>Baixar PDF</a>
+        <button type="button" className="btn-gold min-h-12" disabled={pdfBusy} onClick={() => downloadPdf("pdf")}>
+          {pdfBusy ? "Gerando relatório…" : "Baixar PDF"}
+        </button>
         {closing.status === "paid" ? (
-          <a className="btn-ghost" href={`/api/clinica/${params.id}/fechamentos/${params.closingId}/comprovante`}>Comprovante de repasse</a>
+          <button type="button" className="btn-ghost min-h-12" disabled={pdfBusy} onClick={() => downloadPdf("comprovante")}>
+            Comprovante de repasse
+          </button>
         ) : (
-          <button type="button" className="btn-ghost" onClick={() => act("pay")}>Marcar repasse pago</button>
+          <button type="button" className="btn-ghost min-h-12" disabled={saving} onClick={() => act("pay")}>
+            {saving ? "Salvando…" : "Marcar repasse pago"}
+          </button>
         )}
       </div>
+      {pdfBusy && <p className="mt-2 text-sm text-[var(--text-muted)]">Gerando relatório… a tela continua utilizável.</p>}
       {closing.paidAt && <p className="mt-2 text-xs text-[var(--text-muted)]">Pago em {new Date(closing.paidAt).toLocaleString("pt-BR")}</p>}
 
       {closing.status === "paid" && (
@@ -120,7 +162,7 @@ export default function FechamentoDetalhePage() {
             <input className="input-field" type="number" min="0.01" step="0.01" placeholder="Valor (R$)" value={amount} onChange={(e) => setAmount(e.target.value)} required />
             <input className="input-field" placeholder="Motivo" value={reason} onChange={(e) => setReason(e.target.value)} required minLength={5} />
           </div>
-          <button type="submit" className="btn-gold">Registrar ajuste</button>
+          <button type="submit" className="btn-gold min-h-12" disabled={saving}>{saving ? "Salvando…" : "Registrar ajuste"}</button>
         </form>
       )}
 

@@ -10,6 +10,7 @@ import {
   type ActorKind,
   type Clinic,
   type ClinicMembership,
+  CLINIC_STATUSES,
   type ClinicStatus,
   type PlatformAuditEntry,
   type PlatformRole,
@@ -268,6 +269,7 @@ export async function createClinic(input: {
   legalName?: string;
   cnpj?: string;
   city?: string;
+  status?: ClinicStatus;
 }): Promise<Clinic> {
   const now = new Date().toISOString();
   const clinic: Clinic = {
@@ -276,7 +278,7 @@ export async function createClinic(input: {
     legalName: input.legalName?.trim() || null,
     cnpj: input.cnpj?.trim() || null,
     city: input.city?.trim() || null,
-    status: "active",
+    status: input.status && CLINIC_STATUSES.includes(input.status) ? input.status : "active",
     createdAt: now,
     updatedAt: now,
   };
@@ -300,6 +302,26 @@ export async function createClinic(input: {
   local.clinics.push(clinic);
   await writeLocal(local);
   return clinic;
+}
+
+export async function updateClinicStatus(id: string, status: ClinicStatus): Promise<Clinic> {
+  if (!CLINIC_STATUSES.includes(status)) throw new Error("Status da clínica inválido.");
+  const current = await getClinic(id);
+  if (!current) throw new Error("Clínica não encontrada.");
+  const now = new Date().toISOString();
+  const next: Clinic = { ...current, status, updatedAt: now };
+  if (active()) {
+    const sb = getSupabaseAdmin()!;
+    const { error } = await sb.from("clinics").update({ status, updated_at: now }).eq("id", id);
+    if (error && !isMissing(error)) throw error;
+    if (error && isMissing(error)) tableMissing = true;
+    else if (!error) return next;
+  }
+  const local = await readLocal();
+  const idx = local.clinics.findIndex((c) => c.id === id);
+  if (idx >= 0) local.clinics[idx] = next;
+  await writeLocal(local);
+  return next;
 }
 
 export async function listMemberships(clinicId?: string): Promise<ClinicMembership[]> {
@@ -416,28 +438,58 @@ export async function writeAudit(input: Omit<PlatformAuditEntry, "id" | "created
   await writeLocal(local);
 }
 
-export async function listAudit(limit = 40): Promise<PlatformAuditEntry[]> {
+export type ListAuditOpts = {
+  limit?: number;
+  actorEmail?: string;
+  action?: string;
+  from?: string;
+  to?: string;
+};
+
+function mapAudit(r: Record<string, unknown>): PlatformAuditEntry {
+  return {
+    id: String(r.id),
+    actorKind: (r.actor_kind as string) ?? (r.actorKind as string) ?? null,
+    actorId: (r.actor_id as string) ?? (r.actorId as string) ?? null,
+    actorEmail: (r.actor_email as string) ?? (r.actorEmail as string) ?? null,
+    action: String(r.action),
+    entity: (r.entity as string) ?? null,
+    entityId: (r.entity_id as string) ?? (r.entityId as string) ?? null,
+    detail: (r.detail as string) ?? null,
+    createdAt: String(r.created_at ?? r.createdAt),
+  };
+}
+
+export async function listAudit(opts: ListAuditOpts | number = 40): Promise<PlatformAuditEntry[]> {
+  const q = typeof opts === "number" ? { limit: opts } : opts;
+  const limit = Math.min(Math.max(q.limit ?? 40, 1), 200);
+  const email = q.actorEmail?.trim().toLowerCase();
+  const action = q.action?.trim().toLowerCase();
+  const from = q.from?.slice(0, 10);
+  const to = q.to?.slice(0, 10);
+  const matches = (row: PlatformAuditEntry) => {
+    if (email && !(row.actorEmail || "").toLowerCase().includes(email)) return false;
+    if (action && !row.action.toLowerCase().includes(action)) return false;
+    const day = row.createdAt.slice(0, 10);
+    if (from && day < from) return false;
+    if (to && day > to) return false;
+    return true;
+  };
+
   if (active()) {
     const sb = getSupabaseAdmin()!;
-    const { data, error } = await sb.from("platform_audit_log").select("*").order("created_at", { ascending: false }).limit(limit);
+    let query = sb.from("platform_audit_log").select("*").order("created_at", { ascending: false }).limit(400);
+    if (from) query = query.gte("created_at", `${from}T00:00:00.000Z`);
+    if (to) query = query.lte("created_at", `${to}T23:59:59.999Z`);
+    const { data, error } = await query;
     if (error) {
       if (isMissing(error)) tableMissing = true;
       else return [];
     } else {
-      return (data || []).map((r) => ({
-        id: String((r as { id: string }).id),
-        actorKind: (r as { actor_kind?: string }).actor_kind ?? null,
-        actorId: (r as { actor_id?: string }).actor_id ?? null,
-        actorEmail: (r as { actor_email?: string }).actor_email ?? null,
-        action: String((r as { action: string }).action),
-        entity: (r as { entity?: string }).entity ?? null,
-        entityId: (r as { entity_id?: string }).entity_id ?? null,
-        detail: (r as { detail?: string }).detail ?? null,
-        createdAt: String((r as { created_at: string }).created_at),
-      }));
+      return (data || []).map((r) => mapAudit(r as Record<string, unknown>)).filter(matches).slice(0, limit);
     }
   }
-  return (await readLocal()).audit.slice(0, limit);
+  return (await readLocal()).audit.filter(matches).slice(0, limit);
 }
 
 export async function countPlatformRows(): Promise<{ clinics: number; memberships: number; roleAssignments: number }> {

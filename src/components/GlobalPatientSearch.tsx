@@ -45,7 +45,7 @@ export function GlobalPatientSearch({ compact = false }: { compact?: boolean }) 
           <span aria-hidden className="text-[var(--text-muted)]">🔍</span>
           <input
             className="w-full bg-transparent text-sm outline-none placeholder:text-[var(--text-muted)]"
-            placeholder="Buscar paciente por nome, CPF ou telefone…"
+            placeholder="Buscar por nome, CPF, telefone ou nascimento…"
             value={q}
             onFocus={() => setOpen(true)}
             onChange={(e) => setQ(e.target.value)}

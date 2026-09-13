@@ -4,6 +4,7 @@ import { SiteFooter } from "@/components/SiteFooter";
 import { SiteHeader } from "@/components/SiteHeader";
 import { PwaBootstrap } from "@/components/PwaBootstrap";
 import { AreaTheme } from "@/components/AreaTheme";
+import { SystemStatusBanner } from "@/components/SystemStatusBanner";
 import "./globals.css";
 
 const display = Inter({
@@ -84,6 +85,7 @@ export default function RootLayout({
         <PwaBootstrap />
         <AreaTheme />
         <SiteHeader />
+        <SystemStatusBanner />
         <main>{children}</main>
         <SiteFooter />
       </body>

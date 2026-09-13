@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useParams, usePathname, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
+import { AreaBackBar } from "@/components/AreaBackBar";
 
 const NAV = [
   { href: "", label: "Visão" },
@@ -46,11 +47,21 @@ export default function ClinicaLayout({ children }: { children: React.ReactNode 
   }
 
   const items = NAV.filter((n) => canAdmin || n.href === "/caixa" || n.href === "");
+  const clinicHome = `/clinica/${params.id}`;
+  const atClinicHome = pathname === clinicHome;
+  const backHref = atClinicHome ? home : clinicHome;
+  const backLabel = atClinicHome ? "Voltar à área médica" : "Voltar";
 
   return (
     <div className="flex min-h-screen bg-[var(--bg)]">
       <aside className="hidden w-60 shrink-0 border-r border-[var(--border)] bg-white lg:block">
         <div className="sticky top-0 flex h-screen flex-col p-4">
+          <Link
+            href={backHref}
+            className="btn-gold mb-4 inline-flex min-h-11 items-center justify-center px-3 text-sm"
+          >
+            ← {backLabel}
+          </Link>
           <p className="px-2 text-[11px] font-bold uppercase tracking-wider text-[var(--gold)]">Gestão da clínica</p>
           <p className="mt-1 px-2 text-sm font-bold text-[var(--text)]">{clinic}</p>
           <p className="px-2 text-[11px] text-[var(--text-muted)]">{name} · separado da área médica</p>
@@ -71,15 +82,15 @@ export default function ClinicaLayout({ children }: { children: React.ReactNode 
               );
             })}
           </nav>
-          <Link href={home} className="rounded-xl px-3 py-2.5 text-sm font-semibold text-[var(--text-muted)] hover:text-[var(--gold)]">
-            ← Voltar
+          <Link href={home} className="rounded-xl px-3 py-2.5 text-sm font-semibold text-[var(--gold)]">
+            ← Voltar à área médica
           </Link>
         </div>
       </aside>
       <div className="min-w-0 flex-1">
+        <AreaBackBar href={backHref} label={backLabel} />
         <div className="border-b border-[var(--border)] bg-white px-5 py-3 lg:hidden">
-          <Link href={home} className="text-sm font-semibold text-[var(--gold)]">← Voltar</Link>
-          <p className="mt-1 font-bold">{clinic}</p>
+          <p className="font-bold">{clinic}</p>
           <div className="mt-2 flex flex-wrap gap-2">
             {items.map((n) => (
               <Link key={n.href} href={`/clinica/${params.id}${n.href}`} className="rounded-full border border-[var(--border)] px-3 py-1 text-xs font-semibold">
