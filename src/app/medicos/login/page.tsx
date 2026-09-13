@@ -20,7 +20,7 @@ export default function LoginMedicoPage() {
     setLoading(true);
     setError("");
     try {
-      await postJson("/api/auth", { email, password }, "E-mail ou senha inválidos.");
+      await postJson("/api/auth", { email: email.trim(), password }, "E-mail ou senha inválidos.");
       router.push("/medicos/painel");
     } catch (err) {
       setError(toFriendlyMessage(err, "Não foi possível entrar. Tente novamente."));

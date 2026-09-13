@@ -15,11 +15,20 @@ export type PlatformActor = {
 export async function getPlatformActor(): Promise<PlatformActor | null> {
   const doctorId = await getDoctorSessionId();
   if (!doctorId) return null;
-  await ensureFounderSuperAdmin();
   const db = await readDb();
   const doctor = db.doctors.find((d) => d.id === doctorId);
   if (!doctor) return null;
-  const roles = await listActiveRoles("doctor", doctor.id);
+  try {
+    await ensureFounderSuperAdmin();
+  } catch (err) {
+    console.error("[platform-access] bootstrap ignorado", err);
+  }
+  let roles: PlatformRole[] = [];
+  try {
+    roles = await listActiveRoles("doctor", doctor.id);
+  } catch (err) {
+    console.error("[platform-access] papéis ignorados", err);
+  }
   return {
     doctorId: doctor.id,
     email: doctor.email,
