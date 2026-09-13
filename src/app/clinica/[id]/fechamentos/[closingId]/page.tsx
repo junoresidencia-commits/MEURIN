@@ -37,7 +37,7 @@ export default function FechamentoDetalhePage() {
   const [err, setErr] = useState("");
   const [loaded, setLoaded] = useState(false);
   const [saving, setSaving] = useState(false);
-  const [pdfBusy, setPdfBusy] = useState(false);
+  const [pdfKind, setPdfKind] = useState<"pdf" | "comprovante">("pdf");
 
   function load() {
     fetch(`/api/clinica/${params.id}/fechamentos/${params.closingId}`)
@@ -82,26 +82,16 @@ export default function FechamentoDetalhePage() {
     }
   }
 
-  async function downloadPdf(kind: "pdf" | "comprovante") {
-    setPdfBusy(true);
+  function pdfHref(kind: "pdf" | "comprovante") {
+    return `/api/clinica/${params.id}/fechamentos/${params.closingId}/${kind}`;
+  }
+
+  function openPdf(kind: "pdf" | "comprovante") {
+    setPdfKind(kind);
     setErr("");
-    try {
-      const res = await fetch(`/api/clinica/${params.id}/fechamentos/${params.closingId}/${kind}`);
-      if (!res.ok) {
-        const data = await res.json().catch(() => ({}));
-        throw new Error(data.error || "Estamos com dificuldade temporária para gerar PDFs. Seus dados estão salvos.");
-      }
-      const blob = await res.blob();
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = kind === "pdf" ? `${closing?.code || "fechamento"}.pdf` : `${closing?.code || "repasse"}-comprovante.pdf`;
-      a.click();
-      URL.revokeObjectURL(url);
-    } catch (e) {
-      setErr(e instanceof Error ? e.message : "Não foi possível gerar o PDF agora.");
-    } finally {
-      setPdfBusy(false);
+    const opened = window.open(pdfHref(kind), "_blank", "noopener,noreferrer");
+    if (!opened) {
+      setErr("O navegador bloqueou a aba. Use o PDF abaixo nesta tela e imprima (⌘P).");
     }
   }
 
@@ -127,12 +117,12 @@ export default function FechamentoDetalhePage() {
         <div className="panel"><p className="text-xs uppercase text-[var(--text-muted)]">Líquido ao médico</p><p className="font-display text-2xl font-extrabold">{brl(closing.netCents)}</p></div>
       </div>
       <div className="mt-4 flex flex-wrap gap-2">
-        <button type="button" className="btn-gold min-h-12" disabled={pdfBusy} onClick={() => downloadPdf("pdf")}>
-          {pdfBusy ? "Gerando relatório…" : "Baixar PDF"}
+        <button type="button" className="btn-gold min-h-12" onClick={() => openPdf("pdf")}>
+          Ver e imprimir PDF
         </button>
         {closing.status === "paid" ? (
-          <button type="button" className="btn-ghost min-h-12" disabled={pdfBusy} onClick={() => downloadPdf("comprovante")}>
-            Comprovante de repasse
+          <button type="button" className="btn-ghost min-h-12" onClick={() => openPdf("comprovante")}>
+            Ver comprovante
           </button>
         ) : (
           <button type="button" className="btn-ghost min-h-12" disabled={saving} onClick={() => act("pay")}>
@@ -140,7 +130,15 @@ export default function FechamentoDetalhePage() {
           </button>
         )}
       </div>
-      {pdfBusy && <p className="mt-2 text-sm text-[var(--text-muted)]">Gerando relatório… a tela continua utilizável.</p>}
+      <p className="mt-2 text-sm text-[var(--text-muted)]">
+        O PDF fica nesta tela. Para imprimir: abra em nova aba ou use ⌘P / Ctrl+P.
+      </p>
+      <iframe
+        key={pdfKind}
+        title={pdfKind === "pdf" ? "PDF do fechamento" : "Comprovante de repasse"}
+        src={pdfHref(pdfKind)}
+        className="mt-4 h-[80vh] w-full rounded-2xl border border-[var(--border)] bg-white"
+      />
       {closing.paidAt && <p className="mt-2 text-xs text-[var(--text-muted)]">Pago em {new Date(closing.paidAt).toLocaleString("pt-BR")}</p>}
 
       {closing.status === "paid" && (

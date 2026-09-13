@@ -31,7 +31,7 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
     return new NextResponse(Buffer.from(bytes), {
       headers: {
         "Content-Type": "application/pdf",
-        "Content-Disposition": `attachment; filename="${closing.code}.pdf"`,
+        "Content-Disposition": `inline; filename="${closing.code}.pdf"`,
       },
     });
   } catch {
