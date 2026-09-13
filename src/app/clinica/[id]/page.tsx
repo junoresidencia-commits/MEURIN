@@ -65,6 +65,11 @@ export default function ClinicaHomePage() {
       {status === "pilot" && (
         <p className="mt-2 inline-block rounded-full bg-[var(--gold-soft)] px-3 py-1 text-xs font-bold uppercase text-[var(--gold)]">Piloto</p>
       )}
+      {status === "suspended" && (
+        <p className="mt-2 rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-semibold text-red-800">
+          Clínica bloqueada. Gestora e check-in estão fechados. Pacientes e o caixa não foram apagados.
+        </p>
+      )}
       <p className="mt-2 max-w-2xl text-sm text-[var(--text-soft)]">
         Esta área não substitui o prontuário nem o painel médico. Pacientes atuais continuam no médico;
         nada aqui move cadastro antigo.
