@@ -46,6 +46,10 @@ export default function ClinicaHomePage() {
               <p className="font-bold">Rede de cuidado</p>
               <p className="mt-1 text-sm text-[var(--text-muted)]">Encaminhamento intra-clínica. O paciente continua no médico original.</p>
             </Link>
+            <Link href={`/clinica/${params.id}/inteligencia`} className="panel block">
+              <p className="font-bold">Inteligência clínica</p>
+              <p className="mt-1 text-sm text-[var(--text-muted)]">O que sugerir. Nunca grava no perfil sozinha.</p>
+            </Link>
           </>
         )}
         <Link href={`/clinica/${params.id}/caixa`} className="panel block">

@@ -8,7 +8,8 @@ import { NEPHRO_LABS, labLabel, labUnit } from "@/lib/labs";
 import { LmeWizard } from "@/components/LmeWizard";
 import { ClinicalProfileEditor } from "@/components/ClinicalProfileEditor";
 import { ClinicalReviewModal } from "@/components/ClinicalReviewModal";
-import { extractClinicalFields, findingsToChanges, splitByConfidence, type DetectedField } from "@/lib/clinical-extractor";
+import { extractClinicalFields, type DetectedField } from "@/lib/clinical-extractor";
+import { DEFAULT_INTEL_PREFS, suggestForReview, type IntelligencePrefs } from "@/lib/intelligence-prefs";
 import { ExamReviewModal } from "@/components/ExamReviewModal";
 import { parseLabGroups, type ParsedLabGroup } from "@/lib/lab-parser";
 import { labCollisionDay, persistLabDate, todayCivilBahia } from "@/lib/lab-dates";
@@ -189,6 +190,7 @@ export default function ProntuarioPage() {
   const [form, setForm] = useState({ chiefComplaint: "", history: "", assessment: "", plan: "" });
   const [review, setReview] = useState<{ groups: ParsedLabGroup[]; source?: string } | null>(null);
   const [clinicalReview, setClinicalReview] = useState<DetectedField[] | null>(null);
+  const [intelPrefs, setIntelPrefs] = useState<IntelligencePrefs>(DEFAULT_INTEL_PREFS);
   const [shared, setShared] = useState(true);
   const [editingPatient, setEditingPatient] = useState(false);
   const [toolsOpen, setToolsOpen] = useState(false);
@@ -224,6 +226,15 @@ export default function ProntuarioPage() {
     setLmeList(data.lme || []);
     setLoading(false);
   }, [emailParam, router]);
+
+  useEffect(() => {
+    fetch("/api/doctor/intelligence/prefs")
+      .then((r) => r.json())
+      .then((d) => {
+        if (d?.prefs) setIntelPrefs({ ...DEFAULT_INTEL_PREFS, ...d.prefs, applyMode: "review_only" });
+      })
+      .catch(() => {});
+  }, []);
 
   async function saveAppointment() {
     if (!apptDate || !apptTime) {
@@ -344,15 +355,7 @@ export default function ProntuarioPage() {
       const groups = parseLabGroups(evolutionText).map((g) =>
         g.date ? g : { ...g, date: persistLabDate(todayCivilBahia()) }
       );
-      const { auto, review } = splitByConfidence(detectedClinical);
-      const autoChanges = findingsToChanges(auto);
-      if (Object.keys(autoChanges).length) {
-        await fetch(`/api/doctor/patients/${encodePatientParam(emailParam)}/profile`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ changes: autoChanges, source: "evolução" }),
-        }).catch(() => {});
-      }
+      const suggest = suggestForReview(detectedClinical, intelPrefs);
       setForm({ chiefComplaint: "", history: "", assessment: "", plan: "" });
       let examNote = "";
       if (groups.length > 0) {
@@ -366,8 +369,8 @@ export default function ProntuarioPage() {
         }
       }
       const intelNote =
-        auto.length || review.length
-          ? ` ${auto.length + review.length} informação(ões) lidas da evolução${auto.length ? ` (${auto.length} no perfil)` : ""}.`
+        suggest.length
+          ? ` ${suggest.length} informação(ões) lidas da evolução — confirme para entrar no perfil.`
           : "";
       setSaveMsg("Evolução salva no prontuário." + (shared ? " Liberada ao paciente." : "") + examNote + intelNote);
       try {
@@ -380,8 +383,8 @@ export default function ProntuarioPage() {
       } catch (reloadErr) {
         console.error("[evolucao] recarregar prontuário", reloadErr);
       }
-      if (review.length > 0) {
-        setClinicalReview(review);
+      if (suggest.length > 0) {
+        setClinicalReview(suggest);
       }
     } catch (e) {
       setSaveErr(toFriendlyMessage(e, "Não foi possível salvar a evolução. Tente novamente."));

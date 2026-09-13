@@ -11,6 +11,7 @@ const NAV = [
   { href: "/caixa", label: "Check-in" },
   { href: "/fechamentos", label: "Fechamentos" },
   { href: "/rede", label: "Rede" },
+  { href: "/inteligencia", label: "Inteligência" },
 ];
 
 export default function ClinicaLayout({ children }: { children: React.ReactNode }) {
