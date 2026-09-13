@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { getDoctorSessionId } from "@/lib/auth";
-import { readDb } from "@/lib/store";
+import { getDoctorById } from "@/lib/store";
 import { addDocument, type DocumentType } from "@/lib/patient-store";
 import { resolvePatientAccess } from "@/lib/doctor-access";
 
@@ -25,8 +25,7 @@ export async function POST(
     return NextResponse.json({ error: "Você não tem acesso a este paciente." }, { status: 403 });
   }
 
-  const db = await readDb();
-  const doctor = db.doctors.find((d) => d.id === doctorId);
+  const doctor = doctorId ? await getDoctorById(doctorId) : null;
   if (!doctor) {
     return NextResponse.json({ error: "Médico não encontrado." }, { status: 403 });
   }

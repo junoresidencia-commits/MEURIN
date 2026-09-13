@@ -635,18 +635,43 @@ export async function getLatestLabsByEmails(
 
   if (supabaseActive("lab_results")) {
     const supabase = getSupabaseAdmin()!;
-    const { data, error } = await supabase
-      .from("lab_results")
-      .select("*")
-      .in("patient_email", keys)
-      .order("measured_at", { ascending: true });
-    if (error) {
-      if (isMissingTableError(error)) missingTables.add("lab_results");
-      else throw error;
-    } else {
-      ingest((data ?? []).map((r) => mapLabRow(r as Record<string, unknown>)));
-      return out;
+    const CHUNK = 80;
+    let missing = false;
+    for (let i = 0; i < keys.length; i += CHUNK) {
+      const chunk = keys.slice(i, i + CHUNK);
+      const { data, error } = await supabase
+        .from("lab_results")
+        .select("patient_email,test_key,value,unit,measured_at")
+        .in("patient_email", chunk)
+        .order("measured_at", { ascending: true });
+      if (error) {
+        if (isMissingTableError(error)) {
+          missingTables.add("lab_results");
+          missing = true;
+          break;
+        }
+        throw error;
+      }
+      ingest(
+        (data ?? []).map((r) => {
+          const row = r as Record<string, unknown>;
+          return {
+            id: "",
+            patientEmail: String(row.patient_email).toLowerCase().trim(),
+            doctorId: null,
+            testKey: String(row.test_key),
+            value: Number(row.value),
+            unit: (row.unit as string | null) ?? null,
+            referenceRange: null,
+            origin: null,
+            meta: null,
+            measuredAt: new Date(String(row.measured_at)).toISOString(),
+            createdAt: "",
+          };
+        })
+      );
     }
+    if (!missing) return out;
   }
   const data = await readFile();
   const keySet = new Set(keys);
@@ -668,19 +693,29 @@ export async function getRecentLabsByEmails(emails: string[], sinceMs: number, l
   const sinceIso = new Date(sinceMs).toISOString();
   if (supabaseActive("lab_results")) {
     const supabase = getSupabaseAdmin()!;
-    const { data, error } = await supabase
-      .from("lab_results")
-      .select("*")
-      .in("patient_email", keys)
-      .gte("created_at", sinceIso)
-      .order("created_at", { ascending: false })
-      .limit(limit);
-    if (error) {
-      if (isMissingTableError(error)) missingTables.add("lab_results");
-      else throw error;
-    } else {
-      return (data ?? []).map((r) => mapLabRow(r as Record<string, unknown>));
+    const CHUNK = 80;
+    const collected: LabResult[] = [];
+    let missing = false;
+    for (let i = 0; i < keys.length; i += CHUNK) {
+      const chunk = keys.slice(i, i + CHUNK);
+      const { data, error } = await supabase
+        .from("lab_results")
+        .select("*")
+        .in("patient_email", chunk)
+        .gte("created_at", sinceIso)
+        .order("created_at", { ascending: false })
+        .limit(limit);
+      if (error) {
+        if (isMissingTableError(error)) {
+          missingTables.add("lab_results");
+          missing = true;
+          break;
+        }
+        throw error;
+      }
+      collected.push(...(data ?? []).map((r) => mapLabRow(r as Record<string, unknown>)));
     }
+    if (!missing) return collected.sort((a, b) => b.createdAt.localeCompare(a.createdAt)).slice(0, limit);
   }
   const data = await readFile();
   const keySet = new Set(keys);

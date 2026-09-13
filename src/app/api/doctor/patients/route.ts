@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { getDoctorSessionId } from "@/lib/auth";
-import { readDb } from "@/lib/store";
+import { listBookingsForDoctor } from "@/lib/store";
 import { createPatient, deletePatient, findByCpf, findByCpfAny, listPatientsByDoctor, updatePatient } from "@/lib/patients-store";
 
 export async function GET() {
@@ -9,7 +9,7 @@ export async function GET() {
     return NextResponse.json({ error: "Não autenticado." }, { status: 401 });
   }
 
-  const db = await readDb();
+  const mine = await listBookingsForDoctor(doctorId);
   const created = await listPatientsByDoctor(doctorId);
   const createdEmails = new Set(created.map((p) => (p.email || "").toLowerCase()).filter(Boolean));
 
@@ -19,7 +19,7 @@ export async function GET() {
     .map((p) => {
       const email = (p.email || "").toLowerCase();
       const bks = email
-        ? db.bookings.filter((b) => b.doctorId === doctorId && b.patientEmail.toLowerCase() === email)
+        ? mine.filter((b) => b.patientEmail.toLowerCase() === email)
         : [];
       return {
         key: p.id,
@@ -33,8 +33,7 @@ export async function GET() {
 
   // Pacientes vindos de agendamento (que não têm cadastro próprio)
   const byEmail = new Map<string, { key: string; name: string; city: string; total: number; isCreated: boolean; lastSlot: string }>();
-  for (const b of db.bookings) {
-    if (b.doctorId !== doctorId) continue;
+  for (const b of mine) {
     const email = b.patientEmail.toLowerCase();
     if (createdEmails.has(email)) continue;
     const entry = byEmail.get(email) || {

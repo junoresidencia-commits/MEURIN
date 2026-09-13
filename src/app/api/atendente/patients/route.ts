@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { requireAttendantForDoctor, hasPerm } from "@/lib/attendant-context";
-import { readDb } from "@/lib/store";
+import { listBookingsForDoctor } from "@/lib/store";
 import { createPatient, findByCpf, listPatientsByDoctor, normalizeCpf } from "@/lib/patients-store";
 import { logAttendantAudit } from "@/lib/attendants-store";
 
@@ -12,15 +12,13 @@ export async function GET(req: Request) {
   const ctx = await requireAttendantForDoctor(doctorId);
   if (!ctx) return NextResponse.json({ error: "Sem acesso a este médico." }, { status: 403 });
 
-  const db = await readDb();
-  const created = await listPatientsByDoctor(doctorId);
+  const [mine, created] = await Promise.all([listBookingsForDoctor(doctorId), listPatientsByDoctor(doctorId)]);
   const createdRows = created.filter((p) => p.status !== "archived").map((p) => ({
     key: p.id, name: p.name, cpf: p.cpf || "", phone: p.phone || "", email: p.email || "", isCreated: true,
   }));
   const seenEmails = new Set(created.map((p) => (p.email || "").toLowerCase()).filter(Boolean));
   const byEmail = new Map<string, { key: string; name: string; cpf: string; phone: string; email: string; isCreated: boolean }>();
-  for (const b of db.bookings) {
-    if (b.doctorId !== doctorId) continue;
+  for (const b of mine) {
     const email = b.patientEmail.toLowerCase();
     if (!email || seenEmails.has(email)) continue;
     if (!byEmail.has(email)) byEmail.set(email, { key: email, name: b.patientName, cpf: "", phone: b.patientPhone, email, isCreated: false });

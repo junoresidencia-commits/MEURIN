@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { v4 as uuid } from "uuid";
 import { getDoctorSessionId } from "@/lib/auth";
-import { readDb, updateDb } from "@/lib/store";
+import { getDoctorById, updateDb } from "@/lib/store";
 import type { DoctorLocation } from "@/lib/types";
 
 const TYPES = ["clinica", "consultorio", "hospital", "outro"];
@@ -9,8 +9,7 @@ const TYPES = ["clinica", "consultorio", "hospital", "outro"];
 export async function GET() {
   const doctorId = await getDoctorSessionId();
   if (!doctorId) return NextResponse.json({ error: "Não autenticado." }, { status: 401 });
-  const db = await readDb();
-  const doctor = db.doctors.find((d) => d.id === doctorId);
+  const doctor = await getDoctorById(doctorId);
   return NextResponse.json({ locations: doctor?.locations || [] });
 }
 

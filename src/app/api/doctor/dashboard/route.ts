@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { getDoctorSessionId } from "@/lib/auth";
-import { readDb } from "@/lib/store";
+import { listBookingsForDoctor } from "@/lib/store";
 import { clinicalKey, listPatientsByDoctor } from "@/lib/patients-store";
 import { getLatestLabsByEmails, getRecentLabsByEmails } from "@/lib/patient-store";
 import { listOpenAttendance, listReturnsByDoctor } from "@/lib/care-store";
@@ -11,7 +11,7 @@ export async function GET() {
   const doctorId = await getDoctorSessionId();
   if (!doctorId) return NextResponse.json({ error: "Não autenticado." }, { status: 401 });
 
-  const db = await readDb();
+  const mine = await listBookingsForDoctor(doctorId);
   const created = (await listPatientsByDoctor(doctorId)).filter((p) => p.status !== "archived");
   const createdEmails = new Set(created.map((p) => (p.email || "").toLowerCase()).filter(Boolean));
 
@@ -19,8 +19,7 @@ export async function GET() {
   const nameByKey = new Map<string, string>();
   const allKeys: string[] = [];
   for (const p of created) { const k = clinicalKey(p); nameByKey.set(k, p.name); allKeys.push(k); }
-  for (const b of db.bookings) {
-    if (b.doctorId !== doctorId) continue;
+  for (const b of mine) {
     const e = b.patientEmail.toLowerCase();
     if (createdEmails.has(e)) continue;
     if (!nameByKey.has(e)) { nameByKey.set(e, b.patientName); allKeys.push(e); }
@@ -28,15 +27,15 @@ export async function GET() {
 
   const now = Date.now();
   const todayStr = new Date().toDateString();
-  const consultasHoje = db.bookings.filter((b) => b.doctorId === doctorId && b.status !== "cancelled" && new Date(b.slotStart).toDateString() === todayStr).length;
+  const consultasHoje = mine.filter((b) => b.status !== "cancelled" && new Date(b.slotStart).toDateString() === todayStr).length;
   // Consultas aguardando ação (pagas aguardando confirmação ou horário proposto).
-  const aguardando = db.bookings.filter((b) => b.doctorId === doctorId && (b.status === "paid" || b.stage === "proposto_novo_horario")).length;
+  const aguardando = mine.filter((b) => b.status === "paid" || b.stage === "proposto_novo_horario").length;
 
   // Retornos pendentes (abertos, vencidos/próx. 7 dias, sem consulta futura).
   const returns = await listReturnsByDoctor(doctorId, "open");
   const futureByPatient = new Set<string>();
-  for (const b of db.bookings) {
-    if (b.doctorId !== doctorId || b.status === "cancelled") continue;
+  for (const b of mine) {
+    if (b.status === "cancelled") continue;
     if (new Date(b.slotStart).getTime() > now) futureByPatient.add(b.patientEmail.toLowerCase());
   }
   const in7 = now + 7 * 86400000;
@@ -93,7 +92,6 @@ export async function GET() {
   const delta = (a: number, b: number): number | null => (b > 0 ? Math.round(((a - b) / b) * 100) : a > 0 ? 100 : null);
   const pair = (last: number, prev: number) => ({ v: last, delta: delta(last, prev) });
 
-  const mine = db.bookings.filter((b) => b.doctorId === doctorId);
   const isDone = (b: (typeof mine)[number]) => b.status === "completed" || b.stage === "realizada";
   const doneLast = mine.filter((b) => isDone(b) && inLast(new Date(b.slotStart).getTime()));
   const donePrev = mine.filter((b) => isDone(b) && inPrev(new Date(b.slotStart).getTime()));

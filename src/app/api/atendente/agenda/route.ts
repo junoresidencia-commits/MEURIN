@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { requireAttendantForDoctor, hasPerm } from "@/lib/attendant-context";
-import { readDb } from "@/lib/store";
+import { listBookingsForDoctor } from "@/lib/store";
 
 export async function GET(req: Request) {
   const doctorId = new URL(req.url).searchParams.get("doctorId") || "";
@@ -9,9 +9,7 @@ export async function GET(req: Request) {
   if (!ctx) return NextResponse.json({ error: "Sem acesso a este médico." }, { status: 403 });
   if (!hasPerm(ctx.link, "agenda")) return NextResponse.json({ error: "Sem permissão para ver a agenda." }, { status: 403 });
 
-  const db = await readDb();
-  const bookings = db.bookings
-    .filter((b) => b.doctorId === doctorId)
+  const bookings = (await listBookingsForDoctor(doctorId))
     .sort((a, b) => a.slotStart.localeCompare(b.slotStart))
     .map((b) => ({
       id: b.id, patientName: b.patientName, patientPhone: b.patientPhone, patientEmail: b.patientEmail,

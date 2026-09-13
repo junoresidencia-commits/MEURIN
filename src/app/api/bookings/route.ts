@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { v4 as uuid } from "uuid";
 import { getDoctorSessionId } from "@/lib/auth";
-import { listBookingsForDoctor, readDb, updateDb, updateBooking, deleteBooking } from "@/lib/store";
+import { getBookingById, getDoctorById, listBookingsForDoctor, updateDb, updateBooking, deleteBooking } from "@/lib/store";
 import { appOrigin } from "@/lib/payments";
 import { buildConfirmationEmail, sendEmail } from "@/lib/email";
 import { generateAvailableSlots } from "@/lib/scheduling";
@@ -58,8 +58,7 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "Dados incompletos." }, { status: 400 });
   }
 
-  const db = await readDb();
-  const doctor = db.doctors.find((d) => d.id === doctorId);
+  const [doctor, mine] = await Promise.all([getDoctorById(String(doctorId)), listBookingsForDoctor(String(doctorId))]);
   if (!doctor) {
     return NextResponse.json({ error: "Médico não encontrado." }, { status: 404 });
   }
@@ -67,9 +66,8 @@ export async function POST(req: Request) {
   const iso = new Date(String(slotStart)).toISOString();
   const holder = body.holder ? String(body.holder).slice(0, 80) : "";
 
-  const conflict = db.bookings.some(
+  const conflict = mine.some(
     (b) =>
-      b.doctorId === doctorId &&
       new Date(b.slotStart).toISOString() === iso &&
       ["pending_payment", "paid", "confirmed"].includes(b.status)
   );
@@ -137,9 +135,7 @@ export async function PATCH(req: Request) {
   const body = await req.json().catch(() => ({}));
   const id = String(body.id || "");
   const action = String(body.action || "");
-  const db = await readDb();
-  const booking = db.bookings.find((b) => b.id === id);
-  const doctor = db.doctors.find((d) => d.id === doctorId);
+  const [booking, doctor] = await Promise.all([getBookingById(id), getDoctorById(doctorId)]);
   if (!booking || booking.doctorId !== doctorId || !doctor) {
     return NextResponse.json({ error: "Consulta não encontrada." }, { status: 404 });
   }
@@ -306,8 +302,7 @@ export async function DELETE(req: Request) {
     return NextResponse.json({ error: "Requisição inválida." }, { status: 400 });
   }
   const id = String(body.id || "");
-  const db = await readDb();
-  const booking = db.bookings.find((b) => b.id === id);
+  const booking = await getBookingById(id);
   if (!booking || booking.doctorId !== doctorId) {
     return NextResponse.json({ error: "Consulta não encontrada." }, { status: 404 });
   }

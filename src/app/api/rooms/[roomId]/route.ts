@@ -1,13 +1,12 @@
 import { NextResponse } from "next/server";
-import { readDb } from "@/lib/store";
+import { getBookingByRoomId, getDoctorById } from "@/lib/store";
 
 export async function GET(
   _req: Request,
   context: { params: Promise<{ roomId: string }> }
 ) {
   const { roomId } = await context.params;
-  const db = await readDb();
-  const booking = db.bookings.find((b) => b.meetingRoomId === roomId);
+  const booking = await getBookingByRoomId(roomId);
   if (!booking) {
     return NextResponse.json({ error: "Sala não encontrada" }, { status: 404 });
   }
@@ -19,7 +18,7 @@ export async function GET(
         : "Consulta liberada somente após o pagamento e a confirmação do médico.";
     return NextResponse.json({ error: msg }, { status: 403 });
   }
-  const doctor = db.doctors.find((d) => d.id === booking.doctorId);
+  const doctor = await getDoctorById(booking.doctorId);
   return NextResponse.json({
     booking: {
       id: booking.id,

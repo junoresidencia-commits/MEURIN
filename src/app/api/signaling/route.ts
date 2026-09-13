@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { v4 as uuid } from "uuid";
-import { updateDb, readDb } from "@/lib/store";
+import { appendSignalingMessage, listSignalingForRoom } from "@/lib/store";
 
 export async function GET(req: Request) {
   const { searchParams } = new URL(req.url);
@@ -9,10 +9,7 @@ export async function GET(req: Request) {
   if (!roomId) {
     return NextResponse.json({ error: "roomId obrigatório" }, { status: 400 });
   }
-  const db = await readDb();
-  const messages = db.signaling
-    .filter((m) => m.roomId === roomId && m.createdAt > after)
-    .sort((a, b) => a.createdAt.localeCompare(b.createdAt));
+  const messages = await listSignalingForRoom(roomId, after);
   return NextResponse.json({ messages });
 }
 
@@ -32,13 +29,6 @@ export async function POST(req: Request) {
     createdAt: new Date().toISOString(),
   };
 
-  await updateDb((db) => ({
-    ...db,
-    // Keep last 50 messages per room
-    signaling: [...db.signaling.filter((m) => m.roomId !== roomId).concat(
-      [...db.signaling.filter((m) => m.roomId === roomId), message].slice(-50)
-    )],
-  }));
-
+  await appendSignalingMessage(message);
   return NextResponse.json({ ok: true, message });
 }

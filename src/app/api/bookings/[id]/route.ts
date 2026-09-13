@@ -1,17 +1,16 @@
 import { NextResponse } from "next/server";
-import { readDb } from "@/lib/store";
+import { getBookingById, getDoctorById } from "@/lib/store";
 
 export async function GET(
   _req: Request,
   context: { params: Promise<{ id: string }> }
 ) {
   const { id } = await context.params;
-  const db = await readDb();
-  const booking = db.bookings.find((b) => b.id === id);
+  const booking = await getBookingById(id);
   if (!booking) {
     return NextResponse.json({ error: "Não encontrado" }, { status: 404 });
   }
-  const doctor = db.doctors.find((d) => d.id === booking.doctorId);
+  const doctor = await getDoctorById(booking.doctorId);
   return NextResponse.json({
     booking,
     doctor: doctor

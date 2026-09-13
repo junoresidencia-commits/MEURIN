@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { getDoctorSessionId } from "@/lib/auth";
-import { readDb } from "@/lib/store";
+import { getDoctorById } from "@/lib/store";
 import { createLme, type LmeMedication } from "@/lib/lme-store";
 import { resolvePatientAccess } from "@/lib/doctor-access";
 
@@ -16,8 +16,7 @@ export async function POST(
     return NextResponse.json({ error: "Você não tem acesso a este paciente." }, { status: 403 });
   }
 
-  const db = await readDb();
-  const doctor = db.doctors.find((d) => d.id === doctorId);
+  const doctor = doctorId ? await getDoctorById(doctorId) : null;
   const b = await req.json();
 
   const medications: LmeMedication[] = Array.isArray(b.medications)

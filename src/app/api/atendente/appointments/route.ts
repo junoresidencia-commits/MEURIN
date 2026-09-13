@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { v4 as uuid } from "uuid";
 import { requireAttendantForDoctor, hasPerm } from "@/lib/attendant-context";
-import { readDb, updateDb } from "@/lib/store";
+import { getDoctorById, listBookingsForDoctor, updateDb } from "@/lib/store";
 import { generateAvailableSlots } from "@/lib/scheduling";
 import { activeHoldStarts } from "@/lib/holds-store";
 import { sendNotification, patientKey, links, fmtDateTime } from "@/lib/notify";
@@ -24,12 +24,11 @@ export async function POST(req: Request) {
   if (Number.isNaN(t)) return NextResponse.json({ error: "Horário inválido." }, { status: 400 });
   const iso = new Date(t).toISOString();
 
-  const db = await readDb();
-  const doctor = db.doctors.find((d) => d.id === doctorId);
+  const [doctor, mine] = await Promise.all([getDoctorById(doctorId), listBookingsForDoctor(doctorId)]);
   if (!doctor) return NextResponse.json({ error: "Médico não encontrado." }, { status: 404 });
 
-  const conflict = db.bookings.some(
-    (x) => x.doctorId === doctorId && new Date(x.slotStart).toISOString() === iso && ["pending_payment", "paid", "confirmed"].includes(x.status)
+  const conflict = mine.some(
+    (x) => new Date(x.slotStart).toISOString() === iso && ["pending_payment", "paid", "confirmed"].includes(x.status)
   );
   if (conflict) return NextResponse.json({ error: "Este horário acabou de ser reservado. Escolha outro horário." }, { status: 409 });
 

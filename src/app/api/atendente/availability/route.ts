@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { requireAttendantForDoctor, hasPerm } from "@/lib/attendant-context";
-import { readDb } from "@/lib/store";
+import { getDoctorById, listBookingsForDoctor } from "@/lib/store";
 import { generateAvailableSlots } from "@/lib/scheduling";
 import { activeHoldStarts } from "@/lib/holds-store";
 import type { Modality } from "@/lib/types";
@@ -15,12 +15,11 @@ export async function GET(req: Request) {
   if (!ctx) return NextResponse.json({ error: "Sem acesso a este médico." }, { status: 403 });
   if (!hasPerm(ctx.link, "verHorarios")) return NextResponse.json({ error: "Sem permissão para ver horários." }, { status: 403 });
 
-  const db = await readDb();
-  const doctor = db.doctors.find((d) => d.id === doctorId);
+  const [doctor, mine] = await Promise.all([getDoctorById(doctorId), listBookingsForDoctor(doctorId)]);
   if (!doctor) return NextResponse.json({ error: "Médico não encontrado." }, { status: 404 });
 
-  const bookedStarts = db.bookings
-    .filter((b) => b.doctorId === doctorId && ["pending_payment", "paid", "confirmed"].includes(b.status))
+  const bookedStarts = mine
+    .filter((b) => ["pending_payment", "paid", "confirmed"].includes(b.status))
     .map((b) => new Date(b.slotStart).toISOString());
   const held = await activeHoldStarts(doctorId);
   const excludeStarts = new Set<string>([...bookedStarts, ...held]);

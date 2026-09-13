@@ -1,4 +1,4 @@
-import { readDb } from "@/lib/store";
+import { getBookingById, getDoctorById } from "@/lib/store";
 import { getCurrentUser } from "@/lib/current-user";
 import { appOrigin } from "@/lib/payments";
 
@@ -15,11 +15,10 @@ function esc(s: string): string {
  *  consulta (mesma capacidade já usada na página "Minhas consultas"). */
 export async function GET(_req: Request, context: { params: Promise<{ id: string }> }) {
   const { id } = await context.params;
-  const db = await readDb();
-  const booking = db.bookings.find((b) => b.id === id);
+  const booking = await getBookingById(id);
   if (!booking) return new Response("Consulta não encontrada.", { status: 404 });
 
-  const doctor = db.doctors.find((d) => d.id === booking.doctorId);
+  const doctor = await getDoctorById(booking.doctorId);
   const user = await getCurrentUser();
 
   // Papel para decidir o TÍTULO (privacidade do nome do paciente no calendário do médico).

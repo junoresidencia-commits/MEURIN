@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { getDoctorSessionId } from "@/lib/auth";
-import { readDb } from "@/lib/store";
+import { listBookingsForDoctor } from "@/lib/store";
 import { clinicalKey, findPatientByClinicalKey, listPatientsByDoctor } from "@/lib/patients-store";
 import { getProfile, getProfilesByDoctor } from "@/lib/clinical-profile-store";
 import { listSharesForDoctor } from "@/lib/patient-shares-store";
@@ -36,7 +36,7 @@ export async function GET() {
   const doctorId = await getDoctorSessionId();
   if (!doctorId) return NextResponse.json({ error: "Não autenticado." }, { status: 401 });
 
-  const db = await readDb();
+  const mine = await listBookingsForDoctor(doctorId);
   const created = await listPatientsByDoctor(doctorId);
   const createdEmails = new Set(created.map((p) => (p.email || "").toLowerCase()).filter(Boolean));
 
@@ -49,8 +49,7 @@ export async function GET() {
     bases.push({ key: p.id, clinicalKey: clinicalKey(p), name: p.name, photoUrl: p.photoUrl ?? null, city: p.address || "", birthdate: p.birthdate || null, sex: p.sex || null, isCreated: true });
   }
   const byEmail = new Map<string, Base & { lastSlot: string }>();
-  for (const b of db.bookings) {
-    if (b.doctorId !== doctorId) continue;
+  for (const b of mine) {
     const email = b.patientEmail.toLowerCase();
     if (createdEmails.has(email)) continue;
     const cur = byEmail.get(email);
@@ -113,8 +112,8 @@ export async function GET() {
     else if (potassio && potassio.value >= 5.5) alert = { level: "importante", text: `K ${potassio.value} mEq/L`, date: potassio.date };
     else if (hb && hb.value < 8) alert = { level: "importante", text: `Hb ${hb.value} g/dL`, date: hb.date };
 
-    const bks = db.bookings
-      .filter((x) => x.doctorId === doctorId && x.patientEmail.toLowerCase() === b.clinicalKey.toLowerCase() && x.status !== "cancelled")
+    const bks = mine
+      .filter((x) => x.patientEmail.toLowerCase() === b.clinicalKey.toLowerCase() && x.status !== "cancelled")
       .sort((a, c) => a.slotStart.localeCompare(c.slotStart));
     const past = bks.filter((x) => new Date(x.slotStart).getTime() <= now);
     const future = bks.filter((x) => new Date(x.slotStart).getTime() > now);
