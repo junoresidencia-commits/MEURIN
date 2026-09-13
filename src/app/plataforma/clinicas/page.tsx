@@ -96,10 +96,25 @@ export default function ClinicasPage() {
                 <p className="text-xs text-[var(--text-muted)]">{[c.city, c.status].filter(Boolean).join(" · ")}</p>
               </div>
               <div className="flex flex-wrap gap-2">
-                {c.status !== "pilot" ? (
+                {c.status !== "pilot" && c.status !== "suspended" ? (
                   <button type="button" className="btn-ghost text-sm" onClick={() => setStatus(c.id, "pilot")}>Marcar piloto</button>
-                ) : (
+                ) : null}
+                {c.status === "pilot" ? (
                   <button type="button" className="btn-ghost text-sm" onClick={() => setStatus(c.id, "active")}>Passar a ativa</button>
+                ) : null}
+                {c.status === "suspended" ? (
+                  <button type="button" className="btn-ghost text-sm" onClick={() => setStatus(c.id, "pilot")}>Reativar (piloto)</button>
+                ) : (
+                  <button
+                    type="button"
+                    className="btn-ghost text-sm"
+                    onClick={() => {
+                      if (!window.confirm(`Bloquear ${c.name}? A gestora e o check-in desta clínica param. Pacientes e o caixa não são apagados.`)) return;
+                      setStatus(c.id, "suspended");
+                    }}
+                  >
+                    Bloquear
+                  </button>
                 )}
                 <Link href={`/clinica/${c.id}`} className="btn-gold text-sm">Abrir gestão</Link>
               </div>

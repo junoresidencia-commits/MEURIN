@@ -48,7 +48,8 @@ export async function buildPlatformActor(doctor: {
     const byId = new Map(clinics.map((c) => [c.id, c]));
     clinicAdmin = adminMs.flatMap((m) => {
       const clinic = byId.get(m.clinicId);
-      return clinic ? [{ clinicId: clinic.id, clinicName: clinic.name, role: m.role }] : [];
+      if (!clinic || clinic.status === "suspended" || clinic.status === "draft") return [];
+      return [{ clinicId: clinic.id, clinicName: clinic.name, role: m.role }];
     });
   } catch (err) {
     console.error("[platform-access] clínicas ignoradas", err);
@@ -92,14 +93,16 @@ export type ClinicStaff = {
 export async function getClinicStaff(clinicId: string): Promise<ClinicStaff | null> {
   const clinic = await getClinic(clinicId);
   if (!clinic) return null;
+  const blocked = clinic.status === "suspended" || clinic.status === "draft";
 
   const doctor = await getPlatformActor();
   if (doctor) {
+    if (blocked && !doctor.isSuperAdmin) return null;
     const memberships = await listMemberships(clinicId);
     const membership =
       memberships.find((m) => m.actorKind === "doctor" && m.actorId === doctor.doctorId && m.status === "active") ?? null;
     const canAdmin = doctor.isSuperAdmin || membership?.role === "ADMIN_CLINICA";
-    const canCheckout = Boolean(canAdmin);
+    const canCheckout = Boolean(canAdmin) && !blocked;
     if (!canAdmin) return null;
     return {
       kind: "doctor",
@@ -116,6 +119,7 @@ export async function getClinicStaff(clinicId: string): Promise<ClinicStaff | nu
 
   const attendantId = await getAttendantId();
   if (!attendantId) return null;
+  if (blocked) return null;
   const att = await getAttendant(attendantId);
   if (!att || att.status !== "active") return null;
   const memberships = await listMemberships(clinicId);

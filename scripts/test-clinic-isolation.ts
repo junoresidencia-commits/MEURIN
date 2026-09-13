@@ -88,6 +88,8 @@ async function main() {
 
   const active = await updateClinicStatus(clinicA.id, "active");
   assert.equal(active.status, "active");
+  const blocked = await updateClinicStatus(clinicA.id, "suspended");
+  assert.equal(blocked.status, "suspended");
   const back = await updateClinicStatus(clinicA.id, "pilot");
   assert.equal(back.status, "pilot");
 
