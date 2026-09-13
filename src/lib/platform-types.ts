@@ -60,6 +60,69 @@ export type PlatformAuditEntry = {
   createdAt: string;
 };
 
+export type InviteKind = "doctor" | "attendant";
+export type InviteStatus = "pending" | "accepted" | "cancelled" | "expired";
+
+export type ClinicInvite = {
+  id: string;
+  clinicId: string;
+  kind: InviteKind;
+  email: string;
+  name: string;
+  crm: string | null;
+  specialty: string | null;
+  token: string;
+  status: InviteStatus;
+  invitedBy: string | null;
+  acceptedActorId: string | null;
+  createdAt: string;
+  acceptedAt: string | null;
+};
+
+export type ClinicFeeRule = {
+  id: string;
+  clinicId: string;
+  doctorId: string;
+  feeCents: number;
+  clinicSharePercent: number;
+  active: boolean;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type EncounterPaymentStatus = "pending" | "paid" | "partial" | "courtesy";
+export type ClinicPaymentMethod = "pix" | "card" | "cash" | "courtesy" | "other";
+
+export type ClinicEncounter = {
+  id: string;
+  clinicId: string;
+  doctorId: string;
+  patientKey: string;
+  patientName: string | null;
+  bookingId: string | null;
+  feeCents: number;
+  clinicShareCents: number;
+  doctorShareCents: number;
+  receivedCents: number;
+  paymentStatus: EncounterPaymentStatus;
+  attendedAt: string;
+  createdAt: string;
+};
+
+export type ClinicPayment = {
+  id: string;
+  clinicId: string;
+  encounterId: string;
+  method: ClinicPaymentMethod;
+  amountCents: number;
+  discountCents: number;
+  status: EncounterPaymentStatus;
+  note: string | null;
+  recordedByKind: string | null;
+  recordedById: string | null;
+  createdAt: string;
+};
+
 export type IntegrityCounts = {
   doctors: number;
   patients: number;

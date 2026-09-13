@@ -41,8 +41,8 @@ Colunas opcionais futuras (nunca obrigatórias nos registros atuais): `clinic_id
 ## 3. Migrations planejadas
 
 1. **`20260913010000_platform_clinics_roles.sql` (Fase 1, esta PR)** — cria as 4 tabelas da fundação. Idempotente (`IF NOT EXISTS`). Sem ALTER em `doctors`/`patients`/`bookings`.
-2. Fase 2 — convites + `clinic_patient_links` (aditivo).
-3. Fase 3 — financeiro da clínica (tabelas novas).
+2. **`20260913020000_clinic_invites.sql` (Fase 2)** — `clinic_invites` + `clinic_patient_links` (esta última sem backfill).
+3. **`20260913030000_clinic_finance.sql` (Fase 3)** — `clinic_fee_rules`, `clinic_encounters`, `clinic_payments`.
 4. Fase 4 — fechamentos/PDF.
 5. Fase 5 — encaminhamento intra-clínica (em cima de `patient_doctor_shares`).
 
@@ -64,14 +64,14 @@ Colunas opcionais futuras (nunca obrigatórias nos registros atuais): `clinic_id
 
 - Fase 1 é só tabelas/arquivos novos + um link condicional na sidebar.
 - Rollback de código: reverter o PR. Login, pacientes e painel voltam ao estado anterior.
-- Rollback de schema (se a migration tiver rodado em staging): `DROP TABLE` apenas das tabelas **novas** (`platform_role_assignments`, `clinics`, `clinic_memberships`, `platform_audit_log`, `platform_integrity_snapshots`). Nunca dropar `doctors`/`patients`.
+- Rollback de schema (se a migration tiver rodado em staging): `DROP TABLE` apenas das tabelas **novas** (`platform_role_assignments`, `clinics`, `clinic_memberships`, `clinic_invites`, `clinic_patient_links`, `clinic_fee_rules`, `clinic_encounters`, `clinic_payments`, `platform_audit_log`, `platform_integrity_snapshots`). Nunca dropar `doctors`/`patients`.
 - Dados clínicos não são tocados; não há job de “mover pacientes”.
 
 ## 6. Fases
 
-1. **Fundação (esta entrega)** — diagnóstico, tabelas, SUPER_ADMIN no login existente, `/plataforma`, integridade, fallback sem clínica.
-2. **Multi-clínica operacional** — gestora, convite de médico, atendente por clínica. Sem migrar em lote os 200+ pacientes.
-3. **Financeiro da clínica** — produção ≠ recebido, regras no vínculo médico↔clínica.
+1. **Fundação** — diagnóstico, tabelas, SUPER_ADMIN no login existente, `/plataforma`, integridade, fallback sem clínica.
+2. **Multi-clínica operacional (nesta entrega)** — gestora `ADMIN_CLINICA`, convite de médico/atendente sem a gestora criar senha, área `/clinica/[id]`. Sem migrar em lote os 200+ pacientes.
+3. **Financeiro da clínica (nesta entrega)** — produção ≠ recebido, regra no vínculo médico↔clínica, check-in, relatório por médico/período. Finalizar atendimento cria produção sem mudar o painel médico.
 4. **Fechamento + PDF + repasse + comprovante.**
 5. **Encaminhamentos intra-clínica + rede de cuidado.**
 6. **Inteligência clínica configurável (nunca automático).**

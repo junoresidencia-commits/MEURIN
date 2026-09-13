@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import bcrypt from "bcryptjs";
 import { COOKIE, DOCTOR_MAX_AGE, createSessionToken, getDoctorSessionId } from "@/lib/auth";
 import { readDb } from "@/lib/store";
+import { getPlatformActor } from "@/lib/platform-access";
 import { ensureFounderSuperAdmin, listActiveRoles } from "@/lib/platform-store";
 
 export async function GET() {
@@ -14,11 +15,16 @@ export async function GET() {
   if (!doctor) return NextResponse.json({ doctor: null });
   const { passwordHash, mpAccessToken, ...safe } = doctor;
   void passwordHash;
-  await ensureFounderSuperAdmin();
-  const platformRoles = await listActiveRoles("doctor", doctor.id);
+  const actor = await getPlatformActor();
+  const platformRoles = actor?.roles ?? (await listActiveRoles("doctor", doctor.id));
   // Nunca devolvemos o token do Mercado Pago ao navegador — só se está conectado.
   return NextResponse.json({
-    doctor: { ...safe, mpConnected: Boolean(mpAccessToken?.trim()), platformRoles },
+    doctor: {
+      ...safe,
+      mpConnected: Boolean(mpAccessToken?.trim()),
+      platformRoles,
+      clinicAdmin: actor?.clinicAdmin ?? [],
+    },
   });
 }
 

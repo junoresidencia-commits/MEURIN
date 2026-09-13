@@ -41,7 +41,12 @@ export async function POST(req: Request, { params }: { params: Promise<{ email: 
   }
 
   if (action === "finish") {
-    await finishAttendance({ doctorId, patientKey: access.key, bookingId: body.bookingId || null });
+    await finishAttendance({
+      doctorId,
+      patientKey: access.key,
+      bookingId: body.bookingId || null,
+      patientName: access.name || null,
+    });
     // Próximo retorno (opcional): intervalo pré-definido ou data escolhida.
     const interval = String(body.returnInterval || "");
     let dueAt: string | null = null;

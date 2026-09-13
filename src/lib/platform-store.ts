@@ -163,6 +163,20 @@ export async function grantRole(
   return row;
 }
 
+export async function getClinic(id: string): Promise<Clinic | null> {
+  if (active()) {
+    const sb = getSupabaseAdmin()!;
+    const { data, error } = await sb.from("clinics").select("*").eq("id", id).maybeSingle();
+    if (error) {
+      if (isMissing(error)) tableMissing = true;
+      else return null;
+    } else {
+      return data ? mapClinic(data as Record<string, unknown>) : null;
+    }
+  }
+  return (await readLocal()).clinics.find((c) => c.id === id) ?? null;
+}
+
 export async function listClinics(): Promise<Clinic[]> {
   if (active()) {
     const sb = getSupabaseAdmin()!;
@@ -233,12 +247,25 @@ export async function listMemberships(clinicId?: string): Promise<ClinicMembersh
   return clinicId ? local.memberships.filter((m) => m.clinicId === clinicId) : local.memberships;
 }
 
+export async function listMembershipsForActor(actorKind: ActorKind, actorId: string): Promise<ClinicMembership[]> {
+  const all = await listMemberships();
+  return all.filter((m) => m.actorKind === actorKind && m.actorId === actorId && m.status === "active");
+}
+
 export async function addMembership(input: {
   clinicId: string;
   actorKind: ActorKind;
   actorId: string;
   role: PlatformRole;
 }): Promise<ClinicMembership> {
+  const existing = (await listMemberships(input.clinicId)).find(
+    (m) =>
+      m.actorKind === input.actorKind &&
+      m.actorId === input.actorId &&
+      m.role === input.role &&
+      m.status === "active"
+  );
+  if (existing) return existing;
   const now = new Date().toISOString();
   const row: ClinicMembership = {
     id: uuid(),
