@@ -4,6 +4,7 @@ import path from "path";
 import { getSupabaseAdmin } from "./supabase-admin";
 import { countBookings, listDoctors } from "./store";
 import { countPlatformRows } from "./platform-store";
+import { countSaasRows } from "./saas-store";
 import type { IntegrityCounts } from "./platform-types";
 
 const DATA_DIR = path.join(process.cwd(), "data");
@@ -28,10 +29,11 @@ async function supabaseCount(table: string): Promise<number | null> {
 
 /** Contagens somente-leitura. Nunca altera registros. */
 export async function collectIntegrityCounts(): Promise<IntegrityCounts> {
-  const [doctors, bookings, platform, sbPatients, sbNotes, sbDocs, sbLabs] = await Promise.all([
+  const [doctors, bookings, platform, saas, sbPatients, sbNotes, sbDocs, sbLabs] = await Promise.all([
     listDoctors(),
     countBookings(),
     countPlatformRows(),
+    countSaasRows(),
     supabaseCount("patients"),
     supabaseCount("clinical_notes"),
     supabaseCount("documents"),
@@ -48,6 +50,8 @@ export async function collectIntegrityCounts(): Promise<IntegrityCounts> {
     clinics: platform.clinics,
     memberships: platform.memberships,
     roleAssignments: platform.roleAssignments,
+    saasPlans: saas.saasPlans,
+    saasLicenses: saas.saasLicenses,
   };
 }
 

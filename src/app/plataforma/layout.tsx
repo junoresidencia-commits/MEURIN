@@ -11,6 +11,7 @@ const NAV = [
   { href: "/plataforma/integridade", label: "Integridade" },
   { href: "/plataforma/auditoria", label: "Auditoria" },
   { href: "/plataforma/pesquisa", label: "Pesquisa" },
+  { href: "/plataforma/planos", label: "Planos SaaS" },
 ];
 
 export default function PlataformaLayout({ children }: { children: React.ReactNode }) {

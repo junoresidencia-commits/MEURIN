@@ -205,6 +205,43 @@ export type IntegrityCounts = {
   clinics: number;
   memberships: number;
   roleAssignments: number;
+  saasPlans: number;
+  saasLicenses: number;
+};
+
+export type SaasLicenseStatus = "trial" | "active" | "past_due" | "canceled";
+
+export type SaasPlan = {
+  id: string;
+  name: string;
+  monthlyCents: number;
+  doctorSeats: number;
+  features: Record<string, boolean>;
+  active: boolean;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type SaasLicense = {
+  id: string;
+  planId: string;
+  clinicId: string | null;
+  doctorId: string | null;
+  status: SaasLicenseStatus;
+  periodStart: string | null;
+  periodEnd: string | null;
+  monthlyCents: number;
+  createdAt: string;
+  updatedAt: string;
+  canceledAt: string | null;
+};
+
+export type SaasMrrSnapshot = {
+  id: string;
+  yearMonth: string;
+  mrrCents: number;
+  licensesActive: number;
+  createdAt: string;
 };
 
 export const FOUNDER_SUPER_ADMIN_EMAIL = (
