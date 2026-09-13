@@ -38,6 +38,9 @@ Somente **CREATE**. Nenhuma DROP/RENAME de tabela existente.
 | `research_protocols` | 7 | CEP/CONEP ou dispensa por estudo. |
 | `research_consents` | 7 | Consentimento pontual (sem backfill). |
 | `research_export_log` | 7 | Auditoria de exportação (sem identificadores). |
+| `saas_plans` | 8 | Catálogo de planos Meu Rim (mensalidade + assentos). |
+| `saas_licenses` | 8 | Licença de clínica ou médico solo. Ausência não bloqueia o médico. |
+| `saas_mrr_snapshots` | 8 | MRR mensal. Sem paciente e sem caixa da clínica. |
 | `platform_audit_log` | 1 | Auditoria de ações de plataforma/clínica. |
 | `platform_integrity_snapshots` | 1 | Contagens antes/depois (abortar se diminuir). |
 
@@ -52,6 +55,7 @@ Colunas opcionais futuras (nunca obrigatórias nos registros atuais): `clinic_id
 5. **`20260913050000_clinic_referrals.sql` (Fase 5)** — `clinic_referrals` (em cima de `patient_doctor_shares`). Sem backfill.
 6. **`20260913060000_intelligence_prefs.sql` (Fase 6)** — `intelligence_preferences` (médico/clínica). Sempre `review_only`.
 7. **`20260913070000_research_governance.sql` (Fase 7)** — `research_protocols`, `research_consents`, `research_export_log`. Sem ALTER em `research_studies`.
+8. **`20260913080000_saas_plans_licenses.sql` (Fase 8)** — `saas_plans`, `saas_licenses`, `saas_mrr_snapshots`. Sem ALTER em tabelas clínicas. Sem gate no login.
 
 As migrations 1–7 já estão no repo e as tabelas novas já existem em produção. Código das fases 1–7 está na `main`.
 
@@ -85,6 +89,6 @@ As migrations 1–7 já estão no repo e as tabelas novas já existem em produç
 5. **Encaminhamentos intra-clínica + rede de cuidado (nesta entrega)** — médicos da mesma clínica aparecem no Encaminhar; a gestora vê a rede em `/clinica/[id]/rede`. O cadastro do paciente **não muda** de `doctor_id`. Vínculo pontual em `clinic_patient_links` só no encaminhamento (sem migrar os 200+).
 6. **Inteligência clínica configurável (nesta entrega, nunca automático)** — médico e clínica escolhem o que sugerir. Salvar evolução e reler prontuário **não gravam** no perfil; o modal de revisão confirma.
 7. **Pesquisa com governança própria (nesta entrega)** — CEP/CONEP ou dispensa no estudo; exportação bloqueada sem isso. Consentimento pontual. Área `/plataforma/pesquisa` só com metadados. Separada do financeiro da clínica. Sem migrar pacientes.
-8. **SaaS Meu Rim** (planos/licenças/MRR) — **próxima entrega**. Separado do financeiro da clínica. Sem licença, a área médica continua liberada (não trava login nem pacientes).
+8. **SaaS Meu Rim (nesta entrega)** — planos, licenças e MRR em `/plataforma/planos`. Tabelas `saas_plans`, `saas_licenses`, `saas_mrr_snapshots`. Separado do financeiro da clínica. Sem licença, a área médica continua liberada (não trava login nem pacientes).
 
 Critério de bloqueio: se login, pacientes, prontuário, exames, documentos ou agenda do Dr. Juno quebrarem, **não avançar de fase**.

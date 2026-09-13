@@ -13,6 +13,8 @@ const LABELS: Record<string, string> = {
   clinics: "Clínicas (novas)",
   memberships: "Vínculos clínica",
   roleAssignments: "Papéis extras",
+  saasPlans: "Planos SaaS",
+  saasLicenses: "Licenças SaaS",
 };
 
 export default function IntegridadePage() {

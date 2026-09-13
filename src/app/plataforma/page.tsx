@@ -33,6 +33,10 @@ export default function PlataformaHomePage() {
           <p className="font-bold">Pesquisa</p>
           <p className="mt-1 text-sm text-[var(--text-muted)]">CEP/CONEP e dispensa. Sem prontuário e sem financeiro da clínica.</p>
         </Link>
+        <Link href="/plataforma/planos" className="panel block">
+          <p className="font-bold">Planos SaaS</p>
+          <p className="mt-1 text-sm text-[var(--text-muted)]">Licenças e MRR da plataforma. Não mistura com o caixa da clínica.</p>
+        </Link>
       </div>
     </div>
   );

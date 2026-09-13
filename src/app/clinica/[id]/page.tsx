@@ -8,6 +8,7 @@ export default function ClinicaHomePage() {
   const params = useParams<{ id: string }>();
   const [clinic, setClinic] = useState("");
   const [canAdmin, setCanAdmin] = useState(false);
+  const [planName, setPlanName] = useState<string | null>(null);
 
   useEffect(() => {
     fetch(`/api/clinica/${params.id}/me`)
@@ -17,6 +18,10 @@ export default function ClinicaHomePage() {
         setCanAdmin(Boolean(d.staff?.canAdmin));
       })
       .catch(() => {});
+    fetch(`/api/clinica/${params.id}/license`)
+      .then((r) => r.json())
+      .then((d) => setPlanName(d.plan?.name || null))
+      .catch(() => setPlanName(null));
   }, [params.id]);
 
   return (
@@ -26,6 +31,11 @@ export default function ClinicaHomePage() {
       <p className="mt-2 max-w-2xl text-sm text-[var(--text-soft)]">
         Esta área não substitui o prontuário nem o painel médico. Pacientes atuais continuam no médico;
         nada aqui move cadastro antigo.
+      </p>
+      <p className="mt-2 text-sm text-[var(--text-muted)]">
+        {planName
+          ? `Plano Meu Rim: ${planName}. O prontuário não depende desta licença.`
+          : "Sem licença SaaS — agenda e prontuário continuam no médico."}
       </p>
       <div className="mt-6 grid gap-3 sm:grid-cols-2">
         {canAdmin && (
