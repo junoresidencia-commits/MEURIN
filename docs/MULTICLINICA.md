@@ -33,6 +33,7 @@ Somente **CREATE**. Nenhuma DROP/RENAME de tabela existente.
 | `clinic_payments` | 3 | Check-in financeiro da atendente. |
 | `clinic_closings` | 4 | Fechamento + código único `MED-AAAA-######`. |
 | `clinic_closing_adjustments` | 4 | Ajuste auditado após pago. |
+| `clinic_referrals` | 5 | Encaminhamento intra-clínica (não move o paciente). |
 | `platform_audit_log` | 1 | Auditoria de ações de plataforma/clínica. |
 | `platform_integrity_snapshots` | 1 | Contagens antes/depois (abortar se diminuir). |
 
@@ -44,7 +45,7 @@ Colunas opcionais futuras (nunca obrigatórias nos registros atuais): `clinic_id
 2. **`20260913020000_clinic_invites.sql` (Fase 2)** — `clinic_invites` + `clinic_patient_links` (esta última sem backfill).
 3. **`20260913030000_clinic_finance.sql` (Fase 3)** — `clinic_fee_rules`, `clinic_encounters`, `clinic_payments`.
 4. **`20260913040000_clinic_closings.sql` (Fase 4)** — `clinic_closings` + `clinic_closing_adjustments`.
-5. Fase 5 — encaminhamento intra-clínica (em cima de `patient_doctor_shares`).
+5. **`20260913050000_clinic_referrals.sql` (Fase 5)** — `clinic_referrals` (em cima de `patient_doctor_shares`). Sem backfill.
 
 **Não aplicar em produção nesta PR.** Arquivo de migration vai no repo; staging/dev primeiro. Backup obrigatório antes de rodar no Postgres de produção.
 
@@ -64,7 +65,7 @@ Colunas opcionais futuras (nunca obrigatórias nos registros atuais): `clinic_id
 
 - Fase 1 é só tabelas/arquivos novos + um link condicional na sidebar.
 - Rollback de código: reverter o PR. Login, pacientes e painel voltam ao estado anterior.
-- Rollback de schema (se a migration tiver rodado em staging): `DROP TABLE` apenas das tabelas **novas** (`platform_role_assignments`, `clinics`, `clinic_memberships`, `clinic_invites`, `clinic_patient_links`, `clinic_fee_rules`, `clinic_encounters`, `clinic_payments`, `clinic_closings`, `clinic_closing_adjustments`, `platform_audit_log`, `platform_integrity_snapshots`). Nunca dropar `doctors`/`patients`.
+- Rollback de schema (se a migration tiver rodado em staging): `DROP TABLE` apenas das tabelas **novas** (`platform_role_assignments`, `clinics`, `clinic_memberships`, `clinic_invites`, `clinic_patient_links`, `clinic_fee_rules`, `clinic_encounters`, `clinic_payments`, `clinic_closings`, `clinic_closing_adjustments`, `clinic_referrals`, `platform_audit_log`, `platform_integrity_snapshots`). Nunca dropar `doctors`/`patients`.
 - Dados clínicos não são tocados; não há job de “mover pacientes”.
 
 ## 6. Fases
@@ -73,7 +74,7 @@ Colunas opcionais futuras (nunca obrigatórias nos registros atuais): `clinic_id
 2. **Multi-clínica operacional (nesta entrega)** — gestora `ADMIN_CLINICA`, convite de médico/atendente sem a gestora criar senha, área `/clinica/[id]`. Sem migrar em lote os 200+ pacientes.
 3. **Financeiro da clínica (nesta entrega)** — produção ≠ recebido, regra no vínculo médico↔clínica, check-in, relatório por médico/período. Finalizar atendimento cria produção sem mudar o painel médico.
 4. **Fechamento + PDF + repasse + comprovante (nesta entrega)** — código único `MED-AAAA-######`, PDF do período, comprovante após pago, ajuste auditado com motivo.
-5. **Encaminhamentos intra-clínica + rede de cuidado.**
+5. **Encaminhamentos intra-clínica + rede de cuidado (nesta entrega)** — médicos da mesma clínica aparecem no Encaminhar; a gestora vê a rede em `/clinica/[id]/rede`. O cadastro do paciente **não muda** de `doctor_id`. Vínculo pontual em `clinic_patient_links` só no encaminhamento (sem migrar os 200+).
 6. **Inteligência clínica configurável (nunca automático).**
 7. **Pesquisa com governança própria.**
 8. **SaaS Meu Rim** (planos/licenças/MRR) — separado do financeiro da clínica.

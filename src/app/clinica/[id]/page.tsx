@@ -42,6 +42,10 @@ export default function ClinicaHomePage() {
               <p className="font-bold">Fechamentos</p>
               <p className="mt-1 text-sm text-[var(--text-muted)]">Código MED-AAAA-######, PDF e comprovante de repasse.</p>
             </Link>
+            <Link href={`/clinica/${params.id}/rede`} className="panel block">
+              <p className="font-bold">Rede de cuidado</p>
+              <p className="mt-1 text-sm text-[var(--text-muted)]">Encaminhamento intra-clínica. O paciente continua no médico original.</p>
+            </Link>
           </>
         )}
         <Link href={`/clinica/${params.id}/caixa`} className="panel block">

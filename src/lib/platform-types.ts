@@ -159,6 +159,42 @@ export type ClinicPayment = {
   createdAt: string;
 };
 
+export type ClinicReferralStatus = "active" | "cancelled";
+
+export type ClinicReferral = {
+  id: string;
+  clinicId: string;
+  shareId: string | null;
+  patientKey: string;
+  patientName: string | null;
+  fromDoctorId: string;
+  fromDoctorName: string | null;
+  fromSpecialty: string | null;
+  toDoctorId: string;
+  toDoctorName: string | null;
+  toSpecialty: string | null;
+  reason: string | null;
+  status: ClinicReferralStatus;
+  createdAt: string;
+  cancelledAt: string | null;
+};
+
+export type ClinicPatientLink = {
+  id: string;
+  clinicId: string;
+  patientKey: string;
+  source: string;
+  createdAt: string;
+};
+
+export type ClinicPeerDoctor = {
+  id: string;
+  name: string;
+  specialty: string;
+  crm?: string;
+  clinics: { id: string; name: string }[];
+};
+
 export type IntegrityCounts = {
   doctors: number;
   patients: number;
