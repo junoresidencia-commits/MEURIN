@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { readDb } from "../src/lib/store";
 import { addMembership, createClinic, listAudit, updateClinicStatus } from "../src/lib/platform-store";
-import { createEncounter, listEncounters, recordCheckIn, upsertFeeRule } from "../src/lib/clinic-finance-store";
+import { createEncounter, listEncounters, listFinanceEvents, recordCheckIn, upsertFeeRule } from "../src/lib/clinic-finance-store";
 import { createClosing, markClosingPaid } from "../src/lib/clinic-closing-store";
 import { clinicExecutiveResumo } from "../src/lib/clinic-resumo";
 import { collectIntegrityCounts, countsDropped } from "../src/lib/platform-integrity";
@@ -72,6 +72,12 @@ async function main() {
   );
   const paid = await markClosingPaid(closingB.id, carlos.id, clinicB.id);
   assert.equal(paid.status, "paid");
+
+  const eventsA = await listFinanceEvents(clinicA.id);
+  const eventsB = await listFinanceEvents(clinicB.id);
+  assert.ok(eventsA.every((e) => e.clinicId === clinicA.id));
+  assert.ok(eventsB.every((e) => e.clinicId === clinicB.id));
+  assert.ok(!eventsA.some((e) => eventsB.some((b) => b.id === e.id)));
 
   const resumoA = await clinicExecutiveResumo(clinicA.id);
   assert.ok(resumoA.alerts.length >= 1);

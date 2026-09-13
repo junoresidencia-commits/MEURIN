@@ -11,6 +11,24 @@ type Member = { actorId: string; actorKind: string; role: string; name: string }
 type Rule = { doctorId: string; feeCents: number; clinicSharePercent: number };
 type Row = { id: string; doctorName: string; patientName: string | null; feeCents: number; receivedCents: number; paymentStatus: string; attendedAt: string };
 type Summary = { count: number; producedCents: number; receivedCents: number; pendingCents: number; byDoctor: { doctorId: string; doctorName: string; count: number; producedCents: number; receivedCents: number }[] };
+type Issue = { tone: "red" | "yellow"; text: string };
+type EventRow = {
+  id: string;
+  kind: string;
+  beforeCents: number | null;
+  afterCents: number | null;
+  reason: string | null;
+  actorEmail: string | null;
+  createdAt: string;
+};
+
+const KIND_LABEL: Record<string, string> = {
+  fee_rule: "Regra de honorário",
+  checkin: "Check-in",
+  closing: "Fechamento",
+  payout: "Repasse pago",
+  adjustment: "Ajuste",
+};
 
 export default function ClinicaFinanceiroPage() {
   const params = useParams<{ id: string }>();
@@ -27,6 +45,8 @@ export default function ClinicaFinanceiroPage() {
   const [msg, setMsg] = useState("");
   const [reason, setReason] = useState("");
   const [saving, setSaving] = useState(false);
+  const [issues, setIssues] = useState<Issue[]>([]);
+  const [events, setEvents] = useState<EventRow[]>([]);
 
   function loadTeam() {
     fetch(`/api/clinica/${params.id}/invite`)
@@ -40,6 +60,14 @@ export default function ClinicaFinanceiroPage() {
     fetch(`/api/clinica/${params.id}/fee-rules`)
       .then((r) => r.json())
       .then((d) => setRules(d.rules || []))
+      .catch(() => {});
+    fetch(`/api/clinica/${params.id}/resumo`)
+      .then((r) => r.json())
+      .then((d) => setIssues(d.resumo?.inconsistencies || []))
+      .catch(() => {});
+    fetch(`/api/clinica/${params.id}/financeiro-eventos`)
+      .then((r) => r.json())
+      .then((d) => setEvents(d.events || []))
       .catch(() => {});
   }
   function loadProd() {
@@ -117,6 +145,44 @@ export default function ClinicaFinanceiroPage() {
         <p className="mt-2 text-xs text-[var(--text-muted)]">
           Regras ativas: {rules.map((r) => `${doctors.find((d) => d.actorId === r.doctorId)?.name || r.doctorId} ${brl(r.feeCents)}`).join(" · ")}
         </p>
+      )}
+
+      {issues.length > 0 && (
+        <div className="mt-5 space-y-2">
+          <p className="text-xs font-bold uppercase tracking-wider text-[var(--gold)]">Inconsistências</p>
+          {issues.map((i) => (
+            <div
+              key={i.text}
+              className={`rounded-2xl border px-4 py-3 text-sm font-semibold ${
+                i.tone === "red" ? "border-red-200 bg-red-50 text-red-800" : "border-amber-200 bg-amber-50 text-amber-900"
+              }`}
+            >
+              {i.text}
+            </div>
+          ))}
+        </div>
+      )}
+
+      {events.length > 0 && (
+        <div className="mt-5">
+          <p className="text-xs font-bold uppercase tracking-wider text-[var(--gold)]">Histórico financeiro</p>
+          <div className="mt-2 space-y-2">
+            {events.map((ev) => (
+              <div key={ev.id} className="panel">
+                <p className="text-sm font-bold">{KIND_LABEL[ev.kind] || ev.kind}</p>
+                <p className="text-xs text-[var(--text-muted)]">
+                  {new Date(ev.createdAt).toLocaleString("pt-BR")}
+                  {ev.actorEmail ? ` · ${ev.actorEmail}` : ""}
+                </p>
+                <p className="mt-1 text-sm">
+                  {ev.beforeCents != null ? `${brl(ev.beforeCents)} → ` : ""}
+                  {ev.afterCents != null ? brl(ev.afterCents) : "—"}
+                  {ev.reason ? ` · ${ev.reason}` : ""}
+                </p>
+              </div>
+            ))}
+          </div>
+        </div>
       )}
 
       <div className="mt-6 grid gap-3 sm:grid-cols-3">

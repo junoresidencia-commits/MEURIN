@@ -88,6 +88,10 @@ export default function FechamentosPage() {
       setErr(`Já existe um fechamento para este médico e período (${preview.existing.code}).`);
       return;
     }
+    if (preview.warnings.length) {
+      const ok = window.confirm(`Há avisos:\n${preview.warnings.join("\n")}\n\nGerar o fechamento mesmo assim?`);
+      if (!ok) return;
+    }
     setSaving(true);
     setErr("");
     setMsg("");

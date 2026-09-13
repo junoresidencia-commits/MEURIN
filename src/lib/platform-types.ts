@@ -160,6 +160,28 @@ export type ClinicPayment = {
   createdAt: string;
 };
 
+export type ClinicFinanceEventKind =
+  | "fee_rule"
+  | "checkin"
+  | "closing"
+  | "payout"
+  | "adjustment";
+
+export type ClinicFinanceEvent = {
+  id: string;
+  clinicId: string;
+  kind: ClinicFinanceEventKind;
+  entity: string;
+  entityId: string;
+  beforeCents: number | null;
+  afterCents: number | null;
+  reason: string | null;
+  actorKind: string | null;
+  actorId: string | null;
+  actorEmail: string | null;
+  createdAt: string;
+};
+
 export type ClinicReferralStatus = "active" | "cancelled";
 
 export type ClinicReferral = {

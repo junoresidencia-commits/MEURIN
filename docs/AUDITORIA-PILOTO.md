@@ -164,9 +164,9 @@ Não havia banco / backup / secrets / prontidão numa tela só. Criadas `/plataf
 
 `platform_audit_log` não tem `clinic_id`. Filtros por usuário, ação e data passam a existir na UI (em memória/query). Coluna `clinic_id` fica como melhoria futura (ALTER aditivo).
 
-#### M6 — Histórico financeiro incompleto
+#### M6 — Histórico financeiro incompleto (resolvido no app)
 
-Mudança de regra de honorário só gravava o valor novo no audit. Agora grava `anterior → novo` + motivo. Ainda **não** há tabela dedicada `clinic_fee_rule_events` (teleconsulta já tem `doctor_financial_events`).
+Mudança de regra, check-in, fechamento, repasse e ajuste gravam em `clinic_finance_events` (e no JSON local se a tabela ainda não existir). Staging precisa rodar `20260913092000_clinic_finance_events.sql`.
 
 #### M7 — Sem `CLINIC_STATUS = PILOT`
 
@@ -244,7 +244,7 @@ Não rodado em produção (proibido). Script de isolamento + runbook de staging.
 | 5 | Comparar contagens | Integridade já existia; saúde/prontidão mostram |
 | 6–9 | Performance / lazy / busca / agenda | Auditados; **não** reescritos no painel médico |
 | 10 | Duplo clique | Check-in, fechamento, repasse, regra, clínica |
-| 11–16 | Financeiro transacional / avisos / histórico / conferência / sem duplicar | Preview + unique + audit de regra + IDOR |
+| 11–16 | Financeiro transacional / avisos / histórico / conferência / sem duplicar | Eventos persistidos + check-in idempotente + preview com avisos + conferência |
 | 17–18 | PDF A4 / não travar | PDF de fechamento paginado + “Gerando…” |
 | 19–20 | Simplificar atendente/médico | **Não** refeito o painel médico; check-in continua simples |
 | 21–23 | Gestora / alertas / saúde | Home da clínica + `/plataforma/saude` |

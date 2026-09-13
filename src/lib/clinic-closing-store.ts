@@ -3,7 +3,7 @@ import { promises as fs } from "fs";
 import path from "path";
 import { v4 as uuid } from "uuid";
 import { getSupabaseAdmin } from "./supabase-admin";
-import { listEncounters } from "./clinic-finance-store";
+import { getFeeRule, listEncounters, writeFinanceEvent } from "./clinic-finance-store";
 import type {
   AdjustmentKind,
   ClinicClosing,
@@ -145,6 +145,36 @@ async function nextCode(year: number): Promise<string> {
   return `${prefix}${String(max + 1).padStart(6, "0")}`;
 }
 
+async function logClosingFinanceEvent(input: {
+  clinicId: string;
+  kind: "closing" | "payout" | "adjustment";
+  entity: string;
+  entityId: string;
+  beforeCents?: number | null;
+  afterCents?: number | null;
+  reason?: string | null;
+  actorKind?: string | null;
+  actorId?: string | null;
+  actorEmail?: string | null;
+}) {
+  try {
+    await writeFinanceEvent({
+      clinicId: input.clinicId,
+      kind: input.kind,
+      entity: input.entity,
+      entityId: input.entityId,
+      beforeCents: input.beforeCents ?? null,
+      afterCents: input.afterCents ?? null,
+      reason: input.reason ?? null,
+      actorKind: input.actorKind ?? null,
+      actorId: input.actorId ?? null,
+      actorEmail: input.actorEmail ?? null,
+    });
+  } catch (err) {
+    console.error("[clinic-closing] histórico financeiro indisponível", err);
+  }
+}
+
 export function netDoctorPayout(closing: ClinicClosing, adjustments: ClinicClosingAdjustment[]): number {
   let extra = 0;
   for (const a of adjustments) {
@@ -218,6 +248,15 @@ export async function previewClosing(input: {
   if (unpaid.length) warnings.push(`${unpaid.length} atendimento(s) com pagamento pendente ou parcial.`);
   const zeroFee = fresh.filter((e) => e.feeCents <= 0);
   if (zeroFee.length) warnings.push(`${zeroFee.length} atendimento(s) sem valor configurado.`);
+  const rule = await getFeeRule(input.clinicId, input.doctorId);
+  if (!rule) warnings.push("Nenhuma regra de honorário ativa para este médico.");
+  if (rule && rule.feeCents === 0) {
+    warnings.push("A regra deste médico está em R$ 0. Confirme se é retorno ou cortesia.");
+  }
+  if (fresh.some((e) => !e.doctorId)) warnings.push("Há atendimentos sem médico identificado.");
+  if (fresh.some((e) => e.clinicId !== input.clinicId)) {
+    warnings.push("Há atendimentos que não pertencem a esta clínica.");
+  }
   return {
     doctorId: input.doctorId,
     periodFrom: from,
@@ -303,11 +342,31 @@ export async function createClosing(input: {
     });
     if (error && !isMissing(error)) throw error;
     if (error && isMissing(error)) tableMissing = true;
-    else if (!error) return row;
+    else if (!error) {
+      await logClosingFinanceEvent({
+        clinicId: input.clinicId,
+        kind: "closing",
+        entity: "clinic_closing",
+        entityId: row.id,
+        afterCents: row.doctorShareCents,
+        reason: row.code,
+        actorId: input.createdBy,
+      });
+      return row;
+    }
   }
   const local = await readLocal();
   local.closings.unshift(row);
   await writeLocal(local);
+  await logClosingFinanceEvent({
+    clinicId: input.clinicId,
+    kind: "closing",
+    entity: "clinic_closing",
+    entityId: row.id,
+    afterCents: row.doctorShareCents,
+    reason: row.code,
+    actorId: input.createdBy,
+  });
   return row;
 }
 
@@ -322,12 +381,32 @@ export async function markClosingPaid(closingId: string, paidBy: string, clinicI
     const { error } = await sb.from("clinic_closings").update({ status: "paid", paid_at: now, paid_by: paidBy, updated_at: now }).eq("id", closingId);
     if (error && !isMissing(error)) throw error;
     if (error && isMissing(error)) tableMissing = true;
-    else if (!error) return next;
+    else if (!error) {
+      await logClosingFinanceEvent({
+        clinicId: row.clinicId,
+        kind: "payout",
+        entity: "clinic_closing",
+        entityId: row.id,
+        afterCents: row.doctorShareCents,
+        reason: row.code,
+        actorId: paidBy,
+      });
+      return next;
+    }
   }
   const local = await readLocal();
   const idx = local.closings.findIndex((c) => c.id === closingId);
   if (idx >= 0) local.closings[idx] = next;
   await writeLocal(local);
+  await logClosingFinanceEvent({
+    clinicId: row.clinicId,
+    kind: "payout",
+    entity: "clinic_closing",
+    entityId: row.id,
+    afterCents: row.doctorShareCents,
+    reason: row.code,
+    actorId: paidBy,
+  });
   return next;
 }
 
@@ -376,10 +455,34 @@ export async function addClosingAdjustment(input: {
     });
     if (error && !isMissing(error)) throw error;
     if (error && isMissing(error)) tableMissing = true;
-    else if (!error) return row;
+    else if (!error) {
+      await logClosingFinanceEvent({
+        clinicId: input.clinicId,
+        kind: "adjustment",
+        entity: "clinic_closing_adjustment",
+        entityId: row.id,
+        afterCents: row.kind === "debit" ? -row.amountCents : row.amountCents,
+        reason: row.reason,
+        actorKind: row.createdByKind,
+        actorId: row.createdById,
+        actorEmail: row.createdByEmail,
+      });
+      return row;
+    }
   }
   const local = await readLocal();
   local.adjustments.unshift(row);
   await writeLocal(local);
+  await logClosingFinanceEvent({
+    clinicId: input.clinicId,
+    kind: "adjustment",
+    entity: "clinic_closing_adjustment",
+    entityId: row.id,
+    afterCents: row.kind === "debit" ? -row.amountCents : row.amountCents,
+    reason: row.reason,
+    actorKind: row.createdByKind,
+    actorId: row.createdById,
+    actorEmail: row.createdByEmail,
+  });
   return row;
 }

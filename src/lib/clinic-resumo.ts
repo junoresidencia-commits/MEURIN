@@ -1,6 +1,6 @@
 import "server-only";
 import { listClosings } from "./clinic-closing-store";
-import { listEncounters, listFeeRules, productionSummary } from "./clinic-finance-store";
+import { financeInconsistencies, listEncounters, listFeeRules, productionSummary } from "./clinic-finance-store";
 import { listMemberships } from "./platform-store";
 
 export type ClinicAlert = {
@@ -11,12 +11,13 @@ export type ClinicAlert = {
 export async function clinicExecutiveResumo(clinicId: string) {
   const today = new Date().toISOString().slice(0, 10);
   const monthFrom = `${today.slice(0, 7)}-01`;
-  const [todayEnc, monthEnc, closings, rules, memberships] = await Promise.all([
+  const [todayEnc, monthEnc, closings, rules, memberships, inconsistencies] = await Promise.all([
     listEncounters(clinicId, `${today}T00:00:00.000Z`, `${today}T23:59:59.999Z`),
     listEncounters(clinicId, `${monthFrom}T00:00:00.000Z`),
     listClosings(clinicId),
     listFeeRules(clinicId),
     listMemberships(clinicId),
+    financeInconsistencies(clinicId),
   ]);
 
   const todaySum = productionSummary(todayEnc);
@@ -45,6 +46,7 @@ export async function clinicExecutiveResumo(clinicId: string) {
       text: `${zeroFee.length + missingFee.length} consulta(s)/médico(s) sem valor configurado`,
     });
   }
+  for (const item of inconsistencies) alerts.push(item);
   if (alerts.length === 0) alerts.push({ tone: "green", text: "Sistema funcionando normalmente." });
 
   return {
@@ -64,5 +66,6 @@ export async function clinicExecutiveResumo(clinicId: string) {
     doctorsToday: todaySum.byDoctor.map((d) => d.doctorId),
     unpaidClosings: unpaidClosings.length,
     alerts,
+    inconsistencies,
   };
 }

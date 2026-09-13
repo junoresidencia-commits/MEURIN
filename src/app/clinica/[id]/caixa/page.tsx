@@ -79,7 +79,11 @@ export default function ClinicaCaixaPage() {
       });
       const data = await res.json();
       if (!res.ok) { setErr(data.error || "Não foi possível registrar o pagamento agora."); return; }
-      setMsg("Check-in registrado. A produção já existia; agora o recebido foi atualizado.");
+      setMsg(
+        data.duplicate
+          ? "Este pagamento já tinha sido registrado (evitou duplicata)."
+          : "Check-in registrado. A produção já existia; agora o recebido foi atualizado."
+      );
       setNote("");
       setEncounterId("");
       load();

@@ -7,6 +7,8 @@ import { listMembershipsForActor } from "./platform-store";
 import type {
   ClinicEncounter,
   ClinicFeeRule,
+  ClinicFinanceEvent,
+  ClinicFinanceEventKind,
   ClinicPayment,
   ClinicPaymentMethod,
   EncounterPaymentStatus,
@@ -25,13 +27,19 @@ function isMissing(error: { code?: string; message?: string } | null): boolean {
   return Boolean(error.message && /relation .* does not exist|could not find the table/i.test(error.message));
 }
 
-type LocalDb = { rules: ClinicFeeRule[]; encounters: ClinicEncounter[]; payments: ClinicPayment[] };
+type LocalDb = { rules: ClinicFeeRule[]; encounters: ClinicEncounter[]; payments: ClinicPayment[]; events: ClinicFinanceEvent[] };
 
 async function readLocal(): Promise<LocalDb> {
   try {
-    return JSON.parse(await fs.readFile(FILE, "utf8")) as LocalDb;
+    const raw = JSON.parse(await fs.readFile(FILE, "utf8")) as Partial<LocalDb>;
+    return {
+      rules: raw.rules || [],
+      encounters: raw.encounters || [],
+      payments: raw.payments || [],
+      events: raw.events || [],
+    };
   } catch {
-    return { rules: [], encounters: [], payments: [] };
+    return { rules: [], encounters: [], payments: [], events: [] };
   }
 }
 async function writeLocal(db: LocalDb) {
@@ -91,11 +99,145 @@ export async function getFeeRule(clinicId: string, doctorId: string): Promise<Cl
   return rules.find((r) => r.doctorId === doctorId) ?? null;
 }
 
+function mapEvent(r: Record<string, unknown>): ClinicFinanceEvent {
+  return {
+    id: String(r.id),
+    clinicId: String(r.clinic_id ?? r.clinicId),
+    kind: String(r.kind) as ClinicFinanceEventKind,
+    entity: String(r.entity),
+    entityId: String(r.entity_id ?? r.entityId),
+    beforeCents: r.before_cents == null && r.beforeCents == null ? null : Number(r.before_cents ?? r.beforeCents),
+    afterCents: r.after_cents == null && r.afterCents == null ? null : Number(r.after_cents ?? r.afterCents),
+    reason: (r.reason as string) ?? null,
+    actorKind: (r.actor_kind as string) ?? (r.actorKind as string) ?? null,
+    actorId: (r.actor_id as string) ?? (r.actorId as string) ?? null,
+    actorEmail: (r.actor_email as string) ?? (r.actorEmail as string) ?? null,
+    createdAt: String(r.created_at ?? r.createdAt),
+  };
+}
+
+export async function writeFinanceEvent(input: Omit<ClinicFinanceEvent, "id" | "createdAt">): Promise<ClinicFinanceEvent> {
+  const row: ClinicFinanceEvent = {
+    id: uuid(),
+    createdAt: new Date().toISOString(),
+    ...input,
+  };
+  if (active()) {
+    const sb = getSupabaseAdmin()!;
+    const { error } = await sb.from("clinic_finance_events").insert({
+      id: row.id,
+      clinic_id: row.clinicId,
+      kind: row.kind,
+      entity: row.entity,
+      entity_id: row.entityId,
+      before_cents: row.beforeCents,
+      after_cents: row.afterCents,
+      reason: row.reason,
+      actor_kind: row.actorKind,
+      actor_id: row.actorId,
+      actor_email: row.actorEmail,
+      created_at: row.createdAt,
+    });
+    if (error && !isMissing(error)) throw error;
+    if (error && isMissing(error)) tableMissing = true;
+    else if (!error) return row;
+  }
+  const local = await readLocal();
+  local.events.unshift(row);
+  local.events = local.events.slice(0, 500);
+  await writeLocal(local);
+  return row;
+}
+
+export async function listFinanceEvents(clinicId: string, limit = 40): Promise<ClinicFinanceEvent[]> {
+  if (active()) {
+    const sb = getSupabaseAdmin()!;
+    const { data, error } = await sb
+      .from("clinic_finance_events")
+      .select("*")
+      .eq("clinic_id", clinicId)
+      .order("created_at", { ascending: false })
+      .limit(limit);
+    if (error) {
+      if (isMissing(error)) tableMissing = true;
+      else return [];
+    } else {
+      return (data || []).map((r) => mapEvent(r as Record<string, unknown>));
+    }
+  }
+  return (await readLocal()).events.filter((e) => e.clinicId === clinicId).slice(0, limit);
+}
+
+export async function listPayments(clinicId: string, encounterId?: string): Promise<ClinicPayment[]> {
+  if (active()) {
+    const sb = getSupabaseAdmin()!;
+    let q = sb.from("clinic_payments").select("*").eq("clinic_id", clinicId).order("created_at", { ascending: false });
+    if (encounterId) q = q.eq("encounter_id", encounterId);
+    const { data, error } = await q;
+    if (error) {
+      if (isMissing(error)) tableMissing = true;
+      else return [];
+    } else {
+      return (data || []).map((r) => ({
+        id: String((r as { id: string }).id),
+        clinicId: String((r as { clinic_id: string }).clinic_id),
+        encounterId: String((r as { encounter_id: string }).encounter_id),
+        method: String((r as { method: string }).method) as ClinicPaymentMethod,
+        amountCents: Number((r as { amount_cents: number }).amount_cents),
+        discountCents: Number((r as { discount_cents?: number }).discount_cents || 0),
+        status: String((r as { status: string }).status) as EncounterPaymentStatus,
+        note: (r as { note?: string | null }).note ?? null,
+        recordedByKind: (r as { recorded_by_kind?: string | null }).recorded_by_kind ?? null,
+        recordedById: (r as { recorded_by_id?: string | null }).recorded_by_id ?? null,
+        createdAt: String((r as { created_at: string }).created_at),
+      }));
+    }
+  }
+  return (await readLocal()).payments.filter((p) => p.clinicId === clinicId && (!encounterId || p.encounterId === encounterId));
+}
+
+export async function financeInconsistencies(clinicId: string) {
+  const [encounters, payments] = await Promise.all([listEncounters(clinicId), listPayments(clinicId)]);
+  const items: { tone: "red" | "yellow"; text: string }[] = [];
+  const encIds = new Set(encounters.map((e) => e.id));
+  for (const e of encounters) {
+    const related = payments.filter((p) => p.encounterId === e.id);
+    const sum = related.reduce((s, p) => s + p.amountCents, 0);
+    if (sum !== e.receivedCents) {
+      items.push({ tone: "red", text: `Recebido do atendimento ${e.patientName || e.id.slice(0, 8)} não bate com os check-ins.` });
+    }
+    if (e.clinicId !== clinicId) {
+      items.push({ tone: "red", text: `Atendimento ${e.id.slice(0, 8)} está em outra clínica.` });
+    }
+    if (e.paymentStatus === "paid" && e.receivedCents === 0 && related.every((p) => p.method !== "courtesy")) {
+      items.push({ tone: "yellow", text: `Atendimento ${e.patientName || e.id.slice(0, 8)} marcado pago sem valor recebido.` });
+    }
+  }
+  for (const p of payments) {
+    if (!encIds.has(p.encounterId)) {
+      items.push({ tone: "red", text: `Check-in ${p.id.slice(0, 8)} sem atendimento correspondente.` });
+    }
+  }
+  return items;
+}
+
+async function logFinanceEvent(input: Omit<ClinicFinanceEvent, "id" | "createdAt">) {
+  try {
+    await writeFinanceEvent(input);
+  } catch (err) {
+    console.error("[clinic-finance] histórico indisponível", err);
+  }
+}
+
 export async function upsertFeeRule(input: {
   clinicId: string;
   doctorId: string;
   feeCents: number;
   clinicSharePercent: number;
+  reason?: string;
+  actorKind?: string;
+  actorId?: string;
+  actorEmail?: string;
 }): Promise<ClinicFeeRule> {
   const now = new Date().toISOString();
   const existing = await getFeeRule(input.clinicId, input.doctorId);
@@ -128,13 +270,39 @@ export async function upsertFeeRule(input: {
       : await sb.from("clinic_fee_rules").insert(payload);
     if (error && !isMissing(error)) throw error;
     if (error && isMissing(error)) tableMissing = true;
-    else if (!error) return row;
+    else if (!error) {
+      await logFinanceEvent({
+        clinicId: input.clinicId,
+        kind: "fee_rule",
+        entity: "clinic_fee_rule",
+        entityId: row.id,
+        beforeCents: existing?.feeCents ?? null,
+        afterCents: row.feeCents,
+        reason: input.reason?.trim() || null,
+        actorKind: input.actorKind ?? null,
+        actorId: input.actorId ?? null,
+        actorEmail: input.actorEmail ?? null,
+      });
+      return row;
+    }
   }
   const local = await readLocal();
   const idx = local.rules.findIndex((r) => r.id === row.id);
   if (idx >= 0) local.rules[idx] = row;
   else local.rules.push(row);
   await writeLocal(local);
+  await logFinanceEvent({
+    clinicId: input.clinicId,
+    kind: "fee_rule",
+    entity: "clinic_fee_rule",
+    entityId: row.id,
+    beforeCents: existing?.feeCents ?? null,
+    afterCents: row.feeCents,
+    reason: input.reason?.trim() || null,
+    actorKind: input.actorKind ?? null,
+    actorId: input.actorId ?? null,
+    actorEmail: input.actorEmail ?? null,
+  });
   return row;
 }
 
@@ -286,12 +454,25 @@ export async function recordCheckIn(input: {
   note?: string;
   recordedByKind?: string;
   recordedById?: string;
-}): Promise<{ encounter: ClinicEncounter; payment: ClinicPayment }> {
+}): Promise<{ encounter: ClinicEncounter; payment: ClinicPayment; duplicate?: boolean }> {
   const encounter = await getEncounter(input.encounterId);
   if (!encounter || encounter.clinicId !== input.clinicId) throw new Error("Atendimento não encontrado nesta clínica.");
   const courtesy = input.method === "courtesy";
   const amount = courtesy ? 0 : Math.max(0, Math.round(input.amountCents));
   const discount = Math.max(0, Math.round(input.discountCents || 0));
+  const recent = (await listPayments(input.clinicId, encounter.id)).find(
+    (p) =>
+      p.method === input.method &&
+      p.amountCents === amount &&
+      Date.parse(p.createdAt) >= Date.now() - 15_000
+  );
+  if (recent) {
+    return {
+      encounter: { ...encounter, paymentStatus: encounter.paymentStatus, receivedCents: encounter.receivedCents },
+      payment: recent,
+      duplicate: true,
+    };
+  }
   const received = encounter.receivedCents + amount;
   let paymentStatus: EncounterPaymentStatus = encounter.paymentStatus;
   if (courtesy && received === 0) paymentStatus = "courtesy";
@@ -332,7 +513,24 @@ export async function recordCheckIn(input: {
     if (error && !isMissing(error)) throw error;
     if (error && isMissing(error)) tableMissing = true;
     else if (!error) {
-      await saveEncounter(next);
+      try {
+        await saveEncounter(next);
+      } catch (err) {
+        await sb.from("clinic_payments").delete().eq("id", payment.id);
+        throw err;
+      }
+      await logFinanceEvent({
+        clinicId: input.clinicId,
+        kind: "checkin",
+        entity: "clinic_payment",
+        entityId: payment.id,
+        beforeCents: encounter.receivedCents,
+        afterCents: next.receivedCents,
+        reason: payment.note,
+        actorKind: input.recordedByKind ?? null,
+        actorId: input.recordedById ?? null,
+        actorEmail: null,
+      });
       return { encounter: next, payment };
     }
   }
@@ -341,6 +539,18 @@ export async function recordCheckIn(input: {
   const idx = local.encounters.findIndex((e) => e.id === next.id);
   if (idx >= 0) local.encounters[idx] = next;
   await writeLocal(local);
+  await logFinanceEvent({
+    clinicId: input.clinicId,
+    kind: "checkin",
+    entity: "clinic_payment",
+    entityId: payment.id,
+    beforeCents: encounter.receivedCents,
+    afterCents: next.receivedCents,
+    reason: payment.note,
+    actorKind: input.recordedByKind ?? null,
+    actorId: input.recordedById ?? null,
+    actorEmail: null,
+  });
   return { encounter: next, payment };
 }
 

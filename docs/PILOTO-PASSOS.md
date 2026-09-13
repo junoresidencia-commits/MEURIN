@@ -46,6 +46,7 @@ No SQL Editor do **meurim-staging**, nesta ordem, os arquivos da pasta `supabase
 - `20260913080000_saas_plans_licenses.sql`
 - `20260913090000_pilot_readiness.sql`
 - `20260913091000_search_agenda_indexes.sql`
+- `20260913092000_clinic_finance_events.sql`
 
 Não rode isso em produção até o passo 4 ter batido.
 

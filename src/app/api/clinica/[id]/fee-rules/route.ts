@@ -33,7 +33,16 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
   ) {
     return NextResponse.json({ error: "Informe o motivo da alteração do valor." }, { status: 400 });
   }
-  const rule = await upsertFeeRule({ clinicId: id, doctorId, feeCents, clinicSharePercent });
+  const rule = await upsertFeeRule({
+    clinicId: id,
+    doctorId,
+    feeCents,
+    clinicSharePercent,
+    reason,
+    actorKind: staff.kind,
+    actorId: staff.actorId,
+    actorEmail: staff.email ?? undefined,
+  });
   const before = previous ? `R$ ${(previous.feeCents / 100).toFixed(2)} (${previous.clinicSharePercent}%)` : "nova";
   const after = `R$ ${(feeCents / 100).toFixed(2)} (${clinicSharePercent}%)`;
   await writeAudit({

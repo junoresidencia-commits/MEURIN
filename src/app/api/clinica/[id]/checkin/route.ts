@@ -34,16 +34,18 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
       recordedByKind: staff.kind,
       recordedById: staff.actorId,
     });
-    await writeAudit({
-      actorKind: staff.kind,
-      actorId: staff.actorId,
-      actorEmail: staff.email,
-      action: "clinic_checkin",
-      entity: "clinic_payment",
-      entityId: result.payment.id,
-      detail: `${method} · ${(result.payment.amountCents / 100).toFixed(2)}`,
-    });
-    return NextResponse.json(result, { status: 201 });
+    if (!result.duplicate) {
+      await writeAudit({
+        actorKind: staff.kind,
+        actorId: staff.actorId,
+        actorEmail: staff.email,
+        action: "clinic_checkin",
+        entity: "clinic_payment",
+        entityId: result.payment.id,
+        detail: `${method} · ${(result.payment.amountCents / 100).toFixed(2)}`,
+      });
+    }
+    return NextResponse.json(result, { status: result.duplicate ? 200 : 201 });
   } catch (e) {
     return NextResponse.json({ error: e instanceof Error ? e.message : "Check-in não registrado." }, { status: 400 });
   }
