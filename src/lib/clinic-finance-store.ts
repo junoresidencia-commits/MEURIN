@@ -68,22 +68,6 @@ function mapEncounter(r: Record<string, unknown>): ClinicEncounter {
     createdAt: String(r.created_at ?? r.createdAt),
   };
 }
-function mapPayment(r: Record<string, unknown>): ClinicPayment {
-  return {
-    id: String(r.id),
-    clinicId: String(r.clinic_id ?? r.clinicId),
-    encounterId: String(r.encounter_id ?? r.encounterId),
-    method: String(r.method) as ClinicPaymentMethod,
-    amountCents: Number(r.amount_cents ?? r.amountCents ?? 0),
-    discountCents: Number(r.discount_cents ?? r.discountCents ?? 0),
-    status: String(r.status ?? "paid") as EncounterPaymentStatus,
-    note: (r.note as string) ?? null,
-    recordedByKind: (r.recorded_by_kind as string) ?? (r.recordedByKind as string) ?? null,
-    recordedById: (r.recorded_by_id as string) ?? (r.recordedById as string) ?? null,
-    createdAt: String(r.created_at ?? r.createdAt),
-  };
-}
-
 export async function listFeeRules(clinicId: string): Promise<ClinicFeeRule[]> {
   if (active()) {
     const sb = getSupabaseAdmin()!;
