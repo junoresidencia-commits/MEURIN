@@ -1,7 +1,8 @@
 import { createHmac, timingSafeEqual } from "crypto";
 import { cookies } from "next/headers";
+import { sessionSecret } from "./session-secret";
 
-const SECRET = process.env.SESSION_SECRET || "meu-rim-dev-secret-change-me";
+const SECRET = sessionSecret();
 const COOKIE = "meurim_allied_session";
 const MAX_AGE = 60 * 60 * 24 * 365;
 

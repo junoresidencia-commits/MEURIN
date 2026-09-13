@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import { formatSlotLabel } from "@/lib/scheduling-client";
@@ -25,6 +25,7 @@ import { EncaminharHeaderButton } from "@/components/EncaminharHeaderButton";
 import { ClinicalSummaryBar } from "@/components/ClinicalSummaryBar";
 import { PdModule } from "@/components/PdModule";
 import { encodePatientParam, postJson, toFriendlyMessage } from "@/lib/user-errors";
+import { clearEvolutionDraft, loadEvolutionDraft, saveEvolutionDraft } from "@/lib/evolution-draft";
 import { ageFromBirthdate } from "@/lib/egfr";
 
 type Lab = { id: string; testKey: string; value: number; unit?: string | null; measuredAt: string };
@@ -198,6 +199,8 @@ export default function ProntuarioPage() {
   const [saving, setSaving] = useState(false);
   const [saveMsg, setSaveMsg] = useState("");
   const [saveErr, setSaveErr] = useState("");
+  const [draftAt, setDraftAt] = useState("");
+  const draftTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Formulário de documento (receita / exame / relatório)
   // Documentos usam o papel timbrado salvo (compositor). hasLetterhead controla a orientação.
@@ -226,6 +229,24 @@ export default function ProntuarioPage() {
     setLmeList(data.lme || []);
     setLoading(false);
   }, [emailParam, router]);
+
+  useEffect(() => {
+    const draft = loadEvolutionDraft(emailParam);
+    if (draft?.history) {
+      setForm((f) => (f.history.trim() ? f : { ...f, history: draft.history }));
+      setDraftAt(draft.savedAt);
+    }
+  }, [emailParam]);
+
+  useEffect(() => {
+    if (draftTimer.current) clearTimeout(draftTimer.current);
+    draftTimer.current = setTimeout(() => {
+      saveEvolutionDraft(emailParam, form.history);
+      if (form.history.trim()) setDraftAt(new Date().toISOString());
+      else setDraftAt("");
+    }, 1500);
+    return () => { if (draftTimer.current) clearTimeout(draftTimer.current); };
+  }, [emailParam, form.history]);
 
   useEffect(() => {
     fetch("/api/doctor/intelligence/prefs")
@@ -357,6 +378,8 @@ export default function ProntuarioPage() {
       );
       const suggest = suggestForReview(detectedClinical, intelPrefs);
       setForm({ chiefComplaint: "", history: "", assessment: "", plan: "" });
+      clearEvolutionDraft(emailParam);
+      setDraftAt("");
       let examNote = "";
       if (groups.length > 0) {
         const autoLabs = await tryAutoSaveLabs(groups, "evolução");
@@ -659,6 +682,11 @@ export default function ProntuarioPage() {
               {saveErr && <p className="rounded-xl border border-[var(--danger)]/30 bg-[var(--danger)]/10 px-3 py-2 text-sm text-[var(--danger)]">{saveErr}</p>}
               {saveMsg && <p className="rounded-xl border border-[var(--green)]/30 bg-[var(--green)]/10 px-3 py-2 text-sm text-[var(--green)]">{saveMsg}</p>}
 
+              {draftAt && (
+                <p className="text-xs text-[var(--text-muted)]">
+                  Rascunho salvo às {new Date(draftAt).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}. A versão final só entra ao clicar em Salvar.
+                </p>
+              )}
               <button type="button" className="btn-gold w-full" onClick={saveNote} disabled={saving}>
                 {saving ? "Salvando…" : "Salvar evolução"}
               </button>

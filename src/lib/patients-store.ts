@@ -225,6 +225,54 @@ export async function createPatient(input: NewPatient): Promise<Patient> {
   return p;
 }
 
+function sanitizeFilter(q: string) {
+  return q.replace(/[%(),."']/g, "").trim().slice(0, 80);
+}
+
+/** Busca limitada. Não carrega o cadastro inteiro no browser. */
+export async function searchPatientsForDoctor(doctorId: string, q: string, limit = 20): Promise<Patient[]> {
+  const cap = Math.min(Math.max(limit, 1), 40);
+  const raw = q.trim();
+  if (active()) {
+    const supabase = getSupabaseAdmin()!;
+    let query = supabase.from("patients").select("*").eq("doctor_id", doctorId).neq("status", "archived");
+    if (raw) {
+      const safe = sanitizeFilter(raw);
+      const d = raw.replace(/\D/g, "");
+      const parts = [`name.ilike.%${safe}%`];
+      if (d.length >= 3) {
+        parts.push(`cpf_normalized.ilike.%${d}%`);
+        parts.push(`phone.ilike.%${d}%`);
+      }
+      const iso = raw.match(/^(\d{2})\/(\d{2})\/(\d{4})$/);
+      if (iso) parts.push(`birthdate.eq.${iso[3]}-${iso[2]}-${iso[1]}`);
+      else if (/^\d{4}-\d{2}-\d{2}$/.test(raw)) parts.push(`birthdate.eq.${raw}`);
+      query = query.or(parts.join(","));
+    }
+    const { data, error } = await query.order("created_at", { ascending: false }).limit(cap);
+    if (error) {
+      if (isMissingTableError(error)) tableMissing = true;
+      else throw error;
+    } else {
+      return (data ?? []).map((r) => mapRow(r as Record<string, unknown>));
+    }
+  }
+  const list = (await readFile()).filter((p) => p.doctorId === doctorId && p.status !== "archived");
+  const n = raw.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+  const d = raw.replace(/\D/g, "");
+  const filtered = raw
+    ? list.filter((p) => {
+        const name = (p.name || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+        if (name.includes(n)) return true;
+        if (d.length >= 3 && p.cpf && p.cpf.replace(/\D/g, "").includes(d)) return true;
+        if (d.length >= 3 && p.phone && p.phone.replace(/\D/g, "").includes(d)) return true;
+        if (p.birthdate && (p.birthdate === raw || p.birthdate.split("-").reverse().join("/") === raw)) return true;
+        return false;
+      })
+    : list;
+  return filtered.sort((a, b) => b.createdAt.localeCompare(a.createdAt)).slice(0, cap);
+}
+
 export async function listPatientsByDoctor(doctorId: string): Promise<Patient[]> {
   if (active()) {
     const supabase = getSupabaseAdmin()!;

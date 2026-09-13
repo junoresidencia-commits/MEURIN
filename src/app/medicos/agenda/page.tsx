@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { addDays, addWeeks, format, getDay, isSameDay, startOfWeek } from "date-fns";
+import { addDays, addMonths, addWeeks, endOfDay, endOfMonth, format, getDay, isSameDay, startOfDay, startOfMonth, startOfWeek } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { DoctorSidebar } from "@/components/DoctorSidebar";
 import { DoctorMobileNav } from "@/components/DoctorMobileNav";
@@ -55,16 +55,29 @@ export default function AgendaCalendarioPage() {
   const [periods, setPeriods] = useState<AvailabilityPeriod[]>([]);
   const [locations, setLocations] = useState<DoctorLoc[]>([]);
   const [blocked, setBlocked] = useState<string[]>([]);
-  const [view, setView] = useState<View>("semana");
+  const [view, setView] = useState<View>("dia");
   const [weekOffset, setWeekOffset] = useState(0);
   const [dayCursor, setDayCursor] = useState<Date>(new Date());
   const [modalityFilter, setModalityFilter] = useState<"" | Modality>("");
   const [prefill, setPrefill] = useState<Prefill>(null);
 
+  function rangeForView(): { from: string; to: string } {
+    if (view === "dia") {
+      return { from: startOfDay(dayCursor).toISOString(), to: endOfDay(dayCursor).toISOString() };
+    }
+    if (view === "mes") {
+      const cursor = addMonths(dayCursor, 0);
+      return { from: startOfMonth(cursor).toISOString(), to: endOfMonth(cursor).toISOString() };
+    }
+    const start = addWeeks(startOfWeek(new Date(), { weekStartsOn: 0 }), weekOffset);
+    return { from: start.toISOString(), to: addDays(start, 7).toISOString() };
+  }
+
   async function loadAll() {
+    const { from, to } = rangeForView();
     const [auth, books] = await Promise.all([
       fetch("/api/auth").then((r) => r.json()),
-      fetch("/api/bookings").then((r) => r.json()),
+      fetch(`/api/bookings?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}`).then((r) => r.json()),
     ]);
     if (!auth.doctor) { router.replace("/medicos/login"); return; }
     setPeriods(auth.doctor.availabilityPeriods || []);
@@ -75,8 +88,9 @@ export default function AgendaCalendarioPage() {
   }
   useEffect(() => {
     loadAll();
+    // Recarrega só o intervalo visível (hoje / semana / mês).
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [view, dayCursor, weekOffset]);
 
   const weekStart = useMemo(() => addWeeks(startOfWeek(new Date(), { weekStartsOn: 0 }), weekOffset), [weekOffset]);
   const weekDays = useMemo(() => Array.from({ length: 7 }, (_, i) => addDays(weekStart, i)), [weekStart]);
@@ -230,6 +244,17 @@ export default function AgendaCalendarioPage() {
                     {view === "dia" ? format(dayCursor, "EEEE, d 'de' MMMM 'de' yyyy", { locale: ptBR }) : `${format(weekDays[0], "d")} a ${format(weekDays[6], "d 'de' MMMM 'de' yyyy", { locale: ptBR })}`}
                   </p>
                   <button type="button" className="btn-ghost !px-3" onClick={() => view === "dia" ? setDayCursor(addDays(dayCursor, 1)) : setWeekOffset((w) => w + 1)}>›</button>
+                  <button
+                    type="button"
+                    className="btn-gold !px-4"
+                    onClick={() => {
+                      setDayCursor(new Date());
+                      setWeekOffset(0);
+                      setView("dia");
+                    }}
+                  >
+                    Hoje
+                  </button>
                 </div>
               )}
 

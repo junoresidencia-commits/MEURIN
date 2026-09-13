@@ -584,6 +584,26 @@ function mapBookingRow(row: Record<string, unknown>) {
   };
 }
 
+export async function listBookingsForDoctor(doctorId: string, from?: string, to?: string): Promise<Booking[]> {
+  const sb = getSupabaseAdmin();
+  if (sb) {
+    let q = sb.from("bookings").select("*").eq("doctor_id", doctorId).order("slot_start", { ascending: true });
+    if (from) q = q.gte("slot_start", from);
+    if (to) q = q.lte("slot_start", to);
+    const { data, error } = await q;
+    if (!error) return (data || []).map((r) => mapBookingRow(r as Record<string, unknown>));
+  }
+  const db = await readDb();
+  return db.bookings
+    .filter((b) => {
+      if (b.doctorId !== doctorId) return false;
+      if (from && b.slotStart < from) return false;
+      if (to && b.slotStart > to) return false;
+      return true;
+    })
+    .sort((a, b) => a.slotStart.localeCompare(b.slotStart));
+}
+
 function mapPaymentRow(row: Record<string, unknown>): PaymentRecord {
   return {
     id: String(row.id),
