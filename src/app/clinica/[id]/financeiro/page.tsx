@@ -85,6 +85,14 @@ export default function ClinicaFinanceiroPage() {
   }
   useEffect(() => { loadTeam(); }, [params.id]);
   useEffect(() => { loadProd(); }, [params.id, from, to, filterDoctor]);
+  useEffect(() => {
+    function refresh() {
+      loadTeam();
+      loadProd();
+    }
+    window.addEventListener("focus", refresh);
+    return () => window.removeEventListener("focus", refresh);
+  }, [params.id, from, to, filterDoctor]);
 
   async function saveRule(e: React.FormEvent) {
     e.preventDefault();

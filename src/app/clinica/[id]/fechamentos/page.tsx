@@ -35,8 +35,11 @@ export default function FechamentosPage() {
   const [doctors, setDoctors] = useState<Member[]>([]);
   const [rows, setRows] = useState<Closing[]>([]);
   const [doctorId, setDoctorId] = useState("");
-  const [from, setFrom] = useState("");
-  const [to, setTo] = useState("");
+  const [from, setFrom] = useState(() => {
+    const d = new Date();
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-01`;
+  });
+  const [to, setTo] = useState(() => new Date().toISOString().slice(0, 10));
   const [preview, setPreview] = useState<Preview | null>(null);
   const [msg, setMsg] = useState("");
   const [err, setErr] = useState("");
