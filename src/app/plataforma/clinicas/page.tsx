@@ -11,6 +11,7 @@ export default function ClinicasPage() {
   const [city, setCity] = useState("");
   const [err, setErr] = useState("");
   const [saving, setSaving] = useState(false);
+  const [asPilot, setAsPilot] = useState(false);
   const [gestoraEmail, setGestoraEmail] = useState<Record<string, string>>({});
   const [gestoraMsg, setGestoraMsg] = useState<Record<string, string>>({});
 
@@ -30,7 +31,7 @@ export default function ClinicasPage() {
       const res = await fetch("/api/plataforma/clinics", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name, city }),
+        body: JSON.stringify({ name, city, status: asPilot ? "pilot" : "active" }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Não foi possível criar.");
@@ -42,6 +43,15 @@ export default function ClinicasPage() {
     } finally {
       setSaving(false);
     }
+  }
+
+  async function setStatus(clinicId: string, status: string) {
+    const res = await fetch("/api/plataforma/clinics", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ id: clinicId, status }),
+    });
+    if (res.ok) load();
   }
 
   async function assignGestora(clinicId: string) {
@@ -70,6 +80,10 @@ export default function ClinicasPage() {
         <input className="input-field" placeholder="Nome (ex.: Medclin)" value={name} onChange={(e) => setName(e.target.value)} required />
         <input className="input-field" placeholder="Cidade" value={city} onChange={(e) => setCity(e.target.value)} />
         <button type="submit" className="btn-gold" disabled={saving}>{saving ? "Salvando…" : "Criar clínica"}</button>
+        <label className="sm:col-span-3 flex items-center gap-2 text-sm text-[var(--text-soft)]">
+          <input type="checkbox" checked={asPilot} onChange={(e) => setAsPilot(e.target.checked)} />
+          Criar como piloto (CLINIC_STATUS = PILOT)
+        </label>
         {err && <p className="sm:col-span-3 text-sm text-[var(--danger)]">{err}</p>}
       </form>
       <div className="mt-4 space-y-2">
@@ -81,7 +95,14 @@ export default function ClinicasPage() {
                 <p className="font-bold">{c.name}</p>
                 <p className="text-xs text-[var(--text-muted)]">{[c.city, c.status].filter(Boolean).join(" · ")}</p>
               </div>
-              <Link href={`/clinica/${c.id}`} className="btn-gold text-sm">Abrir gestão</Link>
+              <div className="flex flex-wrap gap-2">
+                {c.status !== "pilot" ? (
+                  <button type="button" className="btn-ghost text-sm" onClick={() => setStatus(c.id, "pilot")}>Marcar piloto</button>
+                ) : (
+                  <button type="button" className="btn-ghost text-sm" onClick={() => setStatus(c.id, "active")}>Passar a ativa</button>
+                )}
+                <Link href={`/clinica/${c.id}`} className="btn-gold text-sm">Abrir gestão</Link>
+              </div>
             </div>
             <div className="grid gap-2 sm:grid-cols-[1fr_auto]">
               <input

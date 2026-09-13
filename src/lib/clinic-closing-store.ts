@@ -154,6 +154,93 @@ export function netDoctorPayout(closing: ClinicClosing, adjustments: ClinicClosi
   return closing.doctorShareCents + extra;
 }
 
+function periodsOverlap(aFrom: string, aTo: string, bFrom: string, bTo: string): boolean {
+  return aFrom <= bTo && bFrom <= aTo;
+}
+
+export function findOverlappingClosing(
+  closings: ClinicClosing[],
+  doctorId: string,
+  periodFrom: string,
+  periodTo: string
+): ClinicClosing | null {
+  return (
+    closings.find(
+      (c) => c.doctorId === doctorId && periodsOverlap(c.periodFrom, c.periodTo, periodFrom, periodTo)
+    ) ?? null
+  );
+}
+
+export type ClosingPreview = {
+  doctorId: string;
+  periodFrom: string;
+  periodTo: string;
+  encounterCount: number;
+  producedCents: number;
+  receivedCents: number;
+  pendingCents: number;
+  clinicShareCents: number;
+  doctorShareCents: number;
+  existing: ClinicClosing | null;
+  warnings: string[];
+  encounters: {
+    id: string;
+    patientName: string | null;
+    feeCents: number;
+    receivedCents: number;
+    paymentStatus: string;
+    attendedAt: string;
+  }[];
+};
+
+export async function previewClosing(input: {
+  clinicId: string;
+  doctorId: string;
+  periodFrom: string;
+  periodTo: string;
+}): Promise<ClosingPreview> {
+  const from = input.periodFrom.slice(0, 10);
+  const to = input.periodTo.slice(0, 10);
+  if (!from || !to || from > to) throw new Error("Informe o período (de / até).");
+  if (!input.doctorId) throw new Error("Informe o médico.");
+  const encounters = (await listEncounters(input.clinicId, from, `${to}T23:59:59.999Z`)).filter((e) => e.doctorId === input.doctorId);
+  const existingList = await listClosings(input.clinicId);
+  const existing = findOverlappingClosing(existingList, input.doctorId, from, to);
+  const taken = new Set(existingList.flatMap((c) => c.encounterIds));
+  const fresh = existing ? [] : encounters.filter((e) => !taken.has(e.id));
+  const warnings: string[] = [];
+  if (existing) warnings.push(`Já existe um fechamento para este médico e período (${existing.code}).`);
+  if (!existing && encounters.length === 0) warnings.push("Não há produção neste período para este médico.");
+  if (!existing && encounters.length > 0 && fresh.length === 0) {
+    warnings.push("Essa produção já está em outro fechamento.");
+  }
+  const unpaid = fresh.filter((e) => e.paymentStatus === "pending" || e.paymentStatus === "partial");
+  if (unpaid.length) warnings.push(`${unpaid.length} atendimento(s) com pagamento pendente ou parcial.`);
+  const zeroFee = fresh.filter((e) => e.feeCents <= 0);
+  if (zeroFee.length) warnings.push(`${zeroFee.length} atendimento(s) sem valor configurado.`);
+  return {
+    doctorId: input.doctorId,
+    periodFrom: from,
+    periodTo: to,
+    encounterCount: fresh.length,
+    producedCents: fresh.reduce((s, e) => s + e.feeCents, 0),
+    receivedCents: fresh.reduce((s, e) => s + e.receivedCents, 0),
+    pendingCents: fresh.reduce((s, e) => s + Math.max(0, e.feeCents - e.receivedCents), 0),
+    clinicShareCents: fresh.reduce((s, e) => s + e.clinicShareCents, 0),
+    doctorShareCents: fresh.reduce((s, e) => s + e.doctorShareCents, 0),
+    existing,
+    warnings,
+    encounters: fresh.map((e) => ({
+      id: e.id,
+      patientName: e.patientName,
+      feeCents: e.feeCents,
+      receivedCents: e.receivedCents,
+      paymentStatus: e.paymentStatus,
+      attendedAt: e.attendedAt,
+    })),
+  };
+}
+
 export async function createClosing(input: {
   clinicId: string;
   doctorId: string;
@@ -164,10 +251,14 @@ export async function createClosing(input: {
   const from = input.periodFrom.slice(0, 10);
   const to = input.periodTo.slice(0, 10);
   if (!from || !to || from > to) throw new Error("Informe o período (de / até).");
+  const existingList = await listClosings(input.clinicId);
+  const overlap = findOverlappingClosing(existingList, input.doctorId, from, to);
+  if (overlap) {
+    throw new Error(`Já existe um fechamento para este médico e período (${overlap.code}).`);
+  }
   const encounters = (await listEncounters(input.clinicId, from, `${to}T23:59:59.999Z`)).filter((e) => e.doctorId === input.doctorId);
   if (encounters.length === 0) throw new Error("Não há produção neste período para este médico.");
-  const existing = await listClosings(input.clinicId);
-  const taken = new Set(existing.flatMap((c) => c.encounterIds));
+  const taken = new Set(existingList.flatMap((c) => c.encounterIds));
   const fresh = encounters.filter((e) => !taken.has(e.id));
   if (fresh.length === 0) throw new Error("Essa produção já está em outro fechamento.");
   const year = Number(to.slice(0, 4)) || new Date().getFullYear();
@@ -220,9 +311,9 @@ export async function createClosing(input: {
   return row;
 }
 
-export async function markClosingPaid(closingId: string, paidBy: string): Promise<ClinicClosing> {
+export async function markClosingPaid(closingId: string, paidBy: string, clinicId?: string): Promise<ClinicClosing> {
   const row = await getClosing(closingId);
-  if (!row) throw new Error("Fechamento não encontrado.");
+  if (!row || (clinicId && row.clinicId !== clinicId)) throw new Error("Fechamento não encontrado.");
   if (row.status === "paid") return row;
   const now = new Date().toISOString();
   const next: ClinicClosing = { ...row, status: "paid", paidAt: now, paidBy, updatedAt: now };

@@ -6,10 +6,13 @@ import { useEffect, useState } from "react";
 
 const NAV = [
   { href: "/plataforma", label: "Visão geral" },
+  { href: "/plataforma/saude", label: "Saúde" },
+  { href: "/plataforma/prontidao", label: "Prontidão" },
   { href: "/plataforma/clinicas", label: "Clínicas" },
   { href: "/plataforma/usuarios", label: "Usuários" },
   { href: "/plataforma/integridade", label: "Integridade" },
   { href: "/plataforma/auditoria", label: "Auditoria" },
+  { href: "/plataforma/metricas", label: "Métricas" },
   { href: "/plataforma/pesquisa", label: "Pesquisa" },
   { href: "/plataforma/planos", label: "Planos SaaS" },
 ];

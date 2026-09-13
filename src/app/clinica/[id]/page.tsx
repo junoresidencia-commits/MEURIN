@@ -4,17 +4,39 @@ import Link from "next/link";
 import { useParams } from "next/navigation";
 import { useEffect, useState } from "react";
 
+function brl(cents: number) {
+  return (cents / 100).toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
+}
+
+type Alert = { tone: "red" | "yellow" | "green"; text: string };
+type Resumo = {
+  today: { encounters: number; receivedCents: number; pendingCents: number };
+  month: { producedCents: number; toPayoutCents: number };
+  unpaidClosings: number;
+  alerts: Alert[];
+};
+
+const TONE = {
+  red: "border-red-200 bg-red-50 text-red-800",
+  yellow: "border-amber-200 bg-amber-50 text-amber-900",
+  green: "border-emerald-200 bg-emerald-50 text-emerald-800",
+};
+
 export default function ClinicaHomePage() {
   const params = useParams<{ id: string }>();
   const [clinic, setClinic] = useState("");
+  const [status, setStatus] = useState("");
   const [canAdmin, setCanAdmin] = useState(false);
   const [planName, setPlanName] = useState<string | null>(null);
+  const [resumo, setResumo] = useState<Resumo | null>(null);
+  const [finErr, setFinErr] = useState("");
 
   useEffect(() => {
     fetch(`/api/clinica/${params.id}/me`)
       .then((r) => r.json())
       .then((d) => {
         setClinic(d.clinic?.name || "");
+        setStatus(d.clinic?.status || "");
         setCanAdmin(Boolean(d.staff?.canAdmin));
       })
       .catch(() => {});
@@ -24,10 +46,25 @@ export default function ClinicaHomePage() {
       .catch(() => setPlanName(null));
   }, [params.id]);
 
+  useEffect(() => {
+    if (!canAdmin) return;
+    fetch(`/api/clinica/${params.id}/resumo`)
+      .then(async (r) => {
+        const d = await r.json();
+        if (!r.ok) throw new Error(d.error || "Não foi possível carregar o financeiro agora.");
+        setResumo(d.resumo);
+        setFinErr("");
+      })
+      .catch((e) => setFinErr(e instanceof Error ? e.message : "Não foi possível carregar o financeiro agora."));
+  }, [params.id, canAdmin]);
+
   return (
     <div>
       <p className="text-sm font-semibold text-[var(--gold)]">Gestão da clínica</p>
       <h1 className="font-display mt-1 text-3xl font-extrabold text-[var(--text)]">{clinic || "Clínica"}</h1>
+      {status === "pilot" && (
+        <p className="mt-2 inline-block rounded-full bg-[var(--gold-soft)] px-3 py-1 text-xs font-bold uppercase text-[var(--gold)]">Piloto</p>
+      )}
       <p className="mt-2 max-w-2xl text-sm text-[var(--text-soft)]">
         Esta área não substitui o prontuário nem o painel médico. Pacientes atuais continuam no médico;
         nada aqui move cadastro antigo.
@@ -37,6 +74,29 @@ export default function ClinicaHomePage() {
           ? `Plano Meu Rim: ${planName}. O prontuário não depende desta licença.`
           : "Sem licença SaaS — agenda e prontuário continuam no médico."}
       </p>
+
+      {canAdmin && resumo && (
+        <>
+          <div className="mt-6 grid gap-3 sm:grid-cols-2">
+            <div className="panel"><p className="text-xs uppercase text-[var(--text-muted)]">Consultas hoje</p><p className="font-display text-2xl font-extrabold">{resumo.today.encounters}</p></div>
+            <div className="panel"><p className="text-xs uppercase text-[var(--text-muted)]">Entrou hoje</p><p className="font-display text-2xl font-extrabold">{brl(resumo.today.receivedCents)}</p></div>
+            <div className="panel"><p className="text-xs uppercase text-[var(--text-muted)]">Pendente hoje</p><p className="font-display text-2xl font-extrabold">{brl(resumo.today.pendingCents)}</p></div>
+            <div className="panel"><p className="text-xs uppercase text-[var(--text-muted)]">Produção do mês</p><p className="font-display text-2xl font-extrabold">{brl(resumo.month.producedCents)}</p></div>
+            <div className="panel"><p className="text-xs uppercase text-[var(--text-muted)]">A repassar</p><p className="font-display text-2xl font-extrabold">{brl(resumo.month.toPayoutCents)}</p></div>
+            <div className="panel"><p className="text-xs uppercase text-[var(--text-muted)]">Fechamentos em aberto</p><p className="font-display text-2xl font-extrabold">{resumo.unpaidClosings}</p></div>
+          </div>
+          <div className="mt-4 space-y-2">
+            <p className="text-xs font-bold uppercase tracking-wider text-[var(--gold)]">Precisa de atenção</p>
+            {resumo.alerts.map((a) => (
+              <div key={a.text} className={`rounded-2xl border px-4 py-3 text-sm font-semibold ${TONE[a.tone]}`}>
+                {a.tone === "red" ? "🔴" : a.tone === "yellow" ? "🟡" : "🟢"} {a.text}
+              </div>
+            ))}
+          </div>
+        </>
+      )}
+      {finErr && <p className="mt-4 text-sm text-[var(--danger)]">{finErr}</p>}
+
       <div className="mt-6 grid gap-3 sm:grid-cols-2">
         {canAdmin && (
           <>

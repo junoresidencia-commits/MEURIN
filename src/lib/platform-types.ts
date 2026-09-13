@@ -12,7 +12,8 @@ export type PlatformRole = (typeof PLATFORM_ROLES)[number];
 export const ACTOR_KINDS = ["doctor", "attendant"] as const;
 export type ActorKind = (typeof ACTOR_KINDS)[number];
 
-export type ClinicStatus = "active" | "suspended" | "draft";
+export type ClinicStatus = "active" | "pilot" | "suspended" | "draft";
+export const CLINIC_STATUSES: ClinicStatus[] = ["active", "pilot", "suspended", "draft"];
 export type MembershipStatus = "active" | "invited" | "revoked";
 
 export type PlatformRoleAssignment = {

@@ -25,6 +25,8 @@ export default function ClinicaFinanceiroPage() {
   const [summary, setSummary] = useState<Summary | null>(null);
   const [rows, setRows] = useState<Row[]>([]);
   const [msg, setMsg] = useState("");
+  const [reason, setReason] = useState("");
+  const [saving, setSaving] = useState(false);
 
   function loadTeam() {
     fetch(`/api/clinica/${params.id}/invite`)
@@ -58,20 +60,39 @@ export default function ClinicaFinanceiroPage() {
 
   async function saveRule(e: React.FormEvent) {
     e.preventDefault();
+    if (saving) return;
+    const feeCents = Math.round(Number(fee) * 100);
+    const previous = rules.find((r) => r.doctorId === doctorId);
+    if (previous && previous.feeCents !== feeCents) {
+      const ok = window.confirm(
+        `Alterar ${brl(previous.feeCents)} → ${brl(feeCents)}? A mudança fica registrada com o motivo.`
+      );
+      if (!ok) return;
+    } else if (!previous && (feeCents >= 90000 || (feeCents > 0 && feeCents <= 5000))) {
+      const ok = window.confirm(`Esse valor está muito diferente do habitual (R$ 450). Deseja confirmar ${brl(feeCents)}?`);
+      if (!ok) return;
+    }
+    setSaving(true);
     setMsg("");
-    const res = await fetch(`/api/clinica/${params.id}/fee-rules`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        doctorId,
-        feeCents: Math.round(Number(fee) * 100),
-        clinicSharePercent: Number(share),
-      }),
-    });
-    const data = await res.json();
-    if (!res.ok) { setMsg(data.error || "Erro"); return; }
-    setMsg("Regra salva neste vínculo médico↔clínica.");
-    loadTeam();
+    try {
+      const res = await fetch(`/api/clinica/${params.id}/fee-rules`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          doctorId,
+          feeCents,
+          clinicSharePercent: Number(share),
+          reason,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) { setMsg(data.error || "Não foi possível salvar a regra agora."); return; }
+      setMsg("Regra salva neste vínculo médico↔clínica. A alteração ficou no histórico.");
+      setReason("");
+      loadTeam();
+    } finally {
+      setSaving(false);
+    }
   }
 
   return (
@@ -82,13 +103,14 @@ export default function ClinicaFinanceiroPage() {
       </p>
 
       <form onSubmit={saveRule} className="panel mt-5 grid gap-3 sm:grid-cols-4">
-        <select className="input-field" value={doctorId} onChange={(e) => setDoctorId(e.target.value)} required>
+        <select className="input-field min-h-12" value={doctorId} onChange={(e) => setDoctorId(e.target.value)} required>
           <option value="">Médico</option>
           {doctors.map((d) => <option key={d.actorId} value={d.actorId}>{d.name}</option>)}
         </select>
-        <input className="input-field" type="number" min="0" step="0.01" placeholder="Valor (R$)" value={fee} onChange={(e) => setFee(e.target.value)} />
-        <input className="input-field" type="number" min="0" max="100" step="0.1" placeholder="% clínica" value={share} onChange={(e) => setShare(e.target.value)} />
-        <button type="submit" className="btn-gold">Salvar regra</button>
+        <input className="input-field min-h-12" type="number" min="0" step="0.01" placeholder="Valor (R$)" value={fee} onChange={(e) => setFee(e.target.value)} />
+        <input className="input-field min-h-12" type="number" min="0" max="100" step="0.1" placeholder="% clínica" value={share} onChange={(e) => setShare(e.target.value)} />
+        <input className="input-field min-h-12 sm:col-span-3" placeholder="Motivo se alterar valor (obrigatório na mudança)" value={reason} onChange={(e) => setReason(e.target.value)} />
+        <button type="submit" className="btn-gold min-h-12" disabled={saving}>{saving ? "Salvando…" : "Salvar regra"}</button>
         {msg && <p className="sm:col-span-4 text-sm text-[var(--gold)]">{msg}</p>}
       </form>
       {rules.length > 0 && (
