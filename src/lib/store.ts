@@ -668,9 +668,13 @@ export async function getDoctorByEmail(email: string): Promise<Doctor | null> {
   return (await readDb()).doctors.find((d) => d.email.toLowerCase() === norm) ?? null;
 }
 
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
 export async function listSignalingForRoom(roomId: string, after = ""): Promise<SignalingMessage[]> {
   const sb = getSupabaseAdmin();
   if (sb) {
+    // A coluna room_id é uuid: id inválido não pode ir ao PostgREST (vira 500).
+    if (!UUID_RE.test(roomId)) return [];
     let q = sb
       .from("signaling_messages")
       .select("*")
@@ -678,7 +682,10 @@ export async function listSignalingForRoom(roomId: string, after = ""): Promise<
       .order("created_at", { ascending: true });
     if (after) q = q.gt("created_at", after);
     const { data, error } = await q;
-    if (error) throw error;
+    if (error) {
+      console.error("[signaling] list", error.message || error);
+      return [];
+    }
     return (data ?? []).map((row) => mapSignalRow(row as Record<string, unknown>));
   }
   return (await readDb()).signaling
@@ -690,6 +697,9 @@ export async function listSignalingForRoom(roomId: string, after = ""): Promise<
 export async function appendSignalingMessage(message: SignalingMessage): Promise<void> {
   const sb = getSupabaseAdmin();
   if (sb) {
+    if (!UUID_RE.test(message.roomId)) {
+      throw new Error("Sala inválida.");
+    }
     const { error } = await sb.from("signaling_messages").insert({
       id: message.id,
       room_id: message.roomId,
