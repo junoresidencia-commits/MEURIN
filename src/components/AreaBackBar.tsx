@@ -11,7 +11,7 @@ export function AreaBackBar({
   label?: string;
 }) {
   return (
-    <div className="sticky top-0 z-40 border-b border-[var(--border)] bg-white px-5 py-3">
+    <div className="sticky top-0 z-40 border-b border-[var(--border)] bg-white px-5 py-3 print:hidden">
       <Link
         href={href}
         className="btn-gold inline-flex min-h-11 items-center justify-center px-4"

@@ -211,4 +211,12 @@ body {
     background: white !important;
     color: black !important;
   }
+  @page {
+    size: A4;
+    margin: 12mm;
+  }
+  .official-sheet {
+    box-shadow: none !important;
+    border: none !important;
+  }
 }

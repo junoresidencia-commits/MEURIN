@@ -304,6 +304,44 @@ export async function createClinic(input: {
   return clinic;
 }
 
+export async function updateClinicProfile(
+  id: string,
+  input: { name?: string; legalName?: string; cnpj?: string; city?: string },
+): Promise<Clinic> {
+  const current = await getClinic(id);
+  if (!current) throw new Error("Clínica não encontrada.");
+  const now = new Date().toISOString();
+  const next: Clinic = {
+    ...current,
+    name: input.name !== undefined ? input.name.trim() || current.name : current.name,
+    legalName: input.legalName !== undefined ? input.legalName.trim() || null : current.legalName,
+    cnpj: input.cnpj !== undefined ? input.cnpj.trim() || null : current.cnpj,
+    city: input.city !== undefined ? input.city.trim() || null : current.city,
+    updatedAt: now,
+  };
+  if (active()) {
+    const sb = getSupabaseAdmin()!;
+    const { error } = await sb
+      .from("clinics")
+      .update({
+        name: next.name,
+        legal_name: next.legalName,
+        cnpj: next.cnpj,
+        city: next.city,
+        updated_at: now,
+      })
+      .eq("id", id);
+    if (error && !isMissing(error)) throw error;
+    if (error && isMissing(error)) tableMissing = true;
+    else if (!error) return next;
+  }
+  const local = await readLocal();
+  const idx = local.clinics.findIndex((c) => c.id === id);
+  if (idx >= 0) local.clinics[idx] = next;
+  await writeLocal(local);
+  return next;
+}
+
 export async function updateClinicStatus(id: string, status: ClinicStatus): Promise<Clinic> {
   if (!CLINIC_STATUSES.includes(status)) throw new Error("Status da clínica inválido.");
   const current = await getClinic(id);

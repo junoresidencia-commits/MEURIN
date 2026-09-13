@@ -115,7 +115,7 @@ export default function ClinicaHomePage() {
             </Link>
             <Link href={`/clinica/${params.id}/relatorios`} className="panel block">
               <p className="font-bold">Relatórios</p>
-              <p className="mt-1 text-sm text-[var(--text-muted)]">Por médico, período, imprimir e CSV. Valor e % desta clínica.</p>
+              <p className="mt-1 text-sm text-[var(--text-muted)]">PDF oficial para Prefeitura, CRM, relação nominal e assinaturas.</p>
             </Link>
             <Link href={`/clinica/${params.id}/fechamentos`} className="panel block">
               <p className="font-bold">Fechamentos</p>

@@ -55,7 +55,7 @@ export default function ClinicaLayout({ children }: { children: React.ReactNode 
 
   return (
     <div className="flex min-h-screen bg-[var(--bg)]">
-      <aside className="hidden w-60 shrink-0 border-r border-[var(--border)] bg-white lg:block">
+      <aside className="hidden w-60 shrink-0 border-r border-[var(--border)] bg-white print:hidden lg:block">
         <div className="sticky top-0 flex h-screen flex-col p-4">
           <Link
             href={backHref}
@@ -90,7 +90,7 @@ export default function ClinicaLayout({ children }: { children: React.ReactNode 
       </aside>
       <div className="min-w-0 flex-1">
         <AreaBackBar href={backHref} label={backLabel} />
-        <div className="border-b border-[var(--border)] bg-white px-5 py-3 lg:hidden">
+        <div className="border-b border-[var(--border)] bg-white px-5 py-3 print:hidden lg:hidden">
           <p className="font-bold">{clinic}</p>
           <div className="mt-2 flex flex-wrap gap-2">
             {items.map((n) => (

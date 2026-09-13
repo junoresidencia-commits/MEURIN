@@ -1,0 +1,85 @@
+import assert from "node:assert/strict";
+import { officialClinicReportPdf } from "../src/lib/clinic-official-report-pdf";
+import { upsertFeeRule, createEncounter, recordCheckIn } from "../src/lib/clinic-finance-store";
+import { buildOfficialClinicReport } from "../src/lib/official-report-server";
+import { defaultOfficialDestination, periodLabel } from "../src/lib/official-report";
+import { addMembership, createClinic, updateClinicProfile } from "../src/lib/platform-store";
+import { readDb } from "../src/lib/store";
+
+async function main() {
+  if (process.env.NEXT_PUBLIC_SUPABASE_URL && process.env.SUPABASE_SERVICE_ROLE_KEY) {
+    console.error("Recuse: este teste não pode apontar para Supabase (produção).");
+    process.exit(1);
+  }
+
+  const db = await readDb();
+  const carlos = db.doctors.find((d) => d.email === "carlos@meurim.com");
+  assert.ok(carlos, "seed do Dr. Carlos");
+
+  const clinic = await createClinic({
+    name: "Clínica Municipal Teste",
+    legalName: "CLINICA MUNICIPAL TESTE LTDA",
+    cnpj: "12.345.678/0001-90",
+    city: "Feira de Santana",
+  });
+  await addMembership({ clinicId: clinic.id, actorKind: "doctor", actorId: carlos.id, role: "ADMIN_CLINICA" });
+  await upsertFeeRule({ clinicId: clinic.id, doctorId: carlos.id, feeCents: 45000, clinicSharePercent: 30 });
+
+  const enc = await createEncounter({
+    clinicId: clinic.id,
+    doctorId: carlos.id,
+    patientKey: `prefeitura.${Date.now()}@meurim.com`,
+    patientName: "Maria da Prestação",
+  });
+  await recordCheckIn({
+    clinicId: clinic.id,
+    encounterId: enc.id,
+    method: "pix",
+    amountCents: 45000,
+    recordedByKind: "doctor",
+  });
+
+  const today = new Date();
+  const from = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}-01`;
+  const to = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}-${String(today.getDate()).padStart(2, "0")}`;
+
+  const report = await buildOfficialClinicReport(clinic.id, from, to);
+  assert.ok(report);
+  assert.equal(report.clinic.cnpj, "12.345.678/0001-90");
+  assert.equal(report.clinic.city, "Feira de Santana");
+  assert.match(report.destination, /Feira de Santana/);
+  assert.equal(report.destination, defaultOfficialDestination("Feira de Santana"));
+  assert.equal(report.periodLabel, periodLabel(from, to));
+  assert.ok(report.totals.appointments >= 1);
+  assert.equal(report.totals.billedCents >= 45000, true);
+  assert.ok(report.byDoctor.some((row) => row.doctorId === carlos.id && row.crm.includes(carlos.crm)));
+  const row = report.rows.find((item) => item.patientName === "Maria da Prestação");
+  assert.ok(row, "relação nominal com o paciente");
+  assert.equal(row.paymentLabel, "Quitado");
+  assert.ok(row.n >= 1);
+  assert.equal(report.warnings.length, 0, "unidade completa não deve ter pendência");
+
+  const renamed = await updateClinicProfile(clinic.id, { city: "Salvador" });
+  assert.equal(renamed.city, "Salvador");
+  const again = await buildOfficialClinicReport(clinic.id, from, to, "Secretaria Municipal de Saúde de Salvador");
+  assert.equal(again?.destination, "Secretaria Municipal de Saúde de Salvador");
+  assert.equal(again?.clinic.city, "Salvador");
+
+  const pdf = await officialClinicReportPdf(report);
+  assert.ok(pdf.byteLength > 800, `PDF pequeno demais: ${pdf.byteLength}`);
+  const head = Buffer.from(pdf.slice(0, 5)).toString("latin1");
+  assert.equal(head, "%PDF-");
+
+  console.log("official-clinic-report ok", {
+    documentId: report.documentId,
+    destination: report.destination,
+    appointments: report.totals.appointments,
+    pdfBytes: pdf.byteLength,
+    crm: report.byDoctor[0]?.crm,
+  });
+}
+
+main().catch((e) => {
+  console.error(e);
+  process.exit(1);
+});
