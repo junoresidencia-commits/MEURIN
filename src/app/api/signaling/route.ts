@@ -9,8 +9,13 @@ export async function GET(req: Request) {
   if (!roomId) {
     return NextResponse.json({ error: "roomId obrigatório" }, { status: 400 });
   }
-  const messages = await listSignalingForRoom(roomId, after);
-  return NextResponse.json({ messages });
+  try {
+    const messages = await listSignalingForRoom(roomId, after);
+    return NextResponse.json({ messages });
+  } catch (err) {
+    console.error("[signaling] GET", err);
+    return NextResponse.json({ messages: [] });
+  }
 }
 
 export async function POST(req: Request) {
@@ -29,6 +34,11 @@ export async function POST(req: Request) {
     createdAt: new Date().toISOString(),
   };
 
-  await appendSignalingMessage(message);
+  try {
+    await appendSignalingMessage(message);
+  } catch (err) {
+    console.error("[signaling] POST", err);
+    return NextResponse.json({ error: "Não foi possível sinalizar a sala." }, { status: 400 });
+  }
   return NextResponse.json({ ok: true, message });
 }
