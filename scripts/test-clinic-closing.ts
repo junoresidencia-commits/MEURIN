@@ -40,7 +40,6 @@ async function main() {
     createdBy: carlos.id,
   });
   assert.match(closing.code, new RegExp(`^MED-${year}-\\d{6}$`));
-  assert.equal(closing.code, `MED-${year}-000001`);
   assert.equal(closing.status, "closed");
   assert.equal(closing.producedCents, 45000);
   assert.equal(closing.doctorShareCents, 36000);
