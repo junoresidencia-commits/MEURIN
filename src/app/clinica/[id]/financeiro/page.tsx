@@ -135,7 +135,7 @@ export default function ClinicaFinanceiroPage() {
     <div>
       <h1 className="font-display text-3xl font-extrabold text-[var(--text)]">Produção da clínica</h1>
       <p className="mt-1 text-sm text-[var(--text-muted)]">
-        Atendido (produção) não é recebido. Ex.: consulta de {brl(45000)} pode estar com {brl(0)} recebido até o check-in.
+        O valor e o % são deste vínculo (ex.: Salute R$ 450 e 30%; outra cidade R$ 550 e 20%). Atendido não é recebido até o check-in.
       </p>
 
       <form onSubmit={saveRule} className="panel mt-5 grid gap-3 sm:grid-cols-4">
@@ -143,8 +143,8 @@ export default function ClinicaFinanceiroPage() {
           <option value="">Médico</option>
           {doctors.map((d) => <option key={d.actorId} value={d.actorId}>{d.name}</option>)}
         </select>
-        <input className="input-field min-h-12" type="number" min="0" step="0.01" placeholder="Valor (R$)" value={fee} onChange={(e) => setFee(e.target.value)} />
-        <input className="input-field min-h-12" type="number" min="0" max="100" step="0.1" placeholder="% clínica" value={share} onChange={(e) => setShare(e.target.value)} />
+        <input className="input-field min-h-12" type="number" min="0" step="0.01" placeholder="Valor nesta clínica (R$)" value={fee} onChange={(e) => setFee(e.target.value)} />
+        <input className="input-field min-h-12" type="number" min="0" max="100" step="0.1" placeholder="% desta clínica" value={share} onChange={(e) => setShare(e.target.value)} />
         <input className="input-field min-h-12 sm:col-span-3" placeholder="Motivo se alterar valor (obrigatório na mudança)" value={reason} onChange={(e) => setReason(e.target.value)} />
         <button type="submit" className="btn-gold min-h-12" disabled={saving}>{saving ? "Salvando…" : "Salvar regra"}</button>
         {msg && <p className="sm:col-span-4 text-sm text-[var(--gold)]">{msg}</p>}

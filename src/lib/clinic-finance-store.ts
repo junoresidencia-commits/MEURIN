@@ -555,17 +555,38 @@ export async function recordCheckIn(input: {
 }
 
 export function productionSummary(encounters: ClinicEncounter[]) {
-  const byDoctor = new Map<string, { doctorId: string; count: number; producedCents: number; receivedCents: number }>();
+  const byDoctor = new Map<string, {
+    doctorId: string;
+    count: number;
+    producedCents: number;
+    clinicShareCents: number;
+    doctorShareCents: number;
+    receivedCents: number;
+    pendingCents: number;
+  }>();
   for (const e of encounters) {
-    const cur = byDoctor.get(e.doctorId) || { doctorId: e.doctorId, count: 0, producedCents: 0, receivedCents: 0 };
+    const cur = byDoctor.get(e.doctorId) || {
+      doctorId: e.doctorId,
+      count: 0,
+      producedCents: 0,
+      clinicShareCents: 0,
+      doctorShareCents: 0,
+      receivedCents: 0,
+      pendingCents: 0,
+    };
     cur.count += 1;
     cur.producedCents += e.feeCents;
+    cur.clinicShareCents += e.clinicShareCents;
+    cur.doctorShareCents += e.doctorShareCents;
     cur.receivedCents += e.receivedCents;
+    cur.pendingCents += Math.max(0, e.feeCents - e.receivedCents);
     byDoctor.set(e.doctorId, cur);
   }
   return {
     count: encounters.length,
     producedCents: encounters.reduce((s, e) => s + e.feeCents, 0),
+    clinicShareCents: encounters.reduce((s, e) => s + e.clinicShareCents, 0),
+    doctorShareCents: encounters.reduce((s, e) => s + e.doctorShareCents, 0),
     receivedCents: encounters.reduce((s, e) => s + e.receivedCents, 0),
     pendingCents: encounters.reduce((s, e) => s + Math.max(0, e.feeCents - e.receivedCents), 0),
     byDoctor: Array.from(byDoctor.values()),

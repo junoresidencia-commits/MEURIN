@@ -113,6 +113,10 @@ export default function ClinicaHomePage() {
               <p className="font-bold">Produção</p>
               <p className="mt-1 text-sm text-[var(--text-muted)]">Atendido ≠ recebido. Regra no vínculo médico↔clínica.</p>
             </Link>
+            <Link href={`/clinica/${params.id}/relatorios`} className="panel block">
+              <p className="font-bold">Relatórios</p>
+              <p className="mt-1 text-sm text-[var(--text-muted)]">Por médico, período, imprimir e CSV. Valor e % desta clínica.</p>
+            </Link>
             <Link href={`/clinica/${params.id}/fechamentos`} className="panel block">
               <p className="font-bold">Fechamentos</p>
               <p className="mt-1 text-sm text-[var(--text-muted)]">Código MED-AAAA-######, PDF e comprovante de repasse.</p>

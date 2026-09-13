@@ -78,6 +78,10 @@ export type ClinicInvite = {
   acceptedActorId: string | null;
   createdAt: string;
   acceptedAt: string | null;
+  /** Valor desta clínica (não o preço do médico em outra cidade). */
+  feeCents?: number | null;
+  /** % da clínica neste vínculo. O restante é o médico. */
+  clinicSharePercent?: number | null;
 };
 
 export type ClinicFeeRule = {

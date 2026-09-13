@@ -4,21 +4,30 @@ import { inviteAttendant, inviteDoctor, listInvites } from "@/lib/clinic-ops-sto
 import { listMemberships } from "@/lib/platform-store";
 import { getDoctorById } from "@/lib/store";
 import { getAttendant } from "@/lib/attendants-store";
+import { listFeeRules } from "@/lib/clinic-finance-store";
 import { siteUrl } from "@/lib/site";
 
 export async function GET(_req: Request, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const staff = await requireClinicAdmin(id);
   if (!staff) return NextResponse.json({ error: "Sem permissão." }, { status: 403 });
-  const [invites, memberships] = await Promise.all([listInvites(id), listMemberships(id)]);
+  const [invites, memberships, rules] = await Promise.all([listInvites(id), listMemberships(id), listFeeRules(id)]);
+  const ruleByDoctor = new Map(rules.map((r) => [r.doctorId, r]));
   const members = await Promise.all(
     memberships.map(async (m) => {
       if (m.actorKind === "doctor") {
         const d = await getDoctorById(m.actorId);
-        return { ...m, name: d?.name || "Médico", email: d?.email || null };
+        const rule = ruleByDoctor.get(m.actorId);
+        return {
+          ...m,
+          name: d?.name || "Médico",
+          email: d?.email || null,
+          feeCents: rule?.feeCents ?? null,
+          clinicSharePercent: rule?.clinicSharePercent ?? null,
+        };
       }
       const a = await getAttendant(m.actorId);
-      return { ...m, name: a?.name || "Atendente", email: a?.email || null };
+      return { ...m, name: a?.name || "Atendente", email: a?.email || null, feeCents: null, clinicSharePercent: null };
     })
   );
   return NextResponse.json({
@@ -52,6 +61,8 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
             crm: body.crm ? String(body.crm) : undefined,
             specialty: body.specialty ? String(body.specialty) : undefined,
             invitedBy: staff.actorId,
+            feeCents: body.feeCents != null ? Number(body.feeCents) : undefined,
+            clinicSharePercent: body.clinicSharePercent != null ? Number(body.clinicSharePercent) : undefined,
           });
     return NextResponse.json({
       ...result,

@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { requireClinicAdmin } from "@/lib/platform-access";
-import { listEncounters, productionSummary } from "@/lib/clinic-finance-store";
+import { listEncounters, listFeeRules, productionSummary } from "@/lib/clinic-finance-store";
 import { listDoctorsByIds } from "@/lib/store";
 
 export async function GET(req: Request, { params }: { params: Promise<{ id: string }> }) {
@@ -13,8 +13,12 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
   const doctorId = url.searchParams.get("doctorId") || undefined;
   let encounters = await listEncounters(id, from, to ? `${to}T23:59:59.999Z` : undefined);
   if (doctorId) encounters = encounters.filter((e) => e.doctorId === doctorId);
-  const doctors = await listDoctorsByIds(encounters.map((e) => e.doctorId));
+  const [doctors, rules] = await Promise.all([
+    listDoctorsByIds(encounters.map((e) => e.doctorId)),
+    listFeeRules(id),
+  ]);
   const nameById = new Map(doctors.map((d) => [d.id, d.name]));
+  const ruleById = new Map(rules.map((r) => [r.doctorId, r]));
   const named = encounters.map((e) => ({
     ...e,
     doctorName: nameById.get(e.doctorId) || "Médico",
@@ -24,10 +28,15 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
     encounters: named,
     summary: {
       ...summary,
-      byDoctor: summary.byDoctor.map((row) => ({
-        ...row,
-        doctorName: nameById.get(row.doctorId) || "Médico",
-      })),
+      byDoctor: summary.byDoctor.map((row) => {
+        const rule = ruleById.get(row.doctorId);
+        return {
+          ...row,
+          doctorName: nameById.get(row.doctorId) || "Médico",
+          feeCents: rule?.feeCents ?? null,
+          clinicSharePercent: rule?.clinicSharePercent ?? null,
+        };
+      }),
     },
   });
 }

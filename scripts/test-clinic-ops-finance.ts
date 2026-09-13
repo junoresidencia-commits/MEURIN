@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { readDb } from "../src/lib/store";
 import { createClinic, addMembership, listMemberships, listMembershipsForActor } from "../src/lib/platform-store";
 import { inviteDoctor, inviteAttendant, acceptInvite, getInviteByToken } from "../src/lib/clinic-ops-store";
-import { upsertFeeRule, recordProductionFromAttendance, recordCheckIn, listEncounters, productionSummary } from "../src/lib/clinic-finance-store";
+import { getFeeRule, upsertFeeRule, recordProductionFromAttendance, recordCheckIn, listEncounters, productionSummary } from "../src/lib/clinic-finance-store";
 import { collectIntegrityCounts, countsDropped } from "../src/lib/platform-integrity";
 
 async function main() {
@@ -23,10 +23,15 @@ async function main() {
     email: "carlos@meurim.com",
     crm: "CRM-SP 123456",
     invitedBy: carlos.id,
+    feeCents: 45000,
+    clinicSharePercent: 30,
   });
   assert.equal(existing.linkedExisting, true);
   assert.equal(existing.actorId, carlosId);
   assert.equal(existing.invite.status, "accepted");
+  const saluteRule = await getFeeRule(clinic.id, carlosId);
+  assert.equal(saluteRule?.feeCents, 45000);
+  assert.equal(saluteRule?.clinicSharePercent, 30);
 
   const afterLink = await readDb();
   assert.equal(afterLink.doctors.length, doctorsBefore, "vínculo de médico existente não cria usuário");
@@ -41,6 +46,8 @@ async function main() {
     crm: "CRM-BA 999",
     specialty: "Nefrologia",
     invitedBy: carlos.id,
+    feeCents: 55000,
+    clinicSharePercent: 20,
   });
   assert.equal(pending.linkedExisting, false);
   assert.equal(pending.invite.status, "pending");
@@ -58,6 +65,9 @@ async function main() {
   assert.equal(afterAccept.doctors.find((d) => d.email === "carlos@meurim.com")?.passwordHash, carlosHash);
   const used = await getInviteByToken(pending.invite.token);
   assert.equal(used?.status, "accepted");
+  const novaRule = await getFeeRule(clinic.id, nova.id);
+  assert.equal(novaRule?.feeCents, 55000);
+  assert.equal(novaRule?.clinicSharePercent, 20);
 
   const members = await listMemberships(clinic.id);
   assert.ok(members.some((m) => m.actorId === carlosId && m.role === "ADMIN_CLINICA"));
