@@ -3,9 +3,19 @@
 import { useParams } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 
+import { reportRangeFor, type ReportPeriodKey } from "@/lib/report-period";
+
 function brl(cents: number) {
   return (cents / 100).toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
 }
+
+const PERIODS: { key: ReportPeriodKey; label: string }[] = [
+  { key: "hoje", label: "Hoje" },
+  { key: "semana", label: "Esta semana" },
+  { key: "mes", label: "Este mês" },
+  { key: "mes_passado", label: "Mês passado" },
+  { key: "ano", label: "Este ano" },
+];
 
 type DoctorRow = {
   doctorId: string;
@@ -43,11 +53,20 @@ type Summary = {
 export default function ClinicaRelatoriosPage() {
   const params = useParams<{ id: string }>();
   const [clinic, setClinic] = useState("");
-  const [from, setFrom] = useState(() => new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString().slice(0, 10));
-  const [to, setTo] = useState(() => new Date().toISOString().slice(0, 10));
+  const initial = reportRangeFor("mes");
+  const [from, setFrom] = useState(initial.from);
+  const [to, setTo] = useState(initial.to);
+  const [period, setPeriod] = useState<ReportPeriodKey>("mes");
   const [summary, setSummary] = useState<Summary | null>(null);
   const [rows, setRows] = useState<Encounter[]>([]);
   const [err, setErr] = useState("");
+
+  function applyPeriod(key: ReportPeriodKey) {
+    const r = reportRangeFor(key);
+    setPeriod(key);
+    setFrom(r.from);
+    setTo(r.to);
+  }
 
   useEffect(() => {
     fetch(`/api/clinica/${params.id}/me`)
@@ -107,14 +126,46 @@ export default function ClinicaRelatoriosPage() {
         <p className="mt-1 text-sm text-[var(--text-muted)]">
           Produção e repasse por médico nesta clínica. O valor de cada um é o desta unidade — não o de outra cidade.
         </p>
-        <div className="mt-5 grid gap-3 sm:grid-cols-4">
+        <div className="mt-4 flex flex-wrap gap-2">
+          {PERIODS.map((p) => (
+            <button
+              key={p.key}
+              type="button"
+              onClick={() => applyPeriod(p.key)}
+              className={`rounded-full border px-3 py-1.5 text-xs font-bold ${
+                period === p.key
+                  ? "border-[var(--gold)] bg-[var(--gold-soft)] text-[var(--gold)]"
+                  : "border-[var(--border)] text-[var(--text-soft)]"
+              }`}
+            >
+              {p.label}
+            </button>
+          ))}
+        </div>
+        <div className="mt-4 grid gap-3 sm:grid-cols-4">
           <label>
             <span className="mb-1 block text-xs font-semibold text-[var(--text-muted)]">De</span>
-            <input className="input-field" type="date" value={from} onChange={(e) => setFrom(e.target.value)} />
+            <input
+              className="input-field"
+              type="date"
+              value={from}
+              onChange={(e) => {
+                setPeriod("livre");
+                setFrom(e.target.value);
+              }}
+            />
           </label>
           <label>
             <span className="mb-1 block text-xs font-semibold text-[var(--text-muted)]">Até</span>
-            <input className="input-field" type="date" value={to} onChange={(e) => setTo(e.target.value)} />
+            <input
+              className="input-field"
+              type="date"
+              value={to}
+              onChange={(e) => {
+                setPeriod("livre");
+                setTo(e.target.value);
+              }}
+            />
           </label>
           <button type="button" className="btn-gold mt-6 min-h-12" onClick={() => window.print()}>Imprimir</button>
           <button type="button" className="btn-ghost mt-6 min-h-12" onClick={downloadCsv} disabled={!csv}>Baixar CSV</button>
