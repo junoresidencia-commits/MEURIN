@@ -109,6 +109,42 @@ export type ClinicEncounter = {
   createdAt: string;
 };
 
+export type ClosingStatus = "closed" | "paid";
+export type AdjustmentKind = "credit" | "debit" | "correction";
+
+export type ClinicClosing = {
+  id: string;
+  clinicId: string;
+  doctorId: string;
+  code: string;
+  periodFrom: string;
+  periodTo: string;
+  encounterIds: string[];
+  producedCents: number;
+  receivedCents: number;
+  clinicShareCents: number;
+  doctorShareCents: number;
+  status: ClosingStatus;
+  createdBy: string | null;
+  paidAt: string | null;
+  paidBy: string | null;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type ClinicClosingAdjustment = {
+  id: string;
+  closingId: string;
+  clinicId: string;
+  kind: AdjustmentKind;
+  amountCents: number;
+  reason: string;
+  createdByKind: string | null;
+  createdById: string | null;
+  createdByEmail: string | null;
+  createdAt: string;
+};
+
 export type ClinicPayment = {
   id: string;
   clinicId: string;
