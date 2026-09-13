@@ -59,7 +59,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
         reason: String(body.reason || ""),
         createdByKind: staff.kind,
         createdById: staff.actorId,
-        createdByEmail: staff.email,
+        createdByEmail: staff.email ?? undefined,
       });
       await writeAudit({
         actorKind: staff.kind,

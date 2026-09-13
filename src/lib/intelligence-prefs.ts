@@ -29,6 +29,11 @@ export type IntelligencePrefs = {
   source: "default" | "clinic" | "doctor";
 };
 
+/** Patch parcial: a clínica/médico pode ligar só um módulo. */
+export type IntelligencePrefsPatch = Omit<Partial<IntelligencePrefs>, "modules" | "applyMode" | "source"> & {
+  modules?: Partial<IntelligenceModules>;
+};
+
 export const DEFAULT_INTEL_MODULES: IntelligenceModules = {
   lifestyle: true,
   meds: true,
@@ -73,7 +78,7 @@ export function moduleForField(key: string): IntelModule {
 
 export function mergeIntelPrefs(
   base: IntelligencePrefs,
-  override: Partial<IntelligencePrefs> | null | undefined,
+  override: IntelligencePrefsPatch | null | undefined,
   source: IntelligencePrefs["source"]
 ): IntelligencePrefs {
   if (!override) return { ...base, modules: { ...base.modules } };
