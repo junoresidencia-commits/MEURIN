@@ -273,6 +273,27 @@ export async function searchApprovedDoctors(q: string, excludeId: string, specia
     .map(toDoctorPublicCard);
 }
 
+/** Só a tabela de médicos — sem bookings/pagamentos/sinalização. Usado no login e na sessão. */
+export async function listDoctors(): Promise<Doctor[]> {
+  const supabase = getSupabaseAdmin();
+  if (supabase) {
+    const { data, error } = await supabase.from("doctors").select("*").order("created_at", { ascending: true });
+    if (error) throw error;
+    return (data ?? []).map((row) => mapDoctorRow(row as Record<string, unknown>));
+  }
+  return (await readDb()).doctors;
+}
+
+export async function countBookings(): Promise<number> {
+  const supabase = getSupabaseAdmin();
+  if (supabase) {
+    const { count, error } = await supabase.from("bookings").select("id", { count: "exact", head: true });
+    if (error) throw error;
+    return count ?? 0;
+  }
+  return (await readDb()).bookings.length;
+}
+
 /** Busca um médico pelo id (Supabase direto ou fallback local). */
 export async function getDoctorById(id: string): Promise<Doctor | null> {
   const supabase = getSupabaseAdmin();

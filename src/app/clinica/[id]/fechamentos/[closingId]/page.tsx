@@ -35,16 +35,22 @@ export default function FechamentoDetalhePage() {
   const [reason, setReason] = useState("");
   const [msg, setMsg] = useState("");
   const [err, setErr] = useState("");
+  const [loaded, setLoaded] = useState(false);
 
   function load() {
     fetch(`/api/clinica/${params.id}/fechamentos/${params.closingId}`)
-      .then((r) => r.json())
-      .then((d) => {
+      .then(async (r) => {
+        const d = await r.json();
+        if (!r.ok) throw new Error(d.error || "Não foi possível abrir o fechamento.");
         setClosing(d.closing || null);
         setAdjustments(d.adjustments || []);
         setEncounters(d.encounters || []);
       })
-      .catch(() => {});
+      .catch((e) => {
+        setClosing(null);
+        setErr(e instanceof Error ? e.message : "Erro");
+      })
+      .finally(() => setLoaded(true));
   }
   useEffect(() => { load(); }, [params.id, params.closingId]);
 
@@ -64,7 +70,15 @@ export default function FechamentoDetalhePage() {
     load();
   }
 
-  if (!closing) return <p className="text-[var(--text-muted)]">Carregando fechamento…</p>;
+  if (!loaded) return <p className="text-[var(--text-muted)]">Carregando fechamento…</p>;
+  if (!closing) {
+    return (
+      <div>
+        <Link href={`/clinica/${params.id}/fechamentos`} className="text-sm font-semibold text-[var(--gold)]">← Fechamentos</Link>
+        <p className="mt-4 text-sm text-[var(--danger)]">{err || "Fechamento não encontrado."}</p>
+      </div>
+    );
+  }
 
   return (
     <div>

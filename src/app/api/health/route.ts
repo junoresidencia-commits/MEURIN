@@ -1,16 +1,16 @@
 import { NextResponse } from "next/server";
-import { readDb } from "@/lib/store";
+import { countBookings, listDoctors } from "@/lib/store";
 import { getSupabaseAdmin } from "@/lib/supabase-admin";
 
 export async function GET() {
   try {
-    const db = await readDb();
+    const [doctors, bookings] = await Promise.all([listDoctors(), countBookings()]);
     return NextResponse.json({
       ok: true,
       service: "meu-rim",
       mode: getSupabaseAdmin() ? "supabase" : "demo",
-      doctors: db.doctors.length,
-      bookings: db.bookings.length,
+      doctors: doctors.length,
+      bookings,
       time: new Date().toISOString(),
     });
   } catch (error) {

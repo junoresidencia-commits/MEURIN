@@ -1,9 +1,9 @@
 import { NextResponse } from "next/server";
 import bcrypt from "bcryptjs";
 import { COOKIE, DOCTOR_MAX_AGE, createSessionToken, getDoctorSessionId } from "@/lib/auth";
-import { readDb } from "@/lib/store";
+import { getDoctorById, listDoctors } from "@/lib/store";
 import { emailsMatch } from "@/lib/login-email";
-import { getPlatformActor } from "@/lib/platform-access";
+import { buildPlatformActor } from "@/lib/platform-access";
 import { ensureFounderSuperAdmin, listActiveRoles } from "@/lib/platform-store";
 
 async function platformRolesSafe(doctorId: string): Promise<string[]> {
@@ -21,19 +21,17 @@ export async function GET() {
   if (!doctorId) {
     return NextResponse.json({ doctor: null });
   }
-  const db = await readDb();
-  const doctor = db.doctors.find((d) => d.id === doctorId);
+  const doctor = await getDoctorById(doctorId);
   if (!doctor) return NextResponse.json({ doctor: null });
   const { passwordHash, mpAccessToken, ...safe } = doctor;
   void passwordHash;
   let actor = null;
   try {
-    actor = await getPlatformActor();
+    actor = await buildPlatformActor(doctor);
   } catch (err) {
     console.error("[auth] ator da plataforma ignorado", err);
   }
-  const platformRoles = actor?.roles ?? (await platformRolesSafe(doctor.id));
-  // Nunca devolvemos o token do Mercado Pago ao navegador — só se está conectado.
+  const platformRoles = actor?.roles ?? [];
   return NextResponse.json({
     doctor: {
       ...safe,
@@ -45,10 +43,24 @@ export async function GET() {
 }
 
 export async function POST(req: Request) {
-  const { email, password } = await req.json();
-  const db = await readDb();
-  const doctor = db.doctors.find((d) => emailsMatch(d.email, String(email || "")));
-  const pass = String(password || "").trim();
+  let email = "";
+  let password = "";
+  try {
+    const body = await req.json();
+    email = String(body?.email || "");
+    password = String(body?.password || "");
+  } catch {
+    return NextResponse.json({ error: "Dados de login inválidos." }, { status: 400 });
+  }
+  let doctors;
+  try {
+    doctors = await listDoctors();
+  } catch (err) {
+    console.error("[auth] falha ao ler médicos", err);
+    return NextResponse.json({ error: "Não foi possível entrar. Tente novamente." }, { status: 503 });
+  }
+  const doctor = doctors.find((d) => emailsMatch(d.email, email));
+  const pass = password.trim();
   let passwordOk = false;
   try {
     passwordOk = Boolean(doctor?.passwordHash && pass && (await bcrypt.compare(pass, doctor.passwordHash)));

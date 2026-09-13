@@ -2,7 +2,7 @@ import "server-only";
 import { promises as fs } from "fs";
 import path from "path";
 import { getSupabaseAdmin } from "./supabase-admin";
-import { readDb } from "./store";
+import { countBookings, listDoctors } from "./store";
 import { countPlatformRows } from "./platform-store";
 import type { IntegrityCounts } from "./platform-types";
 
@@ -28,17 +28,20 @@ async function supabaseCount(table: string): Promise<number | null> {
 
 /** Contagens somente-leitura. Nunca altera registros. */
 export async function collectIntegrityCounts(): Promise<IntegrityCounts> {
-  const db = await readDb();
-  const platform = await countPlatformRows();
-  const sbPatients = await supabaseCount("patients");
-  const sbNotes = await supabaseCount("clinical_notes");
-  const sbDocs = await supabaseCount("documents");
-  const sbLabs = await supabaseCount("lab_results");
+  const [doctors, bookings, platform, sbPatients, sbNotes, sbDocs, sbLabs] = await Promise.all([
+    listDoctors(),
+    countBookings(),
+    countPlatformRows(),
+    supabaseCount("patients"),
+    supabaseCount("clinical_notes"),
+    supabaseCount("documents"),
+    supabaseCount("lab_results"),
+  ]);
 
   return {
-    doctors: db.doctors.length,
+    doctors: doctors.length,
     patients: sbPatients ?? (await countJsonArray("patients.json")),
-    bookings: db.bookings.length,
+    bookings,
     clinicalNotes: sbNotes ?? (await countJsonArray("patient-records.json", "notes")),
     documents: sbDocs ?? (await countJsonArray("patient-records.json", "documents")),
     labResults: sbLabs ?? (await countJsonArray("patient-records.json", "labs")),
@@ -46,6 +49,41 @@ export async function collectIntegrityCounts(): Promise<IntegrityCounts> {
     memberships: platform.memberships,
     roleAssignments: platform.roleAssignments,
   };
+}
+
+export type IntegritySnapshot = {
+  label: string;
+  counts: IntegrityCounts;
+  createdAt: string;
+};
+
+export async function latestIntegritySnapshot(): Promise<IntegritySnapshot | null> {
+  const sb = getSupabaseAdmin();
+  if (sb) {
+    const { data, error } = await sb
+      .from("platform_integrity_snapshots")
+      .select("label,counts,created_at")
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    if (error || !data) return null;
+    return {
+      label: String((data as { label: string }).label),
+      counts: (data as { counts: IntegrityCounts }).counts,
+      createdAt: String((data as { created_at: string }).created_at),
+    };
+  }
+  return null;
+}
+
+export async function saveIntegritySnapshot(label: string, counts: IntegrityCounts): Promise<void> {
+  const sb = getSupabaseAdmin();
+  if (!sb) return;
+  const { error } = await sb.from("platform_integrity_snapshots").insert({
+    label,
+    counts,
+  });
+  if (error) console.error("[integrity] snapshot ignorado", error);
 }
 
 export function countsDropped(before: IntegrityCounts, after: IntegrityCounts): string[] {

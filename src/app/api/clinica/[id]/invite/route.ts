@@ -22,7 +22,13 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
       return { ...m, name: a?.name || "Atendente", email: a?.email || null };
     })
   );
-  return NextResponse.json({ invites, members });
+  return NextResponse.json({
+    invites: invites.map((i) => ({
+      ...i,
+      acceptUrl: i.status === "pending" ? siteUrl(`/convite/${i.token}`) : null,
+    })),
+    members,
+  });
 }
 
 export async function POST(req: Request, { params }: { params: Promise<{ id: string }> }) {
