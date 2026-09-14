@@ -204,10 +204,18 @@ body {
 @media print {
   header,
   footer,
+  aside,
   .print\:hidden {
     display: none !important;
   }
-  body {
+  html,
+  body,
+  main,
+  .flex,
+  .min-h-screen {
+    display: block !important;
+    height: auto !important;
+    overflow: visible !important;
     background: white !important;
     color: black !important;
   }
@@ -215,8 +223,13 @@ body {
     size: A4;
     margin: 12mm;
   }
-  .official-sheet {
+  .official-sheet,
+  .clinic-print-area {
     box-shadow: none !important;
     border: none !important;
+    overflow: visible !important;
+  }
+  .clinic-print-area table {
+    overflow: visible !important;
   }
 }

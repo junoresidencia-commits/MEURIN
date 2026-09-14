@@ -74,7 +74,7 @@ async function main() {
 
   const xlsx = officialClinicReportXlsx(report);
   assert.ok(xlsx.byteLength > 800, `XLSX pequeno demais: ${xlsx.byteLength}`);
-  const book = XLSX.read(xlsx, { type: "buffer" });
+  const book = XLSX.read(xlsx, { type: "array" });
   assert.deepEqual(book.SheetNames, ["Capa", "Por profissional", "Relacao nominal"]);
   const relacao = XLSX.utils.sheet_to_json<Record<string, unknown>>(book.Sheets["Relacao nominal"]!, { header: 1 });
   const header = relacao[0] as unknown[];

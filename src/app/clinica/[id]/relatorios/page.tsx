@@ -3,7 +3,8 @@
 import { useParams } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 
-import { defaultOfficialDestination, money, periodLabel } from "@/lib/official-report";
+import { clinicReportXlsxBytes } from "@/lib/clinic-official-report-xlsx";
+import { defaultOfficialDestination, money, periodLabel, reportFileSlug } from "@/lib/official-report";
 import { reportRangeFor, type ReportPeriodKey } from "@/lib/report-period";
 
 const PERIODS: { key: ReportPeriodKey; label: string }[] = [
@@ -76,6 +77,8 @@ export default function ClinicaRelatoriosPage() {
   const [view, setView] = useState<"tabela" | "oficial" | "painel">("tabela");
   const [savingId, setSavingId] = useState(false);
   const [idMsg, setIdMsg] = useState("");
+  const [fileMsg, setFileMsg] = useState("");
+  const [busy, setBusy] = useState<"xlsx" | "pdf" | "print" | "">("");
 
   function applyPeriod(key: ReportPeriodKey) {
     const r = reportRangeFor(key);
@@ -151,24 +154,179 @@ export default function ClinicaRelatoriosPage() {
     return [head, ...body].join("\n");
   }, [summary, chronological]);
 
-  function downloadCsv() {
-    const blob = new Blob(["\uFEFF" + csv], { type: "text/csv;charset=utf-8" });
+  function fileBase() {
+    return `prestacao-contas-${reportFileSlug(clinic.name || "clinica") || "clinica"}-${from}-${to}`;
+  }
+
+  function saveBlob(blob: Blob, filename: string) {
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
-    a.download = `prestacao-contas-${clinic.name || "clinica"}-${from}-${to}.csv`;
+    a.download = filename;
+    a.rel = "noopener";
+    document.body.appendChild(a);
     a.click();
-    URL.revokeObjectURL(url);
+    a.remove();
+    window.setTimeout(() => URL.revokeObjectURL(url), 30_000);
   }
 
-  function openPdf() {
-    const q = new URLSearchParams({ from, to, format: "pdf", destination });
-    window.open(`/api/clinica/${params.id}/relatorio-oficial?${q}`, "_blank", "noopener,noreferrer");
+  function workbookInput() {
+    return {
+      destination,
+      periodLabel: periodLabel(from, to),
+      issuedAt: new Date().toLocaleString("pt-BR"),
+      clinic: {
+        name: clinic.name,
+        legalName: clinic.legalName || clinic.name,
+        cnpj: clinic.cnpj || "—",
+        city: clinic.city || "—",
+      },
+      totals: {
+        appointments: summary?.count || 0,
+        billedCents: summary?.producedCents || 0,
+        receivedCents: summary?.receivedCents || 0,
+        pendingCents: summary?.pendingCents || 0,
+        clinicCents: summary?.clinicShareCents || 0,
+        doctorCents: summary?.doctorShareCents || 0,
+      },
+      byDoctor: (summary?.byDoctor || []).map((d) => ({
+        doctorName: d.doctorName,
+        crm: d.doctorCrm || "—",
+        appointments: d.count,
+        billedCents: d.producedCents,
+        receivedCents: d.receivedCents,
+        pendingCents: d.pendingCents,
+        clinicCents: d.clinicShareCents,
+        doctorCents: d.doctorShareCents,
+        feeCents: d.feeCents,
+        clinicSharePercent: d.clinicSharePercent,
+      })),
+      rows: chronological.map((r, i) => {
+        const d = new Date(r.attendedAt);
+        return {
+          n: i + 1,
+          date: d.toLocaleDateString("pt-BR"),
+          time: d.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" }),
+          patientName: r.patientName || "Não informado",
+          doctorName: r.doctorName,
+          crm: r.doctorCrm || "—",
+          billedCents: r.feeCents,
+          receivedCents: r.receivedCents,
+          clinicCents: r.clinicShareCents,
+          doctorCents: r.doctorShareCents,
+          paymentLabel: sit(r.paymentStatus),
+        };
+      }),
+    };
+  }
+
+  function downloadCsv() {
+    const blob = new Blob(["\uFEFF" + csv], { type: "text/csv;charset=utf-8" });
+    saveBlob(blob, `${fileBase()}.csv`);
+    setFileMsg("CSV baixado.");
   }
 
   function downloadExcel() {
-    const q = new URLSearchParams({ from, to, format: "xlsx", destination });
-    window.location.href = `/api/clinica/${params.id}/relatorio-oficial?${q}`;
+    setBusy("xlsx");
+    setFileMsg("");
+    setErr("");
+    try {
+      const bytes = clinicReportXlsxBytes(workbookInput());
+      saveBlob(
+        new Blob([new Uint8Array(bytes)], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" }),
+        `${fileBase()}.xlsx`,
+      );
+      setFileMsg("Planilha Excel baixada. Abra no computador ou no app da planilha.");
+    } catch (error) {
+      setErr(error instanceof Error ? error.message : "Não foi possível montar a planilha.");
+    } finally {
+      setBusy("");
+    }
+  }
+
+  async function openPdf() {
+    setBusy("pdf");
+    setFileMsg("");
+    setErr("");
+    try {
+      const q = new URLSearchParams({ from, to, format: "pdf", destination });
+      const res = await fetch(`/api/clinica/${params.id}/relatorio-oficial?${q}`);
+      if (!res.ok) {
+        const d = await res.json().catch(() => ({}));
+        throw new Error(d.error || "Não foi possível gerar o PDF.");
+      }
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const opened = window.open(url, "_blank", "noopener,noreferrer");
+      if (!opened) saveBlob(blob, `${fileBase()}.pdf`);
+      setFileMsg(opened ? "PDF aberto. Use Imprimir nessa aba." : "PDF baixado.");
+      window.setTimeout(() => URL.revokeObjectURL(url), 60_000);
+    } catch (error) {
+      setErr(error instanceof Error ? error.message : "Não foi possível gerar o PDF.");
+    } finally {
+      setBusy("");
+    }
+  }
+
+  function printReport() {
+    setBusy("print");
+    setFileMsg("");
+    const rowsHtml = chronological.length
+      ? chronological
+          .map((r, i) => {
+            const d = new Date(r.attendedAt);
+            return `<tr>
+              <td>${i + 1}</td>
+              <td>${d.toLocaleDateString("pt-BR")}</td>
+              <td>${d.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}</td>
+              <td>${r.patientName || "Não informado"}</td>
+              <td>${r.doctorName}</td>
+              <td>${r.doctorCrm || "—"}</td>
+              <td>${money(r.feeCents)}</td>
+              <td>${money(r.receivedCents)}</td>
+              <td>${sit(r.paymentStatus)}</td>
+            </tr>`;
+          })
+          .join("")
+      : `<tr><td colspan="9">Sem atendimentos no período.</td></tr>`;
+    const html = `<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"/><title>${clinic.name || "Relatório"}</title>
+      <style>
+        body { font-family: Arial, sans-serif; color: #111; margin: 16px; }
+        h1 { font-size: 18px; margin: 0 0 4px; }
+        p, td, th { font-size: 12px; }
+        table { border-collapse: collapse; width: 100%; }
+        th, td { border: 1px solid #ccc; padding: 4px 6px; text-align: left; }
+        th { background: #f3f3f3; }
+        @page { size: A4; margin: 12mm; }
+      </style></head><body>
+      <h1>Prestação de contas de atendimentos</h1>
+      <p><b>${clinic.legalName || clinic.name}</b> · CNPJ ${clinic.cnpj || "—"} · ${clinic.city || ""}</p>
+      <p>Destinatário: ${destination}<br/>Período: ${periodLabel(from, to)} · ${summary?.count || 0} atendimento(s) · ${money(summary?.producedCents || 0)}</p>
+      <table><thead><tr><th>Nº</th><th>Data</th><th>Hora</th><th>Paciente</th><th>Médico</th><th>CRM</th><th>Valor</th><th>Recebido</th><th>Sit.</th></tr></thead>
+      <tbody>${rowsHtml}</tbody></table>
+      <p>Clínica ${money(summary?.clinicShareCents || 0)} · Honorários ${money(summary?.doctorShareCents || 0)} · Pendente ${money(summary?.pendingCents || 0)}</p>
+      </body></html>`;
+    const w = window.open("", "_blank", "noopener,noreferrer");
+    if (!w) {
+      setView("tabela");
+      window.setTimeout(() => window.print(), 50);
+      setFileMsg("O navegador bloqueou a aba. Imprima esta tela.");
+      setBusy("");
+      return;
+    }
+    w.document.open();
+    w.document.write(html);
+    w.document.close();
+    w.focus();
+    window.setTimeout(() => {
+      try {
+        w.print();
+      } catch {
+        /* a tabela já está na aba para imprimir */
+      }
+      setBusy("");
+      setFileMsg("Janela de impressão aberta.");
+    }, 250);
   }
 
   async function saveIdentity(e: React.FormEvent) {
@@ -284,19 +442,20 @@ export default function ClinicaRelatoriosPage() {
           </label>
         </div>
         <div className="mt-4 flex flex-wrap gap-2">
-          <button type="button" className="btn-gold min-h-12" onClick={downloadExcel} disabled={!summary}>
-            Planilha Excel
+          <button type="button" className="btn-gold min-h-12" onClick={downloadExcel} disabled={busy === "xlsx"}>
+            {busy === "xlsx" ? "Montando planilha…" : "Baixar Excel"}
           </button>
-          <button type="button" className="btn-ghost min-h-12" onClick={openPdf}>
-            PDF para protocolar
+          <button type="button" className="btn-ghost min-h-12" onClick={printReport} disabled={busy === "print"}>
+            {busy === "print" ? "Abrindo impressão…" : "Imprimir tabela"}
           </button>
-          <button type="button" className="btn-ghost min-h-12" onClick={() => window.print()}>
-            Imprimir
+          <button type="button" className="btn-ghost min-h-12" onClick={openPdf} disabled={busy === "pdf"}>
+            {busy === "pdf" ? "Gerando PDF…" : "PDF para protocolar"}
           </button>
           <button type="button" className="btn-ghost min-h-12" onClick={downloadCsv} disabled={!csv}>
             CSV
           </button>
         </div>
+        {fileMsg && <p className="mt-3 text-sm text-[var(--text-soft)]">{fileMsg}</p>}
         {summary && summary.count >= 30 && (
           <p className="mt-3 text-sm text-amber-800">
             {summary.count} atendimentos neste período. A planilha Excel evita dezenas de páginas de PDF.
@@ -340,7 +499,7 @@ export default function ClinicaRelatoriosPage() {
       </div>
 
       {view === "tabela" && summary && (
-        <div className="mt-6">
+        <div className="clinic-print-area mt-6">
           <div className="flex flex-wrap items-end justify-between gap-3">
             <div>
               <p className="text-xs font-bold uppercase tracking-wider text-[var(--gold)]">{clinic.name}</p>
