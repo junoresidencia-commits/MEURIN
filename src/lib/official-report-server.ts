@@ -47,12 +47,6 @@ export async function buildOfficialClinicReport(
   const summary = productionSummary(encounters);
   const legalName = clinic.legalName || clinic.name;
   const warnings: string[] = [];
-  if (!clinic.legalName) warnings.push("Razão social não cadastrada. Complete os dados da unidade antes de protocolar.");
-  if (!clinic.cnpj) warnings.push("CNPJ não cadastrado. Complete os dados da unidade antes de protocolar.");
-  if (!clinic.city) warnings.push("Município não cadastrado. Informe a cidade da unidade no documento.");
-  if (doctors.some((doctor) => !String(doctor.crm || "").trim())) {
-    warnings.push("Há profissional sem CRM no cadastro. O órgão público costuma exigir o registro.");
-  }
 
   return {
     kind: "clinic",

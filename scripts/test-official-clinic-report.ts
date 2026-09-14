@@ -67,6 +67,15 @@ async function main() {
   assert.equal(again?.destination, "Secretaria Municipal de Saúde de Salvador");
   assert.equal(again?.clinic.city, "Salvador");
 
+  const bare = await createClinic({ name: "Medclin" });
+  const bareReport = await buildOfficialClinicReport(bare.id, from, to);
+  assert.ok(bareReport);
+  assert.equal(bareReport.warnings.length, 0, "razão social e CNPJ são opcionais");
+  assert.equal(bareReport.clinic.cnpj, "—");
+  const barePdf = await officialClinicReportPdf(bareReport);
+  const bareTxt = Buffer.from(barePdf).toString("latin1");
+  assert.equal(bareTxt.includes("Pendencias cadastrais") || bareTxt.includes("Pendências cadastrais"), false);
+
   const pdf = await officialClinicReportPdf(report);
   assert.ok(pdf.byteLength > 800, `PDF pequeno demais: ${pdf.byteLength}`);
   const head = Buffer.from(pdf.slice(0, 5)).toString("latin1");

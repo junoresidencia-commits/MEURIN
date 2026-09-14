@@ -126,7 +126,6 @@ export default function ClinicaRelatoriosPage() {
       .catch((e) => setErr(e instanceof Error ? e.message : "Erro"));
   }, [params.id, from, to]);
 
-  const missing = [!clinic.legalName && "razão social", !clinic.cnpj && "CNPJ", !clinic.city && "município"].filter(Boolean);
   const chronological = useMemo(
     () => [...rows].sort((a, b) => a.attendedAt.localeCompare(b.attendedAt)),
     [rows],
@@ -308,7 +307,7 @@ export default function ClinicaRelatoriosPage() {
       <script>window.addEventListener("load", function () { window.print(); });</script>
       </body></html>`;
     const url = URL.createObjectURL(new Blob([html], { type: "text/html;charset=utf-8" }));
-    const w = window.open(url, "_blank", "noopener,noreferrer");
+    const w = window.open(url, "_blank");
     if (!w) {
       URL.revokeObjectURL(url);
       setView("tabela");
@@ -341,7 +340,7 @@ export default function ClinicaRelatoriosPage() {
         city: d.clinic.city || "",
       });
       if (d.clinic.city) setDestination(defaultOfficialDestination(d.clinic.city));
-      setIdMsg("Dados da unidade salvos. Já entram no PDF da prefeitura.");
+      setIdMsg("Dados da unidade salvos.");
     } catch (error) {
       setIdMsg(error instanceof Error ? error.message : "Erro ao salvar.");
     } finally {
@@ -360,7 +359,7 @@ export default function ClinicaRelatoriosPage() {
         <form onSubmit={saveIdentity} className="panel mt-4">
           <p className="text-xs font-bold uppercase tracking-wider text-[var(--gold)]">Dados da unidade no documento</p>
           <p className="mt-1 text-sm text-[var(--text-muted)]">
-            Razão social, CNPJ e município aparecem no PDF protocolado. Sem isso o órgão devolve o relatório.
+            Razão social, CNPJ e município são opcionais. Se preencher, entram no cabeçalho do PDF e da planilha.
           </p>
           <div className="mt-3 grid gap-3 sm:grid-cols-2">
             <label>
@@ -483,11 +482,6 @@ export default function ClinicaRelatoriosPage() {
             Painel interno
           </button>
         </div>
-        {missing.length > 0 && (
-          <p className="mt-3 text-sm text-amber-800">
-            Falta {missing.join(", ")} no cabeçalho. Preencha acima antes de mandar para a prefeitura.
-          </p>
-        )}
         {err && <p className="mt-3 text-sm text-[var(--danger)]">{err}</p>}
       </div>
 
