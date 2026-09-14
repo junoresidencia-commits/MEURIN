@@ -21,7 +21,7 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
     const slug = reportFileSlug(report.clinic.name) || "clinica";
     if (format === "xlsx" || format === "excel") {
       const bytes = officialClinicReportXlsx(report);
-      return new NextResponse(bytes, {
+      return new NextResponse(new Uint8Array(bytes), {
         headers: {
           "Content-Type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
           "Content-Disposition": `attachment; filename="prestacao-contas-${slug}-${from}-${to}.xlsx"`,
@@ -30,7 +30,7 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
     }
     if (format === "pdf") {
       const bytes = await officialClinicReportPdf(report);
-      return new NextResponse(Buffer.from(bytes), {
+      return new NextResponse(new Uint8Array(bytes), {
         headers: {
           "Content-Type": "application/pdf",
           "Content-Disposition": `inline; filename="prestacao-contas-${slug}-${from}-${to}.pdf"`,
