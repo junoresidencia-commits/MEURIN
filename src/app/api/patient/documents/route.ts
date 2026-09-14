@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { getPatientEmail } from "@/lib/patient-session";
 import { getDocuments } from "@/lib/patient-store";
+import { patientCanViewSharedDocument } from "@/lib/nutrition-plan-access";
 
 export async function GET() {
   const email = await getPatientEmail();
@@ -8,8 +9,12 @@ export async function GET() {
     return NextResponse.json({ error: "Sessão de paciente não encontrada." }, { status: 401 });
   }
   const docs = await getDocuments(email, { onlyShared: true });
+  const visible: typeof docs = [];
+  for (const d of docs) {
+    if (await patientCanViewSharedDocument(d, email)) visible.push(d);
+  }
   // Nunca expõe caminhos de storage. PDF gerado é servido pelo proxy autenticado.
-  const documents = docs.map((d) => ({
+  const documents = visible.map((d) => ({
     id: d.id,
     type: d.type,
     title: d.title,
