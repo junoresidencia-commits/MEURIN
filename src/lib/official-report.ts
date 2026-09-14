@@ -52,7 +52,7 @@ export type OfficialClinicReport = {
     doctorCents: number;
     paymentLabel: string;
   }>;
-  declaration: string[];
+  notes?: string;
   warnings: string[];
   issuer: typeof COMPANY;
 };
@@ -96,12 +96,4 @@ export function reportFileSlug(name: string) {
     .replace(/[^a-zA-Z0-9]+/g, "-")
     .replace(/^-|-$/g, "")
     .toLowerCase();
-}
-
-export function clinicDeclaration(clinicName: string) {
-  return [
-    `A unidade ${clinicName} declara, para os devidos fins junto à Prefeitura Municipal, Secretaria Municipal de Saúde e demais órgãos de controle, que os atendimentos relacionados neste documento foram efetivamente realizados no período de competência indicado.`,
-    "Os valores correspondem à produção assistencial e ao rateio contratual entre a clínica e o(s) profissional(is) de saúde. Este relatório serve como prestação de contas administrativa e não substitui nota fiscal, RPA, recibo de honorários, SISAB/e-SUS ou faturamento de convênio.",
-    "A relação nominal identifica o paciente, o profissional responsável (com CRM) e o valor da consulta, para conferência da gestão municipal e arquivo da clínica.",
-  ];
 }

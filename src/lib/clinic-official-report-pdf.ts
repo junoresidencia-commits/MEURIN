@@ -15,7 +15,8 @@ function pdfSafe(text: string) {
     .replace(/[‘’]/g, "'")
     .replace(/[“”]/g, '"')
     .replace(/·/g, "-")
-    .normalize("NFC");
+    .normalize("NFC")
+    .replace(/[^\x20-\x7E\xA0-\xFF]/g, "");
 }
 
 function wrap(text: string, max: number) {
@@ -189,36 +190,29 @@ export async function officialClinicReportPdf(report: OfficialClinicReport): Pro
     y -= 12;
   }
 
-  y -= 10;
-  ensure(90);
-  text("5. DECLARAÇÃO", MARGIN, 10, bold, teal);
-  y -= 14;
-  for (const paragraph of report.declaration) {
-    for (const lineText of wrap(paragraph, 98)) {
-      ensure(12);
-      text(lineText, MARGIN, 8, font, ink);
-      y -= 11;
-    }
-    y -= 6;
-  }
-
-  if (report.warnings.length) {
-    ensure(28);
-    text("Pendências cadastrais (completar antes de protocolar):", MARGIN, 8, bold, teal);
-    y -= 12;
-    for (const warning of report.warnings) {
-      for (const lineText of wrap(`- ${warning}`, 98)) {
+  const notes = (report.notes || "").trim();
+  if (notes) {
+    y -= 10;
+    ensure(40);
+    text("5. OBSERVACOES", MARGIN, 10, bold, teal);
+    y -= 14;
+    for (const paragraph of notes.split(/\n+/)) {
+      for (const lineText of wrap(paragraph, 98)) {
+        if (!lineText) continue;
         ensure(12);
-        text(lineText, MARGIN, 8, font, muted);
+        text(lineText, MARGIN, 8, font, ink);
         y -= 11;
       }
+      y -= 6;
     }
+    ensure(90);
     y -= 6;
+    text("6. ASSINATURAS", MARGIN, 10, bold, teal);
+  } else {
+    ensure(90);
+    y -= 6;
+    text("5. ASSINATURAS", MARGIN, 10, bold, teal);
   }
-
-  ensure(90);
-  y -= 6;
-  text("6. ASSINATURAS", MARGIN, 10, bold, teal);
   y -= 40;
   page.drawLine({ start: { x: MARGIN, y }, end: { x: MARGIN + 200, y }, thickness: 0.8, color: rule });
   page.drawLine({

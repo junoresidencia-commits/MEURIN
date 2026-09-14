@@ -63,6 +63,14 @@ function sit(status: string) {
   return "Pendente";
 }
 
+function escapeHtml(value: string) {
+  return value
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;");
+}
+
 export default function ClinicaRelatoriosPage() {
   const params = useParams<{ id: string }>();
   const initial = reportRangeFor("mes");
@@ -71,6 +79,7 @@ export default function ClinicaRelatoriosPage() {
   const [to, setTo] = useState(initial.to);
   const [period, setPeriod] = useState<ReportPeriodKey>("mes");
   const [destination, setDestination] = useState(defaultOfficialDestination(""));
+  const [notes, setNotes] = useState("");
   const [summary, setSummary] = useState<Summary | null>(null);
   const [rows, setRows] = useState<Encounter[]>([]);
   const [err, setErr] = useState("");
@@ -216,6 +225,7 @@ export default function ClinicaRelatoriosPage() {
           paymentLabel: sit(r.paymentStatus),
         };
       }),
+      notes: notes.trim() || undefined,
     };
   }
 
@@ -249,6 +259,7 @@ export default function ClinicaRelatoriosPage() {
     setErr("");
     try {
       const q = new URLSearchParams({ from, to, format: "pdf", destination });
+      if (notes.trim()) q.set("notes", notes.trim().slice(0, 4000));
       const res = await fetch(`/api/clinica/${params.id}/relatorio-oficial?${q}`);
       if (!res.ok) {
         const d = await res.json().catch(() => ({}));
@@ -300,7 +311,8 @@ export default function ClinicaRelatoriosPage() {
       </style></head><body>
       <h1>Prestação de contas de atendimentos</h1>
       <p><b>${clinic.legalName || clinic.name}</b> · CNPJ ${clinic.cnpj || "—"} · ${clinic.city || ""}</p>
-      <p>Destinatário: ${destination}<br/>Período: ${periodLabel(from, to)} · ${summary?.count || 0} atendimento(s) · ${money(summary?.producedCents || 0)}</p>
+      <p>Destinatário: ${escapeHtml(destination)}<br/>Período: ${periodLabel(from, to)} · ${summary?.count || 0} atendimento(s) · ${money(summary?.producedCents || 0)}</p>
+      ${notes.trim() ? `<p><b>Observações:</b> ${escapeHtml(notes.trim()).replace(/\n/g, "<br/>")}</p>` : ""}
       <table><thead><tr><th>Nº</th><th>Data</th><th>Hora</th><th>Paciente</th><th>Médico</th><th>CRM</th><th>Valor</th><th>Recebido</th><th>Sit.</th></tr></thead>
       <tbody>${rowsHtml}</tbody></table>
       <p>Clínica ${money(summary?.clinicShareCents || 0)} · Honorários ${money(summary?.doctorShareCents || 0)} · Pendente ${money(summary?.pendingCents || 0)}</p>
@@ -431,6 +443,15 @@ export default function ClinicaRelatoriosPage() {
           <label className="sm:col-span-2">
             <span className="mb-1 block text-xs font-semibold text-[var(--text-muted)]">Destinatário</span>
             <input className="input-field" value={destination} onChange={(e) => setDestination(e.target.value)} />
+          </label>
+          <label className="sm:col-span-2">
+            <span className="mb-1 block text-xs font-semibold text-[var(--text-muted)]">Observações (opcional)</span>
+            <textarea
+              className="input-field min-h-[80px]"
+              value={notes}
+              onChange={(e) => setNotes(e.target.value.slice(0, 4000))}
+              placeholder="Se quiser escrever algo no relatório, escreva aqui. Senão, deixe em branco."
+            />
           </label>
         </div>
         <div className="mt-4 flex flex-wrap gap-2">
@@ -658,15 +679,15 @@ export default function ClinicaRelatoriosPage() {
             </table>
           </div>
 
-          <h3 className="mt-6 text-sm font-bold uppercase tracking-wider text-[var(--gold)]">5. Declaração</h3>
-          <p className="mt-2 text-sm leading-relaxed">
-            A unidade {clinic.legalName || clinic.name || "clínica"} declara, para os devidos fins junto à Prefeitura Municipal, Secretaria Municipal de Saúde e demais órgãos de controle, que os atendimentos relacionados neste documento foram efetivamente realizados no período de competência indicado.
-          </p>
-          <p className="mt-2 text-sm leading-relaxed text-[var(--text-soft)]">
-            Os valores correspondem à produção assistencial e ao rateio contratual. Este relatório não substitui nota fiscal, RPA, recibo de honorários, SISAB/e-SUS ou faturamento de convênio.
-          </p>
-
-          <h3 className="mt-8 text-sm font-bold uppercase tracking-wider text-[var(--gold)]">6. Assinaturas</h3>
+          {notes.trim() ? (
+            <>
+              <h3 className="mt-6 text-sm font-bold uppercase tracking-wider text-[var(--gold)]">5. Observações</h3>
+              <p className="mt-2 whitespace-pre-wrap text-sm leading-relaxed">{notes.trim()}</p>
+              <h3 className="mt-8 text-sm font-bold uppercase tracking-wider text-[var(--gold)]">6. Assinaturas</h3>
+            </>
+          ) : (
+            <h3 className="mt-8 text-sm font-bold uppercase tracking-wider text-[var(--gold)]">5. Assinaturas</h3>
+          )}
           <div className="mt-10 grid gap-10 sm:grid-cols-2">
             <div>
               <div className="border-t border-[var(--text)] pt-2 text-sm">Gestora / responsável administrativo</div>

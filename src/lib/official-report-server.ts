@@ -1,7 +1,7 @@
 import "server-only";
 import { COMPANY } from "@/lib/company";
 import { listEncounters, listFeeRules, productionSummary } from "@/lib/clinic-finance-store";
-import { clinicDeclaration, defaultOfficialDestination, formatCrm, paymentLabel, periodLabel, type OfficialClinicReport } from "@/lib/official-report";
+import { defaultOfficialDestination, formatCrm, paymentLabel, periodLabel, type OfficialClinicReport } from "@/lib/official-report";
 import { getClinic } from "@/lib/platform-store";
 import { listDoctorsByIds } from "@/lib/store";
 
@@ -34,6 +34,7 @@ export async function buildOfficialClinicReport(
   from: string,
   to: string,
   destination?: string,
+  notes?: string,
 ): Promise<OfficialClinicReport | null> {
   const clinic = await getClinic(clinicId);
   if (!clinic) return null;
@@ -106,7 +107,7 @@ export async function buildOfficialClinicReport(
         paymentLabel: paymentLabel(row.paymentStatus),
       };
     }),
-    declaration: clinicDeclaration(legalName),
+    notes: (notes || "").trim() || undefined,
     warnings,
     issuer: COMPANY,
   };

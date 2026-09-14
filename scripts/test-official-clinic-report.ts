@@ -60,6 +60,7 @@ async function main() {
   assert.equal(row.paymentLabel, "Quitado");
   assert.ok(row.n >= 1);
   assert.equal(report.warnings.length, 0, "unidade completa não deve ter pendência");
+  assert.equal(report.notes, undefined);
 
   const renamed = await updateClinicProfile(clinic.id, { city: "Salvador" });
   assert.equal(renamed.city, "Salvador");
@@ -80,16 +81,36 @@ async function main() {
   assert.ok(pdf.byteLength > 800, `PDF pequeno demais: ${pdf.byteLength}`);
   const head = Buffer.from(pdf.slice(0, 5)).toString("latin1");
   assert.equal(head, "%PDF-");
+  const pdfTxt = Buffer.from(pdf).toString("latin1");
+  assert.equal(pdfTxt.includes("declara, para os devidos fins"), false);
+  assert.equal(pdfTxt.includes("nao substitui nota fiscal") || pdfTxt.includes("não substitui nota fiscal"), false);
+  assert.equal(pdfTxt.includes("5. DECLARACAO") || pdfTxt.includes("5. DECLARAÇÃO"), false);
+
+  const noted = await buildOfficialClinicReport(clinic.id, from, to, undefined, "Atendimentos do posto municipal.");
+  assert.equal(noted?.notes, "Atendimentos do posto municipal.");
+  const notedPdf = await officialClinicReportPdf(noted!);
+  const notedTxt = Buffer.from(notedPdf).toString("latin1");
+  assert.ok(notedTxt.includes("Atendimentos do posto municipal."));
+  assert.ok(notedTxt.includes("5. OBSERVACOES") || notedTxt.includes("5. OBSERVAÇÕES"));
 
   const xlsx = officialClinicReportXlsx(report);
   assert.ok(xlsx.byteLength > 800, `XLSX pequeno demais: ${xlsx.byteLength}`);
   const book = XLSX.read(xlsx, { type: "array" });
   assert.deepEqual(book.SheetNames, ["Capa", "Por profissional", "Relacao nominal"]);
+  const capa = XLSX.utils.sheet_to_json<unknown[]>(book.Sheets["Capa"]!, { header: 1 });
+  const capaText = JSON.stringify(capa);
+  assert.equal(capaText.includes("declara, para os devidos fins"), false);
+  assert.equal(capaText.includes("não substitui nota fiscal"), false);
   const relacao = XLSX.utils.sheet_to_json<Record<string, unknown>>(book.Sheets["Relacao nominal"]!, { header: 1 });
   const header = relacao[0] as unknown[];
   assert.ok(header.includes("Paciente") && header.includes("CRM"));
   const named = relacao.some((line) => Array.isArray(line) && line.includes("Maria da Prestação"));
   assert.ok(named, "planilha traz a relação nominal");
+
+  const notedXlsx = officialClinicReportXlsx(noted!);
+  const notedBook = XLSX.read(notedXlsx, { type: "array" });
+  const notedCapa = JSON.stringify(XLSX.utils.sheet_to_json<unknown[]>(notedBook.Sheets["Capa"]!, { header: 1 }));
+  assert.ok(notedCapa.includes("Atendimentos do posto municipal."));
 
   console.log("official-clinic-report ok", {
     documentId: report.documentId,

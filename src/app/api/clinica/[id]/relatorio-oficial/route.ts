@@ -14,9 +14,10 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
   const to = url.searchParams.get("to") || "";
   if (!from || !to) return NextResponse.json({ error: "Informe o período (de / até)." }, { status: 400 });
   const destination = url.searchParams.get("destination") || undefined;
+  const notes = (url.searchParams.get("notes") || "").trim().slice(0, 4000) || undefined;
   const format = (url.searchParams.get("format") || "json").toLowerCase();
   try {
-    const report = await buildOfficialClinicReport(id, from, to, destination);
+    const report = await buildOfficialClinicReport(id, from, to, destination, notes);
     if (!report) return NextResponse.json({ error: "Clínica não encontrada." }, { status: 404 });
     const slug = reportFileSlug(report.clinic.name) || "clinica";
     if (format === "xlsx" || format === "excel") {

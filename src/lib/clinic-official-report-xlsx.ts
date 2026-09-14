@@ -1,5 +1,5 @@
 import * as XLSX from "xlsx";
-import { clinicDeclaration, type OfficialClinicReport } from "@/lib/official-report";
+import type { OfficialClinicReport } from "@/lib/official-report";
 
 function reais(cents: number) {
   return Math.round(cents) / 100;
@@ -55,14 +55,12 @@ export type ClinicWorkbookInput = {
     doctorCents: number;
     paymentLabel: string;
   }>;
-  declaration?: string[];
+  notes?: string;
 };
 
 export function clinicReportWorkbook(input: ClinicWorkbookInput) {
   const wb = XLSX.utils.book_new();
-  const declaration = input.declaration?.length
-    ? input.declaration
-    : clinicDeclaration(input.clinic.legalName || input.clinic.name || "clínica");
+  const notes = (input.notes || "").trim();
 
   const capa = XLSX.utils.aoa_to_sheet([
     [input.title || "Prestação de contas de atendimentos"],
@@ -84,8 +82,7 @@ export function clinicReportWorkbook(input: ClinicWorkbookInput) {
     ["Pendente", reais(input.totals.pendingCents)],
     ["Retenção clínica", reais(input.totals.clinicCents)],
     ["Honorários", reais(input.totals.doctorCents)],
-    [],
-    ...declaration.map((line) => [line]),
+    ...(notes ? [[], ["Observações", notes]] : []),
   ]);
   capa["!cols"] = [{ wch: 28 }, { wch: 72 }];
   applyMoney(capa, ["B"], 15, 19);
@@ -212,6 +209,6 @@ export function officialClinicReportXlsx(report: OfficialClinicReport): Uint8Arr
       clinicSharePercent: row.clinicSharePercent,
     })),
     rows: report.rows,
-    declaration: report.declaration,
+    notes: report.notes,
   });
 }
