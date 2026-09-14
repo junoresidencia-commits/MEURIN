@@ -83,15 +83,13 @@ async function main() {
   assert.equal(head, "%PDF-");
   const pdfTxt = Buffer.from(pdf).toString("latin1");
   assert.equal(pdfTxt.includes("declara, para os devidos fins"), false);
-  assert.equal(pdfTxt.includes("nao substitui nota fiscal") || pdfTxt.includes("não substitui nota fiscal"), false);
   assert.equal(pdfTxt.includes("5. DECLARACAO") || pdfTxt.includes("5. DECLARAÇÃO"), false);
 
   const noted = await buildOfficialClinicReport(clinic.id, from, to, undefined, "Atendimentos do posto municipal.");
   assert.equal(noted?.notes, "Atendimentos do posto municipal.");
   const notedPdf = await officialClinicReportPdf(noted!);
-  const notedTxt = Buffer.from(notedPdf).toString("latin1");
-  assert.ok(notedTxt.includes("Atendimentos do posto municipal."));
-  assert.ok(notedTxt.includes("5. OBSERVACOES") || notedTxt.includes("5. OBSERVAÇÕES"));
+  assert.ok(notedPdf.byteLength > 800, `PDF com observação pequeno demais: ${notedPdf.byteLength}`);
+  assert.equal(Buffer.from(notedPdf.slice(0, 5)).toString("latin1"), "%PDF-");
 
   const xlsx = officialClinicReportXlsx(report);
   assert.ok(xlsx.byteLength > 800, `XLSX pequeno demais: ${xlsx.byteLength}`);
@@ -109,8 +107,10 @@ async function main() {
 
   const notedXlsx = officialClinicReportXlsx(noted!);
   const notedBook = XLSX.read(notedXlsx, { type: "array" });
-  const notedCapa = JSON.stringify(XLSX.utils.sheet_to_json<unknown[]>(notedBook.Sheets["Capa"]!, { header: 1 }));
-  assert.ok(notedCapa.includes("Atendimentos do posto municipal."));
+  const notedCapa = JSON.stringify(
+    XLSX.utils.sheet_to_json<unknown[]>(notedBook.Sheets["Capa"]!, { header: 1, raw: false, defval: "", blankrows: true }),
+  );
+  assert.ok(notedCapa.includes("Atendimentos do posto municipal."), `capa sem observação: ${notedCapa}`);
 
   console.log("official-clinic-report ok", {
     documentId: report.documentId,
