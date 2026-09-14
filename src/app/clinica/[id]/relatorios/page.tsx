@@ -73,7 +73,7 @@ export default function ClinicaRelatoriosPage() {
   const [summary, setSummary] = useState<Summary | null>(null);
   const [rows, setRows] = useState<Encounter[]>([]);
   const [err, setErr] = useState("");
-  const [view, setView] = useState<"oficial" | "painel">("oficial");
+  const [view, setView] = useState<"tabela" | "oficial" | "painel">("tabela");
   const [savingId, setSavingId] = useState(false);
   const [idMsg, setIdMsg] = useState("");
 
@@ -166,6 +166,11 @@ export default function ClinicaRelatoriosPage() {
     window.open(`/api/clinica/${params.id}/relatorio-oficial?${q}`, "_blank", "noopener,noreferrer");
   }
 
+  function downloadExcel() {
+    const q = new URLSearchParams({ from, to, format: "xlsx", destination });
+    window.location.href = `/api/clinica/${params.id}/relatorio-oficial?${q}`;
+  }
+
   async function saveIdentity(e: React.FormEvent) {
     e.preventDefault();
     setSavingId(true);
@@ -198,7 +203,7 @@ export default function ClinicaRelatoriosPage() {
       <div className="print:hidden">
         <h1 className="font-display text-3xl font-extrabold text-[var(--text)]">Relatórios</h1>
         <p className="mt-1 text-sm text-[var(--text-muted)]">
-          Documento oficial para Prefeitura e Secretaria de Saúde: cabeçalho da unidade, CRM, relação nominal e assinaturas. O painel interno continua disponível para o dia a dia.
+          Lista grande: mande a planilha Excel — uma tabela só, a prefeitura e a gestora abrem no computador. O PDF oficial é para protocolar com assinatura, quando a lista cabe em poucas páginas.
         </p>
 
         <form onSubmit={saveIdentity} className="panel mt-4">
@@ -279,17 +284,34 @@ export default function ClinicaRelatoriosPage() {
           </label>
         </div>
         <div className="mt-4 flex flex-wrap gap-2">
-          <button type="button" className="btn-gold min-h-12" onClick={openPdf}>
-            PDF para a Prefeitura
+          <button type="button" className="btn-gold min-h-12" onClick={downloadExcel} disabled={!summary}>
+            Planilha Excel
+          </button>
+          <button type="button" className="btn-ghost min-h-12" onClick={openPdf}>
+            PDF para protocolar
           </button>
           <button type="button" className="btn-ghost min-h-12" onClick={() => window.print()}>
-            Imprimir / salvar em papel
+            Imprimir
           </button>
           <button type="button" className="btn-ghost min-h-12" onClick={downloadCsv} disabled={!csv}>
-            Planilha (CSV)
+            CSV
           </button>
         </div>
-        <div className="mt-4 flex gap-2">
+        {summary && summary.count >= 30 && (
+          <p className="mt-3 text-sm text-amber-800">
+            {summary.count} atendimentos neste período. A planilha Excel evita dezenas de páginas de PDF.
+          </p>
+        )}
+        <div className="mt-4 flex flex-wrap gap-2">
+          <button
+            type="button"
+            onClick={() => setView("tabela")}
+            className={`rounded-full border px-3 py-1.5 text-xs font-bold ${
+              view === "tabela" ? "border-[var(--gold)] bg-[var(--gold-soft)] text-[var(--gold)]" : "border-[var(--border)]"
+            }`}
+          >
+            Tabela
+          </button>
           <button
             type="button"
             onClick={() => setView("oficial")}
@@ -316,6 +338,77 @@ export default function ClinicaRelatoriosPage() {
         )}
         {err && <p className="mt-3 text-sm text-[var(--danger)]">{err}</p>}
       </div>
+
+      {view === "tabela" && summary && (
+        <div className="mt-6">
+          <div className="flex flex-wrap items-end justify-between gap-3">
+            <div>
+              <p className="text-xs font-bold uppercase tracking-wider text-[var(--gold)]">{clinic.name}</p>
+              <h2 className="font-display text-2xl font-extrabold">Tabela de produção</h2>
+              <p className="text-sm text-[var(--text-muted)]">
+                {periodLabel(from, to)} · {summary.count} atendimento{summary.count === 1 ? "" : "s"} · {money(summary.producedCents)}
+              </p>
+            </div>
+            <p className="text-sm text-[var(--text-muted)]">
+              Clínica {money(summary.clinicShareCents)} · honorários {money(summary.doctorShareCents)} · pendente {money(summary.pendingCents)}
+            </p>
+          </div>
+          <div className="mt-4 overflow-x-auto rounded-2xl border border-[var(--border)] bg-white">
+            <table className="w-full min-w-[880px] text-left text-sm">
+              <thead className="sticky top-0 bg-[var(--gold-soft)]">
+                <tr className="text-[11px] uppercase text-[var(--text-muted)]">
+                  <th className="px-3 py-2">Nº</th>
+                  <th className="px-3 py-2">Data</th>
+                  <th className="px-3 py-2">Hora</th>
+                  <th className="px-3 py-2">Paciente</th>
+                  <th className="px-3 py-2">Médico</th>
+                  <th className="px-3 py-2">CRM</th>
+                  <th className="px-3 py-2">Valor</th>
+                  <th className="px-3 py-2">Recebido</th>
+                  <th className="px-3 py-2">Clínica</th>
+                  <th className="px-3 py-2">Honorário</th>
+                  <th className="px-3 py-2">Sit.</th>
+                </tr>
+              </thead>
+              <tbody>
+                {chronological.map((r, i) => {
+                  const d = new Date(r.attendedAt);
+                  return (
+                    <tr key={r.id} className="border-t border-[var(--border)] even:bg-[var(--bg)]">
+                      <td className="px-3 py-1.5">{i + 1}</td>
+                      <td className="px-3 py-1.5 whitespace-nowrap">{d.toLocaleDateString("pt-BR")}</td>
+                      <td className="px-3 py-1.5">{d.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}</td>
+                      <td className="px-3 py-1.5 font-semibold">{r.patientName || "Não informado"}</td>
+                      <td className="px-3 py-1.5">{r.doctorName}</td>
+                      <td className="px-3 py-1.5 whitespace-nowrap">{r.doctorCrm || "—"}</td>
+                      <td className="px-3 py-1.5 whitespace-nowrap">{money(r.feeCents)}</td>
+                      <td className="px-3 py-1.5 whitespace-nowrap">{money(r.receivedCents)}</td>
+                      <td className="px-3 py-1.5 whitespace-nowrap">{money(r.clinicShareCents)}</td>
+                      <td className="px-3 py-1.5 whitespace-nowrap">{money(r.doctorShareCents)}</td>
+                      <td className="px-3 py-1.5">{sit(r.paymentStatus)}</td>
+                    </tr>
+                  );
+                })}
+                {chronological.length === 0 && (
+                  <tr><td colSpan={11} className="px-3 py-4 text-[var(--text-muted)]">Sem atendimentos no período.</td></tr>
+                )}
+              </tbody>
+              {chronological.length > 0 && (
+                <tfoot>
+                  <tr className="border-t-2 border-[var(--text)] font-bold">
+                    <td className="px-3 py-2" colSpan={6}>Total</td>
+                    <td className="px-3 py-2 whitespace-nowrap">{money(summary.producedCents)}</td>
+                    <td className="px-3 py-2 whitespace-nowrap">{money(summary.receivedCents)}</td>
+                    <td className="px-3 py-2 whitespace-nowrap">{money(summary.clinicShareCents)}</td>
+                    <td className="px-3 py-2 whitespace-nowrap">{money(summary.doctorShareCents)}</td>
+                    <td className="px-3 py-2">{summary.pendingCents ? money(summary.pendingCents) : "—"}</td>
+                  </tr>
+                </tfoot>
+              )}
+            </table>
+          </div>
+        </div>
+      )}
 
       {view === "oficial" && summary && (
         <article className="official-sheet mt-6 bg-white print:mt-0">

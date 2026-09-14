@@ -89,6 +89,15 @@ export function formatCrm(crm?: string | null, crmState?: string | null) {
   return uf ? `CRM ${number}/${uf}` : `CRM ${number}`;
 }
 
+export function reportFileSlug(name: string) {
+  return name
+    .normalize("NFD")
+    .replace(/\p{M}/gu, "")
+    .replace(/[^a-zA-Z0-9]+/g, "-")
+    .replace(/^-|-$/g, "")
+    .toLowerCase();
+}
+
 export function clinicDeclaration(clinicName: string) {
   return [
     `A unidade ${clinicName} declara, para os devidos fins junto à Prefeitura Municipal, Secretaria Municipal de Saúde e demais órgãos de controle, que os atendimentos relacionados neste documento foram efetivamente realizados no período de competência indicado.`,

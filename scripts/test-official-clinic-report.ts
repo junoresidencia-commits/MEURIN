@@ -1,5 +1,7 @@
 import assert from "node:assert/strict";
+import * as XLSX from "xlsx";
 import { officialClinicReportPdf } from "../src/lib/clinic-official-report-pdf";
+import { officialClinicReportXlsx } from "../src/lib/clinic-official-report-xlsx";
 import { upsertFeeRule, createEncounter, recordCheckIn } from "../src/lib/clinic-finance-store";
 import { buildOfficialClinicReport } from "../src/lib/official-report-server";
 import { defaultOfficialDestination, periodLabel } from "../src/lib/official-report";
@@ -70,11 +72,23 @@ async function main() {
   const head = Buffer.from(pdf.slice(0, 5)).toString("latin1");
   assert.equal(head, "%PDF-");
 
+  const xlsx = officialClinicReportXlsx(report);
+  assert.ok(xlsx.byteLength > 800, `XLSX pequeno demais: ${xlsx.byteLength}`);
+  const book = XLSX.read(xlsx, { type: "buffer" });
+  assert.deepEqual(book.SheetNames, ["Capa", "Por profissional", "Relacao nominal"]);
+  const relacao = XLSX.utils.sheet_to_json<Record<string, unknown>>(book.Sheets["Relacao nominal"]!, { header: 1 });
+  const header = relacao[0] as unknown[];
+  assert.ok(header.includes("Paciente") && header.includes("CRM"));
+  const named = relacao.some((line) => Array.isArray(line) && line.includes("Maria da Prestação"));
+  assert.ok(named, "planilha traz a relação nominal");
+
   console.log("official-clinic-report ok", {
     documentId: report.documentId,
     destination: report.destination,
     appointments: report.totals.appointments,
     pdfBytes: pdf.byteLength,
+    xlsxBytes: xlsx.byteLength,
+    sheets: book.SheetNames,
     crm: report.byDoctor[0]?.crm,
   });
 }

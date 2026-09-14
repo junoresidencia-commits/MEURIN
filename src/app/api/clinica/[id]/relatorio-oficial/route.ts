@@ -1,5 +1,7 @@
 import { NextResponse } from "next/server";
 import { officialClinicReportPdf } from "@/lib/clinic-official-report-pdf";
+import { officialClinicReportXlsx } from "@/lib/clinic-official-report-xlsx";
+import { reportFileSlug } from "@/lib/official-report";
 import { buildOfficialClinicReport } from "@/lib/official-report-server";
 import { requireClinicAdmin } from "@/lib/platform-access";
 
@@ -16,21 +18,26 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
   try {
     const report = await buildOfficialClinicReport(id, from, to, destination);
     if (!report) return NextResponse.json({ error: "Clínica não encontrada." }, { status: 404 });
-    if (format !== "pdf") return NextResponse.json({ report });
-    const bytes = await officialClinicReportPdf(report);
-    const slug = report.clinic.name
-      .normalize("NFD")
-      .replace(/\p{M}/gu, "")
-      .replace(/[^a-zA-Z0-9]+/g, "-")
-      .replace(/^-|-$/g, "")
-      .toLowerCase();
-    const filename = `prestacao-contas-${slug || "clinica"}-${from}-${to}.pdf`;
-    return new NextResponse(Buffer.from(bytes), {
-      headers: {
-        "Content-Type": "application/pdf",
-        "Content-Disposition": `inline; filename="${filename}"`,
-      },
-    });
+    const slug = reportFileSlug(report.clinic.name) || "clinica";
+    if (format === "xlsx" || format === "excel") {
+      const bytes = officialClinicReportXlsx(report);
+      return new NextResponse(bytes, {
+        headers: {
+          "Content-Type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+          "Content-Disposition": `attachment; filename="prestacao-contas-${slug}-${from}-${to}.xlsx"`,
+        },
+      });
+    }
+    if (format === "pdf") {
+      const bytes = await officialClinicReportPdf(report);
+      return new NextResponse(Buffer.from(bytes), {
+        headers: {
+          "Content-Type": "application/pdf",
+          "Content-Disposition": `inline; filename="prestacao-contas-${slug}-${from}-${to}.pdf"`,
+        },
+      });
+    }
+    return NextResponse.json({ report });
   } catch {
     return NextResponse.json(
       { error: "Não foi possível montar o relatório oficial. Tente de novo em instantes." },
