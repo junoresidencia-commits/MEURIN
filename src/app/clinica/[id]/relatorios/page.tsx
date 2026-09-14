@@ -305,28 +305,21 @@ export default function ClinicaRelatoriosPage() {
       <table><thead><tr><th>Nº</th><th>Data</th><th>Hora</th><th>Paciente</th><th>Médico</th><th>CRM</th><th>Valor</th><th>Recebido</th><th>Sit.</th></tr></thead>
       <tbody>${rowsHtml}</tbody></table>
       <p>Clínica ${money(summary?.clinicShareCents || 0)} · Honorários ${money(summary?.doctorShareCents || 0)} · Pendente ${money(summary?.pendingCents || 0)}</p>
+      <script>window.addEventListener("load", function () { window.print(); });</script>
       </body></html>`;
-    const w = window.open("", "_blank", "noopener,noreferrer");
+    const url = URL.createObjectURL(new Blob([html], { type: "text/html;charset=utf-8" }));
+    const w = window.open(url, "_blank", "noopener,noreferrer");
     if (!w) {
+      URL.revokeObjectURL(url);
       setView("tabela");
       window.setTimeout(() => window.print(), 50);
-      setFileMsg("O navegador bloqueou a aba. Imprima esta tela.");
+      setFileMsg("Imprima esta tela (Ctrl+P). A tabela já está visível.");
       setBusy("");
       return;
     }
-    w.document.open();
-    w.document.write(html);
-    w.document.close();
-    w.focus();
-    window.setTimeout(() => {
-      try {
-        w.print();
-      } catch {
-        /* a tabela já está na aba para imprimir */
-      }
-      setBusy("");
-      setFileMsg("Janela de impressão aberta.");
-    }, 250);
+    window.setTimeout(() => URL.revokeObjectURL(url), 60_000);
+    setBusy("");
+    setFileMsg("Tabela aberta para imprimir. Se o diálogo não aparecer, use Ctrl+P na nova aba.");
   }
 
   async function saveIdentity(e: React.FormEvent) {
