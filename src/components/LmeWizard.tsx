@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { OfficialCeafDocs } from "@/components/OfficialCeafDocs";
 import { CEAF_PROTOCOLS, getProtocol } from "@/lib/ceaf-catalog";
 import { encodePatientParam } from "@/lib/user-errors";
 
@@ -260,15 +261,12 @@ export function LmeWizard({ emailParam, patientName, onCreated }: { emailParam: 
             <input type="checkbox" className="h-4 w-4 accent-[var(--gold)]" checked={alsoRelatorio} onChange={(e) => setAlsoRelatorio(e.target.checked)} />
             Gerar também o relatório médico (documento no prontuário)
           </label>
-          <div className="mt-2 rounded-xl border border-[var(--border)] p-3">
-            <p className="text-xs font-bold uppercase tracking-wider text-[var(--gold)]">Documentos oficiais SESAB (páginas exatas — sem redesenho)</p>
-            <div className="mt-2 flex flex-wrap gap-2">
-              <a className="btn-ghost text-sm" href={`/api/ceaf/official?protocol=${protocol.id}&doc=ter&name=${encodeURIComponent(patientName || "")}&doctor=${encodeURIComponent(doctorInfo.name)}&crm=${encodeURIComponent(doctorInfo.crm)}&date=${encodeURIComponent(new Date().toLocaleDateString("pt-BR"))}`} target="_blank" rel="noopener noreferrer">Baixar TER oficial (com nome)</a>
-              <a className="btn-ghost text-sm" href={`/api/ceaf/official?protocol=${protocol.id}&doc=form`} target="_blank" rel="noopener noreferrer">Baixar formulário oficial</a>
-              <a className="btn-ghost text-sm" href={`/api/ceaf/official?protocol=${protocol.id}&doc=residencia`} target="_blank" rel="noopener noreferrer">Declaração de residência (terceiro)</a>
-            </div>
-            <p className="mt-2 text-xs text-[var(--text-muted)]">A LME oficial é gerada no botão abaixo; TER e formulário são os arquivos oficiais da SESAB (conferidos em {new Date(protocol.lastReview).toLocaleDateString("pt-BR")}). Imprima, colha assinatura e anexe ao processo.</p>
-          </div>
+          <OfficialCeafDocs
+            protocolId={protocol.id}
+            patientName={patientName}
+            doctorName={doctorInfo.name}
+            crm={doctorInfo.crm}
+          />
         </div>
       )}
 

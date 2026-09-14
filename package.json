@@ -4,6 +4,7 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
+    "check:ceaf-docs": "npx tsx scripts/test-ceaf-official-docs.ts",
     "build": "next build",
     "start": "next start",
     "lint": "next lint"
