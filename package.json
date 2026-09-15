@@ -7,7 +7,8 @@
     "check:ceaf-docs": "npx tsx scripts/test-ceaf-official-docs.ts",
     "build": "next build",
     "start": "next start",
-    "lint": "next lint"
+    "lint": "next lint",
+    "check:document-pdf": "npx tsx scripts/test-document-pdf.ts"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.110.3",

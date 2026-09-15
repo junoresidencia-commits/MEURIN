@@ -1,6 +1,7 @@
 import "server-only";
 import { PDFDocument, StandardFonts, rgb, type PDFFont, type PDFImage, type PDFEmbeddedPage, type PDFPage } from "pdf-lib";
 import type { LetterheadArea } from "./letterheads-store";
+import { winAnsiSafe } from "./pdf-winansi";
 
 // A4 em pontos.
 const A4_W = 595.28;
@@ -42,18 +43,8 @@ export function fillFields(text: string, vars: Record<string, string>): string {
   return (text || "").replace(/\{\{\s*([a-z_]+)\s*\}\}/gi, (_m, key) => vars[String(key).toLowerCase()] ?? "");
 }
 
-// Mantém apenas caracteres que a fonte padrão (WinAnsi) codifica com segurança.
 function safe(text: string): string {
-  return (text || "")
-    .replace(/[\u2018\u2019]/g, "'")
-    .replace(/[\u201C\u201D]/g, '"')
-    .replace(/\u2013/g, "-")
-    .replace(/\u2014/g, "\u2014") // em dash (WinAnsi ok)
-    .replace(/\u2022/g, "\u2022") // bullet (WinAnsi ok)
-    .replace(/\u2026/g, "...")
-    .replace(/\t/g, "    ")
-    // remove o que sobrar fora do Latin comum
-    .replace(/[^\u0000-\u024F\u2013\u2014\u2022]/g, "?");
+  return winAnsiSafe(text);
 }
 
 type Run = { text: string; bold: boolean };
@@ -74,12 +65,12 @@ function wrapRuns(runs: Run[], maxWidth: number, size: number, font: PDFFont, fo
   const pushWord = (word: string, bold: boolean, spaceBefore: boolean) => {
     const f = bold ? fontBold : font;
     const token = (spaceBefore ? " " : "") + word;
-    const w = f.widthOfTextAtSize(token, size);
+    const w = f.widthOfTextAtSize(safe(token), size);
     if (width + w > maxWidth && current.length > 0) {
       lines.push(current);
       current = [];
       width = 0;
-      const w2 = f.widthOfTextAtSize(word, size);
+      const w2 = f.widthOfTextAtSize(safe(word), size);
       current.push({ text: word, bold });
       width += w2;
     } else {
@@ -89,7 +80,7 @@ function wrapRuns(runs: Run[], maxWidth: number, size: number, font: PDFFont, fo
   };
   let first = true;
   for (const run of runs) {
-    const words = run.text.split(/(\s+)/).filter((w) => w.length);
+    const words = safe(run.text).split(/(\s+)/).filter((w) => w.length);
     for (const token of words) {
       if (/^\s+$/.test(token)) continue;
       pushWord(token, run.bold, !first);
@@ -104,6 +95,26 @@ export async function buildDocumentPdf(input: BuildDocInput): Promise<Uint8Array
   const out = await PDFDocument.create();
   const font = await out.embedFont(StandardFonts.Helvetica);
   const fontBold = await out.embedFont(StandardFonts.HelveticaBold);
+  input = {
+    ...input,
+    title: input.title ? safe(input.title) : input.title,
+    content: safe(input.content || ""),
+    patient: input.patient
+      ? {
+          ...input.patient,
+          name: input.patient.name ? safe(input.patient.name) : input.patient.name,
+          cpf: input.patient.cpf ? safe(input.patient.cpf) : input.patient.cpf,
+        }
+      : input.patient,
+    doctor: {
+      ...input.doctor,
+      name: safe(input.doctor.name || ""),
+      crm: input.doctor.crm ? safe(input.doctor.crm) : input.doctor.crm,
+      crmState: input.doctor.crmState ? safe(input.doctor.crmState) : input.doctor.crmState,
+      rqe: input.doctor.rqe ? safe(input.doctor.rqe) : input.doctor.rqe,
+      specialty: input.doctor.specialty ? safe(input.doctor.specialty) : input.doctor.specialty,
+    },
+  };
 
   // Prepara o fundo (papel timbrado).
   let bgImage: PDFImage | null = null;
