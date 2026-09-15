@@ -4,6 +4,8 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { TemplatePicker } from "@/components/TemplatePicker";
+import { fetchPdfBlob } from "@/lib/doc-pdf-client";
+import { FriendlyError, toFriendlyMessage } from "@/lib/user-errors";
 
 type Doctor = {
   name: string;
@@ -73,7 +75,8 @@ export default function DocumentoAvulsoPage() {
     try {
       const res = await fetch("/api/documents/avulso", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        headers: { "Content-Type": "application/json; charset=utf-8" },
         body: JSON.stringify({
           type,
           title: TYPE_LABEL[type],
@@ -82,15 +85,21 @@ export default function DocumentoAvulsoPage() {
           letterheadId: letterheadId === NO_LETTERHEAD ? "" : letterheadId,
         }),
       });
-      if (!res.ok) {
-        const d = await res.json().catch(() => ({}));
-        throw new Error(d.error || "Não foi possível gerar o documento.");
-      }
-      const blob = await res.blob();
+      const blob = await fetchPdfBlob(res);
       const url = URL.createObjectURL(blob);
-      window.open(url, "_blank", "noopener,noreferrer");
+      const opened = window.open(url, "_blank", "noopener,noreferrer");
+      if (!opened) {
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = `${type}-meu-rim.pdf`;
+        a.rel = "noopener";
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+      }
+      window.setTimeout(() => URL.revokeObjectURL(url), 60_000);
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Erro inesperado.");
+      setError(toFriendlyMessage(e instanceof Error ? new FriendlyError(e.message) : e, "Não foi possível gerar o documento. Tente novamente."));
     } finally {
       setBusy(false);
     }
@@ -173,8 +182,8 @@ export default function DocumentoAvulsoPage() {
         </label>
         {error && <p className="text-sm font-semibold text-[var(--danger)]">{error}</p>}
         <div className="flex flex-wrap gap-2">
-          <button type="button" className="btn-gold" onClick={generatePdf} disabled={busy || !body.trim()}>
-            {busy ? "Gerando…" : "Gerar PDF (timbrado)"}
+          <button type="button" className="btn-gold" onClick={generatePdf} disabled={busy || !body.trim()} aria-busy={busy}>
+            {busy ? "Preparando documento…" : "Gerar PDF (timbrado)"}
           </button>
           <button type="button" className="btn-ghost" onClick={shareWhatsApp} disabled={!body.trim()}>Enviar no WhatsApp</button>
         </div>

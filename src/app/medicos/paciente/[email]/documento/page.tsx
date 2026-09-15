@@ -6,7 +6,8 @@ import { useParams, useSearchParams } from "next/navigation";
 import { TemplatePicker } from "@/components/TemplatePicker";
 import { PosologyBuilder } from "@/components/PosologyBuilder";
 import type { TemplateType } from "@/lib/document-templates";
-import { toFriendlyMessage } from "@/lib/user-errors";
+import { FriendlyError, toFriendlyMessage } from "@/lib/user-errors";
+import { DOC_PDF_USER_ERROR, fetchPdfBlob, readApiError } from "@/lib/doc-pdf-client";
 
 const TEMPLATE_TYPES = ["receita", "exame", "relatorio"];
 
@@ -67,14 +68,19 @@ function ComporDocumentoInner() {
     setBusy(true); setMsg("");
     try {
       const res = await fetch("/api/documents/generate", {
-        method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload(true)),
+        method: "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/json; charset=utf-8" },
+        body: JSON.stringify(payload(true)),
       });
-      if (!res.ok) { const d = await res.json().catch(() => ({})); throw new Error(d.error || "Falha ao pré-visualizar."); }
-      const blob = await res.blob();
-      const url = URL.createObjectURL(blob);
-      setPreviewUrl(url);
+      const blob = await fetchPdfBlob(res, "Não foi possível pré-visualizar. Tente novamente.");
+      if (previewUrl?.startsWith("blob:")) URL.revokeObjectURL(previewUrl);
+      setPreviewUrl(URL.createObjectURL(blob));
+      if (res.headers.get("x-meurim-warning") === "letterhead-unavailable") {
+        setMsg("Papel timbrado indisponível no momento. A prévia saiu em papel branco.");
+      }
     } catch (e) {
-      setMsg(toFriendlyMessage(e, "Não foi possível pré-visualizar. Tente novamente."));
+      setMsg(toFriendlyMessage(e instanceof Error ? new FriendlyError(e.message) : e, "Não foi possível pré-visualizar. Tente novamente."));
     } finally { setBusy(false); }
   }
 
@@ -82,15 +88,19 @@ function ComporDocumentoInner() {
     setBusy(true); setMsg("");
     try {
       const res = await fetch("/api/documents/generate", {
-        method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload(false)),
+        method: "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/json; charset=utf-8" },
+        body: JSON.stringify(payload(false)),
       });
-      const d = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(d.error || "Falha ao gerar.");
+      if (!res.ok) throw new FriendlyError(await readApiError(res, DOC_PDF_USER_ERROR));
+      const d = (await res.json().catch(() => ({}))) as { id?: string; warning?: string };
+      if (!d.id) throw new FriendlyError(DOC_PDF_USER_ERROR);
       setSavedId(d.id); setStatus("final");
       setPreviewUrl(`/api/documents/${d.id}/pdf`);
-      setMsg("Documento gerado e salvo no prontuário.");
+      setMsg(d.warning || "Documento gerado e salvo no prontuário.");
     } catch (e) {
-      setMsg(toFriendlyMessage(e, "Não foi possível gerar o documento. Tente novamente."));
+      setMsg(toFriendlyMessage(e, DOC_PDF_USER_ERROR));
     } finally { setBusy(false); }
   }
 
@@ -168,8 +178,12 @@ function ComporDocumentoInner() {
           </p>
 
           <div className="mt-4 flex flex-wrap gap-2">
-            <button type="button" className="btn-ghost" onClick={preview} disabled={busy}>Pré-visualizar</button>
-            <button type="button" className="btn-gold" onClick={salvar} disabled={busy || !content.trim()}>Gerar PDF e salvar</button>
+            <button type="button" className="btn-ghost" onClick={preview} disabled={busy} aria-busy={busy}>
+              {busy ? "Preparando documento…" : "Pré-visualizar"}
+            </button>
+            <button type="button" className="btn-gold" onClick={salvar} disabled={busy || !content.trim()} aria-busy={busy}>
+              {busy ? "Preparando documento…" : "Gerar PDF e salvar"}
+            </button>
           </div>
 
           {savedId && (
@@ -183,14 +197,26 @@ function ComporDocumentoInner() {
               </div>
             </div>
           )}
-          {msg && <p className="mt-3 text-sm font-semibold text-[var(--gold)]">{msg}</p>}
+          {msg && (
+            <p
+              className={`mt-3 text-sm font-semibold ${/não foi possível|falha ao|tente novamente/i.test(msg) ? "text-[var(--danger)]" : "text-[var(--gold)]"}`}
+              role={/não foi possível|falha ao/i.test(msg) ? "alert" : undefined}
+            >
+              {msg}
+            </p>
+          )}
         </div>
 
         {/* Pré-visualização */}
         <div className="panel">
           <p className="mb-2 text-sm font-semibold text-[var(--text-muted)]">Pré-visualização</p>
           {previewUrl ? (
-            <iframe src={previewUrl} title="Pré-visualização" className="h-[70vh] w-full rounded-lg border border-[var(--border)]" />
+            <>
+              <iframe src={previewUrl} title="Pré-visualização" className="h-[70vh] w-full rounded-lg border border-[var(--border)]" />
+              <a className="btn-ghost mt-2 inline-block text-sm" href={previewUrl} target="_blank" rel="noopener noreferrer">
+                Abrir PDF em nova aba
+              </a>
+            </>
           ) : (
             <div className="grid h-[70vh] place-items-center rounded-lg border border-dashed border-[var(--border)] text-center text-sm text-[var(--text-muted)]">
               Clique em “Pré-visualizar” para ver o PDF com o seu papel timbrado.

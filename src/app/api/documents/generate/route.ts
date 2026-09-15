@@ -9,7 +9,10 @@ import { getLetterhead, type LetterheadArea } from "@/lib/letterheads-store";
 import { LETTERHEADS_BUCKET, DOCPDF_BUCKET, readFile, saveFile } from "@/lib/doc-storage";
 import { buildDocumentPdf, fillFields, type DocBackground } from "@/lib/document-engine";
 import { writeAudit } from "@/lib/patient-shares-store";
+import { jsonUtf8 } from "@/lib/json-utf8";
 
+export const runtime = "nodejs";
+export const dynamic = "force-dynamic";
 export const maxDuration = 60;
 
 function idadeFrom(birthdate?: string | null): string | null {
@@ -25,7 +28,7 @@ function idadeFrom(birthdate?: string | null): string | null {
 
 export async function POST(req: Request) {
   const doctorId = await getDoctorSessionId();
-  if (!doctorId) return NextResponse.json({ error: "Não autenticado." }, { status: 401 });
+  if (!doctorId) return jsonUtf8({ error: "Não autenticado." }, 401);
 
   try {
     const body = await req.json().catch(() => ({}));
@@ -36,13 +39,13 @@ export async function POST(req: Request) {
     const content = String(body.content || "");
     const letterheadId = body.letterheadId ? String(body.letterheadId) : null;
 
-    if (!patientParam) return NextResponse.json({ error: "Selecione o paciente." }, { status: 400 });
+    if (!patientParam) return jsonUtf8({ error: "Selecione o paciente." }, 400);
 
     const access = await resolvePatientAccess(patientParam);
-    if (!access || !access.allowed) return NextResponse.json({ error: "Sem acesso a este paciente." }, { status: 403 });
+    if (!access || !access.allowed) return jsonUtf8({ error: "Sem acesso a este paciente." }, 403);
 
     const doctor = await getDoctorById(doctorId);
-    if (!doctor) return NextResponse.json({ error: "Médico não encontrado." }, { status: 404 });
+    if (!doctor) return jsonUtf8({ error: "Médico não encontrado." }, 404);
 
     // Dados do paciente para o cabeçalho (CPF só quando é paciente cadastrado).
     let cpf: string | undefined;
@@ -52,18 +55,23 @@ export async function POST(req: Request) {
       if (p) { cpf = p.cpf || undefined; birthdate = p.birthdate || birthdate; }
     }
 
-    // Papel timbrado (opcional). "Sem timbrado" => fundo branco.
+    // Papel timbrado (opcional). Arquivo ausente/flaky no storage NÃO derruba o PDF.
     let background: DocBackground | null = null;
     let area: LetterheadArea = defaultAreaNoLetterhead();
     let usedLetterheadId: string | null = null;
+    let letterheadWarning = false;
     if (letterheadId) {
       const lh = await getLetterhead(letterheadId);
-      if (!lh || lh.doctorId !== doctorId) return NextResponse.json({ error: "Papel timbrado inválido." }, { status: 400 });
+      if (!lh || lh.doctorId !== doctorId) return jsonUtf8({ error: "Papel timbrado inválido." }, 400);
       const file = await readFile(LETTERHEADS_BUCKET, lh.storage, lh.filePath);
-      if (!file) return NextResponse.json({ error: "Arquivo do papel timbrado indisponível." }, { status: 400 });
-      background = { kind: lh.kind, bytes: file.buffer, mime: lh.mime || file.mime };
-      area = lh.area;
-      usedLetterheadId = lh.id;
+      if (!file) {
+        letterheadWarning = true;
+        console.warn("[documents/generate]", { type, preview, letterheadId, status: 200, error: "letterhead_missing_fallback" });
+      } else {
+        background = { kind: lh.kind, bytes: file.buffer, mime: lh.mime || file.mime };
+        area = lh.area;
+        usedLetterheadId = lh.id;
+      }
     }
 
     const vars: Record<string, string> = {
@@ -90,8 +98,14 @@ export async function POST(req: Request) {
     });
 
     if (preview) {
+      console.info("[documents/generate]", { type, preview: true, status: 200, letterhead: usedLetterheadId ? "ok" : letterheadWarning ? "fallback" : "none" });
       return new NextResponse(new Uint8Array(pdfBytes), {
-        headers: { "Content-Type": "application/pdf", "Cache-Control": "no-store", "Content-Disposition": "inline; filename=preview.pdf" },
+        headers: {
+          "Content-Type": "application/pdf",
+          "Cache-Control": "private, no-store",
+          "Content-Disposition": "inline; filename=preview.pdf",
+          ...(letterheadWarning ? { "X-MeuRim-Warning": "letterhead-unavailable" } : {}),
+        },
       });
     }
 
@@ -100,8 +114,8 @@ export async function POST(req: Request) {
     try {
       saved = await saveFile(DOCPDF_BUCKET, doctorId, { name: `${type}.pdf`, type: "application/pdf", buffer: Buffer.from(pdfBytes) });
     } catch (err) {
-      console.error("documents/generate saveFile", err);
-      return NextResponse.json({ error: "Não foi possível guardar o PDF. Tente novamente." }, { status: 500 });
+      console.error("[documents/generate]", { type, preview: false, status: 500, error: "saveFile" });
+      return jsonUtf8({ error: "Não foi possível guardar o PDF. Tente novamente." }, 500);
     }
     const now = new Date().toISOString();
     let doc;
@@ -124,8 +138,8 @@ export async function POST(req: Request) {
         history: [{ at: now, by: doctor.name, action: "criado", detail: `Documento gerado (${type}).` }],
       });
     } catch (err) {
-      console.error("documents/generate addDocument", err);
-      return NextResponse.json({ error: "Não foi possível registrar o documento no prontuário." }, { status: 500 });
+      console.error("[documents/generate]", { type, preview: false, status: 500, error: "addDocument" });
+      return jsonUtf8({ error: "Não foi possível registrar o documento no prontuário." }, 500);
     }
 
     try {
@@ -140,10 +154,17 @@ export async function POST(req: Request) {
       console.error("[documents/generate] audit", err);
     }
 
-    return NextResponse.json({ ok: true, id: doc.id, pdfUrl: `/api/documents/${doc.id}/pdf` }, { status: 201 });
+    return jsonUtf8({
+      ok: true,
+      id: doc.id,
+      pdfUrl: `/api/documents/${doc.id}/pdf`,
+      warning: letterheadWarning ? "Papel timbrado indisponível no momento. O documento foi gerado em papel branco." : undefined,
+    }, 201);
   } catch (err) {
-    console.error("documents/generate", err);
-    return NextResponse.json({ error: "Não foi possível gerar o documento." }, { status: 500 });
+    const name = err instanceof Error ? err.name : "Error";
+    const message = err instanceof Error ? err.message : "unknown";
+    console.error("[documents/generate]", { status: 500, error: name, detail: message.slice(0, 180) });
+    return jsonUtf8({ error: "Não foi possível gerar o documento." }, 500);
   }
 }
 

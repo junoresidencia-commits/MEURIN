@@ -4,12 +4,13 @@ import { getPatientEmail } from "@/lib/patient-session";
 import { getNutritionistId } from "@/lib/nutrition-session";
 import { getDocumentById, markPatientViewed } from "@/lib/patient-store";
 import { DOCPDF_BUCKET, readFile } from "@/lib/doc-storage";
+import { jsonUtf8 } from "@/lib/json-utf8";
 
 /** Serve o PDF final com verificação de permissão (nunca URL pública permanente). */
 export async function GET(_req: Request, ctx: { params: Promise<{ id: string }> }) {
   const { id } = await ctx.params;
   const doc = await getDocumentById(id);
-  if (!doc || !doc.pdfPath) return NextResponse.json({ error: "Documento não encontrado." }, { status: 404 });
+  if (!doc || !doc.pdfPath) return jsonUtf8({ error: "Documento não encontrado." }, 404);
 
   const doctorId = await getDoctorSessionId();
   const patientEmail = await getPatientEmail();
@@ -19,11 +20,11 @@ export async function GET(_req: Request, ctx: { params: Promise<{ id: string }> 
   const isAuthorNutritionist = nutritionistId && nutritionistId === doc.doctorId;
   const isPatientAllowed = patientEmail && patientEmail.toLowerCase() === doc.patientEmail.toLowerCase() && doc.sharedWithPatient;
   if (!isOwnerDoctor && !isAuthorNutritionist && !isPatientAllowed) {
-    return NextResponse.json({ error: "Sem acesso a este documento." }, { status: 403 });
+    return jsonUtf8({ error: "Sem acesso a este documento." }, 403);
   }
 
   const file = await readFile(DOCPDF_BUCKET, (doc.pdfStorage as "supabase" | "local") || "supabase", doc.pdfPath);
-  if (!file) return NextResponse.json({ error: "Arquivo indisponível." }, { status: 404 });
+  if (!file) return jsonUtf8({ error: "Arquivo indisponível." }, 404);
 
   if (isPatientAllowed) markPatientViewed(id).catch(() => {});
 

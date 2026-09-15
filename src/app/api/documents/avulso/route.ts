@@ -4,7 +4,10 @@ import { getDoctorById } from "@/lib/store";
 import { getLetterhead, getDefaultLetterhead, type LetterheadArea } from "@/lib/letterheads-store";
 import { LETTERHEADS_BUCKET, readFile } from "@/lib/doc-storage";
 import { buildDocumentPdf, fillFields, type DocBackground } from "@/lib/document-engine";
+import { jsonUtf8 } from "@/lib/json-utf8";
 
+export const runtime = "nodejs";
+export const dynamic = "force-dynamic";
 export const maxDuration = 60;
 
 // Sem papel timbrado: margens confortáveis e cabeçalho/assinatura próprios.
@@ -18,7 +21,7 @@ function defaultAreaNoLetterhead(): LetterheadArea {
  */
 export async function POST(req: Request) {
   const doctorId = await getDoctorSessionId();
-  if (!doctorId) return NextResponse.json({ error: "Não autenticado." }, { status: 401 });
+  if (!doctorId) return jsonUtf8({ error: "Não autenticado." }, 401);
 
   try {
     const body = await req.json().catch(() => ({}));
@@ -30,14 +33,14 @@ export async function POST(req: Request) {
     const wantId = body.letterheadId !== undefined ? String(body.letterheadId) : null;
 
     const doctor = await getDoctorById(doctorId);
-    if (!doctor) return NextResponse.json({ error: "Médico não encontrado." }, { status: 404 });
+    if (!doctor) return jsonUtf8({ error: "Médico não encontrado." }, 404);
 
     // Papel timbrado: o escolhido, senão o padrão do médico. Se não houver, fundo branco.
     let background: DocBackground | null = null;
     let area: LetterheadArea = defaultAreaNoLetterhead();
     const lh = wantId ? await getLetterhead(wantId) : await getDefaultLetterhead(doctorId);
     if (lh) {
-      if (lh.doctorId !== doctorId) return NextResponse.json({ error: "Papel timbrado inválido." }, { status: 400 });
+      if (lh.doctorId !== doctorId) return jsonUtf8({ error: "Papel timbrado inválido." }, 400);
       const file = await readFile(LETTERHEADS_BUCKET, lh.storage, lh.filePath);
       if (file) {
         background = { kind: lh.kind, bytes: file.buffer, mime: lh.mime || file.mime };
@@ -68,13 +71,14 @@ export async function POST(req: Request) {
     return new NextResponse(new Uint8Array(pdfBytes), {
       headers: {
         "Content-Type": "application/pdf",
-        "Cache-Control": "no-store",
+        "Cache-Control": "private, no-store",
         "Content-Disposition": `inline; filename="${type}-meu-rim.pdf"`,
       },
     });
   } catch (err) {
-    console.error("documents/avulso", err);
-    return NextResponse.json({ error: "Não foi possível gerar o documento." }, { status: 500 });
+    const name = err instanceof Error ? err.name : "Error";
+    console.error("[documents/avulso]", { status: 500, error: name });
+    return jsonUtf8({ error: "Não foi possível gerar o documento." }, 500);
   }
 }
 
