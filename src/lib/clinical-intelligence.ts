@@ -401,11 +401,18 @@ function applyLabsToProfile(
   for (const g of groups) {
     for (const lab of g.labs) latest.set(lab.testKey, lab.value);
   }
-  const rac = latest.get("rac") ?? latest.get("microalbuminuria");
+  const rac = latest.get("rac");
+  const aer = latest.get("albuminuria_24h");
+  // KDIGO A: RAC (mg/g) ou albuminúria 24h (mg/24h). Nunca concentração (mg/L) nem proteína total.
   if (rac != null) {
     const a = aFromRac(rac);
     if (a && (CATEGORIAS_A as readonly string[]).includes(a)) {
       push(out, { key: "categoria_a", value: a, status: "confirmado", confidence: "alta", autoApply: true, evidence: `RAC ${rac}` });
+    }
+  } else if (aer != null) {
+    const a = aFromRac(aer);
+    if (a && (CATEGORIAS_A as readonly string[]).includes(a)) {
+      push(out, { key: "categoria_a", value: a, status: "confirmado", confidence: "alta", autoApply: true, evidence: `Albuminúria 24h ${aer}` });
     }
   }
   const tfge = latest.get("tfge");

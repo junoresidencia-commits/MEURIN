@@ -19,7 +19,8 @@ export function gFromEgfr(egfr: number): string | null {
   return hit?.g ?? null;
 }
 
-/** RAC/UACR em mg/g → A1 <30, A2 30–300, A3 >300. Não usar proteína total. */
+/** RAC/UACR em mg/g (ou albuminúria 24h em mg/24h) → A1 <30, A2 30–300, A3 >300.
+ *  Não usar proteína total nem albumina urinária em mg/L. */
 export function aFromRac(racMgG: number): "A1" | "A2" | "A3" | null {
   if (!Number.isFinite(racMgG) || racMgG < 0) return null;
   if (racMgG < 30) return "A1";
