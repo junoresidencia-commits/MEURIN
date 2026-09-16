@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { DoctorSidebar } from "@/components/DoctorSidebar";
 import { DoctorMobileNav } from "@/components/DoctorMobileNav";
+import { VidaasSignBox } from "@/components/VidaasSignBox";
 
 type Visual = { kind: "typed" | "image" | "draw"; value: string } | null;
 type Icp = { configured: boolean; providerId: string | null };
@@ -102,24 +103,14 @@ export default function MinhaAssinaturaPage() {
           <h1 className="font-display text-3xl font-extrabold text-[var(--text)]">Minha assinatura digital</h1>
           <p className="mt-1 text-sm text-[var(--text-muted)]">{docInfo.name} · {docInfo.crm}{docInfo.rqe ? ` · RQE ${docInfo.rqe}` : ""}</p>
 
-          {/* ICP-Brasil */}
+          {/* ICP-Brasil / VIDaaS */}
           <section className="panel mt-6">
-            <h2 className="font-display text-xl text-[var(--text)]">Assinatura digital ICP-Brasil</h2>
-            {icp.configured ? (
-              <div className="mt-2">
-                <p className="text-sm text-[var(--text-soft)]">Provedor: <b>{icp.providerId}</b></p>
-                <button type="button" className="btn-gold mt-3">Conectar certificado</button>
-              </div>
-            ) : (
-              <div className="mt-2">
-                <p className="rounded-xl border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-800">
-                  Integração ICP-Brasil <b>aguardando configuração do provedor</b>. Quando o provedor de certificado em nuvem
-                  (ex.: BirdID, VIDaaS, SafeID) estiver contratado e configurado, a assinatura digital qualificada (PAdES)
-                  ficará disponível aqui — assinada dentro do Meu Rim, sem baixar nem reenviar arquivos.
-                </p>
-                <button type="button" className="btn-ghost mt-3 opacity-60" disabled title="Aguardando configuração do provedor">Conectar certificado</button>
-                <p className="mt-2 text-xs text-[var(--text-muted)]">Enquanto isso, você pode usar <b>Baixar para assinatura manual</b> na tela do documento.</p>
-              </div>
+            <VidaasSignBox showPreference />
+            {icp.configured && (
+              <p className="mt-3 text-sm text-[var(--text-soft)]">
+                Provedor de API configurado: <b>{icp.providerId}</b>. Quando a integração estiver ativa, a assinatura
+                poderá ser pedida daqui sem baixar o arquivo.
+              </p>
             )}
           </section>
 
@@ -194,9 +185,9 @@ export default function MinhaAssinaturaPage() {
           <section className="panel mt-6">
             <h2 className="font-display text-xl text-[var(--text)]">Como os documentos são finalizados</h2>
             <ul className="mt-2 space-y-1 text-sm text-[var(--text-soft)]">
-              <li>• <b>Aprovação eletrônica interna</b>: registra autoria/integridade no Meu Rim (não substitui a assinatura legal).</li>
-              <li>• <b>Assinatura digital ICP-Brasil</b>: assinatura qualificada (PAdES) — disponível quando o provedor estiver configurado.</li>
-              <li>• <b>Assinatura manual</b>: baixar, imprimir, assinar e carimbar; depois anexar a cópia ao prontuário.</li>
+              <li>• <b>VIDaaS / gov.br</b>: baixa o PDF e assina com o certificado ICP-Brasil (válido juridicamente).</li>
+              <li>• <b>Registro no Meu Rim</b>: marca autoria no prontuário (não substitui a assinatura legal).</li>
+              <li>• <b>À mão</b>: imprimir, assinar e carimbar; depois anexar a cópia ao prontuário.</li>
             </ul>
           </section>
         </div>

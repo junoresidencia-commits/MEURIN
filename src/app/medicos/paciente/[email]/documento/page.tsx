@@ -8,6 +8,7 @@ import { PosologyBuilder } from "@/components/PosologyBuilder";
 import type { TemplateType } from "@/lib/document-templates";
 import { FriendlyError, toFriendlyMessage } from "@/lib/user-errors";
 import { DOC_PDF_USER_ERROR, fetchPdfBlob, readApiError } from "@/lib/doc-pdf-client";
+import { VidaasSignBox } from "@/components/VidaasSignBox";
 
 const TEMPLATE_TYPES = ["receita", "exame", "relatorio"];
 
@@ -191,10 +192,20 @@ function ComporDocumentoInner() {
               <p className="text-sm font-semibold text-[var(--text)]">Documento salvo no prontuário {status === "signed" && "· assinado"}</p>
               <div className="mt-2 flex flex-wrap gap-2">
                 <a className="btn-ghost text-sm" href={`/api/documents/${savedId}/pdf`} target="_blank" rel="noopener noreferrer">Abrir PDF</a>
-                {status !== "signed" && <button type="button" className="btn-ghost text-sm" onClick={assinar} disabled={busy}>Assinar</button>}
+                {status !== "signed" && (
+                  <button type="button" className="btn-ghost text-sm" onClick={assinar} disabled={busy}>
+                    Registrar no Meu Rim
+                  </button>
+                )}
                 <button type="button" className="btn-gold text-sm" onClick={() => disponibilizar(true)} disabled={busy}>Disponibilizar ao paciente</button>
                 <button type="button" className="btn-ghost text-sm" onClick={() => disponibilizar(false)} disabled={busy}>Remover do paciente</button>
               </div>
+              <VidaasSignBox
+                compact
+                pdfHref={`/api/documents/${savedId}/pdf`}
+                pdfLabel="Baixar PDF para o VIDaaS"
+                footnote="Assine no app VIDaaS ou no Assinador gov.br. Registrar no Meu Rim só marca o prontuário — não é certificado ICP-Brasil."
+              />
             </div>
           )}
           {msg && (

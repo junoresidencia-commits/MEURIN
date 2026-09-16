@@ -8,7 +8,8 @@
     "build": "next build",
     "start": "next start",
     "lint": "next lint",
-    "check:document-pdf": "npx tsx scripts/test-document-pdf.ts"
+    "check:document-pdf": "npx tsx scripts/test-document-pdf.ts",
+    "check:signature-links": "npx tsx scripts/test-signature-links.ts"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.110.3",
