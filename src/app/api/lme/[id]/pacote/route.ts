@@ -4,13 +4,17 @@ import { getDoctorSessionId } from "@/lib/auth";
 import { getLme } from "@/lib/lme-store";
 import { getDocuments } from "@/lib/patient-store";
 import { readFile, DOCPDF_BUCKET } from "@/lib/doc-storage";
+import { inferProtocolFromMedNames, officialDocPages } from "@/lib/ceaf-documents";
+import { inferCeafProtocols } from "@/lib/ceaf-catalog";
+import { buildOfficialCeafPdf, type FillValues } from "@/lib/ceaf-official-pdf";
+import { getDoctorById } from "@/lib/store";
+import { resolvePatientAccess } from "@/lib/doctor-access";
+import { idadeFromBirthdate, todayBr } from "@/lib/pdf-winansi";
 
 /**
- * Pacote da LME: junta, num ÚNICO PDF, a LME oficial preenchida + os documentos
- * complementares (Receita/Relatório) já gerados com PDF para o paciente.
+ * Pacote da LME: junta, num ÚNICO PDF, a LME oficial preenchida + TER/formulário
+ * oficiais (quando existirem no pacote SESAB) + Receita/Relatório já gerados.
  * NÃO altera a LME nem os documentos — só copia as páginas para um novo PDF.
- * ?docs=id1,id2 escolhe documentos específicos; sem isso, usa o mais recente de
- * cada tipo. ?download=1 baixa como anexo (senão abre inline, para imprimir).
  */
 export async function GET(req: Request, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -35,6 +39,43 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
   const cookie = req.headers.get("cookie") || "";
   const ores = await fetch(officialUrl, { headers: { cookie } }).catch(() => null);
   if (ores && ores.ok) await addPdf(await ores.arrayBuffer());
+
+  // 1b) TER + formulário oficiais do protocolo inferido (páginas exatas da SESAB).
+  const medNames = (lme.medications || []).map((m) => m.name || "").filter(Boolean);
+  const protocol =
+    inferProtocolFromMedNames(medNames) ||
+    inferCeafProtocols({ cid10: lme.cid10, medications: lme.medications })[0] ||
+    "";
+  if (protocol) {
+    const doctor = await getDoctorById(doctorId);
+    const values: FillValues = {
+      introName: lme.patientName || "",
+      name: lme.patientName || "",
+      cpf: lme.patientCpf || "",
+      cns: lme.patientCns || "",
+      introDoctor: lme.doctorName || doctor?.name || "",
+      doctor: lme.doctorName || doctor?.name || "",
+      crm: (lme.doctorCrm || [doctor?.crm, doctor?.crmState].filter(Boolean).join("-") || "").replace(/^-+|-+$/g, ""),
+      date: new Date(lme.createdAt).toLocaleDateString("pt-BR", { timeZone: "America/Bahia" }) || todayBr(),
+      service: lme.establishmentName || "",
+      uf: (doctor?.crmState || "BA").toUpperCase().slice(0, 2),
+    };
+    const crmNum = String(values.crm || "").match(/(\d{3,})/)?.[1] || String(values.crm || "").replace(/-.*$/, "").trim();
+    if (crmNum) values.crm = crmNum;
+    const access = await resolvePatientAccess(lme.patientEmail);
+    if (access?.allowed) {
+      values.age = idadeFromBirthdate(access.birthdate);
+      if (!values.cpf) values.cpf = access.cpf || "";
+      if (!values.cns) values.cns = access.cns || "";
+      values.city = (access.city || "").split(/[,\-/]/).map((p) => p.trim()).filter(Boolean).pop() || "";
+      values.local = values.city || values.service || "";
+    }
+    for (const doc of ["ter", "form"] as const) {
+      if (!officialDocPages(protocol, doc)) continue;
+      const built = await buildOfficialCeafPdf({ protocol, doc, values, medNames });
+      if (built.ok) await addPdf(built.pdf);
+    }
+  }
 
   // 2) Documentos complementares (Receita/Relatório) com PDF salvo.
   const docs = await getDocuments(lme.patientEmail);

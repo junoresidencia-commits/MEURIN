@@ -288,3 +288,28 @@ export function cidAllowed(protocolId: string, code: string): boolean {
   const p = getProtocol(protocolId);
   return Boolean(p && p.cids.some((c) => c.code === code));
 }
+
+function fold(s: string) {
+  return s.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+}
+
+/** Adivinha o protocolo CEAF pelos medicamentos/CID da LME — sem gravar coluna nova. */
+export function inferCeafProtocols(opts: {
+  cid10?: string | null;
+  medications?: { name?: string | null }[] | null;
+}): string[] {
+  const names = (opts.medications || []).map((m) => fold(m.name || "")).filter(Boolean);
+  const cid = (opts.cid10 || "").toUpperCase().replace(/\s/g, "");
+  const scores = new Map<string, number>();
+  const add = (id: string, n: number) => scores.set(id, (scores.get(id) || 0) + n);
+  for (const p of CEAF_PROTOCOLS) {
+    for (const med of p.medications) {
+      const token = fold(med.name).split(/\s+/)[0] || "";
+      if (token.length >= 5 && names.some((n) => n.includes(token))) add(p.id, 4);
+    }
+    if (cid && p.cids.some((c) => c.code.toUpperCase() === cid)) add(p.id, 1);
+  }
+  return [...scores.entries()]
+    .sort((a, b) => b[1] - a[1])
+    .map(([id]) => id);
+}
