@@ -60,7 +60,7 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
       service: lme.establishmentName || "",
       uf: (doctor?.crmState || "BA").toUpperCase().slice(0, 2),
     };
-    const crmNum = String(values.crm || "").replace(/-.*$/, "").trim();
+    const crmNum = String(values.crm || "").match(/(\d{3,})/)?.[1] || String(values.crm || "").replace(/-.*$/, "").trim();
     if (crmNum) values.crm = crmNum;
     const access = await resolvePatientAccess(lme.patientEmail);
     if (access?.allowed) {

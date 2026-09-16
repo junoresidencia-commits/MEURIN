@@ -27,6 +27,13 @@ function cityFrom(address?: string | null): string {
   return last.length > 40 ? last.slice(0, 40) : last;
 }
 
+function crmNumber(raw?: string | null) {
+  const s = String(raw || "").trim();
+  const digits = s.match(/(\d{3,})/);
+  if (digits) return digits[1];
+  return s.replace(/-.*$/, "").trim();
+}
+
 function inferProtocol(cid10: string | null | undefined, medNames: string[]): string {
   return (
     inferProtocolFromMedNames(medNames) ||
@@ -115,7 +122,7 @@ export async function GET(req: Request) {
     }
   }
 
-  const crmNum = String(values.crm || doctor.crm || "").replace(/-.*$/, "").trim() || doctor.crm;
+  const crmNum = crmNumber(values.crm || doctor.crm);
   const uf = (doctor.crmState || "BA").toUpperCase().slice(0, 2);
   values.uf = uf;
   values.crm = crmNum;

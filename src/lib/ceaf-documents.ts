@@ -211,11 +211,16 @@ export function officialDocSlot(protocolId: string, doc: OfficialDocKind): Offic
 
 /** TER/formulário disponíveis em todos os protocolos do pacote SESAB. */
 export function listAvailableOfficialDocs(doc: OfficialDocKind): { protocolId: string; label: string }[] {
-  return CEAF_PROTOCOLS.map((p) => {
+  const seen = new Set<string>();
+  const out: { protocolId: string; label: string }[] = [];
+  for (const p of CEAF_PROTOCOLS) {
     const slot = officialDocSlot(p.id, doc);
-    if (slot.status !== "available") return null;
-    return { protocolId: p.id, label: slot.label };
-  }).filter((x): x is { protocolId: string; label: string } => Boolean(x));
+    if (slot.status !== "available") continue;
+    if (seen.has(slot.label)) continue;
+    seen.add(slot.label);
+    out.push({ protocolId: p.id, label: slot.label });
+  }
+  return out;
 }
 
 /** Compatível com a API: só devolve ref quando o arquivo oficial existe no pacote. */
