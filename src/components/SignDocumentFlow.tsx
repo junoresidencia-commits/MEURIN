@@ -1,11 +1,13 @@
 "use client";
 
 import { useEffect, useId, useRef, useState, type RefObject } from "react";
+import QRCode from "qrcode";
 import {
   listDigitalSignatureProviders,
   type DigitalSignatureProvider,
   type DigitalSignatureProviderId,
 } from "@/lib/digital-signature/providers";
+import { SIGNATURE_LINKS } from "@/lib/signature-links";
 import {
   DIGITAL_SIGNED_LABEL,
   DIGITAL_UNSIGNED_LABEL,
@@ -25,6 +27,12 @@ type SignedInfo = {
   signedAt?: string | null;
 };
 
+export type SignContext = {
+  patientName?: string | null;
+  patientCpf?: string | null;
+  doctorCrm?: string | null;
+};
+
 type Props = {
   pdfHref?: string | null;
   pdfBlob?: Blob | null;
@@ -37,6 +45,7 @@ type Props = {
   compact?: boolean;
   alreadySigned?: boolean;
   signedDocumentId?: string | null;
+  signContext?: SignContext | null;
   onSigned?: (info: SignedInfo) => void;
 };
 
@@ -181,9 +190,6 @@ function SignDocumentModal(
   async function choose(id: DigitalSignatureProviderId) {
     setStep(id);
     setMsg("");
-    if (id === "vidaas") {
-      await handoff(isLikelyMobile() ? "share" : "download");
-    }
   }
 
   async function attach(file: File, provider: DigitalSignatureProviderId) {
@@ -285,6 +291,7 @@ function SignDocumentModal(
             busy={busy}
             canAttach={canAttach}
             fileRef={fileRef}
+            signContext={props.signContext}
             onHandoff={handoff}
             onAttach={(file) => void attach(file, provider.id)}
             onBack={() => setStep("choose")}
@@ -322,6 +329,7 @@ function ProviderStep({
   busy,
   canAttach,
   fileRef,
+  signContext,
   onHandoff,
   onAttach,
   onBack,
@@ -330,44 +338,111 @@ function ProviderStep({
   busy: boolean;
   canAttach: boolean;
   fileRef: RefObject<HTMLInputElement | null>;
+  signContext?: SignContext | null;
   onHandoff: (prefer: "share" | "download" | "open") => void;
   onAttach: (file: File) => void;
   onBack: () => void;
 }) {
   const mobile = isLikelyMobile();
+  const gov = provider.officialLinks.find((l) => l.id === "gov-assinador");
+  const cfm = provider.officialLinks.find((l) => l.id === "cfm-prescricao");
+  const extra = provider.officialLinks.filter((l) => l.id !== "gov-assinador" && l.id !== "cfm-prescricao" && l.id !== "vidaas-info");
+  const validShop = provider.officialLinks.find((l) => l.id === "vidaas-info");
+  const paste = [
+    signContext?.patientName ? `Paciente: ${signContext.patientName}` : "",
+    signContext?.patientCpf ? `CPF: ${signContext.patientCpf}` : "",
+    signContext?.doctorCrm ? `CRM: ${signContext.doctorCrm}` : "",
+  ]
+    .filter(Boolean)
+    .join("\n");
+
   return (
     <div>
       <p className="text-sm text-[var(--text-soft)]">{provider.description}</p>
-      <p className="mt-2 text-xs text-[var(--text-muted)]">{mobile ? provider.mobileHint : provider.desktopHint}</p>
-      <div className="mt-3 flex flex-wrap gap-2">
-        <button
-          type="button"
-          className="btn-gold text-sm"
-          disabled={busy}
-          onClick={() => onHandoff(mobile ? "share" : "download")}
-        >
-          {mobile ? "Abrir / compartilhar PDF" : "Baixar / abrir PDF"}
-        </button>
-        {!mobile && (
-          <button type="button" className="btn-ghost text-sm" disabled={busy} onClick={() => onHandoff("open")}>
-            Abrir PDF
-          </button>
+      <ol className="mt-3 list-decimal space-y-3 pl-5 text-sm text-[var(--text-soft)]">
+        <li>
+          <b>Pegue este PDF</b>
+          <div className="mt-2 flex flex-wrap gap-2">
+            <button
+              type="button"
+              className="btn-gold text-sm"
+              disabled={busy}
+              onClick={() => onHandoff(mobile ? "share" : "download")}
+            >
+              {mobile ? "Abrir / compartilhar PDF" : "Baixar este PDF"}
+            </button>
+            {!mobile && (
+              <button type="button" className="btn-ghost text-sm" disabled={busy} onClick={() => onHandoff("open")}>
+                Abrir PDF
+              </button>
+            )}
+          </div>
+        </li>
+        {provider.id === "vidaas" && (
+          <li>
+            <b>Envie o PDF no Assinador gov.br</b>
+            <p className="mt-1 text-xs text-[var(--text-muted)]">
+              É <em>aqui</em> que vai o arquivo — não na loja da Valid. Leia o QR no celular ou abra no computador.
+            </p>
+            <div className="mt-2 flex flex-col items-start gap-3 sm:flex-row sm:items-center">
+              <MiniQr value={SIGNATURE_LINKS.govAssinador} caption="Leia: Assinador gov.br" />
+              {gov && (
+                <a className="btn-gold text-sm" href={gov.href} target="_blank" rel="noopener noreferrer">
+                  Abrir Assinador gov.br
+                </a>
+              )}
+            </div>
+            <p className="mt-2 text-xs text-[var(--text-muted)]">
+              Quando o gov.br pedir o certificado, leia o QR com o <b>app VIDaaS</b>.
+            </p>
+          </li>
         )}
-      </div>
+        {provider.id === "cfm" && (
+          <li>
+            <b>Mande para o CFM (Prescrição eletrônica)</b>
+            <p className="mt-1 text-xs text-[var(--text-muted)]">
+              Portal oficial do Conselho. Este PDF do Meu Rim não entra sozinho — abra o CFM, use os dados do paciente, ou
+              assine o arquivo daqui no Assinador gov.br com o certificado da AR-CFM.
+            </p>
+            <div className="mt-2 flex flex-col items-start gap-3 sm:flex-row sm:items-center">
+              <MiniQr value={SIGNATURE_LINKS.cfmPrescricao} caption="Leia: Prescrição CFM" />
+              {cfm && (
+                <a className="btn-gold text-sm" href={cfm.href} target="_blank" rel="noopener noreferrer">
+                  Abrir Prescrição eletrônica CFM
+                </a>
+              )}
+            </div>
+            {paste && (
+              <CopyPatientBox text={paste} />
+            )}
+            <a className="btn-ghost mt-2 inline-block text-sm" href={SIGNATURE_LINKS.govAssinador} target="_blank" rel="noopener noreferrer">
+              Assinar este PDF no Assinador gov.br
+            </a>
+          </li>
+        )}
+      </ol>
       <div className="mt-3 flex flex-wrap gap-2">
-        {provider.officialLinks.map((link) => (
+        {extra.map((link) => (
           <a key={link.id} className="btn-ghost text-sm" href={link.href} target="_blank" rel="noopener noreferrer">
             {link.label}
           </a>
         ))}
       </div>
+      {validShop && (
+        <p className="mt-2 text-[11px] text-[var(--text-muted)]">
+          Ainda não tem certificado VIDaaS?{" "}
+          <a className="font-semibold text-[var(--gold)]" href={validShop.href} target="_blank" rel="noopener noreferrer">
+            Página da Valid (só para emitir — não recebe o PDF)
+          </a>
+        </p>
+      )}
       <p className="mt-3 rounded-xl border border-[var(--border)] bg-[var(--bg)] px-3 py-2 text-xs text-[var(--text-muted)]">
         {provider.honesty}
       </p>
-      <div className="mt-4 rounded-2xl border border-[var(--border)] p-3">
-        <p className="text-sm font-extrabold text-[var(--text)]">Já assinei — anexar PDF</p>
+      <div className="mt-4 rounded-2xl border-2 border-[var(--gold)] bg-[var(--gold-soft)] p-3">
+        <p className="text-sm font-extrabold text-[var(--text)]">É aqui que você devolve o PDF assinado</p>
         <p className="mt-1 text-xs text-[var(--text-muted)]">
-          Volte ao Meu Rim e envie o arquivo assinado. Guardamos original + assinado, data, médico e CRM.
+          Depois de assinar no gov.br, VIDaaS ou CFM, volte e anexe o arquivo. Guardamos original + assinado, data, médico e CRM.
         </p>
         <input
           ref={fileRef}
@@ -388,6 +463,55 @@ function ProviderStep({
       </div>
       <button type="button" className="btn-ghost mt-3 text-sm" onClick={onBack} disabled={busy}>
         ← Outra forma de assinar
+      </button>
+    </div>
+  );
+}
+
+function MiniQr({ value, caption }: { value: string; caption: string }) {
+  const [src, setSrc] = useState("");
+  useEffect(() => {
+    let alive = true;
+    QRCode.toDataURL(value, { width: 132, margin: 1, errorCorrectionLevel: "M" })
+      .then((url) => {
+        if (alive) setSrc(url);
+      })
+      .catch(() => {
+        if (alive) setSrc("");
+      });
+    return () => {
+      alive = false;
+    };
+  }, [value]);
+  return (
+    <div className="flex w-[148px] flex-col items-center gap-1 rounded-xl border border-[var(--border)] bg-white p-2">
+      {src ? (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img src={src} alt={caption} width={132} height={132} className="rounded-md" />
+      ) : (
+        <div className="grid h-[132px] w-[132px] place-items-center text-[11px] text-[var(--text-muted)]">QR…</div>
+      )}
+      <p className="text-center text-[10px] font-semibold text-[var(--text-muted)]">{caption}</p>
+    </div>
+  );
+}
+
+function CopyPatientBox({ text }: { text: string }) {
+  const [msg, setMsg] = useState("");
+  return (
+    <div className="mt-2 w-full rounded-xl border border-[var(--border)] bg-white px-3 py-2">
+      <p className="text-[11px] font-bold uppercase tracking-wider text-[var(--text-muted)]">Dados para colar no CFM</p>
+      <pre className="mt-1 whitespace-pre-wrap text-xs text-[var(--text)]">{text}</pre>
+      <button
+        type="button"
+        className="btn-ghost mt-2 text-sm"
+        onClick={() => {
+          void navigator.clipboard?.writeText(text);
+          setMsg("Copiado");
+          window.setTimeout(() => setMsg(""), 1500);
+        }}
+      >
+        {msg || "Copiar dados"}
       </button>
     </div>
   );

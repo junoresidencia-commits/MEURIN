@@ -21,12 +21,41 @@ export interface OfficialDocRef {
   pages: number[]; // 0-based no pacote
 }
 
-export type TerOverlayField = "name" | "doctor" | "crm" | "date" | "cpf" | "birth";
-export type TerField = { field: TerOverlayField; page: number; x: number; y: number; size?: number };
+/** Campos de identificação sobrepostos no PDF oficial (origem inferior-esquerda, pontos).
+ *  Critérios clínicos / checkboxes do PCDT NÃO entram aqui — o médico marca à mão. */
+export type OverlayFieldName =
+  | "introName"
+  | "introDoctor"
+  | "name"
+  | "doctor"
+  | "crm"
+  | "uf"
+  | "date"
+  | "cpf"
+  | "cns"
+  | "age"
+  | "city"
+  | "local"
+  | "service"
+  | "birth";
+
+export type OverlayField = {
+  field: OverlayFieldName;
+  page: number;
+  x: number;
+  y: number;
+  size?: number;
+  maxWidth?: number;
+};
+
+/** @deprecated use OverlayFieldName */
+export type TerOverlayField = OverlayFieldName;
+/** @deprecated use OverlayField */
+export type TerField = OverlayField;
 
 export type OfficialDocAvailable = OfficialDocRef & {
   status: "available";
-  overlay?: TerField[];
+  overlay?: OverlayField[];
 };
 
 export type OfficialDocUnavailable = {
@@ -73,10 +102,10 @@ export const PROTOCOL_OFFICIAL_DOCS: Record<string, ProtocolDocMap> = {
       label: "TER oficial — Alfaepoetina",
       pages: [2],
       overlay: [
-        { field: "name", page: 0, x: 160, y: 200, size: 9 },
-        { field: "date", page: 0, x: 470, y: 200, size: 9 },
-        { field: "doctor", page: 0, x: 170, y: 133, size: 9 },
-        { field: "crm", page: 0, x: 422, y: 133, size: 9 },
+        { field: "name", page: 0, x: 160, y: 200, size: 9, maxWidth: 250 },
+        { field: "date", page: 0, x: 470, y: 200, size: 9, maxWidth: 70 },
+        { field: "doctor", page: 0, x: 170, y: 133, size: 9, maxWidth: 210 },
+        { field: "crm", page: 0, x: 422, y: 133, size: 9, maxWidth: 90 },
       ],
     },
     form: { status: "available", label: "Formulário médico oficial — Anemia na DRC", pages: [3] },
@@ -87,17 +116,47 @@ export const PROTOCOL_OFFICIAL_DOCS: Record<string, ProtocolDocMap> = {
       label: "TER oficial — Sacarato de hidróxido férrico",
       pages: [4],
       overlay: [
-        { field: "name", page: 0, x: 150, y: 224, size: 8 },
-        { field: "date", page: 0, x: 486, y: 224, size: 8 },
-        { field: "doctor", page: 0, x: 168, y: 155, size: 9 },
-        { field: "crm", page: 0, x: 420, y: 155, size: 9 },
+        { field: "name", page: 0, x: 150, y: 224, size: 8, maxWidth: 260 },
+        { field: "date", page: 0, x: 486, y: 224, size: 8, maxWidth: 70 },
+        { field: "doctor", page: 0, x: 168, y: 155, size: 9, maxWidth: 210 },
+        { field: "crm", page: 0, x: 420, y: 155, size: 9, maxWidth: 90 },
       ],
     },
     form: { status: "available", label: "Formulário médico oficial — Anemia na DRC", pages: [3] },
   },
   dmo_drc: {
-    ter: { status: "available", label: "TER oficial — DMO-DRC", pages: [6] },
-    form: { status: "available", label: "Formulário de acesso oficial — DMO-DRC", pages: [7, 8] },
+    ter: {
+      status: "available",
+      label: "TER oficial — DMO-DRC",
+      pages: [6],
+      overlay: [
+        { field: "introName", page: 0, x: 84, y: 655.5, size: 9, maxWidth: 230 },
+        { field: "introDoctor", page: 0, x: 158, y: 614.1, size: 9, maxWidth: 225 },
+        { field: "local", page: 0, x: 83, y: 189.9, size: 9, maxWidth: 370 },
+        { field: "date", page: 0, x: 488, y: 189.9, size: 9, maxWidth: 46 },
+        { field: "name", page: 0, x: 137, y: 178.6, size: 9, maxWidth: 390 },
+        { field: "cns", page: 0, x: 168, y: 164.8, size: 9, maxWidth: 155 },
+        { field: "cpf", page: 0, x: 403, y: 164.8, size: 9, maxWidth: 125 },
+        { field: "doctor", page: 0, x: 148, y: 99.4, size: 9, maxWidth: 140 },
+        { field: "crm", page: 0, x: 322, y: 99.4, size: 9, maxWidth: 100 },
+        { field: "uf", page: 0, x: 448, y: 99.4, size: 9, maxWidth: 80 },
+      ],
+    },
+    form: {
+      status: "available",
+      label: "Formulário de acesso oficial — DMO-DRC",
+      pages: [7, 8],
+      overlay: [
+        { field: "date", page: 0, x: 483, y: 658.8, size: 9, maxWidth: 70 },
+        { field: "name", page: 0, x: 152, y: 641.7, size: 10, maxWidth: 300 },
+        { field: "age", page: 0, x: 494, y: 641.7, size: 10, maxWidth: 28 },
+        { field: "service", page: 0, x: 102, y: 616.0, size: 10, maxWidth: 245 },
+        { field: "city", page: 0, x: 396, y: 616.0, size: 10, maxWidth: 118 },
+        { field: "doctor", page: 0, x: 164, y: 590.4, size: 10, maxWidth: 225 },
+        { field: "crm", page: 0, x: 424, y: 590.4, size: 10, maxWidth: 68 },
+        { field: "uf", page: 0, x: 515, y: 590.4, size: 10, maxWidth: 22 },
+      ],
+    },
   },
   sindrome_nefrotica_pediatrica: {
     ter: {
@@ -150,6 +209,15 @@ export function officialDocSlot(protocolId: string, doc: OfficialDocKind): Offic
   return pack.residence;
 }
 
+/** TER/formulário disponíveis em todos os protocolos do pacote SESAB. */
+export function listAvailableOfficialDocs(doc: OfficialDocKind): { protocolId: string; label: string }[] {
+  return CEAF_PROTOCOLS.map((p) => {
+    const slot = officialDocSlot(p.id, doc);
+    if (slot.status !== "available") return null;
+    return { protocolId: p.id, label: slot.label };
+  }).filter((x): x is { protocolId: string; label: string } => Boolean(x));
+}
+
 /** Compatível com a API: só devolve ref quando o arquivo oficial existe no pacote. */
 export function officialDocPages(protocolId: string, doc: OfficialDocKind): OfficialDocRef | undefined {
   const slot = officialDocSlot(protocolId, doc);
@@ -157,15 +225,78 @@ export function officialDocPages(protocolId: string, doc: OfficialDocKind): Offi
   return { label: slot.label, pages: slot.pages };
 }
 
-export function terOverlay(protocolId: string): TerField[] {
+export function terOverlay(protocolId: string): OverlayField[] {
   const ter = getProtocolOfficialDocs(protocolId).ter;
   return ter.status === "available" ? ter.overlay ?? [] : [];
 }
 
+export function formOverlay(protocolId: string): OverlayField[] {
+  const form = getProtocolOfficialDocs(protocolId).form;
+  return form.status === "available" ? form.overlay ?? [] : [];
+}
+
+export function officialOverlay(protocolId: string, doc: OfficialDocKind): OverlayField[] {
+  if (doc === "ter") return terOverlay(protocolId);
+  if (doc === "form") return formOverlay(protocolId);
+  return [];
+}
+
 /** @deprecated use terOverlay — mantido para imports antigos. */
-export const TER_OVERLAY: Record<string, TerField[]> = Object.fromEntries(
+export const TER_OVERLAY: Record<string, OverlayField[]> = Object.fromEntries(
   Object.keys(PROTOCOL_OFFICIAL_DOCS).map((id) => [id, terOverlay(id)]),
 );
+
+export const OFFICIAL_OVERLAY: Record<string, { ter?: OverlayField[]; form?: OverlayField[] }> =
+  Object.fromEntries(
+    Object.keys(PROTOCOL_OFFICIAL_DOCS).map((id) => [
+      id,
+      { ter: terOverlay(id), form: formOverlay(id) },
+    ]),
+  );
+
+/** Marca "X" nos medicamentos do TRE (DMO). Calcitriol NÃO é marcado automaticamente. */
+export type MedMarkKey = "calcitriol" | "paricalcitol" | "cinacalcete" | "desferroxamina" | "sevelamer";
+export const TER_MED_MARKS: Record<string, Partial<Record<MedMarkKey, { page: number; x: number; y: number; size?: number }>>> = {
+  dmo_drc: {
+    calcitriol: { page: 0, x: 69, y: 200.9, size: 10 },
+    paricalcitol: { page: 0, x: 128, y: 200.9, size: 10 },
+    cinacalcete: { page: 0, x: 198, y: 200.9, size: 10 },
+    desferroxamina: { page: 0, x: 270, y: 200.9, size: 10 },
+    sevelamer: { page: 0, x: 362, y: 200.9, size: 10 },
+  },
+};
+/** O médico preenche o calcitriol (critérios no formulário / caixa no TRE). */
+export const TER_MED_SKIP_AUTO: MedMarkKey[] = ["calcitriol"];
+
+function normMed(s: string): string {
+  return s.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+}
+
+/** Quais caixas do TRE correspondem aos medicamentos da LME. */
+export function terMedKeysFromNames(names: string[]): MedMarkKey[] {
+  const keys = new Set<MedMarkKey>();
+  for (const raw of names) {
+    const n = normMed(raw || "");
+    if (n.includes("calcitriol")) keys.add("calcitriol");
+    else if (n.includes("paricalcitol")) keys.add("paricalcitol");
+    else if (n.includes("cinacalcet")) keys.add("cinacalcete");
+    else if (n.includes("desferroxamina") || n.includes("deferoxamina")) keys.add("desferroxamina");
+    else if (n.includes("sevelamer")) keys.add("sevelamer");
+  }
+  return [...keys];
+}
+
+/** Infere o protocolo CEAF pelos nomes dos medicamentos da LME. */
+export function inferProtocolFromMedNames(names: string[]): string | undefined {
+  const blob = names.map(normMed).join(" ");
+  if (/sevelamer|cinacalcet|paricalcitol|calcitriol|desferroxamina|deferoxamina/.test(blob)) return "dmo_drc";
+  if (/alfaepoetina|epoetina|darbepoetina/.test(blob)) return "anemia_drc_alfaepoetina";
+  if (/sacarato|hidroxido ferrico/.test(blob)) return "anemia_drc_ferro";
+  if (/micofenolato|azatioprina/.test(blob)) return "les";
+  if (/tacrolimo/.test(blob)) return "sindrome_nefrotica_pediatrica";
+  if (/ciclofosfamida|ciclosporina/.test(blob)) return "sindrome_nefrotica_adultos";
+  return undefined;
+}
 
 export const CEAF_RESIDENCIA_DOC: OfficialDocRef = { label: RESIDENCE_DOC.label, pages: RESIDENCE_DOC.pages };
 

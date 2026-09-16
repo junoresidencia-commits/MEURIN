@@ -1,14 +1,15 @@
 import { NextResponse } from "next/server";
-import { PDFDocument, StandardFonts, rgb } from "pdf-lib";
 import { getDoctorSessionId } from "@/lib/auth";
+import { getDoctorById } from "@/lib/store";
+import { resolvePatientAccess } from "@/lib/doctor-access";
+import { getLme } from "@/lib/lme-store";
 import {
-  CEAF_PACOTE,
-  officialDocSlot,
-  terOverlay,
+  inferProtocolFromMedNames,
   type OfficialDocKind,
-  type TerOverlayField,
 } from "@/lib/ceaf-documents";
-import { readCeafOfficialFile } from "@/lib/ceaf-official-pack";
+import { inferCeafProtocols } from "@/lib/ceaf-catalog";
+import { buildOfficialCeafPdf, type FillValues } from "@/lib/ceaf-official-pdf";
+import { idadeFromBirthdate, todayBr } from "@/lib/pdf-winansi";
 import { jsonUtf8 } from "@/lib/json-utf8";
 
 export const runtime = "nodejs";
@@ -17,96 +18,128 @@ export const maxDuration = 30;
 
 const DOCS: OfficialDocKind[] = ["ter", "form", "residencia"];
 
-function pdfSafe(text: string) {
-  return text
-    .replace(/[–—]/g, "-")
-    .replace(/[‘’]/g, "'")
-    .replace(/[“”]/g, '"')
-    .normalize("NFC")
-    .replace(/[^\x20-\x7E\xA0-\xFF]/g, "");
+function cityFrom(address?: string | null): string {
+  const s = String(address || "").trim();
+  if (!s) return "";
+  const parts = s.split(/[,\-/]/).map((p) => p.trim()).filter(Boolean);
+  const last = parts[parts.length - 1] || s;
+  if (/^\d+$/.test(last)) return parts[parts.length - 2] || "";
+  return last.length > 40 ? last.slice(0, 40) : last;
 }
 
-function asciiName(protocol: string, doc: string) {
-  const slug = protocol.replace(/[^a-zA-Z0-9_-]+/g, "-") || "ceaf";
-  return `${doc}-${slug}-oficial.pdf`;
+function inferProtocol(cid10: string | null | undefined, medNames: string[]): string {
+  return (
+    inferProtocolFromMedNames(medNames) ||
+    inferCeafProtocols({ cid10, medications: medNames.map((name) => ({ name })) })[0] ||
+    ""
+  );
 }
 
-/** Extrai as páginas oficiais exatas do pacote SESAB. Só médico logado. */
+/** Extrai as páginas oficiais exatas do pacote SESAB e preenche identificação. Só médico logado. */
 export async function GET(req: Request) {
   const doctorId = await getDoctorSessionId();
   if (!doctorId) return jsonUtf8({ error: "Não autenticado." }, 401);
 
   const { searchParams } = new URL(req.url);
-  const protocol = (searchParams.get("protocol") || "").trim();
   const doc = (searchParams.get("doc") || "") as OfficialDocKind;
   if (!DOCS.includes(doc)) return jsonUtf8({ error: "Informe o documento: ter, form ou residencia." }, 400);
 
-  const slot = officialDocSlot(protocol, doc);
-  if (slot.status !== "available") {
-    console.info("[ceaf/official]", { protocolId: protocol, doc, status: 404, reason: slot.reason });
-    return jsonUtf8(
-      { error: "Não foi possível localizar o documento oficial deste protocolo. Tente novamente ou informe o suporte." },
-      404,
-    );
-  }
+  const doctor = await getDoctorById(doctorId);
+  if (!doctor) return jsonUtf8({ error: "Médico não encontrado." }, 404);
 
-  try {
-    const { bytes, path: filePath } = await readCeafOfficialFile(CEAF_PACOTE.file);
-    const src = await PDFDocument.load(bytes);
-    const valid = slot.pages.filter((i) => i >= 0 && i < src.getPageCount());
-    if (valid.length === 0) {
-      console.error("[ceaf/official]", {
-        protocolId: protocol,
-        doc,
-        status: 500,
-        path: filePath,
-        pages: slot.pages,
-        pageCount: src.getPageCount(),
-        error: "páginas fora do pacote",
-      });
-      return jsonUtf8({ error: "Não foi possível localizar o documento oficial deste protocolo. Tente novamente ou informe o suporte." }, 500);
+  const lmeId = (searchParams.get("lmeId") || "").trim();
+  const patientParam = (searchParams.get("patient") || "").trim();
+  let protocol = (searchParams.get("protocol") || "").trim();
+
+  const values: FillValues = {};
+  let medNames: string[] = [];
+
+  if (lmeId) {
+    const lme = await getLme(lmeId);
+    if (!lme) return jsonUtf8({ error: "LME não encontrada." }, 404);
+    if (lme.doctorId && lme.doctorId !== doctorId) {
+      return jsonUtf8({ error: "Sem acesso a esta LME." }, 403);
     }
-
-    const out = await PDFDocument.create();
-    const copied = await out.copyPages(src, valid);
-    copied.forEach((p) => out.addPage(p));
-
-    if (doc === "ter") {
-      const overlay = slot.overlay ?? terOverlay(protocol);
-      if (overlay.length) {
-        const values: Record<TerOverlayField, string> = {
-          name: searchParams.get("name") || "",
-          doctor: searchParams.get("doctor") || "",
-          crm: searchParams.get("crm") || "",
-          date: searchParams.get("date") || "",
-          cpf: searchParams.get("cpf") || "",
-          birth: searchParams.get("birth") || "",
-        };
-        const font = await out.embedFont(StandardFonts.Helvetica);
-        const pages = out.getPages();
-        for (const field of overlay) {
-          const val = pdfSafe(values[field.field] || "");
-          if (!val) continue;
-          const pg = pages[field.page];
-          if (!pg) continue;
-          pg.drawText(val, { x: field.x, y: field.y, size: field.size ?? 10, font, color: rgb(0, 0, 0.55) });
+    values.introName = lme.patientName || "";
+    values.name = lme.patientName || "";
+    values.cpf = lme.patientCpf || "";
+    values.cns = lme.patientCns || "";
+    values.introDoctor = lme.doctorName || doctor.name;
+    values.doctor = lme.doctorName || doctor.name;
+    values.crm = (lme.doctorCrm || [doctor.crm, doctor.crmState].filter(Boolean).join("-") || "").replace(/^-+|-+$/g, "");
+    values.date = new Date(lme.createdAt).toLocaleDateString("pt-BR", { timeZone: "America/Bahia" });
+    values.service = lme.establishmentName || "";
+    medNames = (lme.medications || []).map((m) => m.name);
+    if (!protocol) protocol = inferProtocol(lme.cid10, medNames);
+    const access = await resolvePatientAccess(lme.patientEmail || patientParam);
+    if (access?.allowed) {
+      values.age = idadeFromBirthdate(access.birthdate);
+      values.birth = access.birthdate ? new Date(access.birthdate).toLocaleDateString("pt-BR") : "";
+      values.city = cityFrom(access.city);
+      values.local = values.city || values.service || "";
+      if (!values.cpf) values.cpf = access.cpf || "";
+      if (!values.cns) values.cns = access.cns || "";
+      if (!values.name) values.name = access.name;
+      if (!values.introName) values.introName = access.name;
+    }
+  } else {
+    values.introName = searchParams.get("name") || "";
+    values.name = values.introName;
+    values.introDoctor = searchParams.get("doctor") || doctor.name;
+    values.doctor = values.introDoctor;
+    values.crm = searchParams.get("crm") || [doctor.crm, doctor.crmState].filter(Boolean).join("-");
+    values.date = searchParams.get("date") || todayBr();
+    values.cpf = searchParams.get("cpf") || "";
+    values.cns = searchParams.get("cns") || "";
+    values.age = searchParams.get("age") || "";
+    values.birth = searchParams.get("birth") || "";
+    values.city = searchParams.get("city") || "";
+    values.service = searchParams.get("service") || "";
+    values.local = values.city || values.service || "";
+    const medsParam = searchParams.get("meds") || "";
+    medNames = medsParam ? medsParam.split(/[,;]+/).map((s) => s.trim()).filter(Boolean) : [];
+    if (patientParam) {
+      const access = await resolvePatientAccess(patientParam);
+      if (access?.allowed) {
+        if (!values.name) values.name = access.name;
+        if (!values.introName) values.introName = access.name;
+        if (!values.cpf) values.cpf = access.cpf || "";
+        if (!values.cns) values.cns = access.cns || "";
+        if (!values.age) values.age = idadeFromBirthdate(access.birthdate);
+        if (!values.birth && access.birthdate) {
+          values.birth = new Date(access.birthdate).toLocaleDateString("pt-BR");
         }
+        if (!values.city) values.city = cityFrom(access.city);
+        if (!values.local) values.local = values.city;
       }
     }
-
-    const pdf = await out.save();
-    const fname = asciiName(protocol || "ceaf", doc);
-    console.info("[ceaf/official]", { protocolId: protocol, doc, status: 200, path: filePath, pages: valid });
-    return new NextResponse(new Uint8Array(pdf), {
-      headers: {
-        "Content-Type": "application/pdf",
-        "Content-Disposition": `inline; filename="${fname}"`,
-        "Cache-Control": "private, no-store",
-      },
-    });
-  } catch (err) {
-    const tried = err && typeof err === "object" && "tried" in err ? (err as { tried?: string[] }).tried : undefined;
-    console.error("[ceaf/official]", { protocolId: protocol, doc, status: 500, path: tried, error: "falha ao ler/gerar" });
-    return jsonUtf8({ error: "Não foi possível gerar o documento oficial." }, 500);
   }
+
+  const crmNum = String(values.crm || doctor.crm || "").replace(/-.*$/, "").trim() || doctor.crm;
+  const uf = (doctor.crmState || "BA").toUpperCase().slice(0, 2);
+  values.uf = uf;
+  values.crm = crmNum;
+  if (!values.introDoctor) values.introDoctor = doctor.name;
+  if (!values.doctor) values.doctor = doctor.name;
+  if (!values.date) values.date = todayBr();
+  if (!values.service) {
+    const loc = (doctor.locations || []).find((l) => l.active) || (doctor.locations || [])[0];
+    if (loc) {
+      values.service = loc.name;
+      if (!values.city) values.city = loc.city || "";
+      if (!values.local) values.local = loc.city || loc.name;
+    }
+  }
+  if (!values.local) values.local = values.city || "";
+
+  const result = await buildOfficialCeafPdf({ protocol, doc, values, medNames });
+  if (!result.ok) return jsonUtf8({ error: result.error }, result.status);
+
+  return new NextResponse(new Uint8Array(result.pdf), {
+    headers: {
+      "Content-Type": "application/pdf",
+      "Content-Disposition": `inline; filename="${result.filename}"`,
+      "Cache-Control": "private, no-store",
+    },
+  });
 }
