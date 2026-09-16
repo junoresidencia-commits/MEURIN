@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import { DoctorSidebar } from "@/components/DoctorSidebar";
 import { DoctorMobileNav } from "@/components/DoctorMobileNav";
 import { VidaasSignBox } from "@/components/VidaasSignBox";
+import { getDigitalSignatureProvider } from "@/lib/digital-signature/providers";
 
 type Visual = { kind: "typed" | "image" | "draw"; value: string } | null;
 type Icp = { configured: boolean; providerId: string | null };
@@ -94,6 +95,8 @@ export default function MinhaAssinaturaPage() {
 
   if (!ready) return <div className="mx-auto max-w-3xl px-5 py-20 text-[var(--text-muted)]">Carregando…</div>;
 
+  const cfm = getDigitalSignatureProvider("cfm");
+
   return (
     <div className="flex min-h-screen bg-[var(--bg)]">
       <DoctorSidebar />
@@ -111,6 +114,25 @@ export default function MinhaAssinaturaPage() {
                 Provedor de API configurado: <b>{icp.providerId}</b>. Quando a integração estiver ativa, a assinatura
                 poderá ser pedida daqui sem baixar o arquivo.
               </p>
+            )}
+          </section>
+
+          <section className="panel mt-6">
+            <h2 className="font-display text-xl text-[var(--text)]">CFM Digital</h2>
+            {cfm && (
+              <>
+                <p className="mt-1 text-sm text-[var(--text-soft)]">{cfm.description}</p>
+                <div className="mt-3 flex flex-wrap gap-2">
+                  {cfm.officialLinks.map((link) => (
+                    <a key={link.id} className="btn-ghost text-sm" href={link.href} target="_blank" rel="noopener noreferrer">
+                      {link.label}
+                    </a>
+                  ))}
+                </div>
+                <p className="mt-3 rounded-xl border border-[var(--border)] bg-[var(--bg)] px-3 py-2 text-xs text-[var(--text-muted)]">
+                  {cfm.honesty}
+                </p>
+              </>
             )}
           </section>
 
@@ -186,6 +208,7 @@ export default function MinhaAssinaturaPage() {
             <h2 className="font-display text-xl text-[var(--text)]">Como os documentos são finalizados</h2>
             <ul className="mt-2 space-y-1 text-sm text-[var(--text-soft)]">
               <li>• <b>VIDaaS / gov.br</b>: baixa o PDF e assina com o certificado ICP-Brasil (válido juridicamente).</li>
+              <li>• <b>CFM Digital</b>: portais oficiais do CFM (certificado AR-CFM, e-CRM, prescrição eletrônica). O certificado do CFM assina o PDF no VIDaaS.</li>
               <li>• <b>Registro no Meu Rim</b>: marca autoria no prontuário (não substitui a assinatura legal).</li>
               <li>• <b>À mão</b>: imprimir, assinar e carimbar; depois anexar a cópia ao prontuário.</li>
             </ul>

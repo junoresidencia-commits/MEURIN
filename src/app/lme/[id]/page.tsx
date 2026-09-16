@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import { receitaFromLme, relatorioFromLme, composerHref } from "@/lib/complementary-docs";
-import { VidaasSignBox } from "@/components/VidaasSignBox";
+import { SignDocumentPanel } from "@/components/SignDocumentFlow";
 
 type Med = { name: string; presentation?: string; monthlyQty?: string };
 type Lme = {
@@ -204,11 +204,13 @@ export default function LmePage() {
           <li><b>VIDaaS ou gov.br (recomendado)</b>: baixe o PDF final e assine com o certificado ICP-Brasil. Vale juridicamente; confira em validar.iti.gov.br.</li>
           <li><b>À mão</b>: imprima e assine/carimbe no campo 17.</li>
         </ol>
-        <VidaasSignBox
-          compact
+        <SignDocumentPanel
           pdfHref={`${officialUrl}?flatten=1`}
-          pdfLabel="Baixar PDF para assinar digitalmente"
-          footnote="O PDF baixado é a versão final e não editável, para a assinatura cobrir o documento inteiro."
+          filename="lme-oficial.pdf"
+          documentType="lme"
+          title={`LME — ${lme.patientName || "paciente"}`}
+          patientKey={lme.patientEmail}
+          patientPhone={lme.patientPhone}
         />
       </section>
 

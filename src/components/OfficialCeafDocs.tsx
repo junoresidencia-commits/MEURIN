@@ -2,6 +2,7 @@
 
 import { useState, type ReactNode } from "react";
 import { getProtocolOfficialDocs, type OfficialDocKind, type OfficialDocSlot } from "@/lib/ceaf-documents";
+import { SignDocumentPanel } from "@/components/SignDocumentFlow";
 
 const USER_ERROR = "Não foi possível localizar o documento oficial deste protocolo. Tente novamente ou informe o suporte.";
 
@@ -12,6 +13,7 @@ type Props = {
   crm?: string;
   patientCpf?: string;
   patientBirth?: string;
+  patientKey?: string;
 };
 
 function isPdfContentType(value: string | null) {
@@ -31,10 +33,11 @@ async function readApiError(res: Response) {
   return USER_ERROR;
 }
 
-export function OfficialCeafDocs({ protocolId, patientName, doctorName, crm, patientCpf, patientBirth }: Props) {
+export function OfficialCeafDocs({ protocolId, patientName, doctorName, crm, patientCpf, patientBirth, patientKey }: Props) {
   const pack = getProtocolOfficialDocs(protocolId);
   const [busy, setBusy] = useState<OfficialDocKind | "">("");
   const [error, setError] = useState("");
+  const [lastPdf, setLastPdf] = useState<{ blob: Blob; name: string; kind: OfficialDocKind } | null>(null);
 
   async function openOfficial(doc: OfficialDocKind) {
     setBusy(doc);
@@ -60,8 +63,10 @@ export function OfficialCeafDocs({ protocolId, patientName, doctorName, crm, pat
         setError(USER_ERROR);
         return;
       }
-      const url = URL.createObjectURL(new Blob([blob], { type: "application/pdf" }));
+      const pdf = new Blob([blob], { type: "application/pdf" });
+      const url = URL.createObjectURL(pdf);
       const filename = `${doc}-${protocolId}-oficial.pdf`;
+      setLastPdf({ blob: pdf, name: filename, kind: doc });
       const opened = window.open(url, "_blank", "noopener,noreferrer");
       if (!opened) {
         const a = document.createElement("a");
@@ -108,6 +113,16 @@ export function OfficialCeafDocs({ protocolId, patientName, doctorName, crm, pat
       <p className="mt-2 text-xs text-[var(--text-muted)]">
         A LME oficial é gerada no botão abaixo. TER e formulário só aparecem quando o arquivo oficial da SESAB existe neste protocolo.
       </p>
+      {lastPdf && (
+        <SignDocumentPanel
+          compact
+          pdfBlob={lastPdf.blob}
+          filename={lastPdf.name}
+          documentType={lastPdf.kind}
+          title={`Documento oficial SESAB (${lastPdf.kind})`}
+          patientKey={patientKey}
+        />
+      )}
     </div>
   );
 }

@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import { TemplatePicker } from "@/components/TemplatePicker";
 import { fetchPdfBlob } from "@/lib/doc-pdf-client";
 import { FriendlyError, toFriendlyMessage } from "@/lib/user-errors";
+import { SignDocumentPanel } from "@/components/SignDocumentFlow";
 
 type Doctor = {
   name: string;
@@ -45,6 +46,8 @@ export default function DocumentoAvulsoPage() {
   const [letterheadId, setLetterheadId] = useState<string>(NO_LETTERHEAD);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
+  const [pdfBlob, setPdfBlob] = useState<Blob | null>(null);
+  const [pdfUrl, setPdfUrl] = useState<string | null>(null);
 
   useEffect(() => {
     (async () => {
@@ -86,7 +89,10 @@ export default function DocumentoAvulsoPage() {
         }),
       });
       const blob = await fetchPdfBlob(res);
+      if (pdfUrl?.startsWith("blob:")) URL.revokeObjectURL(pdfUrl);
       const url = URL.createObjectURL(blob);
+      setPdfBlob(blob);
+      setPdfUrl(url);
       const opened = window.open(url, "_blank", "noopener,noreferrer");
       if (!opened) {
         const a = document.createElement("a");
@@ -187,6 +193,15 @@ export default function DocumentoAvulsoPage() {
           </button>
           <button type="button" className="btn-ghost" onClick={shareWhatsApp} disabled={!body.trim()}>Enviar no WhatsApp</button>
         </div>
+        {pdfBlob && (
+          <SignDocumentPanel
+            pdfBlob={pdfBlob}
+            pdfHref={pdfUrl}
+            documentType={type}
+            title={TYPE_LABEL[type]}
+            filename={`${type}-meu-rim.pdf`}
+          />
+        )}
       </div>
 
       {/* Prévia do texto (o PDF final sai sobre o papel timbrado selecionado). */}

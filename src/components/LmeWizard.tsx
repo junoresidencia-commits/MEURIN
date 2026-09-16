@@ -266,6 +266,7 @@ export function LmeWizard({ emailParam, patientName, onCreated }: { emailParam: 
             patientName={patientName}
             doctorName={doctorInfo.name}
             crm={doctorInfo.crm}
+            patientKey={emailParam}
           />
         </div>
       )}

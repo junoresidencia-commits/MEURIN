@@ -758,6 +758,24 @@ export async function getDocumentById(id: string): Promise<ClinicalDocument | nu
   return file.documents.find((d) => d.id === id) ?? null;
 }
 
+/** Versões de um mesmo documento (mesmo groupId). Não altera registros. */
+export async function getDocumentsByGroup(groupId: string): Promise<ClinicalDocument[]> {
+  const gid = groupId.trim();
+  if (!gid) return [];
+  if (supabaseActive("documents")) {
+    const supabase = getSupabaseAdmin()!;
+    const { data, error } = await supabase.from("documents").select("*").eq("group_id", gid);
+    if (error) {
+      if (isMissingTableError(error)) missingTables.add("documents");
+      else throw error;
+    } else {
+      return (data ?? []).map((r) => mapDocumentRow(r as Record<string, unknown>));
+    }
+  }
+  const file = await readFile();
+  return file.documents.filter((d) => d.groupId === gid);
+}
+
 /** Exclui um documento (registro). O PDF em storage é removido pela rota. */
 export async function deleteDocument(id: string): Promise<void> {
   if (supabaseActive("documents")) {

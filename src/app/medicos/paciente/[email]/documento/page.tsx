@@ -8,7 +8,7 @@ import { PosologyBuilder } from "@/components/PosologyBuilder";
 import type { TemplateType } from "@/lib/document-templates";
 import { FriendlyError, toFriendlyMessage } from "@/lib/user-errors";
 import { DOC_PDF_USER_ERROR, fetchPdfBlob, readApiError } from "@/lib/doc-pdf-client";
-import { VidaasSignBox } from "@/components/VidaasSignBox";
+import { SignDocumentPanel } from "@/components/SignDocumentFlow";
 
 const TEMPLATE_TYPES = ["receita", "exame", "relatorio"];
 
@@ -44,6 +44,7 @@ function ComporDocumentoInner() {
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [savedId, setSavedId] = useState<string | null>(null);
   const [status, setStatus] = useState<string>("");
+  const [signedDocId, setSignedDocId] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     const r = await fetch("/api/doctor/letterheads").then((x) => x.json());
@@ -97,7 +98,7 @@ function ComporDocumentoInner() {
       if (!res.ok) throw new FriendlyError(await readApiError(res, DOC_PDF_USER_ERROR));
       const d = (await res.json().catch(() => ({}))) as { id?: string; warning?: string };
       if (!d.id) throw new FriendlyError(DOC_PDF_USER_ERROR);
-      setSavedId(d.id); setStatus("final");
+      setSavedId(d.id); setStatus("final"); setSignedDocId(null);
       setPreviewUrl(`/api/documents/${d.id}/pdf`);
       setMsg(d.warning || "Documento gerado e salvo no prontuário.");
     } catch (e) {
@@ -200,12 +201,6 @@ function ComporDocumentoInner() {
                 <button type="button" className="btn-gold text-sm" onClick={() => disponibilizar(true)} disabled={busy}>Disponibilizar ao paciente</button>
                 <button type="button" className="btn-ghost text-sm" onClick={() => disponibilizar(false)} disabled={busy}>Remover do paciente</button>
               </div>
-              <VidaasSignBox
-                compact
-                pdfHref={`/api/documents/${savedId}/pdf`}
-                pdfLabel="Baixar PDF para o VIDaaS"
-                footnote="Assine no app VIDaaS ou no Assinador gov.br. Registrar no Meu Rim só marca o prontuário — não é certificado ICP-Brasil."
-              />
             </div>
           )}
           {msg && (
@@ -227,6 +222,18 @@ function ComporDocumentoInner() {
               <a className="btn-ghost mt-2 inline-block text-sm" href={previewUrl} target="_blank" rel="noopener noreferrer">
                 Abrir PDF em nova aba
               </a>
+              {savedId && (
+                <SignDocumentPanel
+                  documentId={savedId}
+                  patientKey={patientParam}
+                  documentType={type}
+                  title={title || TYPES.find((t) => t.id === type)?.label}
+                  pdfHref={signedDocId ? `/api/documents/${signedDocId}/pdf` : `/api/documents/${savedId}/pdf`}
+                  alreadySigned={Boolean(signedDocId)}
+                  signedDocumentId={signedDocId}
+                  onSigned={(info) => setSignedDocId(info.id)}
+                />
+              )}
             </>
           ) : (
             <div className="grid h-[70vh] place-items-center rounded-lg border border-dashed border-[var(--border)] text-center text-sm text-[var(--text-muted)]">

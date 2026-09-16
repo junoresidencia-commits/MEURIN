@@ -6,6 +6,11 @@ import "server-only";
    o módulo. Enquanto não houver credenciais/adaptador, opera como "não configurado"
    e NUNCA gera assinatura falsa/simulada.
 
+   IDs alinhados à camada client-safe DigitalSignatureProvider (cfm, vidaas) em
+   src/lib/digital-signature/providers.ts. Hoje o handoff é compartilhar/baixar o
+   PDF e anexar o arquivo já assinado. Só ligue signPdf() aqui quando existir API
+   oficial documentada e credenciais de servidor.
+
    Segredos SEMPRE via variáveis de ambiente/servidor — nunca no frontend/tabelas/logs.
    ============================================================================ */
 

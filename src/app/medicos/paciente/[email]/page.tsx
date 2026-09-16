@@ -27,6 +27,8 @@ import { PdModule } from "@/components/PdModule";
 import { encodePatientParam, postJson, toFriendlyMessage } from "@/lib/user-errors";
 import { clearEvolutionDraft, loadEvolutionDraft, saveEvolutionDraft } from "@/lib/evolution-draft";
 import { ageFromBirthdate } from "@/lib/egfr";
+import { SignDocumentPanel } from "@/components/SignDocumentFlow";
+import { digitalSignatureLabel } from "@/lib/digital-signature/status";
 
 type Lab = { id: string; testKey: string; value: number; unit?: string | null; measuredAt: string };
 type Upload = { id: string; name: string; category?: string | null; examDate?: string | null; signedUrl?: string | null };
@@ -82,10 +84,16 @@ type Note = {
 };
 type Doc = {
   id: string;
-  type: "receita" | "exame" | "relatorio";
+  type: string;
   title: string;
   sharedWithPatient: boolean;
   createdAt: string;
+  status?: string | null;
+  signatureMethod?: string | null;
+  signedAt?: string | null;
+  pdfPath?: string | null;
+  doctorCrm?: string | null;
+  signedBy?: string | null;
 };
 
 const REASON: Record<string, string> = {
@@ -119,11 +127,23 @@ type Tab = (typeof TABS)[number]["id"] | "dp";
 const HEADER_ACTION =
   "inline-flex h-10 min-h-10 items-center justify-center rounded-full bg-[var(--gold)] px-4 text-sm font-extrabold text-white disabled:opacity-50";
 
-const DOC_TYPE_LABEL: Record<Doc["type"], string> = {
+const DOC_TYPE_LABEL: Record<string, string> = {
   receita: "Receita",
   exame: "Pedido de exame",
   relatorio: "Relatório",
+  atestado: "Atestado",
+  declaracao: "Declaração",
+  encaminhamento: "Encaminhamento",
+  parecer: "Parecer",
+  orientacao: "Orientações",
+  laudo: "Laudo",
+  lme: "LME",
+  livre: "Documento",
 };
+
+function docTypeLabel(type: string) {
+  return DOC_TYPE_LABEL[type] || "Documento";
+}
 
 function fmt(iso: string) {
   return new Date(iso).toLocaleString("pt-BR", {
@@ -882,16 +902,34 @@ export default function ProntuarioPage() {
             {documents.map((d) => (
               <div
                 key={d.id}
-                className="panel flex items-center justify-between gap-3 transition hover:border-[var(--border-gold)]"
+                className="panel space-y-3 transition hover:border-[var(--border-gold)]"
               >
-                <a href={`/documento/${d.id}`} target="_blank" rel="noopener noreferrer" className="min-w-0 flex-1">
-                  <p className="truncate font-semibold text-[var(--text)]">{d.title}</p>
-                  <p className="text-xs text-[var(--text-muted)]">{DOC_TYPE_LABEL[d.type]} · {fmt(d.createdAt)}</p>
-                </a>
-                <div className="flex shrink-0 items-center gap-3">
-                  <a href={`/documento/${d.id}`} target="_blank" rel="noopener noreferrer" className="text-sm font-semibold text-[var(--gold)]">Abrir PDF →</a>
-                  <button type="button" className="text-sm font-semibold text-[var(--text-muted)] hover:text-[var(--danger)]" onClick={() => removeDocument(d.id)}>Excluir</button>
+                <div className="flex items-center justify-between gap-3">
+                  <a href={`/documento/${d.id}`} target="_blank" rel="noopener noreferrer" className="min-w-0 flex-1">
+                    <p className="truncate font-semibold text-[var(--text)]">{d.title}</p>
+                    <p className="text-xs text-[var(--text-muted)]">
+                      {docTypeLabel(d.type)} · {fmt(d.createdAt)} · {digitalSignatureLabel(d)}
+                    </p>
+                  </a>
+                  <div className="flex shrink-0 items-center gap-3">
+                    <a href={d.pdfPath ? `/api/documents/${d.id}/pdf` : `/documento/${d.id}`} target="_blank" rel="noopener noreferrer" className="text-sm font-semibold text-[var(--gold)]">Abrir PDF →</a>
+                    <button type="button" className="text-sm font-semibold text-[var(--text-muted)] hover:text-[var(--danger)]" onClick={() => removeDocument(d.id)}>Excluir</button>
+                  </div>
                 </div>
+                {d.pdfPath && (
+                  <SignDocumentPanel
+                    compact
+                    documentId={d.id}
+                    patientKey={emailParam}
+                    documentType={d.type}
+                    title={d.title}
+                    pdfHref={`/api/documents/${d.id}/pdf`}
+                    alreadySigned={d.status === "signed" && d.signatureMethod === "certificada"}
+                    signedDocumentId={d.status === "signed" && d.signatureMethod === "certificada" ? d.id : null}
+                    patientPhone={patient?.phone}
+                    onSigned={() => { void load(); }}
+                  />
+                )}
               </div>
             ))}
           </div>
