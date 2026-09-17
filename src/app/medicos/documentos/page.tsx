@@ -71,7 +71,7 @@ export default function DocumentoAvulsoPage() {
   const dateLabel = new Date().toLocaleDateString("pt-BR", { day: "2-digit", month: "long", year: "numeric" });
   const credential = doctor ? [doctor.crm, doctor.rqe ? `RQE ${doctor.rqe}` : ""].filter(Boolean).join(" · ") : "";
 
-  async function generatePdf(plainPaper = false) {
+  async function generatePdf() {
     if (!doctor || !body.trim()) return;
     setBusy(true);
     setError("");
@@ -85,7 +85,7 @@ export default function DocumentoAvulsoPage() {
           title: TYPE_LABEL[type],
           content: body,
           patientName: patientName.trim(),
-          letterheadId: plainPaper || letterheadId === NO_LETTERHEAD ? "" : letterheadId,
+          letterheadId: letterheadId === NO_LETTERHEAD ? "" : letterheadId,
         }),
       });
       const blob = await fetchPdfBlob(res);
@@ -105,13 +105,9 @@ export default function DocumentoAvulsoPage() {
       }
       window.setTimeout(() => URL.revokeObjectURL(url), 60_000);
     } catch (e) {
-      if (!plainPaper && letterheadId !== NO_LETTERHEAD) {
-        await generatePdf(true);
-        return;
-      }
       setError(toFriendlyMessage(e instanceof Error ? new FriendlyError(e.message) : e, "Não foi possível gerar o documento. Tente novamente."));
     } finally {
-      if (!plainPaper) setBusy(false);
+      setBusy(false);
     }
   }
 

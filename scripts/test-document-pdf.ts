@@ -3,7 +3,7 @@ import Module from "node:module";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import zlib from "node:zlib";
-import { PDFDocument, StandardFonts } from "pdf-lib";
+import { PDFDocument, StandardFonts, rgb } from "pdf-lib";
 import { BUILTIN_TEMPLATES } from "../src/lib/document-templates";
 import { winAnsiSafe } from "../src/lib/pdf-winansi";
 
@@ -111,6 +111,51 @@ async function main() {
   assert.match(relText, /continuidade/);
   assert.match(relText, /manuten/);
 
+  const lhDoc = await PDFDocument.create();
+  const lhPage = lhDoc.addPage([595.28, 841.89]);
+  lhPage.drawRectangle({ x: 20, y: 780, width: 555, height: 40, color: rgb(0.7, 0.05, 0.05) });
+  const lhPdfBytes = await lhDoc.save();
+  const withPdfLh = await buildDocumentPdfDetailed({
+    title: rx.title,
+    content: rx.body,
+    patient: { name: "Maria da Prestação" },
+    doctor,
+    area: { ...area, marginTop: 0.22 },
+    background: { kind: "pdf", bytes: lhPdfBytes },
+  });
+  assert.equal(withPdfLh.letterheadSkipped, false, "timbrado PDF válido tem que entrar no documento");
+  assert.ok(withPdfLh.bytes.byteLength > rxPdf.byteLength);
+
+  const sharp = (await import("sharp")).default;
+  const w = 1800;
+  const h = 2400;
+  const raw = Buffer.alloc(w * h * 3);
+  for (let i = 0; i < raw.length; i++) raw[i] = (i * 13 + (i % 97)) & 255;
+  const bigJpg = await sharp(raw, { raw: { width: w, height: h, channels: 3 } }).jpeg({ quality: 85 }).toBuffer();
+  assert.ok(bigJpg.length > 800 * 1024, `JPEG de teste pequeno demais: ${bigJpg.length}`);
+  const withJpgLh = await buildDocumentPdfDetailed({
+    title: rel.title,
+    content: rel.body,
+    patient: { name: "Maria da Prestação" },
+    doctor,
+    area: { ...area, marginTop: 0.22 },
+    background: { kind: "image", bytes: bigJpg, mime: "image/jpeg" },
+  });
+  assert.equal(withJpgLh.letterheadSkipped, false, "timbrado JPG grande tem que entrar (reduzido), não ser pulado");
+  assert.match(Buffer.from(withJpgLh.bytes).toString("latin1"), /DCTDecode|Image/);
+
+  const tinyPng = await sharp({
+    create: { width: 40, height: 40, channels: 3, background: { r: 0, g: 90, b: 90 } },
+  }).png().toBuffer();
+  const withPngLh = await buildDocumentPdfDetailed({
+    title: "Receita",
+    content: "Losartana 50 mg",
+    doctor,
+    area,
+    background: { kind: "image", bytes: tinyPng, mime: "image/png" },
+  });
+  assert.equal(withPngLh.letterheadSkipped, false);
+
   const garbage = await buildDocumentPdfDetailed({
     title: "Receita",
     content: "Losartana 50 mg",
@@ -134,7 +179,14 @@ async function main() {
   assert.equal(skipped.letterheadSkipped, true);
   assert.ok(skipped.bytes.byteLength > 800);
 
-  console.log("document-pdf ok", { templates: BUILTIN_TEMPLATES.length, bytes: pdf.byteLength, rx: rxPdf.byteLength, rel: relPdf.byteLength });
+  console.log("document-pdf ok", {
+    templates: BUILTIN_TEMPLATES.length,
+    bytes: pdf.byteLength,
+    rx: rxPdf.byteLength,
+    rel: relPdf.byteLength,
+    jpgLh: withJpgLh.bytes.byteLength,
+    pdfLh: withPdfLh.bytes.byteLength,
+  });
 }
 
 main().catch((err) => {
