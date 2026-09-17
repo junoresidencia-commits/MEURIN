@@ -74,3 +74,27 @@ export function winAnsiSafe(text: string): string {
     .replace(/\r/g, "\n")
     .replace(/[^\n\x20-\x7E\xA0-\xFF]/g, "");
 }
+
+export function idadeFromBirthdate(birthdate?: string | null): string {
+  if (!birthdate) return "";
+  const b = new Date(birthdate);
+  if (Number.isNaN(b.getTime())) return "";
+  const now = new Date();
+  let a = now.getFullYear() - b.getFullYear();
+  const m = now.getMonth() - b.getMonth();
+  if (m < 0 || (m === 0 && now.getDate() < b.getDate())) a--;
+  return a >= 0 && a < 130 ? String(a) : "";
+}
+
+export function todayBr(): string {
+  const d = new Date();
+  try {
+    return d.toLocaleDateString("pt-BR", { timeZone: "America/Bahia" });
+  } catch {
+    try {
+      return d.toLocaleDateString("pt-BR");
+    } catch {
+      return d.toISOString().slice(0, 10);
+    }
+  }
+}

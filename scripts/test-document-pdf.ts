@@ -55,17 +55,60 @@ async function main() {
     return orig.call(this, request, parent, isMain, options);
   };
 
-  const { buildDocumentPdf } = await import("../src/lib/document-engine");
+  const { buildDocumentPdf, buildDocumentPdfDetailed, LETTERHEAD_EMBED_MAX_BYTES } = await import("../src/lib/document-engine");
+  const { receitaFromLme, relatorioFromLme } = await import("../src/lib/complementary-docs");
+
+  const area = { marginTop: 0.08, marginBottom: 0.1, marginLeft: 0.1, marginRight: 0.1, repeat: "all" as const, showPatientHeader: true, showSignature: true };
+  const doctor = { name: "Dr. Carlos", crm: "12345", crmState: "BA", specialty: "Nefrologia" };
+
   const pdf = await buildDocumentPdf({
     title: "Relatório médico",
     content: scientific + "\n\n" + BUILTIN_TEMPLATES.find((t) => t.id === "rx_acidose")!.body,
     patient: { name: "Maria da Prestação", cpf: "000.000.000-00", idade: 54 },
-    doctor: { name: "Dr. Carlos", crm: "12345", crmState: "BA", specialty: "Nefrologia" },
-    area: { marginTop: 0.08, marginBottom: 0.1, marginLeft: 0.1, marginRight: 0.1, repeat: "all", showPatientHeader: true, showSignature: true },
+    doctor,
+    area,
   });
   assert.equal(Buffer.from(pdf.slice(0, 5)).toString("latin1"), "%PDF-");
   assert.ok(pdf.byteLength > 800, `PDF pequeno demais: ${pdf.byteLength}`);
-  console.log("document-pdf ok", { templates: BUILTIN_TEMPLATES.length, bytes: pdf.byteLength });
+
+  const rx = receitaFromLme({
+    cid10: "N04.0",
+    medications: [{ name: "Ciclosporina 100 mg", presentation: "cápsula" }],
+  });
+  const rel = relatorioFromLme({
+    cid10: "N18.0",
+    diagnosis: "Anemia na DRC",
+    medications: [{ name: "Alfaepoetina 4.000 UI", presentation: "injetável" }],
+  });
+  const rxPdf = await buildDocumentPdf({ title: rx.title, content: rx.body, patient: { name: "Maria da Prestação" }, doctor, area });
+  const relPdf = await buildDocumentPdf({ title: rel.title, content: rel.body, patient: { name: "Maria da Prestação" }, doctor, area });
+  assert.ok(rxPdf.byteLength > 800);
+  assert.ok(relPdf.byteLength > 800);
+
+  const garbage = await buildDocumentPdfDetailed({
+    title: "Receita",
+    content: "Losartana 50 mg",
+    doctor,
+    area,
+    background: { kind: "pdf", bytes: Buffer.from("not-a-pdf") },
+  });
+  assert.equal(Buffer.from(garbage.bytes.slice(0, 5)).toString("latin1"), "%PDF-");
+  assert.equal(garbage.letterheadSkipped, true);
+
+  const huge = Buffer.alloc(LETTERHEAD_EMBED_MAX_BYTES + 10, 0xff);
+  huge[0] = 0xff;
+  huge[1] = 0xd8;
+  const skipped = await buildDocumentPdfDetailed({
+    title: "Receita",
+    content: "1. Ciclosporina 100 mg cápsula",
+    doctor,
+    area,
+    background: { kind: "image", bytes: huge, mime: "image/jpeg" },
+  });
+  assert.equal(skipped.letterheadSkipped, true);
+  assert.ok(skipped.bytes.byteLength > 800);
+
+  console.log("document-pdf ok", { templates: BUILTIN_TEMPLATES.length, bytes: pdf.byteLength, rx: rxPdf.byteLength, rel: relPdf.byteLength });
 }
 
 main().catch((err) => {
