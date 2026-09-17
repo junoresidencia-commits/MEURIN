@@ -87,5 +87,14 @@ export function idadeFromBirthdate(birthdate?: string | null): string {
 }
 
 export function todayBr(): string {
-  return new Date().toLocaleDateString("pt-BR", { timeZone: "America/Bahia" });
+  const d = new Date();
+  try {
+    return d.toLocaleDateString("pt-BR", { timeZone: "America/Bahia" });
+  } catch {
+    try {
+      return d.toLocaleDateString("pt-BR");
+    } catch {
+      return d.toISOString().slice(0, 10);
+    }
+  }
 }
