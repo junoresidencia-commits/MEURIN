@@ -2,9 +2,28 @@ import assert from "node:assert/strict";
 import Module from "node:module";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import zlib from "node:zlib";
 import { PDFDocument, StandardFonts } from "pdf-lib";
 import { BUILTIN_TEMPLATES } from "../src/lib/document-templates";
 import { winAnsiSafe } from "../src/lib/pdf-winansi";
+
+function extractPdfLatin1(bytes: Uint8Array): string {
+  const data = Buffer.from(bytes);
+  const chunks: string[] = [];
+  const re = /stream\r?\n([\s\S]*?)\r?\nendstream/g;
+  let m: RegExpExecArray | null;
+  while ((m = re.exec(data.toString("latin1")))) {
+    const raw = Buffer.from(m[1], "latin1");
+    let decoded = raw;
+    try { decoded = zlib.inflateSync(raw); } catch { /* uncompressed */ }
+    const s = decoded.toString("latin1");
+    chunks.push(s);
+    for (const hex of s.matchAll(/<([0-9A-Fa-f]+)>/g)) {
+      chunks.push(Buffer.from(hex[1], "hex").toString("latin1"));
+    }
+  }
+  return chunks.join("\n");
+}
 
 const samples = [
   "alvo HCO3 ≥ 22",
@@ -84,6 +103,13 @@ async function main() {
   const relPdf = await buildDocumentPdf({ title: rel.title, content: rel.body, patient: { name: "Maria da Prestação" }, doctor, area });
   assert.ok(rxPdf.byteLength > 800);
   assert.ok(relPdf.byteLength > 800);
+  const rxText = extractPdfLatin1(rxPdf);
+  const relText = extractPdfLatin1(relPdf);
+  assert.match(rxText, /N04\.0/);
+  assert.doesNotMatch(rxText, /N04\.0\?\?/);
+  assert.match(rxText, /Ciclosporina/);
+  assert.match(relText, /continuidade/);
+  assert.match(relText, /manuten/);
 
   const garbage = await buildDocumentPdfDetailed({
     title: "Receita",
