@@ -67,16 +67,14 @@ function sniffBg(bytes: Uint8Array, declared?: string | null, mime?: string | nu
   return "skip";
 }
 
-/** Helvetica/WinAnsi: tenta o texto; se um caractere sobrar, substitui em vez de derrubar o PDF. */
-export function fontSafeText(font: PDFFont, text: string): string {
-  const cleaned = winAnsiSafe(text);
-  if (!cleaned) return "";
+function fontSafeChunk(font: PDFFont, chunk: string): string {
+  if (!chunk) return "";
   try {
-    font.encodeText(cleaned);
-    return cleaned;
+    font.encodeText(chunk);
+    return chunk;
   } catch {
     let out = "";
-    for (const ch of Array.from(cleaned)) {
+    for (const ch of Array.from(chunk)) {
       try {
         font.encodeText(ch);
         out += ch;
@@ -86,6 +84,15 @@ export function fontSafeText(font: PDFFont, text: string): string {
     }
     return out;
   }
+}
+
+/** Helvetica/WinAnsi: tenta o texto; se um caractere sobrar, substitui em vez de derrubar o PDF.
+ *  Não passa `\n` ao encode (WinAnsi rejeita) — as quebras de parágrafo precisam sobreviver. */
+export function fontSafeText(font: PDFFont, text: string): string {
+  const cleaned = winAnsiSafe(text);
+  if (!cleaned) return "";
+  if (!cleaned.includes("\n")) return fontSafeChunk(font, cleaned);
+  return cleaned.split("\n").map((part) => fontSafeChunk(font, part)).join("\n");
 }
 
 function dateBr(iso?: string): string {
