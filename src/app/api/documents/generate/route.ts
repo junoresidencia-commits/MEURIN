@@ -7,9 +7,10 @@ import { getPatient } from "@/lib/patients-store";
 import { addDocument } from "@/lib/patient-store";
 import { getLetterhead, type LetterheadArea } from "@/lib/letterheads-store";
 import { LETTERHEADS_BUCKET, DOCPDF_BUCKET, readFile, saveFile } from "@/lib/doc-storage";
-import { buildDocumentPdf, fillFields, type DocBackground } from "@/lib/document-engine";
+import { buildDocumentPdfDetailed, fillFields, LETTERHEAD_EMBED_MAX_BYTES, type DocBackground } from "@/lib/document-engine";
 import { writeAudit } from "@/lib/patient-shares-store";
 import { jsonUtf8 } from "@/lib/json-utf8";
+import { todayBr } from "@/lib/pdf-winansi";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -55,31 +56,59 @@ export async function POST(req: Request) {
       if (p) { cpf = p.cpf || undefined; birthdate = p.birthdate || birthdate; }
     }
 
-    // Papel timbrado (opcional). Arquivo ausente/flaky no storage NÃO derruba o PDF.
+    // Papel timbrado (opcional). Qualquer falha (arquivo ausente, pesado, storage) sai em papel branco.
     let background: DocBackground | null = null;
     let area: LetterheadArea = defaultAreaNoLetterhead();
     let usedLetterheadId: string | null = null;
     let letterheadWarning = false;
     if (letterheadId) {
-      const lh = await getLetterhead(letterheadId);
-      if (!lh || lh.doctorId !== doctorId) return jsonUtf8({ error: "Papel timbrado inválido." }, 400);
-      const file = await readFile(LETTERHEADS_BUCKET, lh.storage, lh.filePath);
-      if (!file) {
+      try {
+        const lh = await getLetterhead(letterheadId);
+        if (!lh || lh.doctorId !== doctorId) {
+          letterheadWarning = true;
+          console.warn("[documents/generate]", { type, preview, letterheadId, status: 200, error: "letterhead_invalid_fallback" });
+        } else {
+          const file = await readFile(LETTERHEADS_BUCKET, lh.storage, lh.filePath);
+          if (!file) {
+            letterheadWarning = true;
+            console.warn("[documents/generate]", { type, preview, letterheadId, status: 200, error: "letterhead_missing_fallback" });
+          } else if (file.buffer.length > LETTERHEAD_EMBED_MAX_BYTES) {
+            letterheadWarning = true;
+            console.warn("[documents/generate]", { type, preview, letterheadId, status: 200, error: "letterhead_too_large_fallback", bytes: file.buffer.length });
+          } else {
+            background = { kind: lh.kind, bytes: file.buffer, mime: lh.mime || file.mime };
+            area = lh.area;
+            usedLetterheadId = lh.id;
+          }
+        }
+      } catch (err) {
         letterheadWarning = true;
-        console.warn("[documents/generate]", { type, preview, letterheadId, status: 200, error: "letterhead_missing_fallback" });
-      } else {
-        background = { kind: lh.kind, bytes: file.buffer, mime: lh.mime || file.mime };
-        area = lh.area;
-        usedLetterheadId = lh.id;
+        console.warn("[documents/generate]", {
+          type,
+          preview,
+          letterheadId,
+          status: 200,
+          error: "letterhead_load_fallback",
+          detail: err instanceof Error ? err.message.slice(0, 180) : "unknown",
+        });
       }
     }
 
+    let nascimento = "";
+    if (birthdate) {
+      try {
+        const d = new Date(birthdate);
+        if (!Number.isNaN(d.getTime())) nascimento = d.toLocaleDateString("pt-BR");
+      } catch {
+        nascimento = "";
+      }
+    }
     const vars: Record<string, string> = {
       paciente_nome: access.name || "",
       paciente_cpf: cpf || "",
-      paciente_data_nascimento: birthdate ? new Date(birthdate).toLocaleDateString("pt-BR") : "",
+      paciente_data_nascimento: nascimento,
       paciente_idade: idadeFrom(birthdate) || "",
-      data_atual: new Date().toLocaleDateString("pt-BR", { timeZone: "America/Bahia" }),
+      data_atual: todayBr(),
       medico_nome: doctor.name,
       medico_crm: [doctor.crm, doctor.crmState].filter(Boolean).join("-"),
       medico_rqe: doctor.rqe || "",
@@ -88,14 +117,28 @@ export async function POST(req: Request) {
     const filledContent = fillFields(content, vars);
     const filledTitle = fillFields(title, vars);
 
-    const pdfBytes = await buildDocumentPdf({
-      title: filledTitle,
-      content: filledContent,
-      patient: { name: access.name, cpf, birthdate, idade: idadeFrom(birthdate) },
-      doctor: { name: doctor.name, crm: doctor.crm, crmState: doctor.crmState, rqe: doctor.rqe, specialty: doctor.specialty },
-      area,
-      background,
-    });
+    let pdfBytes: Uint8Array;
+    try {
+      const built = await buildDocumentPdfDetailed({
+        title: filledTitle,
+        content: filledContent,
+        patient: { name: access.name, cpf, birthdate, idade: idadeFrom(birthdate) },
+        doctor: { name: doctor.name, crm: doctor.crm, crmState: doctor.crmState, rqe: doctor.rqe, specialty: doctor.specialty },
+        area,
+        background,
+      });
+      pdfBytes = built.bytes;
+      if (built.letterheadSkipped) {
+        letterheadWarning = true;
+        usedLetterheadId = null;
+      }
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "unknown";
+      console.error("[documents/generate] pdf", { type, preview, detail: message.slice(0, 180) });
+      return jsonUtf8({
+        error: "Não foi possível montar o PDF. O texto da receita/relatório continua na tela — tente de novo ou gere sem papel timbrado.",
+      }, 500);
+    }
 
     if (preview) {
       console.info("[documents/generate]", { type, preview: true, status: 200, letterhead: usedLetterheadId ? "ok" : letterheadWarning ? "fallback" : "none" });
@@ -164,7 +207,9 @@ export async function POST(req: Request) {
     const name = err instanceof Error ? err.name : "Error";
     const message = err instanceof Error ? err.message : "unknown";
     console.error("[documents/generate]", { status: 500, error: name, detail: message.slice(0, 180) });
-    return jsonUtf8({ error: "Não foi possível gerar o documento." }, 500);
+    return jsonUtf8({
+      error: "Não foi possível gerar o documento. O texto continua salvo na tela. Tente de novo ou escolha “Sem papel timbrado”.",
+    }, 500);
   }
 }
 

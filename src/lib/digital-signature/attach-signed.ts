@@ -54,18 +54,23 @@ function crmUf(doctorCrm: string | null | undefined, crm: string | null | undefi
  */
 export async function attachSignedPdf(opts: {
   doctorId: string;
-  providerId: DigitalSignatureProviderId;
+  providerId: DigitalSignatureProviderId | "manual";
   buffer: Buffer;
   filename: string;
   original?: ClinicalDocument | null;
   patientKey?: string;
   type?: string;
   title?: string;
+  signatureMethod?: "certificada" | "imagem";
 }): Promise<AttachSignedResult> {
   if (!isPdfBuffer(opts.buffer)) {
     throw new Error("O arquivo não parece um PDF válido.");
   }
-  const provider = getDigitalSignatureProvider(opts.providerId);
+  const method = opts.signatureMethod || (opts.providerId === "manual" ? "imagem" : "certificada");
+  const provider =
+    opts.providerId === "manual" || method === "imagem"
+      ? { id: "manual" as const }
+      : getDigitalSignatureProvider(opts.providerId);
   if (!provider) throw new Error("Provedor de assinatura inválido.");
 
   const doctor = await getDoctorById(opts.doctorId);
@@ -119,14 +124,14 @@ export async function attachSignedPdf(opts: {
     groupId,
     signedAt: now,
     signedBy: by,
-    signatureMethod: "certificada",
+    signatureMethod: method,
     signatureHash: hash,
     history: [
       {
         at: now,
         by,
         action: "assinado",
-        detail: `certificada via ${provider.id} · CRM ${crm || "—"} · original:${original?.id || "avulso"} · sha256 ${hash.slice(0, 12)}…`,
+        detail: `${method} via ${provider.id} · CRM ${crm || "—"} · original:${original?.id || "avulso"} · sha256 ${hash.slice(0, 12)}…`,
       },
     ],
   });
@@ -136,7 +141,7 @@ export async function attachSignedPdf(opts: {
       doctorId: opts.doctorId,
       doctorName: doctor.name,
       patientKey,
-      action: "documento_assinado_digital",
+      action: method === "imagem" ? "documento_assinado_manual" : "documento_assinado_digital",
       detail: `${type}: ${title} (${provider.id})`,
     });
   } catch {

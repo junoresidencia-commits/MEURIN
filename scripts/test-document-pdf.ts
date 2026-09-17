@@ -2,9 +2,28 @@ import assert from "node:assert/strict";
 import Module from "node:module";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import zlib from "node:zlib";
 import { PDFDocument, StandardFonts } from "pdf-lib";
 import { BUILTIN_TEMPLATES } from "../src/lib/document-templates";
 import { winAnsiSafe } from "../src/lib/pdf-winansi";
+
+function extractPdfLatin1(bytes: Uint8Array): string {
+  const data = Buffer.from(bytes);
+  const chunks: string[] = [];
+  const re = /stream\r?\n([\s\S]*?)\r?\nendstream/g;
+  let m: RegExpExecArray | null;
+  while ((m = re.exec(data.toString("latin1")))) {
+    const raw = Buffer.from(m[1], "latin1");
+    let decoded = raw;
+    try { decoded = zlib.inflateSync(raw); } catch { /* uncompressed */ }
+    const s = decoded.toString("latin1");
+    chunks.push(s);
+    for (const hex of s.matchAll(/<([0-9A-Fa-f]+)>/g)) {
+      chunks.push(Buffer.from(hex[1], "hex").toString("latin1"));
+    }
+  }
+  return chunks.join("\n");
+}
 
 const samples = [
   "alvo HCO3 ≥ 22",
@@ -55,17 +74,67 @@ async function main() {
     return orig.call(this, request, parent, isMain, options);
   };
 
-  const { buildDocumentPdf } = await import("../src/lib/document-engine");
+  const { buildDocumentPdf, buildDocumentPdfDetailed, LETTERHEAD_EMBED_MAX_BYTES } = await import("../src/lib/document-engine");
+  const { receitaFromLme, relatorioFromLme } = await import("../src/lib/complementary-docs");
+
+  const area = { marginTop: 0.08, marginBottom: 0.1, marginLeft: 0.1, marginRight: 0.1, repeat: "all" as const, showPatientHeader: true, showSignature: true };
+  const doctor = { name: "Dr. Carlos", crm: "12345", crmState: "BA", specialty: "Nefrologia" };
+
   const pdf = await buildDocumentPdf({
     title: "Relatório médico",
     content: scientific + "\n\n" + BUILTIN_TEMPLATES.find((t) => t.id === "rx_acidose")!.body,
     patient: { name: "Maria da Prestação", cpf: "000.000.000-00", idade: 54 },
-    doctor: { name: "Dr. Carlos", crm: "12345", crmState: "BA", specialty: "Nefrologia" },
-    area: { marginTop: 0.08, marginBottom: 0.1, marginLeft: 0.1, marginRight: 0.1, repeat: "all", showPatientHeader: true, showSignature: true },
+    doctor,
+    area,
   });
   assert.equal(Buffer.from(pdf.slice(0, 5)).toString("latin1"), "%PDF-");
   assert.ok(pdf.byteLength > 800, `PDF pequeno demais: ${pdf.byteLength}`);
-  console.log("document-pdf ok", { templates: BUILTIN_TEMPLATES.length, bytes: pdf.byteLength });
+
+  const rx = receitaFromLme({
+    cid10: "N04.0",
+    medications: [{ name: "Ciclosporina 100 mg", presentation: "cápsula" }],
+  });
+  const rel = relatorioFromLme({
+    cid10: "N18.0",
+    diagnosis: "Anemia na DRC",
+    medications: [{ name: "Alfaepoetina 4.000 UI", presentation: "injetável" }],
+  });
+  const rxPdf = await buildDocumentPdf({ title: rx.title, content: rx.body, patient: { name: "Maria da Prestação" }, doctor, area });
+  const relPdf = await buildDocumentPdf({ title: rel.title, content: rel.body, patient: { name: "Maria da Prestação" }, doctor, area });
+  assert.ok(rxPdf.byteLength > 800);
+  assert.ok(relPdf.byteLength > 800);
+  const rxText = extractPdfLatin1(rxPdf);
+  const relText = extractPdfLatin1(relPdf);
+  assert.match(rxText, /N04\.0/);
+  assert.doesNotMatch(rxText, /N04\.0\?\?/);
+  assert.match(rxText, /Ciclosporina/);
+  assert.match(relText, /continuidade/);
+  assert.match(relText, /manuten/);
+
+  const garbage = await buildDocumentPdfDetailed({
+    title: "Receita",
+    content: "Losartana 50 mg",
+    doctor,
+    area,
+    background: { kind: "pdf", bytes: Buffer.from("not-a-pdf") },
+  });
+  assert.equal(Buffer.from(garbage.bytes.slice(0, 5)).toString("latin1"), "%PDF-");
+  assert.equal(garbage.letterheadSkipped, true);
+
+  const huge = Buffer.alloc(LETTERHEAD_EMBED_MAX_BYTES + 10, 0xff);
+  huge[0] = 0xff;
+  huge[1] = 0xd8;
+  const skipped = await buildDocumentPdfDetailed({
+    title: "Receita",
+    content: "1. Ciclosporina 100 mg cápsula",
+    doctor,
+    area,
+    background: { kind: "image", bytes: huge, mime: "image/jpeg" },
+  });
+  assert.equal(skipped.letterheadSkipped, true);
+  assert.ok(skipped.bytes.byteLength > 800);
+
+  console.log("document-pdf ok", { templates: BUILTIN_TEMPLATES.length, bytes: pdf.byteLength, rx: rxPdf.byteLength, rel: relPdf.byteLength });
 }
 
 main().catch((err) => {

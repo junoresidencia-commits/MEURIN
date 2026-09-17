@@ -71,7 +71,7 @@ export default function DocumentoAvulsoPage() {
   const dateLabel = new Date().toLocaleDateString("pt-BR", { day: "2-digit", month: "long", year: "numeric" });
   const credential = doctor ? [doctor.crm, doctor.rqe ? `RQE ${doctor.rqe}` : ""].filter(Boolean).join(" · ") : "";
 
-  async function generatePdf() {
+  async function generatePdf(plainPaper = false) {
     if (!doctor || !body.trim()) return;
     setBusy(true);
     setError("");
@@ -85,7 +85,7 @@ export default function DocumentoAvulsoPage() {
           title: TYPE_LABEL[type],
           content: body,
           patientName: patientName.trim(),
-          letterheadId: letterheadId === NO_LETTERHEAD ? "" : letterheadId,
+          letterheadId: plainPaper || letterheadId === NO_LETTERHEAD ? "" : letterheadId,
         }),
       });
       const blob = await fetchPdfBlob(res);
@@ -105,9 +105,13 @@ export default function DocumentoAvulsoPage() {
       }
       window.setTimeout(() => URL.revokeObjectURL(url), 60_000);
     } catch (e) {
+      if (!plainPaper && letterheadId !== NO_LETTERHEAD) {
+        await generatePdf(true);
+        return;
+      }
       setError(toFriendlyMessage(e instanceof Error ? new FriendlyError(e.message) : e, "Não foi possível gerar o documento. Tente novamente."));
     } finally {
-      setBusy(false);
+      if (!plainPaper) setBusy(false);
     }
   }
 
@@ -188,7 +192,7 @@ export default function DocumentoAvulsoPage() {
         </label>
         {error && <p className="text-sm font-semibold text-[var(--danger)]">{error}</p>}
         <div className="flex flex-wrap gap-2">
-          <button type="button" className="btn-gold" onClick={generatePdf} disabled={busy || !body.trim()} aria-busy={busy}>
+          <button type="button" className="btn-gold" onClick={() => void generatePdf()} disabled={busy || !body.trim()} aria-busy={busy}>
             {busy ? "Preparando documento…" : "Gerar PDF (timbrado)"}
           </button>
           <button type="button" className="btn-ghost" onClick={shareWhatsApp} disabled={!body.trim()}>Enviar no WhatsApp</button>

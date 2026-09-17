@@ -9,7 +9,9 @@
     "start": "next start",
     "lint": "next lint",
     "check:document-pdf": "npx tsx scripts/test-document-pdf.ts",
-    "check:signature-links": "npx tsx scripts/test-signature-links.ts"
+    "check:signature-links": "npx tsx scripts/test-signature-links.ts",
+    "check:document-registry": "npx tsx scripts/test-document-registry-integrity.ts",
+    "check:document-workflow": "npx tsx scripts/test-document-workflow.ts"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.110.3",
