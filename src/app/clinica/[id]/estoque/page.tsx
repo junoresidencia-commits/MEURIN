@@ -257,7 +257,7 @@ export default function ClinicaEstoquePage() {
         const diff = Math.round((counted - p.qty) * 1000) / 1000;
         return { p, counted, diff };
       })
-      .filter((x): x is { p: Product; counted: number; diff: number } => Boolean(x) && x.diff !== 0);
+      .filter((x): x is { p: Product; counted: number; diff: number } => x !== null && x.diff !== 0);
   }, [invLines, products]);
 
   return (
