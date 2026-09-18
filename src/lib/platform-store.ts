@@ -448,6 +448,45 @@ export async function addMembership(input: {
   return row;
 }
 
+export async function updateMembershipPermissions(
+  membershipId: string,
+  permissions: Record<string, boolean>
+): Promise<ClinicMembership | null> {
+  const now = new Date().toISOString();
+  const patch = { ...permissions };
+  if (active()) {
+    const sb = getSupabaseAdmin()!;
+    const { data, error } = await sb.from("clinic_memberships").select("*").eq("id", membershipId).maybeSingle();
+    if (error) {
+      if (isMissing(error)) tableMissing = true;
+      else return null;
+    } else if (data) {
+      const current = mapMembership(data as Record<string, unknown>);
+      const next: ClinicMembership = {
+        ...current,
+        permissions: { ...current.permissions, ...patch },
+        updatedAt: now,
+      };
+      const { error: upErr } = await sb
+        .from("clinic_memberships")
+        .update({ permissions: next.permissions, updated_at: now })
+        .eq("id", membershipId);
+      if (upErr && !isMissing(upErr)) throw upErr;
+      if (!upErr) return next;
+    }
+  }
+  const local = await readLocal();
+  const idx = local.memberships.findIndex((m) => m.id === membershipId);
+  if (idx < 0) return null;
+  local.memberships[idx] = {
+    ...local.memberships[idx],
+    permissions: { ...local.memberships[idx].permissions, ...patch },
+    updatedAt: now,
+  };
+  await writeLocal(local);
+  return local.memberships[idx];
+}
+
 export async function writeAudit(input: Omit<PlatformAuditEntry, "id" | "createdAt">): Promise<void> {
   const row: PlatformAuditEntry = {
     id: uuid(),

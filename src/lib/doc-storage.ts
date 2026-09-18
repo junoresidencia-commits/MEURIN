@@ -97,3 +97,4 @@ function guessMime(p: string): string {
 
 export const LETTERHEADS_BUCKET = "letterheads";
 export const DOCPDF_BUCKET = "documents";
+export const CLINIC_CASH_BUCKET = "clinic-cash";

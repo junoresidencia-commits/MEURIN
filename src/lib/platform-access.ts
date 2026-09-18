@@ -4,7 +4,7 @@ import { getAttendantId } from "./attendant-session";
 import { getAttendant } from "./attendants-store";
 import { getDoctorById } from "./store";
 import { ensureFounderSuperAdmin, getClinic, getClinicsByIds, listActiveRoles, listMemberships, listMembershipsForActor } from "./platform-store";
-import type { Clinic, ClinicMembership, PlatformRole } from "./platform-types";
+import type { Clinic, ClinicCashPermKey, ClinicMembership, PlatformRole } from "./platform-types";
 
 export type ClinicSummary = {
   clinicId: string;
@@ -90,6 +90,33 @@ export type ClinicStaff = {
   canCheckout: boolean;
 };
 
+const ATTENDANT_CASH_DEFAULT: Record<ClinicCashPermKey, boolean> = {
+  expense: true,
+  close_cash: true,
+  receipt: true,
+  nfse_request: true,
+  finance_view: true,
+};
+
+export function clinicCashPerm(staff: ClinicStaff, key: ClinicCashPermKey): boolean {
+  if (staff.canAdmin) return true;
+  const explicit = staff.membership?.permissions?.[key];
+  if (explicit === false) return false;
+  if (explicit === true) return true;
+  if (staff.kind === "attendant") return ATTENDANT_CASH_DEFAULT[key];
+  return false;
+}
+
+export function clinicCashPerms(staff: ClinicStaff): Record<ClinicCashPermKey, boolean> {
+  return {
+    expense: clinicCashPerm(staff, "expense"),
+    close_cash: clinicCashPerm(staff, "close_cash"),
+    receipt: clinicCashPerm(staff, "receipt"),
+    nfse_request: clinicCashPerm(staff, "nfse_request"),
+    finance_view: clinicCashPerm(staff, "finance_view"),
+  };
+}
+
 export async function getClinicStaff(clinicId: string): Promise<ClinicStaff | null> {
   const clinic = await getClinic(clinicId);
   if (!clinic) return null;
@@ -147,5 +174,15 @@ export async function requireClinicAdmin(clinicId: string): Promise<ClinicStaff 
 export async function requireClinicCheckout(clinicId: string): Promise<ClinicStaff | null> {
   const staff = await getClinicStaff(clinicId);
   if (!staff?.canCheckout) return null;
+  return staff;
+}
+
+export async function requireClinicCashPerm(
+  clinicId: string,
+  key: ClinicCashPermKey
+): Promise<ClinicStaff | null> {
+  const staff = await getClinicStaff(clinicId);
+  if (!staff) return null;
+  if (!clinicCashPerm(staff, key)) return null;
   return staff;
 }

@@ -135,6 +135,10 @@ export default function ClinicaHomePage() {
           <p className="font-bold">Check-in</p>
           <p className="mt-1 text-sm text-[var(--text-muted)]">Pago, pendente, cortesia, Pix, cartão ou dinheiro.</p>
         </Link>
+        <Link href={`/clinica/${params.id}/caixa-despesas`} className="panel block">
+          <p className="font-bold">Caixa e despesas</p>
+          <p className="mt-1 text-sm text-[var(--text-muted)]">Registrar saída, fluxo do dia e fechamento do caixa físico.</p>
+        </Link>
       </div>
     </div>
   );

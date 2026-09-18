@@ -326,6 +326,28 @@ export async function listEncounters(clinicId: string, from?: string, to?: strin
   return rows.sort((a, b) => b.attendedAt.localeCompare(a.attendedAt));
 }
 
+export async function listEncountersByPatientKey(patientKey: string): Promise<ClinicEncounter[]> {
+  const key = patientKey.toLowerCase().trim();
+  if (!key) return [];
+  if (active()) {
+    const sb = getSupabaseAdmin()!;
+    const { data, error } = await sb
+      .from("clinic_encounters")
+      .select("*")
+      .eq("patient_key", key)
+      .order("attended_at", { ascending: false });
+    if (error) {
+      if (isMissing(error)) tableMissing = true;
+      else return [];
+    } else {
+      return (data || []).map((r) => mapEncounter(r as Record<string, unknown>));
+    }
+  }
+  return (await readLocal()).encounters
+    .filter((e) => e.patientKey === key)
+    .sort((a, b) => b.attendedAt.localeCompare(a.attendedAt));
+}
+
 export async function getEncounter(id: string): Promise<ClinicEncounter | null> {
   if (active()) {
     const sb = getSupabaseAdmin()!;

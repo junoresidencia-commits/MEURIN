@@ -29,6 +29,7 @@ import { clearEvolutionDraft, loadEvolutionDraft, saveEvolutionDraft } from "@/l
 import { ageFromBirthdate } from "@/lib/egfr";
 import { SignDocumentPanel } from "@/components/SignDocumentFlow";
 import { digitalSignatureLabel } from "@/lib/digital-signature/status";
+import { PatientFinancePanel } from "@/components/PatientFinancePanel";
 
 type Lab = { id: string; testKey: string; value: number; unit?: string | null; measuredAt: string };
 type Upload = { id: string; name: string; category?: string | null; examDate?: string | null; signedUrl?: string | null };
@@ -119,6 +120,7 @@ const MORE_TABS = [
   { id: "equipe", label: "Equipe" },
   { id: "encaminhamentos", label: "Encaminhamentos" },
   { id: "consultas", label: "Consultas" },
+  { id: "financeiro", label: "Financeiro" },
   { id: "pesquisa", label: "Pesquisa" },
 ] as const;
 const TABS = [...PRIMARY_TABS, ...MORE_TABS] as const;
@@ -1013,6 +1015,8 @@ export default function ProntuarioPage() {
             labs={labs.map((l) => ({ key: l.testKey, label: labLabel(l.testKey), value: l.value, unit: l.unit || labUnit(l.testKey), measuredAt: l.measuredAt }))}
           />
         )}
+
+        {tab === "financeiro" && <PatientFinancePanel emailParam={emailParam} />}
 
         {tab === "consultas" && (
           <div className="space-y-3">

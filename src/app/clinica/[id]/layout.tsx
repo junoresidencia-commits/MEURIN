@@ -11,6 +11,7 @@ const NAV = [
   { href: "/financeiro", label: "Produção" },
   { href: "/relatorios", label: "Relatórios" },
   { href: "/caixa", label: "Check-in" },
+  { href: "/caixa-despesas", label: "Caixa e despesas" },
   { href: "/fechamentos", label: "Fechamentos" },
   { href: "/rede", label: "Rede" },
   { href: "/inteligencia", label: "Inteligência" },
@@ -47,7 +48,7 @@ export default function ClinicaLayout({ children }: { children: React.ReactNode 
     return <div className="mx-auto max-w-4xl px-5 py-20 text-[var(--text-muted)]">Carregando clínica…</div>;
   }
 
-  const items = NAV.filter((n) => canAdmin || n.href === "/caixa" || n.href === "");
+  const items = NAV.filter((n) => canAdmin || n.href === "/caixa" || n.href === "/caixa-despesas" || n.href === "");
   const clinicHome = `/clinica/${params.id}`;
   const atClinicHome = pathname === clinicHome;
   const backHref = atClinicHome ? home : clinicHome;

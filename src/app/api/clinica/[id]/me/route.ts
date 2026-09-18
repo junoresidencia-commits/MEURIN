@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { getClinicStaff } from "@/lib/platform-access";
+import { clinicCashPerms, getClinicStaff } from "@/lib/platform-access";
 
 export async function GET(_req: Request, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -15,6 +15,7 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
       canAdmin: staff.canAdmin,
       canCheckout: staff.canCheckout,
       isSuperAdmin: staff.isSuperAdmin,
+      perms: clinicCashPerms(staff),
     },
   });
 }
