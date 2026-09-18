@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { requireClinicAdmin } from "@/lib/platform-access";
 import { listMemberships, updateMembershipPermissions, writeAudit } from "@/lib/platform-store";
-import { CLINIC_CASH_PERM_KEYS } from "@/lib/platform-types";
+import { CLINIC_CASH_PERM_KEYS, CLINIC_STOCK_PERM_KEYS } from "@/lib/platform-types";
 
 export async function PATCH(req: Request, { params }: { params: Promise<{ id: string; memberId: string }> }) {
   const { id, memberId } = await params;
@@ -13,7 +13,7 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
   const body = await req.json().catch(() => ({}));
   const raw = (body.permissions && typeof body.permissions === "object" ? body.permissions : {}) as Record<string, unknown>;
   const permissions: Record<string, boolean> = {};
-  for (const key of CLINIC_CASH_PERM_KEYS) {
+  for (const key of [...CLINIC_CASH_PERM_KEYS, ...CLINIC_STOCK_PERM_KEYS]) {
     if (key in raw) permissions[key] = Boolean(raw[key]);
   }
   const updated = await updateMembershipPermissions(memberId, permissions);

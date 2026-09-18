@@ -12,6 +12,7 @@ const NAV = [
   { href: "/relatorios", label: "Relatórios" },
   { href: "/caixa", label: "Check-in" },
   { href: "/caixa-despesas", label: "Caixa e despesas" },
+  { href: "/estoque", label: "Estoque" },
   { href: "/fechamentos", label: "Fechamentos" },
   { href: "/rede", label: "Rede" },
   { href: "/inteligencia", label: "Inteligência" },
@@ -25,6 +26,7 @@ export default function ClinicaLayout({ children }: { children: React.ReactNode 
   const [name, setName] = useState("");
   const [clinic, setClinic] = useState("");
   const [canAdmin, setCanAdmin] = useState(false);
+  const [stockView, setStockView] = useState(false);
   const [home, setHome] = useState("/medicos/painel");
 
   useEffect(() => {
@@ -38,6 +40,7 @@ export default function ClinicaLayout({ children }: { children: React.ReactNode 
         setClinic(d.clinic.name);
         setName(d.staff.name);
         setCanAdmin(Boolean(d.staff.canAdmin));
+        setStockView(Boolean(d.staff.canAdmin || d.staff.perms?.stock_view));
         setHome(d.staff.kind === "attendant" ? "/atendente/painel" : "/medicos/painel");
         setReady(true);
       })
@@ -48,7 +51,7 @@ export default function ClinicaLayout({ children }: { children: React.ReactNode 
     return <div className="mx-auto max-w-4xl px-5 py-20 text-[var(--text-muted)]">Carregando clínica…</div>;
   }
 
-  const items = NAV.filter((n) => canAdmin || n.href === "/caixa" || n.href === "/caixa-despesas" || n.href === "");
+  const items = NAV.filter((n) => canAdmin || n.href === "/caixa" || n.href === "/caixa-despesas" || (n.href === "/estoque" && stockView) || n.href === "");
   const clinicHome = `/clinica/${params.id}`;
   const atClinicHome = pathname === clinicHome;
   const backHref = atClinicHome ? home : clinicHome;

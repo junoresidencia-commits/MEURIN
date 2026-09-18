@@ -293,6 +293,15 @@ export const CLINIC_CASH_PERM_KEYS = [
 ] as const;
 export type ClinicCashPermKey = (typeof CLINIC_CASH_PERM_KEYS)[number];
 
+export const CLINIC_STOCK_PERM_KEYS = [
+  "stock_view",
+  "stock_out",
+  "stock_in",
+  "stock_request",
+  "stock_manage",
+] as const;
+export type ClinicStockPermKey = (typeof CLINIC_STOCK_PERM_KEYS)[number];
+
 export const CLINIC_EXPENSE_CATEGORIES = [
   "material_medico",
   "material_escritorio",

@@ -3,7 +3,8 @@
 import { useParams } from "next/navigation";
 import { useEffect, useState } from "react";
 import { CASH_PERM_LABEL } from "@/lib/clinic-cash-labels";
-import { CLINIC_CASH_PERM_KEYS } from "@/lib/platform-types";
+import { STOCK_PERM_LABEL } from "@/lib/clinic-stock-labels";
+import { CLINIC_CASH_PERM_KEYS, CLINIC_STOCK_PERM_KEYS } from "@/lib/platform-types";
 
 function brl(cents: number) {
   return (cents / 100).toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
@@ -149,9 +150,9 @@ export default function ClinicaEquipePage() {
                   : "Sem valor definido nesta clínica — cadastre na produção."}
               </p>
             )}
-            {m.actorKind === "attendant" && (
+            {(m.actorKind === "attendant" || m.role === "MEDICO") && (
               <div className="mt-3 grid gap-2 sm:grid-cols-2">
-                {CLINIC_CASH_PERM_KEYS.map((key) => (
+                {m.actorKind === "attendant" && CLINIC_CASH_PERM_KEYS.map((key) => (
                   <label key={key} className="flex items-center gap-2 text-sm">
                     <input
                       type="checkbox"
@@ -162,6 +163,24 @@ export default function ClinicaEquipePage() {
                     {CASH_PERM_LABEL[key]}
                   </label>
                 ))}
+                {CLINIC_STOCK_PERM_KEYS.map((key) => {
+                  const isOn = m.role === "MEDICO"
+                    ? Boolean(m.permissions?.[key])
+                    : key === "stock_manage"
+                      ? m.permissions?.[key] === true
+                      : m.permissions?.[key] !== false;
+                  return (
+                  <label key={key} className="flex items-center gap-2 text-sm">
+                    <input
+                      type="checkbox"
+                      className="accent-[var(--gold)]"
+                      checked={isOn}
+                      onChange={(e) => savePerm(m, key, e.target.checked)}
+                    />
+                    {STOCK_PERM_LABEL[key]}
+                  </label>
+                  );
+                })}
               </div>
             )}
           </div>
