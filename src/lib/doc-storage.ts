@@ -99,3 +99,4 @@ export const LETTERHEADS_BUCKET = "letterheads";
 export const DOCPDF_BUCKET = "documents";
 export const CLINIC_CASH_BUCKET = "clinic-cash";
 export const CLINIC_STOCK_BUCKET = "clinic-stock";
+export const HD_BUCKET = "hemodialise";

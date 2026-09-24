@@ -41,6 +41,7 @@ const MORE: { href: string; label: string; icon: keyof typeof PATHS }[] = [
   { href: "/medicos/painel#financeiro", label: "Financeiro", icon: "chart" },
   { href: "/medicos/pesquisa", label: "Estudos e Pesquisa", icon: "chart" },
   { href: "/medicos/documentos", label: "Documentos avulsos", icon: "edit" },
+  { href: "/hemodialise", label: "Hemodiálise", icon: "heart" },
   { href: "/medicos/agenda/configurar", label: "Clínicas e horários", icon: "cal" },
   { href: "/medicos/equipe", label: "Atendentes", icon: "users" },
   { href: "/medicos/configuracoes", label: "Configurações", icon: "gear" },
@@ -50,9 +51,11 @@ export function DoctorSidebar() {
   const pathname = usePathname();
   const router = useRouter();
   const [doctor, setDoctor] = useState<{ name?: string; crm?: string; specialty?: string; logoUrl?: string; photoUrl?: string; platformRoles?: string[]; clinicAdmin?: { clinicId: string; clinicName: string }[] } | null>(null);
+  const [hdAllowed, setHdAllowed] = useState(false);
 
   useEffect(() => {
     fetch("/api/auth").then((r) => r.json()).then((d) => { if (d?.doctor) setDoctor(d.doctor); }).catch(() => {});
+    fetch("/api/hemodialise?view=session").then((r) => r.json()).then((d) => setHdAllowed(Boolean(d?.allowed))).catch(() => {});
   }, []);
 
   async function logout() {
@@ -100,7 +103,7 @@ export function DoctorSidebar() {
             </Link>
           ))}
           <p className="mt-4 px-3 text-[11px] font-bold uppercase tracking-wider text-[var(--text-muted)]">Mais</p>
-          {MORE.map(({ href, label, icon }) => (
+          {MORE.filter((item) => item.href !== "/hemodialise" || hdAllowed).map(({ href, label, icon }) => (
             <Link key={label} href={href} className={itemCls(href)}>
               <Icon name={icon} className="h-5 w-5" />
               {label}
