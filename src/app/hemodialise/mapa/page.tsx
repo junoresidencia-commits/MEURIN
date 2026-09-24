@@ -50,6 +50,7 @@ export default function HdMapaPage() {
   const [just, setJust] = useState("");
   const [msg, setMsg] = useState("");
   const [file, setFile] = useState<File | null>(null);
+  const [week, setWeek] = useState<"SEG_QUA_SEX" | "TER_QUI_SAB">("SEG_QUA_SEX");
 
   async function load() {
     const u = new URLSearchParams({ view: "map", year: String(year), month: String(month), shift, q });
@@ -89,11 +90,12 @@ export default function HdMapaPage() {
   const groups = useMemo(() => {
     const map = new Map<string, Row[]>();
     for (const r of rows) {
+      if (r.weekdayGroup && r.weekdayGroup !== week) continue;
       const k = `${r.shift}|${r.ward}|${r.weekdayGroup}`;
       map.set(k, [...(map.get(k) || []), r]);
     }
     return [...map.entries()];
-  }, [rows]);
+  }, [rows, week]);
 
   return (
     <div>
@@ -125,6 +127,10 @@ export default function HdMapaPage() {
         </label>
       )}
       {msg && <p className="mt-2 text-sm text-[var(--gold)]">{msg}</p>}
+      <div className="mt-3 flex gap-2">
+        <button type="button" className={`rounded-full px-3 py-1.5 text-sm font-semibold ${week === "SEG_QUA_SEX" ? "bg-[var(--gold)] text-white" : "btn-ghost"}`} onClick={() => setWeek("SEG_QUA_SEX")}>Seg · Qua · Sex</button>
+        <button type="button" className={`rounded-full px-3 py-1.5 text-sm font-semibold ${week === "TER_QUI_SAB" ? "bg-[var(--gold)] text-white" : "btn-ghost"}`} onClick={() => setWeek("TER_QUI_SAB")}>Ter · Qui · Sáb</button>
+      </div>
 
       <div className="mt-4 space-y-8 print:text-xs">
         {groups.map(([key, list]) => {
