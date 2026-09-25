@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { getDoctorSessionId } from "@/lib/auth";
 import { listBookingsForDoctor } from "@/lib/store";
 import { createPatient, deletePatient, findByCpf, findByCpfAny, listPatientsByDoctor, updatePatient } from "@/lib/patients-store";
+import { parseAgeYears } from "@/lib/patient-age";
 
 export async function GET() {
   const doctorId = await getDoctorSessionId();
@@ -152,8 +153,7 @@ export async function POST(req: Request) {
   // Nascimento é a fonte principal. Sem nascimento, guarda idade manual + data
   // de referência — nunca inventa 01/01 a partir da idade.
   const birthdate = b.birthdate && /^\d{4}-\d{2}-\d{2}$/.test(String(b.birthdate)) ? String(b.birthdate) : null;
-  const ageFromBody = b.ageYears != null ? Number(b.ageYears) : Number(String(b.age || "").replace(/\D/g, ""));
-  const ageYears = !birthdate && Number.isFinite(ageFromBody) && ageFromBody >= 0 && ageFromBody < 130 ? Math.round(ageFromBody) : null;
+  const ageYears = !birthdate ? parseAgeYears(b.ageYears != null ? b.ageYears : b.age) : null;
   const ageReportedAt = !birthdate && ageYears != null
     ? (b.ageReportedAt && /^\d{4}-\d{2}(-\d{2})?$/.test(String(b.ageReportedAt))
       ? (String(b.ageReportedAt).length === 7 ? `${b.ageReportedAt}-01` : String(b.ageReportedAt))
