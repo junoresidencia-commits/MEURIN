@@ -105,13 +105,13 @@ export function DoctorSidebar() {
   return (
     <aside className="hidden w-64 shrink-0 border-r border-[var(--border)] bg-white lg:block">
       <div className="sticky top-0 flex h-screen flex-col p-4">
-        <Link href="/" className="mb-4 flex items-center gap-2 px-2">
+        <Link href="/" className="mb-2 flex items-center gap-2 px-2">
           <span className="grid h-9 w-9 place-items-center rounded-xl bg-gradient-to-br from-[var(--gold)] to-[var(--gold-dark)] text-sm font-extrabold text-white">MR</span>
           <span className="font-display text-lg font-extrabold text-[var(--text)]">Meu <span className="text-[var(--gold)]">Rim</span></span>
         </Link>
 
         {doctor && (
-          <div className="mb-4 flex items-center gap-3 rounded-2xl border border-[var(--border)] bg-[var(--bg)] p-3">
+          <div className="mb-2 flex items-center gap-3 rounded-2xl border border-[var(--border)] bg-[var(--bg)] p-2">
             {doctor.photoUrl || doctor.logoUrl ? (
               // eslint-disable-next-line @next/next/no-img-element
               <img src={doctor.photoUrl || doctor.logoUrl} alt="Foto" className="h-10 w-10 shrink-0 rounded-full border border-[var(--border)] object-cover" />
@@ -125,36 +125,40 @@ export function DoctorSidebar() {
           </div>
         )}
 
-        <nav className="flex min-h-0 flex-1 flex-col gap-0.5 overflow-y-auto pb-2">
-          {PRIMARY.map((item) => (
-            <div key={item.label}>
-              <NavLink {...item} />
-              {item.href === "/medicos/agenda" && AGENDA_EXTRA.map((extra) => (
-                <Link key={extra.label} href={extra.href} className={`${itemCls(extra.href)} ml-6`}>
-                  <Icon name={extra.icon} className="h-4 w-4 shrink-0" />
-                  <span className="min-w-0 break-words">{extra.label}</span>
-                </Link>
-              ))}
-            </div>
-          ))}
-          <div className="my-2 h-px bg-[var(--border)]" />
-          {CORE.filter((item) => item.href !== "/hemodialise" || hdAllowed !== false).map((item) => <NavLink key={item.label} {...item} />)}
-          <p className="mt-3 px-3 text-[11px] font-bold uppercase tracking-wider text-[var(--text-muted)]">Documentos</p>
-          {DOCS.map((item) => <NavLink key={item.label} {...item} />)}
-          <p className="mt-3 px-3 text-[11px] font-bold uppercase tracking-wider text-[var(--text-muted)]">Equipe</p>
-          {EQUIPE.map((item) => <NavLink key={item.label} {...item} />)}
-          <p className="mt-3 px-3 text-[11px] font-bold uppercase tracking-wider text-[var(--text-muted)]">Mais</p>
-          {OTHER.map((item) => <NavLink key={item.label} {...item} />)}
-          <button
-            type="button"
-            className="mt-3 flex w-full items-center justify-between rounded-xl px-3 py-2 text-[11px] font-bold uppercase tracking-wider text-[var(--text-muted)]"
-            onClick={() => setGestaoOpen((v) => !v)}
-            aria-expanded={gestaoOpen}
-          >
-            Gestão
-            <span>{gestaoOpen ? "▾" : "▸"}</span>
-          </button>
-          {gestaoOpen && GESTAO.map((item) => <NavLink key={item.label} {...item} />)}
+        <nav className="flex min-h-0 flex-1 flex-col">
+          <div className="shrink-0 space-y-0.5">
+            {PRIMARY.map((item) => (
+              <div key={item.label}>
+                <NavLink {...item} />
+                {item.href === "/medicos/agenda" && AGENDA_EXTRA.map((extra) => (
+                  <Link key={extra.label} href={extra.href} className={`${itemCls(extra.href)} ml-6`}>
+                    <Icon name={extra.icon} className="h-4 w-4 shrink-0" />
+                    <span className="min-w-0 break-words">{extra.label}</span>
+                  </Link>
+                ))}
+              </div>
+            ))}
+            <div className="my-2 h-px bg-[var(--border)]" />
+            {CORE.filter((item) => item.href !== "/hemodialise" || hdAllowed !== false).map((item) => <NavLink key={item.label} {...item} />)}
+          </div>
+          <div className="mt-2 min-h-0 flex-1 overflow-y-auto pb-2">
+            <p className="px-3 text-[11px] font-bold uppercase tracking-wider text-[var(--text-muted)]">Documentos</p>
+            {DOCS.map((item) => <NavLink key={item.label} {...item} />)}
+            <p className="mt-3 px-3 text-[11px] font-bold uppercase tracking-wider text-[var(--text-muted)]">Equipe</p>
+            {EQUIPE.map((item) => <NavLink key={item.label} {...item} />)}
+            <p className="mt-3 px-3 text-[11px] font-bold uppercase tracking-wider text-[var(--text-muted)]">Mais</p>
+            {OTHER.map((item) => <NavLink key={item.label} {...item} />)}
+            <button
+              type="button"
+              className="mt-3 flex w-full items-center justify-between rounded-xl px-3 py-2 text-[11px] font-bold uppercase tracking-wider text-[var(--text-muted)]"
+              onClick={() => setGestaoOpen((v) => !v)}
+              aria-expanded={gestaoOpen}
+            >
+              Gestão
+              <span>{gestaoOpen ? "▾" : "▸"}</span>
+            </button>
+            {gestaoOpen && GESTAO.map((item) => <NavLink key={item.label} {...item} />)}
+          </div>
         </nav>
 
         <div className="shrink-0 border-t border-[var(--border)] pt-3">

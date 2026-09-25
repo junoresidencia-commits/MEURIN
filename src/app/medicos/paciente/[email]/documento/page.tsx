@@ -222,10 +222,15 @@ function ComporDocumentoInner() {
               </p>
             </div>
           )}
-          {type === "receita" && (
+          {type === "receita" && !lmeId && (
             <div className="mt-3">
               <PosologyBuilder onAdd={(t) => setContent((c) => (c.trim() ? `${c.trim()}\n\n${t}` : t))} />
             </div>
+          )}
+          {type === "receita" && lmeId && (
+            <p className="mt-3 text-xs text-[var(--text-muted)]">
+              Posologia montada a partir da LME. Complete dose, via, frequência e duração no texto — o montador automático de comprimido/via oral não entra neste fluxo.
+            </p>
           )}
           <label className="mt-3 block">
             <span className="mb-1 block text-xs font-semibold text-[var(--text-muted)]">Conteúdo</span>
