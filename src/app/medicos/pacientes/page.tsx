@@ -8,6 +8,7 @@ import { DoctorMobileNav } from "@/components/DoctorMobileNav";
 import { GlobalPatientSearch } from "@/components/GlobalPatientSearch";
 import { PatientQuickSheet } from "@/components/PatientQuickSheet";
 import { CreatePatient } from "@/components/CreatePatient";
+import { CompletePatientAge } from "@/components/CompletePatientAge";
 
 type LabVal = { value: number; unit: string | null; date: string } | null;
 type Row = {
@@ -150,6 +151,7 @@ function PacientesInner() {
           <p className="mt-1 text-sm text-[var(--text-muted)]">Busque o paciente por nome, CPF ou telefone. Use os filtros para ver grupos (DRC, diálise, retornos, alertas).</p>
 
           {showCreate && <CreatePatient onCreated={() => { setShowCreate(false); load(); }} />}
+          <CompletePatientAge onSaved={load} />
 
           <div className="mt-4">
             <GlobalPatientSearch />

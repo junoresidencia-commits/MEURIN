@@ -105,6 +105,8 @@ export async function POST(req: Request) {
           phone: b.phone ? String(b.phone) : existingAny.phone,
           email: b.email ? String(b.email) : existingAny.email,
           birthdate: b.birthdate ? String(b.birthdate) : existingAny.birthdate,
+          ageYears: b.ageYears != null ? Number(b.ageYears) : existingAny.ageYears,
+          ageReportedAt: b.ageReportedAt ? String(b.ageReportedAt) : existingAny.ageReportedAt,
           sex: b.sex ? String(b.sex) : existingAny.sex,
           address: b.address ? String(b.address) : existingAny.address,
         });
@@ -147,13 +149,16 @@ export async function POST(req: Request) {
     }
   }
 
-  // Aceita idade quando não há data de nascimento: deriva uma data aproximada
-  // (1º de janeiro do ano) só para os cálculos; a data exata pode ser corrigida depois.
-  let birthdate = b.birthdate ? String(b.birthdate) : null;
-  if (!birthdate && b.age != null && String(b.age).trim() !== "") {
-    const ageNum = Number(String(b.age).replace(/\D/g, ""));
-    if (ageNum > 0 && ageNum < 130) birthdate = `${new Date().getFullYear() - ageNum}-01-01`;
-  }
+  // Nascimento é a fonte principal. Sem nascimento, guarda idade manual + data
+  // de referência — nunca inventa 01/01 a partir da idade.
+  const birthdate = b.birthdate && /^\d{4}-\d{2}-\d{2}$/.test(String(b.birthdate)) ? String(b.birthdate) : null;
+  const ageFromBody = b.ageYears != null ? Number(b.ageYears) : Number(String(b.age || "").replace(/\D/g, ""));
+  const ageYears = !birthdate && Number.isFinite(ageFromBody) && ageFromBody >= 0 && ageFromBody < 130 ? Math.round(ageFromBody) : null;
+  const ageReportedAt = !birthdate && ageYears != null
+    ? (b.ageReportedAt && /^\d{4}-\d{2}(-\d{2})?$/.test(String(b.ageReportedAt))
+      ? (String(b.ageReportedAt).length === 7 ? `${b.ageReportedAt}-01` : String(b.ageReportedAt))
+      : new Date().toISOString().slice(0, 10))
+    : null;
 
   const patient = await createPatient({
     doctorId,
@@ -162,6 +167,8 @@ export async function POST(req: Request) {
     cns: b.cns ? String(b.cns).replace(/\s+/g, "") : null,
     motherName: b.motherName ? String(b.motherName) : null,
     birthdate,
+    ageYears,
+    ageReportedAt,
     sex: b.sex ? String(b.sex) : null,
     phone: b.phone ? String(b.phone) : null,
     email: b.email ? String(b.email) : null,

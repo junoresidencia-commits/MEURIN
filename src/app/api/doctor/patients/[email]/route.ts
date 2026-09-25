@@ -33,6 +33,8 @@ export async function GET(
       phone: access.phone,
       isCreated: access.isCreated,
       birthdate: access.birthdate,
+      ageYears: access.ageYears,
+      ageReportedAt: access.ageReportedAt,
       sex: access.sex,
       cns: access.cns,
       cpf: access.cpf,

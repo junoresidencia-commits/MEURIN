@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { getDoctorSessionId } from "@/lib/auth";
 import { getStudy } from "@/lib/research-studies-store";
-import { buildCohortRecords, applyFilters } from "@/lib/research";
+import { applyFilters, buildCohortRecords, cohortOptsFromStudy } from "@/lib/research";
 import { completeness, describeVars, resultsText } from "@/lib/research-analysis";
 import { RESEARCH_VARS_BY_KEY } from "@/lib/research-fields";
 
@@ -17,7 +17,7 @@ export async function GET(_req: Request, ctx: { params: Promise<{ id: string }> 
   const study = await getStudy(doctorId, id);
   if (!study) return NextResponse.json({ error: "Estudo não encontrado." }, { status: 404 });
 
-  const all = await buildCohortRecords(doctorId);
+  const all = await buildCohortRecords(doctorId, cohortOptsFromStudy(study));
   const matched = applyFilters(all, study.filters);
   const variables = study.variables.length ? study.variables : DEFAULT_VARS;
 
@@ -32,7 +32,8 @@ export async function GET(_req: Request, ctx: { params: Promise<{ id: string }> 
     for (const k of variables) {
       const def = RESEARCH_VARS_BY_KEY.get(k);
       const raw = r[k];
-      row[k] = raw ?? (def?.type === "num" ? null : "desconhecido");
+      if (k === "idade" && (raw === null || raw === undefined)) row[k] = "Dado ausente";
+      else row[k] = raw ?? (def?.type === "num" ? null : "desconhecido");
     }
     return row;
   });

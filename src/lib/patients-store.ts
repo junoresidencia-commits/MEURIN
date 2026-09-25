@@ -16,6 +16,10 @@ export interface Patient {
   cns?: string | null;
   motherName?: string | null;
   birthdate?: string | null;
+  /** Idade informada manualmente (anos). Só usada se não houver birthdate. */
+  ageYears?: number | null;
+  /** Data (YYYY-MM-DD ou YYYY-MM) em que a idade manual foi referida. */
+  ageReportedAt?: string | null;
   sex?: string | null;
   phone?: string | null;
   email?: string | null;
@@ -113,6 +117,12 @@ function mapRow(r: Record<string, unknown>): Patient {
     cns: (r.cns as string | null) ?? null,
     motherName: (r.mother_name as string | null) ?? null,
     birthdate: r.birthdate ? String(r.birthdate) : null,
+    ageYears: (() => {
+      if (r.age_years == null || r.age_years === "") return null;
+      const n = Number(r.age_years);
+      return Number.isFinite(n) ? n : null;
+    })(),
+    ageReportedAt: r.age_reported_at ? String(r.age_reported_at) : null,
     sex: (r.sex as string | null) ?? null,
     phone: (r.phone as string | null) ?? null,
     email: (r.email as string | null) ?? null,
@@ -182,6 +192,9 @@ export async function createPatient(input: NewPatient): Promise<Patient> {
     createdAt: new Date().toISOString(),
     status: input.status || "active",
     ...input,
+    birthdate: input.birthdate || null,
+    ageYears: input.ageYears ?? null,
+    ageReportedAt: input.ageReportedAt || null,
     passwordHash,
     mustChangePassword,
   };
@@ -195,6 +208,8 @@ export async function createPatient(input: NewPatient): Promise<Patient> {
       cns: p.cns ?? null,
       mother_name: p.motherName ?? null,
       birthdate: p.birthdate || null,
+      age_years: p.ageYears ?? null,
+      age_reported_at: p.ageReportedAt || null,
       sex: p.sex ?? null,
       phone: p.phone ?? null,
       email: p.email ? p.email.toLowerCase().trim() : null,
@@ -330,7 +345,7 @@ export async function getPatient(id: string): Promise<Patient | null> {
 export async function updatePatient(
   id: string,
   patch: Partial<
-    Pick<Patient, "name" | "phone" | "email" | "birthdate" | "sex" | "address" | "doctorId" | "passwordHash" | "cns" | "motherName" | "photoUrl">
+    Pick<Patient, "name" | "phone" | "email" | "birthdate" | "ageYears" | "ageReportedAt" | "sex" | "address" | "doctorId" | "passwordHash" | "cns" | "motherName" | "photoUrl">
   >
 ): Promise<Patient | null> {
   const current = await getPatient(id);
@@ -347,6 +362,8 @@ export async function updatePatient(
       phone: updated.phone ?? null,
       email: updated.email ?? null,
       birthdate: updated.birthdate || null,
+      age_years: updated.ageYears ?? null,
+      age_reported_at: updated.ageReportedAt || null,
       sex: updated.sex ?? null,
       address: updated.address ?? null,
     };

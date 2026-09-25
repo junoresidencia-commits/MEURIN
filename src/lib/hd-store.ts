@@ -1345,4 +1345,24 @@ export function canSeeHdMenu(allowed: boolean) {
   return allowed;
 }
 
+/**
+ * Pacientes do Meu Rim já vinculados à Hemodiálise deste médico.
+ * Somente leitura — não cria unidade, não altera o mapa, não recria cadastro.
+ */
+export async function listHdLinkedPatientIds(doctorId: string): Promise<Set<string>> {
+  const db = await load();
+  const unitIds = new Set(
+    [
+      ...db.units.filter((u) => u.ownerDoctorId === doctorId).map((u) => u.id),
+      ...db.members.filter((m) => m.doctorId === doctorId && m.status === "active").map((m) => m.unitId),
+    ]
+  );
+  const ids = new Set<string>();
+  for (const p of db.patients) {
+    if (!p.active || !p.patientId || !unitIds.has(p.unitId)) continue;
+    ids.add(p.patientId);
+  }
+  return ids;
+}
+
 export type { HdAlert };

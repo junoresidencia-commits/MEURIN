@@ -26,7 +26,7 @@ import { ClinicalSummaryBar } from "@/components/ClinicalSummaryBar";
 import { PdModule } from "@/components/PdModule";
 import { encodePatientParam, postJson, toFriendlyMessage } from "@/lib/user-errors";
 import { clearEvolutionDraft, loadEvolutionDraft, saveEvolutionDraft } from "@/lib/evolution-draft";
-import { ageFromBirthdate } from "@/lib/egfr";
+import { resolvePatientAge } from "@/lib/patient-age";
 import { SignDocumentPanel } from "@/components/SignDocumentFlow";
 import { digitalSignatureLabel } from "@/lib/digital-signature/status";
 import { PatientFinancePanel } from "@/components/PatientFinancePanel";
@@ -71,7 +71,7 @@ type HomeRecord = {
 };
 type FoodLog = { id: string; food: string; meal?: string | null; quantity?: string | null; loggedAt: string };
 type Booking = { id: string; status: string; slotStart: string; careReason: string; meetingRoomId: string };
-type Patient = { email: string; name: string; city: string; phone: string; birthdate?: string | null; sex?: string | null; cns?: string | null; cpf?: string | null; motherName?: string | null; isCreated?: boolean };
+type Patient = { email: string; name: string; city: string; phone: string; birthdate?: string | null; ageYears?: number | null; ageReportedAt?: string | null; sex?: string | null; cns?: string | null; cpf?: string | null; motherName?: string | null; isCreated?: boolean };
 type Note = {
   id: string;
   doctorName: string;
@@ -498,7 +498,7 @@ export default function ProntuarioPage() {
   const weight = records.find((r) => r.kind === "weight");
   const sinais = records.filter((r) => r.kind !== "symptom");
   const sintomas = records.filter((r) => r.kind === "symptom");
-  const age = ageFromBirthdate(patient?.birthdate);
+  const age = resolvePatientAge({ birthdate: patient?.birthdate, ageYears: patient?.ageYears, ageReportedAt: patient?.ageReportedAt });
   const patientLine = [age != null ? `${age} anos` : null, patient?.city].filter(Boolean).join(" · ");
   const moreTabs = [...MORE_TABS, ...(isPd ? [{ id: "dp" as const, label: "Diálise peritoneal" }] : [])];
   const moreActive = moreTabs.find((t) => t.id === tab);
@@ -573,7 +573,7 @@ export default function ProntuarioPage() {
       {editingPatient && patient && (
         <PatientEditForm
           emailParam={emailParam}
-          patient={{ name: patient.name, phone: patient.phone, email: patient.email, city: patient.city, birthdate: patient.birthdate, sex: patient.sex }}
+          patient={{ name: patient.name, phone: patient.phone, email: patient.email, city: patient.city, birthdate: patient.birthdate, ageYears: patient.ageYears, ageReportedAt: patient.ageReportedAt, sex: patient.sex }}
           onClose={() => setEditingPatient(false)}
           onSaved={load}
         />
@@ -729,7 +729,7 @@ export default function ProntuarioPage() {
 
         {tab === "exames" && (
           <div className="space-y-4">
-            <EgfrReadinessBanner emailParam={emailParam} birthdate={patient?.birthdate} sex={patient?.sex} patientName={patient?.name} onFixed={load} />
+            <EgfrReadinessBanner emailParam={emailParam} birthdate={patient?.birthdate} ageYears={patient?.ageYears} ageReportedAt={patient?.ageReportedAt} sex={patient?.sex} patientName={patient?.name} onFixed={load} />
             <div className="panel space-y-3">
               <p className="text-xs font-bold uppercase tracking-wider text-[var(--gold)]">
                 Adicionar resultado de exame
@@ -1244,30 +1244,24 @@ function Metric({ label, value, unit }: { label: string; value: string; unit: st
   );
 }
 
-function EgfrReadinessBanner({ emailParam, birthdate, sex, patientName, onFixed }: { emailParam: string; birthdate?: string | null; sex?: string | null; patientName?: string | null; onFixed: () => Promise<void> | void }) {
-  const hasBirth = Boolean(birthdate);
+function EgfrReadinessBanner({ emailParam, birthdate, ageYears, ageReportedAt, sex, patientName, onFixed }: { emailParam: string; birthdate?: string | null; ageYears?: number | null; ageReportedAt?: string | null; sex?: string | null; patientName?: string | null; onFixed: () => Promise<void> | void }) {
+  const hasAge = Boolean(birthdate) || (ageYears != null && Number.isFinite(Number(ageYears)));
   const hasSex = Boolean(sex && /^(m|masc|homem|f|fem|mulher)/i.test(String(sex)));
   const [bd, setBd] = useState("");
   const [ageInput, setAgeInput] = useState("");
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState("");
   const guessed = guessSexFromName(patientName);
-  if (hasBirth && hasSex) return null;
+  void ageReportedAt;
+  if (hasAge && hasSex) return null;
 
-  // Idade -> data de nascimento aproximada (1º de julho do ano estimado).
-  function birthdateFromAge(age: number): string {
-    const y = new Date().getFullYear() - Math.round(age);
-    return `${y}-07-01`;
-  }
-
-  async function saveDemographics(patch: { sex?: string; birthdate?: string }) {
+  async function saveDemographics(patch: { sex?: string; birthdate?: string; ageYears?: number; ageReportedAt?: string }) {
     setBusy(true); setMsg("");
     try {
       const res = await fetch(`/api/doctor/patients/${encodePatientParam(emailParam)}/demographics`, {
         method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(patch),
       });
       if (!res.ok) { const d = await res.json().catch(() => ({})); throw new Error(d.error || "Erro"); }
-      // Recalcula a TFGe para creatinina/cistatina já lançadas.
       await fetch(`/api/doctor/patients/${encodePatientParam(emailParam)}/labs/recompute-egfr`, { method: "POST" });
       setMsg("Dados salvos. TFGe recalculada quando havia creatinina.");
       await onFixed();
@@ -1278,9 +1272,9 @@ function EgfrReadinessBanner({ emailParam, birthdate, sex, patientName, onFixed 
   return (
     <div className="panel border-[var(--warn)]/40 bg-[#fff7e8]">
       <p className="text-sm font-semibold text-[#7a5a12]">Para calcular a TFGe automaticamente, informe idade e sexo</p>
-      <p className="mt-1 text-xs text-[#7a5a12]">A equação CKD‑EPI usa idade e sexo. Complete abaixo — vale para creatinina e cistatina C.</p>
+      <p className="mt-1 text-xs text-[#7a5a12]">A equação CKD‑EPI usa idade e sexo. Prefira a data de nascimento; sem ela, informe a idade (sem inventar nascimento).</p>
       <div className="mt-2 flex flex-wrap items-end gap-3">
-        {!hasBirth && (
+        {!hasAge && (
           <>
             <label className="block">
               <span className="mb-1 block text-xs font-semibold text-[var(--text-muted)]">Data de nascimento</span>
@@ -1293,7 +1287,7 @@ function EgfrReadinessBanner({ emailParam, birthdate, sex, patientName, onFixed 
               <span className="mb-1 block text-xs font-semibold text-[var(--text-muted)]">…ou só a idade (anos)</span>
               <div className="flex items-center gap-2">
                 <input inputMode="numeric" className="input-field w-24" value={ageInput} onChange={(e) => setAgeInput(e.target.value)} placeholder="Ex.: 62" />
-                <button type="button" className="btn-ghost text-sm" disabled={busy || !ageInput} onClick={() => { const a = Number(ageInput); if (a > 0 && a < 130) saveDemographics({ birthdate: birthdateFromAge(a) }); }}>Usar idade</button>
+                <button type="button" className="btn-ghost text-sm" disabled={busy || !ageInput} onClick={() => { const a = Number(ageInput); if (a > 0 && a < 130) saveDemographics({ ageYears: a, ageReportedAt: new Date().toISOString().slice(0, 10) }); }}>Usar idade</button>
               </div>
             </label>
           </>

@@ -5,6 +5,7 @@ import { getLabResults, getPatientData } from "./patient-store";
 import { getPatient } from "./patients-store";
 import { NEPHRO_LABS } from "./labs";
 import type { AlliedRole } from "./allied-types";
+import { resolvePatientAge } from "./patient-age";
 
 const NUTRI_LABS = ["creatinina", "tfge", "ureia", "potassio", "fosforo", "calcio", "albumina", "hemoglobina", "proteinuria_24h", "rac", "glicemia", "glicemia_jejum", "hba1c"];
 const NURSE_LABS = ["creatinina", "tfge", "ureia", "potassio", "calcio", "fosforo", "albumina", "hemoglobina", "pth", "glicemia", "glicemia_jejum"];
@@ -16,15 +17,9 @@ function labsFor(role: AlliedRole | "nutrition" | "doctor"): string[] {
   return PSY_LABS;
 }
 
-function ageYears(birthdate?: string | null): number | null {
-  if (!birthdate) return null;
-  const d = new Date(birthdate);
-  if (Number.isNaN(d.getTime())) return null;
-  const now = new Date();
-  let age = now.getFullYear() - d.getFullYear();
-  const m = now.getMonth() - d.getMonth();
-  if (m < 0 || (m === 0 && now.getDate() < d.getDate())) age -= 1;
-  return age;
+function ageYears(patient: { birthdate?: string | null; ageYears?: number | null; ageReportedAt?: string | null } | null): number | null {
+  if (!patient) return null;
+  return resolvePatientAge(patient);
 }
 
 export async function buildClinicalSnapshot(patientKey: string, role: AlliedRole | "nutrition" | "doctor") {
@@ -57,7 +52,7 @@ export async function buildClinicalSnapshot(patientKey: string, role: AlliedRole
     identification: {
       name: patient?.name || "",
       birthdate: patient?.birthdate || null,
-      age: ageYears(patient?.birthdate),
+      age: ageYears(patient),
       sex: patient?.sex || null,
       cpf: patient?.cpf || null,
       allergies: (data.alergias as string) || patient?.allergies || null,

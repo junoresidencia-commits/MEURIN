@@ -16,6 +16,8 @@ export type StudyLite = {
   variables?: string[];
   filters?: { field: string; op: string; value: string; value2?: string }[];
   journal?: string | null;
+  sources?: string[];
+  ageReferenceDate?: string | null;
 };
 
 export const STUDY_TYPE_LABEL: Record<string, string> = {

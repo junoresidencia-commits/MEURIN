@@ -13,13 +13,30 @@ export async function POST(req: Request, { params }: { params: Promise<{ email: 
   if (!access || !access.allowed) return NextResponse.json({ error: "Sem acesso a este paciente." }, { status: 403 });
 
   const b = await req.json().catch(() => ({}));
-  const patch: { name?: string; phone?: string | null; email?: string | null; address?: string | null; sex?: string; birthdate?: string; cns?: string | null; motherName?: string | null } = {};
+  const patch: { name?: string; phone?: string | null; email?: string | null; address?: string | null; sex?: string; birthdate?: string | null; ageYears?: number | null; ageReportedAt?: string | null; cns?: string | null; motherName?: string | null } = {};
   if (b.sex !== undefined) {
     const s = String(b.sex).toLowerCase();
     if (s === "masculino" || s === "feminino") patch.sex = s;
     else return NextResponse.json({ error: "Sexo deve ser masculino ou feminino." }, { status: 400 });
   }
-  if (b.birthdate !== undefined && /^\d{4}-\d{2}-\d{2}$/.test(String(b.birthdate))) patch.birthdate = String(b.birthdate);
+  if (b.birthdate !== undefined) {
+    const raw = String(b.birthdate || "").trim();
+    if (!raw) patch.birthdate = null;
+    else if (/^\d{4}-\d{2}-\d{2}$/.test(raw)) patch.birthdate = raw;
+    else return NextResponse.json({ error: "Data de nascimento inválida." }, { status: 400 });
+  }
+  if (b.ageYears !== undefined) {
+    const n = Number(String(b.ageYears).replace(",", "."));
+    if (b.ageYears === "" || b.ageYears === null) patch.ageYears = null;
+    else if (Number.isFinite(n) && n >= 0 && n < 130) patch.ageYears = Math.round(n);
+    else return NextResponse.json({ error: "Idade inválida." }, { status: 400 });
+  }
+  if (b.ageReportedAt !== undefined) {
+    const raw = String(b.ageReportedAt || "").trim();
+    if (!raw) patch.ageReportedAt = null;
+    else if (/^\d{4}-\d{2}(-\d{2})?$/.test(raw)) patch.ageReportedAt = raw.length === 7 ? `${raw}-01` : raw;
+    else return NextResponse.json({ error: "Data de referência da idade inválida." }, { status: 400 });
+  }
   if (b.cns !== undefined) patch.cns = String(b.cns).replace(/\s+/g, "") || null;
   if (b.motherName !== undefined) patch.motherName = String(b.motherName).trim() || null;
   if (b.name !== undefined) {

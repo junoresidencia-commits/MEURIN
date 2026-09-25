@@ -3,19 +3,14 @@
  * Client-safe. Retorna também metadados para preservar a origem do cálculo.
  */
 
+import { ageFromBirthdate as ageFromBirthdateShared, resolvePatientAge } from "./patient-age";
+
 export type Sex = "male" | "female";
 export const EGFR_EQUATION = "CKD-EPI";
 export const EGFR_VERSION = "2021";
 
 export function ageFromBirthdate(birthdate?: string | null, at?: Date): number | null {
-  if (!birthdate) return null;
-  const d = new Date(birthdate);
-  if (Number.isNaN(d.getTime())) return null;
-  const ref = at || new Date();
-  let age = ref.getFullYear() - d.getFullYear();
-  const m = ref.getMonth() - d.getMonth();
-  if (m < 0 || (m === 0 && ref.getDate() < d.getDate())) age--;
-  return age >= 0 && age < 130 ? age : null;
+  return ageFromBirthdateShared(birthdate, at);
 }
 
 export function normalizeSex(sex?: string | null): Sex | null {
@@ -44,10 +39,14 @@ export function estimateEgfr(
   creatinine: number,
   birthdate?: string | null,
   sex?: string | null,
-  measuredAt?: string
+  measuredAt?: string,
+  ageHint?: { ageYears?: number | null; ageReportedAt?: string | null }
 ): number | null {
   if (!Number.isFinite(creatinine) || creatinine <= 0) return null;
-  const age = ageFromBirthdate(birthdate, measuredAt ? new Date(measuredAt) : undefined);
+  const age = resolvePatientAge(
+    { birthdate, ageYears: ageHint?.ageYears, ageReportedAt: ageHint?.ageReportedAt },
+    measuredAt || undefined
+  );
   const normSex = normalizeSex(sex);
   if (age == null || !normSex) return null;
   return ckdEpi2021(creatinine, age, normSex);
@@ -71,10 +70,14 @@ export function estimateEgfrCystatin(
   cystatin: number,
   birthdate?: string | null,
   sex?: string | null,
-  measuredAt?: string
+  measuredAt?: string,
+  ageHint?: { ageYears?: number | null; ageReportedAt?: string | null }
 ): number | null {
   if (!Number.isFinite(cystatin) || cystatin <= 0) return null;
-  const age = ageFromBirthdate(birthdate, measuredAt ? new Date(measuredAt) : undefined);
+  const age = resolvePatientAge(
+    { birthdate, ageYears: ageHint?.ageYears, ageReportedAt: ageHint?.ageReportedAt },
+    measuredAt || undefined
+  );
   const normSex = normalizeSex(sex);
   if (age == null || !normSex) return null;
   return ckdEpiCystatin2021(cystatin, age, normSex);
