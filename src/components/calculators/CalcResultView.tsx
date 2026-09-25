@@ -22,7 +22,7 @@ export function CalcResultView({ result, compact }: { result: CalcResult; compac
         <p key={w} className="mt-2 text-sm font-semibold text-amber-800">{w}</p>
       ))}
       {result.values.length > 0 && !compact && (
-        <dl className="mt-3 grid gap-1 text-sm sm:grid-cols-2">
+        <dl className="mt-3 grid gap-1 text-sm">
           {result.values.map((v) => (
             <div key={v.label} className="flex justify-between gap-3 border-b border-black/5 py-1">
               <dt className="text-[var(--text-muted)]">{v.label}</dt>
