@@ -23,6 +23,7 @@ import { CareTeamPatientCard, CareTimeline } from "@/components/CareTeamPatientC
 import { SharePatientWithDoctor } from "@/components/SharePatientWithDoctor";
 import { EncaminharHeaderButton } from "@/components/EncaminharHeaderButton";
 import { ClinicalSummaryBar } from "@/components/ClinicalSummaryBar";
+import { LabResultsTable, LabSparkline } from "@/components/LabResultsTable";
 import { PdModule } from "@/components/PdModule";
 import { encodePatientParam, postJson, toFriendlyMessage } from "@/lib/user-errors";
 import { clearEvolutionDraft, loadEvolutionDraft, saveEvolutionDraft } from "@/lib/evolution-draft";
@@ -168,6 +169,8 @@ export default function ProntuarioPage() {
   const [notes, setNotes] = useState<Note[]>([]);
   const [documents, setDocuments] = useState<Doc[]>([]);
   const [labs, setLabs] = useState<Lab[]>([]);
+  const [chartKey, setChartKey] = useState<string | null>(null);
+  const [sharePreview, setSharePreview] = useState(false);
   const [uploads, setUploads] = useState<Upload[]>([]);
   const [lmeList, setLmeList] = useState<Lme[]>([]);
   const [tab, setTab] = useState<Tab>("evolucao");
@@ -492,7 +495,6 @@ export default function ProntuarioPage() {
       .catch(() => setHasLetterhead(false));
   }, []);
 
-  const labKeys = Array.from(new Set(labs.map((l) => l.testKey)));
   const bp = records.find((r) => r.kind === "bp");
   const glucose = records.find((r) => r.kind === "glucose");
   const weight = records.find((r) => r.kind === "weight");
@@ -680,7 +682,7 @@ export default function ProntuarioPage() {
               <label className="block">
                 <span className="mb-1.5 block text-xs font-bold uppercase tracking-wider text-[var(--gold)]">Evolução</span>
                 <textarea
-                  className="input-field min-h-[220px]"
+                  className="input-field min-h-[380px] lg:min-h-[460px]"
                   value={form.history}
                   onChange={(e) => setForm((f) => ({ ...f, history: e.target.value }))}
                   placeholder={"Escreva a evolução do jeito que preferir.\n\nPode colar exames assim:\n21/08/2026\nCR: 3,51\nU: 94\nK: 5,8"}
@@ -700,6 +702,22 @@ export default function ProntuarioPage() {
                 <input type="checkbox" checked={shared} onChange={(e) => setShared(e.target.checked)} className="h-4 w-4 accent-[var(--gold)]" />
                 Liberar um resumo desta evolução para o paciente ver
               </label>
+              <button type="button" className="text-sm font-semibold text-[var(--gold)]" onClick={() => setSharePreview((v) => !v)}>
+                {sharePreview ? "Ocultar pré-visualização" : "Pré-visualizar resumo do paciente"}
+              </button>
+              {sharePreview && (
+                <div className="rounded-xl border border-[var(--border)] bg-[var(--bg)] p-3 text-sm text-[var(--text-soft)]">
+                  <p className="text-xs font-bold uppercase tracking-wider text-[var(--gold)]">O paciente verá</p>
+                  {form.history.trim() ? (
+                    <p className="mt-1 whitespace-pre-wrap">{form.history.trim()}</p>
+                  ) : (
+                    <p className="mt-1 text-[var(--text-muted)]">Nada ainda — o resumo usa o texto da evolução.</p>
+                  )}
+                  {form.assessment && <p className="mt-2"><b>Avaliação:</b> {form.assessment}</p>}
+                  {form.plan && <p className="mt-1"><b>Orientações:</b> {form.plan}</p>}
+                  {!shared && <p className="mt-2 text-xs text-[var(--text-muted)]">Marque a caixa acima para liberar este resumo.</p>}
+                </div>
+              )}
 
               {saveErr && <p className="rounded-xl border border-[var(--danger)]/30 bg-[var(--danger)]/10 px-3 py-2 text-sm text-[var(--danger)]">{saveErr}</p>}
               {saveMsg && <p className="rounded-xl border border-[var(--green)]/30 bg-[var(--green)]/10 px-3 py-2 text-sm text-[var(--green)]">{saveMsg}</p>}
@@ -781,29 +799,20 @@ export default function ProntuarioPage() {
               </button>
             </div>
 
-            {labKeys.length === 0 && <p className="text-[var(--text-muted)]">Nenhum exame registrado ainda.</p>}
-            {labKeys.map((key) => {
-              const series = labs.filter((l) => l.testKey === key);
-              const last = series[series.length - 1];
-              return (
-                <div key={key} className="panel">
-                  <div className="flex items-center justify-between">
-                    <p className="font-bold text-[var(--text)]">{labLabel(key)}</p>
-                    <p className="text-sm text-[var(--gold)]">
-                      Último: {String(last.value).replace(".", ",")} {labUnit(key)}
-                    </p>
-                  </div>
-                  <LabChart points={series.map((s) => ({ x: s.measuredAt, y: s.value }))} />
-                  <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-xs text-[var(--text-muted)]">
-                    {series.map((s) => (
-                      <span key={s.id}>
-                        {new Date(s.measuredAt).toLocaleDateString("pt-BR")}: <b className="text-[var(--text-soft)]">{String(s.value).replace(".", ",")}</b>
-                      </span>
-                    ))}
-                  </div>
+            <LabResultsTable
+              labs={labs}
+              selectedKey={chartKey}
+              onSelect={(key) => setChartKey((cur) => (cur === key ? null : key))}
+            />
+            {chartKey && (
+              <div className="panel">
+                <div className="flex items-center justify-between gap-2">
+                  <p className="font-bold text-[var(--text)]">{labLabel(chartKey)} {labUnit(chartKey) ? `(${labUnit(chartKey)})` : ""}</p>
+                  <button type="button" className="text-sm font-semibold text-[var(--gold)]" onClick={() => setChartKey(null)}>Fechar gráfico</button>
                 </div>
-              );
-            })}
+                <LabSparkline points={labs.filter((l) => l.testKey === chartKey).map((s) => ({ x: s.measuredAt, y: s.value }))} />
+              </div>
+            )}
           </div>
         )}
 
@@ -1207,30 +1216,6 @@ function ChecklistItem({ ok, label }: { ok: boolean; label: string }) {
       </span>
       <span className={ok ? "text-[var(--text)]" : "text-[var(--text-muted)]"}>{label}</span>
     </li>
-  );
-}
-
-function LabChart({ points }: { points: { x: string; y: number }[] }) {
-  if (points.length === 0) return null;
-  const w = 480;
-  const h = 120;
-  const p = 22;
-  const ys = points.map((d) => d.y);
-  const min = Math.min(...ys);
-  const max = Math.max(...ys);
-  const span = max - min || 1;
-  const n = points.length;
-  const xAt = (i: number) => (n === 1 ? w / 2 : p + (i * (w - 2 * p)) / (n - 1));
-  const yAt = (v: number) => h - p - ((v - min) / span) * (h - 2 * p);
-  const path = points.map((d, i) => `${i ? "L" : "M"}${xAt(i).toFixed(1)} ${yAt(d.y).toFixed(1)}`).join(" ");
-
-  return (
-    <svg viewBox={`0 0 ${w} ${h}`} className="mt-3 h-28 w-full" preserveAspectRatio="none">
-      {n > 1 && <path d={path} fill="none" stroke="var(--gold)" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />}
-      {points.map((d, i) => (
-        <circle key={i} cx={xAt(i)} cy={yAt(d.y)} r="3.5" fill="white" stroke="var(--gold)" strokeWidth="2.5" />
-      ))}
-    </svg>
   );
 }
 
