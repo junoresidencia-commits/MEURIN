@@ -8,6 +8,7 @@ import {
   receitaFromLme,
   relatorioFromLme,
 } from "../src/lib/complementary-docs";
+import { buildClinicalSummary } from "../src/lib/clinical-summary";
 
 function main() {
   const inj = inferRouteAndForm("Alfaepoetina 4.000 UI injetável", "frasco-ampola");
@@ -65,6 +66,20 @@ function main() {
     { kind: "consentimento", label: "Consentimento", status: "indisponivel" },
   ]);
   assert.deepEqual(missing, ["Relatório médico", "TER"]);
+
+  const summary = buildClinicalSummary({
+    age: 58,
+    data: { drc: "sim", estagio_g: "G5" },
+    labs: [
+      { testKey: "creatinina", value: 6.8, unit: "mg/dL", measuredAt: "2026-08-15T12:00:00.000-03:00" },
+      { testKey: "creatinina", value: 7.2, unit: "mg/dL", measuredAt: "2026-09-20T12:00:00.000-03:00" },
+      { testKey: "hemoglobina", value: 8.9, unit: "g/dL", measuredAt: "2026-09-20T12:00:00.000-03:00" },
+    ],
+  }).join(" ");
+  assert.match(summary, /7,2/);
+  assert.match(summary, /20\/09\/2026/);
+  assert.doesNotMatch(summary, /6,8/);
+  assert.match(summary, /8,9/);
 
   console.log("lme-complementary ok");
 }

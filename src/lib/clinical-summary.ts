@@ -12,7 +12,10 @@ function labDate(iso?: string | null): string {
 }
 
 function lab(labs: SummaryLab[], key: string): string | null {
-  const hit = labs.find((l) => l.testKey === key);
+  const hits = labs.filter((l) => l.testKey === key);
+  const hit = hits
+    .slice()
+    .sort((a, b) => String(b.measuredAt || "").localeCompare(String(a.measuredAt || "")))[0];
   if (!hit) return null;
   const n = String(hit.value).replace(".", ",");
   const u = hit.unit ? ` ${hit.unit}` : "";
