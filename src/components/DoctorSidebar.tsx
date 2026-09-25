@@ -24,26 +24,39 @@ function Icon({ name, className }: { name: keyof typeof PATHS; className?: strin
   );
 }
 
-const PRIMARY: { href: string; label: string; icon: keyof typeof PATHS }[] = [
+type Item = { href: string; label: string; icon: keyof typeof PATHS };
+
+const PRIMARY: Item[] = [
   { href: "/medicos/painel", label: "Painel", icon: "home" },
   { href: "/medicos/pacientes", label: "Pacientes", icon: "users" },
   { href: "/medicos/agenda", label: "Agenda", icon: "cal" },
   { href: "/medicos/atendimentos", label: "Atendimentos", icon: "file" },
   { href: "/medicos/retornos", label: "Retornos", icon: "file" },
-  { href: "/medicos/links", label: "Links", icon: "link" },
 ];
-const MORE: { href: string; label: string; icon: keyof typeof PATHS }[] = [
-  { href: "/medicos/lme", label: "Documentos / LME", icon: "file" },
-  { href: "/medicos/mensagens", label: "Mensagens", icon: "link" },
-  { href: "/medicos/equipe-assistencial", label: "Minha Equipe", icon: "heart" },
-  { href: "/medicos/encaminhamentos", label: "Encaminhamentos", icon: "users" },
-  { href: "/medicos/prontuario-inteligente", label: "Revisão de prontuário inteligente", icon: "file" },
-  { href: "/medicos/painel#financeiro", label: "Financeiro", icon: "chart" },
-  { href: "/medicos/pesquisa", label: "Estudos e Pesquisa", icon: "chart" },
-  { href: "/medicos/documentos", label: "Documentos avulsos", icon: "edit" },
-  { href: "/hemodialise", label: "Hemodiálise", icon: "heart" },
+const AGENDA_EXTRA: Item[] = [
   { href: "/medicos/agenda/configurar", label: "Clínicas e horários", icon: "cal" },
+];
+const CORE: Item[] = [
+  { href: "/hemodialise", label: "Hemodiálise", icon: "heart" },
+  { href: "/medicos/pesquisa", label: "Estudos e Pesquisa", icon: "chart" },
+  { href: "/medicos/calculadoras", label: "Calculadoras & Risco", icon: "chart" },
+];
+const DOCS: Item[] = [
+  { href: "/medicos/lme", label: "Documentos / LME", icon: "file" },
+  { href: "/medicos/documentos", label: "Documentos avulsos", icon: "edit" },
+];
+const EQUIPE: Item[] = [
+  { href: "/medicos/equipe-assistencial", label: "Minha Equipe", icon: "heart" },
   { href: "/medicos/equipe", label: "Atendentes", icon: "users" },
+];
+const OTHER: Item[] = [
+  { href: "/medicos/links", label: "Links", icon: "link" },
+  { href: "/medicos/mensagens", label: "Mensagens", icon: "link" },
+  { href: "/medicos/encaminhamentos", label: "Encaminhamentos", icon: "users" },
+  { href: "/medicos/prontuario-inteligente", label: "Revisão de prontuário", icon: "file" },
+];
+const GESTAO: Item[] = [
+  { href: "/medicos/painel#financeiro", label: "Financeiro", icon: "chart" },
   { href: "/medicos/configuracoes", label: "Configurações", icon: "gear" },
 ];
 
@@ -52,6 +65,7 @@ export function DoctorSidebar() {
   const router = useRouter();
   const [doctor, setDoctor] = useState<{ name?: string; crm?: string; specialty?: string; logoUrl?: string; photoUrl?: string; platformRoles?: string[]; clinicAdmin?: { clinicId: string; clinicName: string }[] } | null>(null);
   const [hdAllowed, setHdAllowed] = useState<boolean | null>(null);
+  const [gestaoOpen, setGestaoOpen] = useState(false);
 
   useEffect(() => {
     fetch("/api/auth").then((r) => r.json()).then((d) => { if (d?.doctor) setDoctor(d.doctor); }).catch(() => {});
@@ -61,6 +75,10 @@ export function DoctorSidebar() {
       .catch(() => setHdAllowed(false));
   }, []);
 
+  useEffect(() => {
+    if (pathname.startsWith("/medicos/configuracoes") || pathname.includes("#financeiro")) setGestaoOpen(true);
+  }, [pathname]);
+
   async function logout() {
     await fetch("/api/auth", { method: "DELETE" });
     router.push("/medicos/login");
@@ -68,23 +86,33 @@ export function DoctorSidebar() {
 
   const isActive = (href: string) => {
     const base = href.split("#")[0];
+    if (href === "/medicos/agenda") return pathname === base;
     return pathname === base || (base !== "/medicos/painel" && pathname.startsWith(base + "/"));
   };
   const itemCls = (href: string) =>
-    `flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-semibold transition ${
+    `flex items-center gap-3 rounded-xl px-3 py-2 text-sm font-semibold leading-snug transition ${
       isActive(href) ? "bg-[var(--gold-soft)] text-[var(--gold)]" : "text-[var(--text-soft)] hover:bg-[var(--gold-soft)] hover:text-[var(--gold)]"
     }`;
 
+  function NavLink({ href, label, icon }: Item) {
+    return (
+      <Link href={href} className={itemCls(href)}>
+        <Icon name={icon} className="h-5 w-5 shrink-0" />
+        <span className="min-w-0 break-words">{label}</span>
+      </Link>
+    );
+  }
+
   return (
-    <aside className="hidden w-60 shrink-0 border-r border-[var(--border)] bg-white lg:block">
+    <aside className="hidden w-64 shrink-0 border-r border-[var(--border)] bg-white lg:block">
       <div className="sticky top-0 flex h-screen flex-col p-4">
-        <Link href="/" className="mb-4 flex items-center gap-2 px-2">
+        <Link href="/" className="mb-2 flex items-center gap-2 px-2">
           <span className="grid h-9 w-9 place-items-center rounded-xl bg-gradient-to-br from-[var(--gold)] to-[var(--gold-dark)] text-sm font-extrabold text-white">MR</span>
           <span className="font-display text-lg font-extrabold text-[var(--text)]">Meu <span className="text-[var(--gold)]">Rim</span></span>
         </Link>
 
         {doctor && (
-          <div className="mb-4 flex items-center gap-3 rounded-2xl border border-[var(--border)] bg-[var(--bg)] p-3">
+          <div className="mb-2 flex items-center gap-3 rounded-2xl border border-[var(--border)] bg-[var(--bg)] p-2">
             {doctor.photoUrl || doctor.logoUrl ? (
               // eslint-disable-next-line @next/next/no-img-element
               <img src={doctor.photoUrl || doctor.logoUrl} alt="Foto" className="h-10 w-10 shrink-0 rounded-full border border-[var(--border)] object-cover" />
@@ -98,38 +126,58 @@ export function DoctorSidebar() {
           </div>
         )}
 
-        <nav className="flex flex-1 flex-col gap-1 overflow-y-auto">
-          {PRIMARY.map(({ href, label, icon }) => (
-            <Link key={label} href={href} className={itemCls(href)}>
-              <Icon name={icon} className="h-5 w-5" />
-              {label}
-            </Link>
-          ))}
-          <p className="mt-4 px-3 text-[11px] font-bold uppercase tracking-wider text-[var(--text-muted)]">Mais</p>
-          {MORE.filter((item) => item.href !== "/hemodialise" || hdAllowed !== false).map(({ href, label, icon }) => (
-            <Link key={label} href={href} className={itemCls(href)}>
-              <Icon name={icon} className="h-5 w-5" />
-              {label}
-            </Link>
-          ))}
+        <nav className="flex min-h-0 flex-1 flex-col">
+          <div className="shrink-0 space-y-0.5">
+            {PRIMARY.map((item) => (
+              <div key={item.label}>
+                <NavLink {...item} />
+                {item.href === "/medicos/agenda" && AGENDA_EXTRA.map((extra) => (
+                  <Link key={extra.label} href={extra.href} className={`${itemCls(extra.href)} ml-6`}>
+                    <Icon name={extra.icon} className="h-4 w-4 shrink-0" />
+                    <span className="min-w-0 break-words">{extra.label}</span>
+                  </Link>
+                ))}
+              </div>
+            ))}
+            <div className="my-2 h-px bg-[var(--border)]" />
+            {CORE.filter((item) => item.href !== "/hemodialise" || hdAllowed !== false).map((item) => <NavLink key={item.label} {...item} />)}
+          </div>
+          <div className="mt-2 min-h-0 flex-1 overflow-y-auto pb-2">
+            <p className="px-3 text-[11px] font-bold uppercase tracking-wider text-[var(--text-muted)]">Documentos</p>
+            {DOCS.map((item) => <NavLink key={item.label} {...item} />)}
+            <p className="mt-3 px-3 text-[11px] font-bold uppercase tracking-wider text-[var(--text-muted)]">Equipe</p>
+            {EQUIPE.map((item) => <NavLink key={item.label} {...item} />)}
+            <p className="mt-3 px-3 text-[11px] font-bold uppercase tracking-wider text-[var(--text-muted)]">Mais</p>
+            {OTHER.map((item) => <NavLink key={item.label} {...item} />)}
+            <button
+              type="button"
+              className="mt-3 flex w-full items-center justify-between rounded-xl px-3 py-2 text-[11px] font-bold uppercase tracking-wider text-[var(--text-muted)]"
+              onClick={() => setGestaoOpen((v) => !v)}
+              aria-expanded={gestaoOpen}
+            >
+              Gestão
+              <span>{gestaoOpen ? "▾" : "▸"}</span>
+            </button>
+            {gestaoOpen && GESTAO.map((item) => <NavLink key={item.label} {...item} />)}
+          </div>
         </nav>
 
-        <div className="mt-3 border-t border-[var(--border)] pt-3">
+        <div className="shrink-0 border-t border-[var(--border)] pt-3">
           {doctor?.clinicAdmin?.map((c) => (
             <Link key={c.clinicId} href={`/clinica/${c.clinicId}`} className="flex items-center gap-3 rounded-xl px-3 py-2 text-sm font-semibold text-[var(--text-soft)] transition hover:bg-[var(--gold-soft)] hover:text-[var(--gold)]">
-              <Icon name="heart" className="h-5 w-5" /> {c.clinicName}
+              <Icon name="heart" className="h-5 w-5 shrink-0" /> <span className="min-w-0 break-words">{c.clinicName}</span>
             </Link>
           ))}
           {doctor?.platformRoles?.includes("SUPER_ADMIN") && (
             <Link href="/plataforma" className="flex items-center gap-3 rounded-xl px-3 py-2 text-sm font-semibold text-[var(--text-soft)] transition hover:bg-[var(--gold-soft)] hover:text-[var(--gold)]">
-              <Icon name="gear" className="h-5 w-5" /> Administração Meu Rim
+              <Icon name="gear" className="h-5 w-5 shrink-0" /> Administração Meu Rim
             </Link>
           )}
           <a href="https://wa.me/?text=Preciso%20de%20ajuda%20no%20Meu%20Rim" target="_blank" rel="noopener noreferrer" className="flex items-center gap-3 rounded-xl px-3 py-2 text-sm font-semibold text-[var(--text-soft)] transition hover:bg-[var(--gold-soft)] hover:text-[var(--gold)]">
-            <Icon name="heart" className="h-5 w-5" /> Suporte
+            <Icon name="heart" className="h-5 w-5 shrink-0" /> Suporte
           </a>
           <button type="button" onClick={logout} className="flex w-full items-center gap-3 rounded-xl px-3 py-2 text-sm font-semibold text-[var(--text-muted)] transition hover:text-[var(--danger)]">
-            <Icon name="link" className="h-5 w-5" /> Sair
+            <Icon name="link" className="h-5 w-5 shrink-0" /> Sair
           </button>
         </div>
       </div>

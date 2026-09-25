@@ -63,6 +63,7 @@ export async function POST(
     incapable: Boolean(b.incapable),
     responsibleName: b.responsibleName ? String(b.responsibleName) : null,
     medications,
+    protocolId: b.protocolId ? String(b.protocolId) : null,
     status: "rascunho",
   });
 

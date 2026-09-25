@@ -9,6 +9,14 @@ import type { TemplateType } from "@/lib/document-templates";
 import { FriendlyError, toFriendlyMessage } from "@/lib/user-errors";
 import { DOC_PDF_USER_ERROR, fetchPdfBlob, readApiError } from "@/lib/doc-pdf-client";
 import { SignDocumentPanel } from "@/components/SignDocumentFlow";
+import {
+  clearLmeDocDraft,
+  lmeComplementaresHref,
+  readLmeDocDraft,
+  receitaFromLme,
+  relatorioFromLme,
+  writeLmeDocDraft,
+} from "@/lib/complementary-docs";
 
 const TEMPLATE_TYPES = ["receita", "exame", "relatorio"];
 
@@ -32,6 +40,7 @@ function ComporDocumentoInner() {
   const patientParam = decodeURIComponent(params.email);
   const sp = useSearchParams();
   const prefType = sp.get("type");
+  const lmeId = sp.get("lmeId") || "";
   const initialType = prefType && TYPES.some((t) => t.id === prefType) ? prefType : "livre";
 
   const [letterheads, setLetterheads] = useState<Letterhead[]>([]);
@@ -45,6 +54,7 @@ function ComporDocumentoInner() {
   const [savedId, setSavedId] = useState<string | null>(null);
   const [status, setStatus] = useState<string>("");
   const [signedDocId, setSignedDocId] = useState<string | null>(null);
+  const [draftHint, setDraftHint] = useState("");
 
   const load = useCallback(async () => {
     const r = await fetch("/api/doctor/letterheads").then((x) => x.json());
@@ -55,6 +65,37 @@ function ComporDocumentoInner() {
   }, []);
   useEffect(() => { load(); }, [load]);
 
+  useEffect(() => {
+    if (!lmeId) return;
+    const draft = readLmeDocDraft(lmeId, initialType);
+    if (draft?.body) {
+      setTitle(draft.title || title);
+      setContent(draft.body);
+      setDraftHint("Rascunho recuperado. O texto anterior foi preservado.");
+      return;
+    }
+    if (sp.get("body")) return;
+    fetch(`/api/lme/${lmeId}`)
+      .then((r) => r.json())
+      .then((d) => {
+        const lme = d.lme;
+        if (!lme) return;
+        const built = initialType === "relatorio" ? relatorioFromLme(lme) : receitaFromLme(lme);
+        if (initialType === built.type) {
+          setTitle((t) => t || built.title);
+          setContent((c) => c || built.body);
+        }
+      })
+      .catch(() => {});
+  // Só na abertura: rascunho local ou texto montado a partir da LME.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [lmeId, initialType]);
+
+  useEffect(() => {
+    if (!lmeId || !content.trim()) return;
+    writeLmeDocDraft(lmeId, type, { title, body: content });
+  }, [lmeId, type, title, content]);
+
   function payload(preview: boolean) {
     return {
       patientKey: patientParam,
@@ -63,6 +104,8 @@ function ComporDocumentoInner() {
       title,
       content,
       preview,
+      lmeId: lmeId || undefined,
+      replaceId: savedId || undefined,
     };
   }
 
@@ -100,6 +143,7 @@ function ComporDocumentoInner() {
       if (!d.id) throw new FriendlyError(DOC_PDF_USER_ERROR);
       setSavedId(d.id); setStatus("final"); setSignedDocId(null);
       setPreviewUrl(`/api/documents/${d.id}/pdf`);
+      if (lmeId) clearLmeDocDraft(lmeId, type);
       setMsg(d.warning || "Documento gerado e salvo no prontuário.");
     } catch (e) {
       setMsg(toFriendlyMessage(e, DOC_PDF_USER_ERROR));
@@ -127,12 +171,25 @@ function ComporDocumentoInner() {
 
   return (
     <div className="mx-auto max-w-6xl px-5 py-8">
-      <Link href={`/medicos/paciente/${params.email}`} className="text-sm font-semibold text-[var(--gold)]">← Prontuário</Link>
+      <div className="flex flex-wrap items-center gap-3">
+        {lmeId ? (
+          <Link href={lmeComplementaresHref(lmeId)} className="text-sm font-semibold text-[var(--gold)]">← Voltar à LME</Link>
+        ) : (
+          <Link href={`/medicos/paciente/${params.email}`} className="text-sm font-semibold text-[var(--gold)]">← Prontuário</Link>
+        )}
+        {lmeId && (
+          <Link href={`/medicos/paciente/${params.email}`} className="text-sm text-[var(--text-muted)]">Prontuário</Link>
+        )}
+      </div>
       <h1 className="font-display text-3xl font-extrabold text-[var(--text)]">Novo documento</h1>
-      <p className="mt-1 text-[var(--text-muted)]">Escolha o papel timbrado, escreva o conteúdo, pré-visualize e gere o PDF.</p>
+      <p className="mt-1 text-[var(--text-muted)]">
+        {lmeId
+          ? "Preenchido a partir da LME. Revise o texto, pré-visualize e gere o PDF. O rascunho fica guardado se você voltar."
+          : "Escolha o papel timbrado, escreva o conteúdo, pré-visualize e gere o PDF."}
+      </p>
+      {draftHint && <p className="mt-2 text-sm font-semibold text-[var(--gold)]">{draftHint}</p>}
 
       <div className="mt-6 grid gap-5 lg:grid-cols-2">
-        {/* Editor */}
         <div className="panel">
           <div className="grid gap-3 sm:grid-cols-2">
             <label className="block">
@@ -165,10 +222,15 @@ function ComporDocumentoInner() {
               </p>
             </div>
           )}
-          {type === "receita" && (
+          {type === "receita" && !lmeId && (
             <div className="mt-3">
               <PosologyBuilder onAdd={(t) => setContent((c) => (c.trim() ? `${c.trim()}\n\n${t}` : t))} />
             </div>
+          )}
+          {type === "receita" && lmeId && (
+            <p className="mt-3 text-xs text-[var(--text-muted)]">
+              Posologia montada a partir da LME. Complete dose, via, frequência e duração no texto — o montador automático de comprimido/via oral não entra neste fluxo.
+            </p>
           )}
           <label className="mt-3 block">
             <span className="mb-1 block text-xs font-semibold text-[var(--text-muted)]">Conteúdo</span>
@@ -184,8 +246,11 @@ function ComporDocumentoInner() {
               {busy ? "Preparando documento…" : "Pré-visualizar"}
             </button>
             <button type="button" className="btn-gold" onClick={() => void salvar()} disabled={busy || !content.trim()} aria-busy={busy}>
-              {busy ? "Preparando documento…" : "Gerar PDF e salvar"}
+              {busy ? "Preparando documento…" : savedId ? "Gerar PDF novamente" : "Gerar PDF e salvar"}
             </button>
+            {lmeId && (
+              <Link href={lmeComplementaresHref(lmeId)} className="btn-ghost">Voltar à LME</Link>
+            )}
           </div>
 
           {savedId && (
@@ -205,7 +270,7 @@ function ComporDocumentoInner() {
           )}
           {msg && (
             <p
-              className={`mt-3 text-sm font-semibold ${/não foi possível|falha ao|tente novamente/i.test(msg) ? "text-[var(--danger)]" : "text-[var(--gold)]"}`}
+              className={`mt-3 text-sm font-semibold ${/não foi possível|falha ao|tente novamente|tente de novo/i.test(msg) ? "text-[var(--danger)]" : "text-[var(--gold)]"}`}
               role={/não foi possível|falha ao/i.test(msg) ? "alert" : undefined}
             >
               {msg}
@@ -213,7 +278,6 @@ function ComporDocumentoInner() {
           )}
         </div>
 
-        {/* Pré-visualização */}
         <div className="panel">
           <p className="mb-2 text-sm font-semibold text-[var(--text-muted)]">Pré-visualização</p>
           {previewUrl ? (

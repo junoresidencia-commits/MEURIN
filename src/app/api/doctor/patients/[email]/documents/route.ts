@@ -4,8 +4,8 @@ import { getDoctorById } from "@/lib/store";
 import { addDocument, type DocumentType } from "@/lib/patient-store";
 import { resolvePatientAccess } from "@/lib/doctor-access";
 
-const TYPES: DocumentType[] = ["receita", "exame", "relatorio"];
-const DEFAULT_TITLE: Record<DocumentType, string> = {
+const TYPES = ["receita", "exame", "relatorio"] as const satisfies readonly DocumentType[];
+const DEFAULT_TITLE: Record<(typeof TYPES)[number], string> = {
   receita: "Receita médica",
   exame: "Solicitação de exames",
   relatorio: "Relatório médico",
@@ -31,8 +31,8 @@ export async function POST(
   }
 
   const bodyReq = await req.json();
-  const type = String(bodyReq.type) as DocumentType;
-  if (!TYPES.includes(type)) {
+  const type = String(bodyReq.type) as (typeof TYPES)[number];
+  if (!(TYPES as readonly string[]).includes(type)) {
     return NextResponse.json({ error: "Tipo de documento inválido." }, { status: 400 });
   }
   const body = String(bodyReq.body || "").trim();
@@ -49,6 +49,8 @@ export async function POST(
     title: String(bodyReq.title || "").trim() || DEFAULT_TITLE[type],
     body,
     sharedWithPatient: bodyReq.sharedWithPatient !== false,
+    status: bodyReq.status === "draft" ? "draft" : "final",
+    sourceLmeId: bodyReq.sourceLmeId ? String(bodyReq.sourceLmeId) : null,
   });
 
   return NextResponse.json({ document: doc }, { status: 201 });

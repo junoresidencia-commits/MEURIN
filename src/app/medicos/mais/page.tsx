@@ -46,11 +46,17 @@ export default function MedicoMaisPage() {
       title: "Clínica e equipe",
       items: [
         { href: "/medicos/agenda/configurar", label: "Clínicas e horários", desc: "Locais de atendimento e períodos da agenda." },
-        { href: "/medicos/prontuario-inteligente", label: "Revisão de prontuário inteligente", desc: "Escolher o que sugerir e reler evoluções — nada entra no perfil sozinho." },
+        { href: "/medicos/prontuario-inteligente", label: "Revisão de prontuário", desc: "Escolher o que sugerir e reler evoluções — nada entra no perfil sozinho." },
         { href: "/medicos/equipe", label: "Atendentes", desc: "Sua equipe administrativa e permissões." },
         ...clinicAdmin.map((c) => ({ href: `/clinica/${c.clinicId}`, label: `Gestão · ${c.clinicName}`, desc: "Equipe, produção e check-in da clínica — separado do prontuário." })),
         { href: "/medicos/equipe-assistencial", label: "Minha Equipe", desc: "Médicos, nutrição, psicologia e enfermagem." },
         { href: "/medicos/encaminhamentos", label: "Encaminhamentos", desc: "Pacientes compartilhados com você e os da clínica. O cadastro não muda de médico." },
+      ],
+    },
+    {
+      title: "Apoio clínico",
+      items: [
+        { href: "/medicos/calculadoras", label: "Calculadoras & Risco", desc: "CKD-EPI, KFRE, eletrólitos, ajuste renal e avaliações — sem inventar dado faltante." },
       ],
     },
     {

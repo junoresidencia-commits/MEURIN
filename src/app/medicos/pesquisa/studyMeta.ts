@@ -18,6 +18,8 @@ export type StudyLite = {
   journal?: string | null;
   sources?: string[];
   ageReferenceDate?: string | null;
+  createdAt?: string;
+  updatedAt?: string;
 };
 
 export const STUDY_TYPE_LABEL: Record<string, string> = {
@@ -64,3 +66,19 @@ export const CASE_CATEGORY_LABEL: Record<string, string> = {
 };
 
 export const CASE_CATEGORIES = Object.keys(CASE_CATEGORY_LABEL);
+
+export function studyNextAction(status: string): { hrefSuffix?: string; label: string } {
+  if (status === "rascunho") return { label: "Continuar rascunho" };
+  if (status === "coleta") return { label: "Continuar coleta" };
+  if (status === "analise") return { label: "Abrir análise" };
+  if (status === "escrita") return { label: "Continuar escrita" };
+  if (status === "submetido") return { label: "Acompanhar submissão" };
+  if (status === "concluido") return { label: "Ver estudo" };
+  return { label: "Abrir estudo" };
+}
+
+export function studyBucket(status: string): "rascunho" | "andamento" | "concluido" {
+  if (status === "rascunho") return "rascunho";
+  if (status === "concluido") return "concluido";
+  return "andamento";
+}
