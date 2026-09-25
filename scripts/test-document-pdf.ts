@@ -108,6 +108,12 @@ async function main() {
   assert.match(rxText, /N04\.0/);
   assert.doesNotMatch(rxText, /N04\.0\?\?/);
   assert.match(rxText, /Ciclosporina/);
+  assert.doesNotMatch(rx.body, /1 comprimido — via oral — 1x ao dia/);
+  const rxInj = receitaFromLme({
+    medications: [{ name: "Alfaepoetina 4.000 UI injetável", presentation: "frasco-ampola" }],
+  });
+  assert.doesNotMatch(rxInj.body, /via oral/);
+  assert.doesNotMatch(rxInj.body, /1 comprimido/);
   assert.match(relText, /continuidade/);
   assert.match(relText, /manuten/);
 
