@@ -51,22 +51,19 @@ export function VidaasSignBox({
         </>
       )}
       <div className="mt-3 flex flex-wrap gap-2">
+        <a className="btn-gold text-sm" href={SIGNATURE_LINKS.govAssinador} target="_blank" rel="noopener noreferrer">
+          Assinador gov.br (envie o PDF aqui)
+        </a>
         {pdfHref && (
-          <a className="btn-gold text-sm" href={pdfHref} target="_blank" rel="noopener noreferrer">
+          <a className="btn-ghost text-sm" href={pdfHref} target="_blank" rel="noopener noreferrer">
             {pdfLabel}
           </a>
         )}
-        <a className="btn-ghost text-sm" href={SIGNATURE_LINKS.vidaasInfo} target="_blank" rel="noopener noreferrer">
-          Abrir VIDaaS / Connect
-        </a>
         <a className="btn-ghost text-sm" href={SIGNATURE_LINKS.vidaasIos} target="_blank" rel="noopener noreferrer">
           App iPhone
         </a>
         <a className="btn-ghost text-sm" href={SIGNATURE_LINKS.vidaasAndroid} target="_blank" rel="noopener noreferrer">
           App Android
-        </a>
-        <a className="btn-ghost text-sm" href={SIGNATURE_LINKS.govAssinador} target="_blank" rel="noopener noreferrer">
-          Assinador gov.br
         </a>
         <a className="btn-ghost text-sm" href={SIGNATURE_LINKS.validarIti} target="_blank" rel="noopener noreferrer">
           Validar assinatura
@@ -90,7 +87,8 @@ export function VidaasSignBox({
             Adobe e use Assinar digitalmente.
           </li>
           <li>
-            <b>Pelo navegador:</b> baixe o PDF e envie no Assinador gov.br; o VIDaaS autentica no celular.
+            <b>Pelo navegador (recomendado):</b> baixe o PDF e <b>envie no Assinador gov.br</b> — é lá que vai o arquivo.
+            O gov.br mostra um QR; leia com o app VIDaaS. A página da Valid é só para emitir certificado, não para assinar.
           </li>
         </ol>
       )}
@@ -106,8 +104,11 @@ export function VidaasSignBox({
       {!compact && (
         <p className="mt-3 rounded-xl border border-[var(--border)] bg-[var(--bg)] px-3 py-2 text-xs text-[var(--text-muted)]">
           Assinar <b>dentro</b> do Meu Rim (sem baixar o arquivo) exige contrato de API com a Valid. Enquanto isso
-          não existir, o caminho certo é: gerar no Meu Rim → assinar no VIDaaS/gov.br → o PDF assinado vale e pode
-          ser anexado de volta ao prontuário.
+          não existir, o caminho certo é: gerar no Meu Rim → enviar o PDF no Assinador gov.br → ler o QR com o VIDaaS →
+          anexar o PDF assinado de volta.{" "}
+          <a className="font-semibold text-[var(--gold)]" href={SIGNATURE_LINKS.vidaasInfo} target="_blank" rel="noopener noreferrer">
+            Ainda não tenho certificado (Valid)
+          </a>
         </p>
       )}
     </div>

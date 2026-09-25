@@ -8,8 +8,11 @@ import {
   CEAF_PACOTE,
   PROTOCOL_OFFICIAL_DOCS,
   getProtocolOfficialDocs,
+  inferProtocolFromMedNames,
   officialDocPages,
   officialDocSlot,
+  terOverlay,
+  formOverlay,
   type OfficialDocKind,
 } from "../src/lib/ceaf-documents";
 
@@ -70,6 +73,15 @@ async function main() {
   assert.equal(adult.residence.status, "available");
   assert.equal(officialDocPages("sindrome_nefrotica_adultos", "ter"), undefined);
   assert.ok(officialDocPages("sindrome_nefrotica_adultos", "residencia"));
+
+  assert.ok(terOverlay("dmo_drc").some((f) => f.field === "introName"));
+  assert.ok(terOverlay("dmo_drc").some((f) => f.field === "cpf"));
+  assert.ok(formOverlay("dmo_drc").some((f) => f.field === "age"));
+  assert.ok(terOverlay("anemia_drc_alfaepoetina").some((f) => f.field === "name"));
+  assert.equal(inferProtocolFromMedNames(["Sevelâmer 800 mg"]), "dmo_drc");
+  assert.equal(inferProtocolFromMedNames(["Alfaepoetina 4.000 UI"]), "anemia_drc_alfaepoetina");
+  assert.equal(inferProtocolFromMedNames(["Sacarato de hidróxido férrico 100 mg"]), "anemia_drc_ferro");
+  assert.equal(inferProtocolFromMedNames(["Micofenolato de mofetila"]), "les");
 
   const unknown = getProtocolOfficialDocs("protocolo_inventado");
   assert.equal(unknown.ter.status, "unavailable");

@@ -1,11 +1,13 @@
 "use client";
 
 import { useEffect, useId, useRef, useState, type RefObject } from "react";
+import QRCode from "qrcode";
 import {
   listDigitalSignatureProviders,
   type DigitalSignatureProvider,
   type DigitalSignatureProviderId,
 } from "@/lib/digital-signature/providers";
+import { SIGNATURE_LINKS } from "@/lib/signature-links";
 import {
   DIGITAL_SIGNED_LABEL,
   DIGITAL_UNSIGNED_LABEL,
@@ -17,12 +19,19 @@ import {
 } from "@/lib/digital-signature/share";
 import { toFriendlyMessage } from "@/lib/user-errors";
 
-type Step = "choose" | DigitalSignatureProviderId | "done";
+type Step = "choose" | DigitalSignatureProviderId | "manual" | "done";
 
 type SignedInfo = {
   id: string;
   pdfUrl: string;
   signedAt?: string | null;
+  kind?: "digital" | "manual";
+};
+
+export type SignContext = {
+  patientName?: string | null;
+  patientCpf?: string | null;
+  doctorCrm?: string | null;
 };
 
 type Props = {
@@ -36,7 +45,9 @@ type Props = {
   patientPhone?: string | null;
   compact?: boolean;
   alreadySigned?: boolean;
+  alreadyManual?: boolean;
   signedDocumentId?: string | null;
+  signContext?: SignContext | null;
   onSigned?: (info: SignedInfo) => void;
 };
 
@@ -54,9 +65,22 @@ function pdfName(type?: string, title?: string) {
 export function SignDocumentPanel(props: Props) {
   const [open, setOpen] = useState(false);
   const [start, setStart] = useState<Step>("choose");
-  const signed = props.alreadySigned || Boolean(props.signedDocumentId);
+  const signed = props.alreadySigned || Boolean(props.signedDocumentId && !props.alreadyManual);
+  const manual = Boolean(props.alreadyManual) && !props.alreadySigned;
+
+  function startSession(action: "manual_start" | "digital_start") {
+    if (!props.documentId) return;
+    void fetch("/api/document-workflow/session", {
+      method: "POST",
+      credentials: "include",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ documentId: props.documentId, action }),
+    });
+  }
 
   function openAs(step: Step) {
+    if (step === "vidaas") startSession("digital_start");
+    if (step === "manual") startSession("manual_start");
     setStart(step);
     setOpen(true);
   }
@@ -67,29 +91,28 @@ export function SignDocumentPanel(props: Props) {
         <p className="text-[11px] font-extrabold uppercase tracking-wider text-[var(--gold)]">Assinar documento</p>
         <div className="mt-1 flex flex-wrap items-center justify-between gap-2">
           <p className="text-sm font-semibold text-[var(--text)]">
-            {signed ? `✅ ${DIGITAL_SIGNED_LABEL}` : DIGITAL_UNSIGNED_LABEL}
+            {signed ? `🟢 ${DIGITAL_SIGNED_LABEL}` : manual ? "🔵 Assinatura manual registrada" : DIGITAL_UNSIGNED_LABEL}
           </p>
         </div>
-        {!signed && (
+        {!signed && !manual && (
           <>
             <p className="mt-1 text-xs text-[var(--text-muted)]">
-              A assinatura acontece no VIDaaS ou nos serviços oficiais do CFM — o Meu Rim não guarda senha, PIN nem certificado.
+              A assinatura digital usa o certificado ICP-Brasil no VIDaaS. O Meu Rim não guarda senha, PIN nem certificado.
             </p>
-            <div className="mt-3 grid grid-cols-1 gap-2 sm:grid-cols-2">
-              {PROVIDERS.map((p) => (
-                <button
-                  key={p.id}
-                  type="button"
-                  className={p.primary ? "btn-gold text-sm" : "btn-ghost text-sm"}
-                  onClick={() => openAs(p.id)}
-                >
-                  {p.label}
-                </button>
-              ))}
+            <div className="mt-3 grid grid-cols-1 gap-2">
+              <button type="button" className="btn-gold text-sm" onClick={() => openAs("vidaas")}>
+                Assinar digitalmente
+              </button>
+              <button type="button" className="btn-ghost text-sm" onClick={() => openAs("manual")}>
+                Baixar / imprimir para assinar manualmente
+              </button>
+              <button type="button" className="btn-ghost text-sm" onClick={() => openAs("cfm")}>
+                Abrir CFM
+              </button>
             </div>
             <div className="mt-2 flex flex-wrap gap-2">
               <button type="button" className="btn-ghost text-sm" onClick={() => openAs("choose")}>
-                Assinar digitalmente
+                Outras opções
               </button>
               <button
                 type="button"
@@ -104,12 +127,12 @@ export function SignDocumentPanel(props: Props) {
                   });
                 }}
               >
-                Baixar PDF sem assinatura
+                Baixar PDF sem marcar como assinado
               </button>
             </div>
           </>
         )}
-        {signed && (
+        {(signed || manual) && (
           <PostSignActions
             pdfHref={props.signedDocumentId ? `/api/documents/${props.signedDocumentId}/pdf` : props.pdfHref}
             pdfBlob={props.pdfBlob}
@@ -118,6 +141,7 @@ export function SignDocumentPanel(props: Props) {
             documentId={props.signedDocumentId || props.documentId}
             patientPhone={props.patientPhone}
             saved
+            kind={signed ? "digital" : "manual"}
           />
         )}
       </div>
@@ -142,6 +166,7 @@ function SignDocumentModal(
   const [signed, setSigned] = useState<SignedInfo | null>(
     props.signedDocumentId ? { id: props.signedDocumentId, pdfUrl: `/api/documents/${props.signedDocumentId}/pdf` } : null
   );
+  const [signedKind, setSignedKind] = useState<"digital" | "manual">(props.alreadyManual ? "manual" : "digital");
   const fileRef = useRef<HTMLInputElement>(null);
   const canAttach = Boolean(props.documentId || props.patientKey);
 
@@ -181,12 +206,9 @@ function SignDocumentModal(
   async function choose(id: DigitalSignatureProviderId) {
     setStep(id);
     setMsg("");
-    if (id === "vidaas") {
-      await handoff(isLikelyMobile() ? "share" : "download");
-    }
   }
 
-  async function attach(file: File, provider: DigitalSignatureProviderId) {
+  async function attach(file: File, provider: DigitalSignatureProviderId | "manual") {
     if (!canAttach) {
       setMsg("Este PDF avulso não está ligado a um paciente. Abra o compositor do prontuário para guardar o assinado.");
       return;
@@ -196,7 +218,8 @@ function SignDocumentModal(
     try {
       const form = new FormData();
       form.append("file", file);
-      form.append("provider", provider);
+      form.append("provider", provider === "manual" ? "vidaas" : provider);
+      if (provider === "manual") form.append("method", "manual");
       if (props.patientKey) form.append("patientKey", props.patientKey);
       if (props.documentType) form.append("type", props.documentType);
       if (props.title) form.append("title", props.title);
@@ -215,12 +238,19 @@ function SignDocumentModal(
         id: data.id,
         pdfUrl: data.pdfUrl || `/api/documents/${data.id}/pdf`,
         signedAt: data.signedAt,
+        kind: provider === "manual" ? "manual" : "digital",
       };
+      setSignedKind(info.kind || "digital");
       setSigned(info);
       setStep("done");
       props.onSigned?.(info);
     } catch (e) {
-      setMsg(toFriendlyMessage(e, "Não foi possível guardar o PDF assinado."));
+      const base = toFriendlyMessage(e, "Não foi possível guardar o PDF assinado.");
+      setMsg(
+        provider === "manual"
+          ? `${base} O documento original continua salvo. Tente anexar de novo ou baixe o PDF.`
+          : `Assinatura digital não foi concluída. Seu documento continua salvo. Você pode tentar novamente, assinar manualmente ou baixar o PDF. ${base}`,
+      );
     } finally {
       setBusy(false);
       if (fileRef.current) fileRef.current.value = "";
@@ -242,7 +272,15 @@ function SignDocumentModal(
           <div>
             <p className="text-[11px] font-extrabold uppercase tracking-wider text-[var(--gold)]">Assinar documento</p>
             <h2 id={titleId} className="font-display text-xl font-extrabold text-[var(--text)]">
-              {step === "done" ? DIGITAL_SIGNED_LABEL : step === "choose" ? "Como deseja assinar?" : provider?.label}
+              {step === "done"
+                ? signedKind === "manual"
+                  ? "Assinatura manual registrada"
+                  : DIGITAL_SIGNED_LABEL
+                : step === "manual"
+                  ? "Assinatura manual"
+                  : step === "choose"
+                    ? "Como deseja assinar?"
+                    : provider?.label}
             </h2>
           </div>
           <button type="button" className="btn-ghost min-h-10 px-3 text-sm" onClick={props.onClose} aria-label="Fechar">
@@ -272,9 +310,17 @@ function SignDocumentModal(
               type="button"
               className="btn-ghost mt-2 w-full text-sm"
               disabled={busy}
+              onClick={() => setStep("manual")}
+            >
+              Baixar / imprimir para assinar manualmente
+            </button>
+            <button
+              type="button"
+              className="btn-ghost mt-2 w-full text-sm"
+              disabled={busy}
               onClick={() => void handoff("download")}
             >
-              Baixar PDF sem assinatura
+              Baixar PDF sem marcar como assinado
             </button>
           </div>
         )}
@@ -285,8 +331,21 @@ function SignDocumentModal(
             busy={busy}
             canAttach={canAttach}
             fileRef={fileRef}
+            signContext={props.signContext}
             onHandoff={handoff}
             onAttach={(file) => void attach(file, provider.id)}
+            onBack={() => setStep("choose")}
+          />
+        )}
+
+        {step === "manual" && (
+          <ManualStep
+            busy={busy}
+            canAttach={canAttach}
+            fileRef={fileRef}
+            documentId={props.documentId}
+            onHandoff={handoff}
+            onAttach={(file) => void attach(file, "manual")}
             onBack={() => setStep("choose")}
           />
         )}
@@ -294,7 +353,9 @@ function SignDocumentModal(
         {step === "done" && signed && (
           <div>
             <p className="text-sm text-[var(--text-soft)]">
-              PDF assinado guardado no prontuário. Original permanece. Compartilhe com o paciente quando quiser.
+              {signedKind === "manual"
+                ? "Via digitalizada guardada. O PDF original gerado pelo Meu Rim permanece. Isto não é assinatura digital ICP-Brasil."
+                : "PDF assinado digitalmente guardado no prontuário. Original permanece. Compartilhe com o paciente quando quiser."}
             </p>
             <PostSignActions
               pdfHref={signed.pdfUrl}
@@ -303,6 +364,7 @@ function SignDocumentModal(
               documentId={signed.id}
               patientPhone={props.patientPhone}
               saved
+              kind={signedKind}
             />
           </div>
         )}
@@ -322,6 +384,7 @@ function ProviderStep({
   busy,
   canAttach,
   fileRef,
+  signContext,
   onHandoff,
   onAttach,
   onBack,
@@ -330,44 +393,111 @@ function ProviderStep({
   busy: boolean;
   canAttach: boolean;
   fileRef: RefObject<HTMLInputElement | null>;
+  signContext?: SignContext | null;
   onHandoff: (prefer: "share" | "download" | "open") => void;
   onAttach: (file: File) => void;
   onBack: () => void;
 }) {
   const mobile = isLikelyMobile();
+  const gov = provider.officialLinks.find((l) => l.id === "gov-assinador");
+  const cfm = provider.officialLinks.find((l) => l.id === "cfm-prescricao");
+  const extra = provider.officialLinks.filter((l) => l.id !== "gov-assinador" && l.id !== "cfm-prescricao" && l.id !== "vidaas-info");
+  const validShop = provider.officialLinks.find((l) => l.id === "vidaas-info");
+  const paste = [
+    signContext?.patientName ? `Paciente: ${signContext.patientName}` : "",
+    signContext?.patientCpf ? `CPF: ${signContext.patientCpf}` : "",
+    signContext?.doctorCrm ? `CRM: ${signContext.doctorCrm}` : "",
+  ]
+    .filter(Boolean)
+    .join("\n");
+
   return (
     <div>
       <p className="text-sm text-[var(--text-soft)]">{provider.description}</p>
-      <p className="mt-2 text-xs text-[var(--text-muted)]">{mobile ? provider.mobileHint : provider.desktopHint}</p>
-      <div className="mt-3 flex flex-wrap gap-2">
-        <button
-          type="button"
-          className="btn-gold text-sm"
-          disabled={busy}
-          onClick={() => onHandoff(mobile ? "share" : "download")}
-        >
-          {mobile ? "Abrir / compartilhar PDF" : "Baixar / abrir PDF"}
-        </button>
-        {!mobile && (
-          <button type="button" className="btn-ghost text-sm" disabled={busy} onClick={() => onHandoff("open")}>
-            Abrir PDF
-          </button>
+      <ol className="mt-3 list-decimal space-y-3 pl-5 text-sm text-[var(--text-soft)]">
+        <li>
+          <b>Pegue este PDF</b>
+          <div className="mt-2 flex flex-wrap gap-2">
+            <button
+              type="button"
+              className="btn-gold text-sm"
+              disabled={busy}
+              onClick={() => onHandoff(mobile ? "share" : "download")}
+            >
+              {mobile ? "Abrir / compartilhar PDF" : "Baixar este PDF"}
+            </button>
+            {!mobile && (
+              <button type="button" className="btn-ghost text-sm" disabled={busy} onClick={() => onHandoff("open")}>
+                Abrir PDF
+              </button>
+            )}
+          </div>
+        </li>
+        {provider.id === "vidaas" && (
+          <li>
+            <b>Envie o PDF no Assinador gov.br</b>
+            <p className="mt-1 text-xs text-[var(--text-muted)]">
+              É <em>aqui</em> que vai o arquivo — não na loja da Valid. Leia o QR no celular ou abra no computador.
+            </p>
+            <div className="mt-2 flex flex-col items-start gap-3 sm:flex-row sm:items-center">
+              <MiniQr value={SIGNATURE_LINKS.govAssinador} caption="Leia: Assinador gov.br" />
+              {gov && (
+                <a className="btn-gold text-sm" href={gov.href} target="_blank" rel="noopener noreferrer">
+                  Abrir Assinador gov.br
+                </a>
+              )}
+            </div>
+            <p className="mt-2 text-xs text-[var(--text-muted)]">
+              Quando o gov.br pedir o certificado, leia o QR com o <b>app VIDaaS</b>.
+            </p>
+          </li>
         )}
-      </div>
+        {provider.id === "cfm" && (
+          <li>
+            <b>Mande para o CFM (Prescrição eletrônica)</b>
+            <p className="mt-1 text-xs text-[var(--text-muted)]">
+              Portal oficial do Conselho. Este PDF do Meu Rim não entra sozinho — abra o CFM, use os dados do paciente, ou
+              assine o arquivo daqui no Assinador gov.br com o certificado da AR-CFM.
+            </p>
+            <div className="mt-2 flex flex-col items-start gap-3 sm:flex-row sm:items-center">
+              <MiniQr value={SIGNATURE_LINKS.cfmPrescricao} caption="Leia: Prescrição CFM" />
+              {cfm && (
+                <a className="btn-gold text-sm" href={cfm.href} target="_blank" rel="noopener noreferrer">
+                  Abrir Prescrição eletrônica CFM
+                </a>
+              )}
+            </div>
+            {paste && (
+              <CopyPatientBox text={paste} />
+            )}
+            <a className="btn-ghost mt-2 inline-block text-sm" href={SIGNATURE_LINKS.govAssinador} target="_blank" rel="noopener noreferrer">
+              Assinar este PDF no Assinador gov.br
+            </a>
+          </li>
+        )}
+      </ol>
       <div className="mt-3 flex flex-wrap gap-2">
-        {provider.officialLinks.map((link) => (
+        {extra.map((link) => (
           <a key={link.id} className="btn-ghost text-sm" href={link.href} target="_blank" rel="noopener noreferrer">
             {link.label}
           </a>
         ))}
       </div>
+      {validShop && (
+        <p className="mt-2 text-[11px] text-[var(--text-muted)]">
+          Ainda não tem certificado VIDaaS?{" "}
+          <a className="font-semibold text-[var(--gold)]" href={validShop.href} target="_blank" rel="noopener noreferrer">
+            Página da Valid (só para emitir — não recebe o PDF)
+          </a>
+        </p>
+      )}
       <p className="mt-3 rounded-xl border border-[var(--border)] bg-[var(--bg)] px-3 py-2 text-xs text-[var(--text-muted)]">
         {provider.honesty}
       </p>
-      <div className="mt-4 rounded-2xl border border-[var(--border)] p-3">
-        <p className="text-sm font-extrabold text-[var(--text)]">Já assinei — anexar PDF</p>
+      <div className="mt-4 rounded-2xl border-2 border-[var(--gold)] bg-[var(--gold-soft)] p-3">
+        <p className="text-sm font-extrabold text-[var(--text)]">É aqui que você devolve o PDF assinado</p>
         <p className="mt-1 text-xs text-[var(--text-muted)]">
-          Volte ao Meu Rim e envie o arquivo assinado. Guardamos original + assinado, data, médico e CRM.
+          Depois de assinar no gov.br, VIDaaS ou CFM, volte e anexe o arquivo. Guardamos original + assinado, data, médico e CRM.
         </p>
         <input
           ref={fileRef}
@@ -393,6 +523,133 @@ function ProviderStep({
   );
 }
 
+function ManualStep({
+  busy,
+  canAttach,
+  fileRef,
+  documentId,
+  onHandoff,
+  onAttach,
+  onBack,
+}: {
+  busy: boolean;
+  canAttach: boolean;
+  fileRef: RefObject<HTMLInputElement | null>;
+  documentId?: string | null;
+  onHandoff: (prefer: "share" | "download" | "open") => void;
+  onAttach: (file: File) => void;
+  onBack: () => void;
+}) {
+  return (
+    <div>
+      <p className="text-sm text-[var(--text-soft)]">
+        Baixar ou imprimir <b>não</b> marca o documento como assinado. Assine no papel e anexe a via digitalizada.
+      </p>
+      <ol className="mt-3 list-decimal space-y-2 pl-5 text-sm text-[var(--text-soft)]">
+        <li>Gere/baixe o PDF final (a versão fica congelada para auditoria).</li>
+        <li>Assine à mão — médico, e paciente/responsável quando o documento exigir.</li>
+        <li>Fotografe, digitalize ou anexe o PDF assinado abaixo.</li>
+      </ol>
+      <div className="mt-3 flex flex-wrap gap-2">
+        <button
+          type="button"
+          className="btn-gold text-sm"
+          disabled={busy}
+          onClick={() => {
+            if (documentId) {
+              void fetch("/api/document-workflow/session", {
+                method: "POST",
+                credentials: "include",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ documentId, action: "manual_start" }),
+              });
+            }
+            onHandoff("download");
+          }}
+        >
+          Baixar / imprimir PDF
+        </button>
+      </div>
+      <div className="mt-4 rounded-2xl border-2 border-[var(--gold)] bg-[var(--gold-soft)] p-3">
+        <p className="text-sm font-extrabold text-[var(--text)]">Anexar documento assinado</p>
+        <p className="mt-1 text-xs text-[var(--text-muted)]">
+          No celular: fotografar ou escolher arquivo. No computador: PDF digitalizado. O original gerado pelo Meu Rim permanece.
+        </p>
+        <input
+          ref={fileRef}
+          type="file"
+          accept="application/pdf,.pdf,image/jpeg,image/png,image/heic,image/webp"
+          capture="environment"
+          className="mt-3 block w-full text-sm"
+          disabled={busy || !canAttach}
+          onChange={(e) => {
+            const file = e.target.files?.[0];
+            if (file) onAttach(file);
+          }}
+        />
+        {!canAttach && (
+          <p className="mt-2 text-xs text-[var(--text-muted)]">Para salvar no prontuário, gere o documento a partir do paciente.</p>
+        )}
+      </div>
+      <p className="mt-3 text-xs text-[var(--text-muted)]">
+        Este fluxo registra <b>assinatura manual</b> — nunca o selo de assinatura digital ICP-Brasil.
+      </p>
+      <button type="button" className="btn-ghost mt-3 text-sm" onClick={onBack} disabled={busy}>
+        ← Outra forma de assinar
+      </button>
+    </div>
+  );
+}
+
+function MiniQr({ value, caption }: { value: string; caption: string }) {
+  const [src, setSrc] = useState("");
+  useEffect(() => {
+    let alive = true;
+    QRCode.toDataURL(value, { width: 132, margin: 1, errorCorrectionLevel: "M" })
+      .then((url) => {
+        if (alive) setSrc(url);
+      })
+      .catch(() => {
+        if (alive) setSrc("");
+      });
+    return () => {
+      alive = false;
+    };
+  }, [value]);
+  return (
+    <div className="flex w-[148px] flex-col items-center gap-1 rounded-xl border border-[var(--border)] bg-white p-2">
+      {src ? (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img src={src} alt={caption} width={132} height={132} className="rounded-md" />
+      ) : (
+        <div className="grid h-[132px] w-[132px] place-items-center text-[11px] text-[var(--text-muted)]">QR…</div>
+      )}
+      <p className="text-center text-[10px] font-semibold text-[var(--text-muted)]">{caption}</p>
+    </div>
+  );
+}
+
+function CopyPatientBox({ text }: { text: string }) {
+  const [msg, setMsg] = useState("");
+  return (
+    <div className="mt-2 w-full rounded-xl border border-[var(--border)] bg-white px-3 py-2">
+      <p className="text-[11px] font-bold uppercase tracking-wider text-[var(--text-muted)]">Dados para colar no CFM</p>
+      <pre className="mt-1 whitespace-pre-wrap text-xs text-[var(--text)]">{text}</pre>
+      <button
+        type="button"
+        className="btn-ghost mt-2 text-sm"
+        onClick={() => {
+          void navigator.clipboard?.writeText(text);
+          setMsg("Copiado");
+          window.setTimeout(() => setMsg(""), 1500);
+        }}
+      >
+        {msg || "Copiar dados"}
+      </button>
+    </div>
+  );
+}
+
 function PostSignActions({
   pdfHref,
   pdfBlob,
@@ -401,6 +658,7 @@ function PostSignActions({
   documentId,
   patientPhone,
   saved,
+  kind = "digital",
 }: {
   pdfHref?: string | null;
   pdfBlob?: Blob | null;
@@ -409,6 +667,7 @@ function PostSignActions({
   documentId?: string | null;
   patientPhone?: string | null;
   saved?: boolean;
+  kind?: "digital" | "manual";
 }) {
   const [msg, setMsg] = useState("");
   const [sent, setSent] = useState(false);
@@ -444,7 +703,12 @@ function PostSignActions({
         </button>
         <a
           className="btn-ghost text-sm"
-          href={whatsappUrl(`${title} — documento assinado digitalmente no Meu Rim.`, patientPhone)}
+          href={whatsappUrl(
+            kind === "manual"
+              ? `${title} — documento com assinatura manual registrada no Meu Rim.`
+              : `${title} — documento assinado digitalmente no Meu Rim.`,
+            patientPhone,
+          )}
           target="_blank"
           rel="noopener noreferrer"
         >
@@ -459,7 +723,7 @@ function PostSignActions({
               href,
               filename,
               title,
-              text: `${title} — assinado digitalmente.`,
+              text: kind === "manual" ? `${title} — assinatura manual registrada.` : `${title} — assinado digitalmente.`,
               prefer: "share",
             })
           }

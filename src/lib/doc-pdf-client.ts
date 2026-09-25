@@ -1,7 +1,7 @@
 /** Cliente: só inicia download/preview se a resposta for PDF de verdade. */
 
 export const DOC_PDF_USER_ERROR =
-  "Não foi possível gerar o documento. O texto continua na tela. Tente de novo.";
+  "Não foi possível gerar o documento. O texto continua na tela. Tente de novo ou escolha “Sem papel timbrado”.";
 
 export function isPdfContentType(value: string | null) {
   return (value || "").toLowerCase().includes("application/pdf");

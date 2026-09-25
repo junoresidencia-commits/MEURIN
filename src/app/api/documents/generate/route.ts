@@ -7,7 +7,7 @@ import { getPatient } from "@/lib/patients-store";
 import { addDocument, findLmeLinkedDocument, getDocumentById, updateDocument } from "@/lib/patient-store";
 import { getLetterhead, type LetterheadArea } from "@/lib/letterheads-store";
 import { LETTERHEADS_BUCKET, DOCPDF_BUCKET, readFile, saveFile } from "@/lib/doc-storage";
-import { buildDocumentPdfDetailed, fillFields, type DocBackground } from "@/lib/document-engine";
+import { buildDocumentPdfDetailed, fillFields, LETTERHEAD_EMBED_MAX_BYTES, type DocBackground } from "@/lib/document-engine";
 import { writeAudit } from "@/lib/patient-shares-store";
 import { jsonUtf8 } from "@/lib/json-utf8";
 import { todayBr } from "@/lib/pdf-winansi";
@@ -88,6 +88,7 @@ export async function POST(req: Request) {
       }
     }
 
+    // Papel timbrado (opcional). Qualquer falha (arquivo ausente, pesado, storage) sai em papel branco.
     let background: DocBackground | null = null;
     let area: LetterheadArea = defaultAreaNoLetterhead();
     let usedLetterheadId: string | null = null;
@@ -103,6 +104,9 @@ export async function POST(req: Request) {
           if (!file) {
             letterheadWarning = true;
             console.warn("[documents/generate]", { type, preview, letterheadId, status: 200, error: "letterhead_missing_fallback" });
+          } else if (file.buffer.length > LETTERHEAD_EMBED_MAX_BYTES) {
+            letterheadWarning = true;
+            console.warn("[documents/generate]", { type, preview, letterheadId, status: 200, error: "letterhead_too_large_fallback", bytes: file.buffer.length });
           } else {
             background = { kind: lh.kind, bytes: file.buffer, mime: lh.mime || file.mime };
             area = lh.area;
@@ -112,7 +116,11 @@ export async function POST(req: Request) {
       } catch (err) {
         letterheadWarning = true;
         console.warn("[documents/generate]", {
-          type, preview, letterheadId, status: 200, error: "letterhead_load_fallback",
+          type,
+          preview,
+          letterheadId,
+          status: 200,
+          error: "letterhead_load_fallback",
           detail: err instanceof Error ? err.message.slice(0, 180) : "unknown",
         });
       }
@@ -157,7 +165,11 @@ export async function POST(req: Request) {
         usedLetterheadId = null;
       }
     } catch (err) {
-      return fail(500, "Não foi possível montar o PDF. O texto da receita/relatório continua na tela — tente de novo.", err instanceof Error ? err.message : "pdf");
+      return fail(
+        500,
+        "Não foi possível montar o PDF. O texto da receita/relatório continua na tela — tente de novo ou gere sem papel timbrado.",
+        err instanceof Error ? err.message : "pdf",
+      );
     }
 
     if (preview) {
@@ -251,7 +263,11 @@ export async function POST(req: Request) {
   } catch (err) {
     const name = err instanceof Error ? err.name : "Error";
     const message = err instanceof Error ? err.message : "unknown";
-    return fail(500, "Não foi possível gerar o documento. O texto continua salvo na tela. Tente de novo.", `${name}: ${message}`);
+    return fail(
+      500,
+      "Não foi possível gerar o documento. O texto continua salvo na tela. Tente de novo ou escolha “Sem papel timbrado”.",
+      `${name}: ${message}`,
+    );
   }
 }
 
