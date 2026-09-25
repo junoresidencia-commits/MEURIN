@@ -126,8 +126,17 @@ export function DoctorSidebar() {
         )}
 
         <nav className="flex min-h-0 flex-1 flex-col gap-0.5 overflow-y-auto pb-2">
-          {PRIMARY.map((item) => <NavLink key={item.label} {...item} />)}
-          {AGENDA_EXTRA.map((item) => <NavLink key={item.label} {...item} />)}
+          {PRIMARY.map((item) => (
+            <div key={item.label}>
+              <NavLink {...item} />
+              {item.href === "/medicos/agenda" && AGENDA_EXTRA.map((extra) => (
+                <Link key={extra.label} href={extra.href} className={`${itemCls(extra.href)} ml-6`}>
+                  <Icon name={extra.icon} className="h-4 w-4 shrink-0" />
+                  <span className="min-w-0 break-words">{extra.label}</span>
+                </Link>
+              ))}
+            </div>
+          ))}
           <div className="my-2 h-px bg-[var(--border)]" />
           {CORE.filter((item) => item.href !== "/hemodialise" || hdAllowed !== false).map((item) => <NavLink key={item.label} {...item} />)}
           <p className="mt-3 px-3 text-[11px] font-bold uppercase tracking-wider text-[var(--text-muted)]">Documentos</p>
