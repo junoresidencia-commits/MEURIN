@@ -89,6 +89,8 @@ export async function GET(
       creatinina: latest["creatinina"] || null,
       rac: latest["rac"] || null,
       proteinuria_24h: latest["proteinuria_24h"] || null,
+      albuminuria_24h: latest["albuminuria_24h"] || null,
+      microalbuminuria: latest["microalbuminuria"] || null,
       potassio: latest["potassio"] || null,
       hemoglobina: latest["hemoglobina"] || null,
     },
