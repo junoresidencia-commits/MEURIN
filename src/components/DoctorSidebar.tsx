@@ -39,6 +39,7 @@ const AGENDA_EXTRA: Item[] = [
 const CORE: Item[] = [
   { href: "/hemodialise", label: "Hemodiálise", icon: "heart" },
   { href: "/medicos/pesquisa", label: "Estudos e Pesquisa", icon: "chart" },
+  { href: "/medicos/calculadoras", label: "Calculadoras & Risco", icon: "chart" },
 ];
 const DOCS: Item[] = [
   { href: "/medicos/lme", label: "Documentos / LME", icon: "file" },

@@ -54,6 +54,12 @@ export default function MedicoMaisPage() {
       ],
     },
     {
+      title: "Apoio clínico",
+      items: [
+        { href: "/medicos/calculadoras", label: "Calculadoras & Risco", desc: "CKD-EPI, KFRE, eletrólitos, ajuste renal e avaliações — sem inventar dado faltante." },
+      ],
+    },
+    {
       title: "Documentos e pesquisa",
       items: [
         { href: "/medicos/documentos", label: "Documento avulso", desc: "Receita, pedido ou relatório rápido sem paciente." },

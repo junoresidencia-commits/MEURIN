@@ -31,6 +31,7 @@ import { resolvePatientAge } from "@/lib/patient-age";
 import { SignDocumentPanel } from "@/components/SignDocumentFlow";
 import { digitalSignatureLabel } from "@/lib/digital-signature/status";
 import { PatientFinancePanel } from "@/components/PatientFinancePanel";
+import { PatientRisksPanel } from "@/components/calculators/PatientRisksPanel";
 
 type Lab = { id: string; testKey: string; value: number; unit?: string | null; measuredAt: string };
 type Upload = { id: string; name: string; category?: string | null; examDate?: string | null; signedUrl?: string | null };
@@ -109,6 +110,7 @@ const PRIMARY_TABS = [
   { id: "evolucao", label: "Evolução" },
   { id: "exames", label: "Exames" },
   { id: "resumo", label: "Resumo" },
+  { id: "riscos", label: "Riscos" },
   { id: "perfil", label: "Perfil" },
   { id: "documentos", label: "Documentos" },
   { id: "lme", label: "LME / CEAF" },
@@ -664,6 +666,8 @@ export default function ProntuarioPage() {
             </ul>
           </div>
         )}
+
+        {tab === "riscos" && <PatientRisksPanel emailParam={emailParam} />}
 
         {tab === "perfil" && <ClinicalProfileEditor emailParam={emailParam} />}
 
