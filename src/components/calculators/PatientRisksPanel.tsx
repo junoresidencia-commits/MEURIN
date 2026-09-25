@@ -169,7 +169,7 @@ export function PatientRisksPanel({ emailParam }: { emailParam: string }) {
           <p>{geri?.headline || "—"}</p>
         </SummaryCard>
         <SummaryCard title="Geriatria">
-          <p>CFS: {cfs?.status === "recorded" ? cfs.headline : "ainda não avaliada"}</p>
+          <p>{cfs?.status === "recorded" ? cfs.headline : "CFS: ainda não avaliada"}</p>
           <p className="text-[var(--text-muted)]">Fragilidade ≠ prognóstico automático.</p>
         </SummaryCard>
         <SummaryCard title="Cuidados de suporte">
