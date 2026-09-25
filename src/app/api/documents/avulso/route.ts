@@ -89,7 +89,7 @@ export async function POST(req: Request) {
     const name = err instanceof Error ? err.name : "Error";
     console.error("[documents/avulso]", { status: 500, error: name });
     return jsonUtf8({
-      error: "Não foi possível gerar o documento. Tente de novo.",
+      error: "Não foi possível gerar o documento. Tente de novo ou escolha “Sem papel timbrado”.",
     }, 500);
   }
 }

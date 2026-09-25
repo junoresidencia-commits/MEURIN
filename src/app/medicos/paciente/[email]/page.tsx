@@ -29,7 +29,8 @@ import { encodePatientParam, postJson, toFriendlyMessage } from "@/lib/user-erro
 import { clearEvolutionDraft, loadEvolutionDraft, saveEvolutionDraft } from "@/lib/evolution-draft";
 import { resolvePatientAge } from "@/lib/patient-age";
 import { SignDocumentPanel } from "@/components/SignDocumentFlow";
-import { digitalSignatureLabel } from "@/lib/digital-signature/status";
+import { DocumentWorkflowPanel } from "@/components/DocumentWorkflowPanel";
+import { chartSignatureLabel } from "@/lib/digital-signature/status";
 import { PatientFinancePanel } from "@/components/PatientFinancePanel";
 import { PatientRisksPanel } from "@/components/calculators/PatientRisksPanel";
 
@@ -846,6 +847,7 @@ export default function ProntuarioPage() {
 
         {tab === "lme" && (
           <div className="space-y-4">
+            <DocumentWorkflowPanel patientKey={emailParam} />
             {/* Dados da LME (CNS e Nome da mãe) — avisam quando faltam; auto-preenchem a LME. */}
             <PatientLmeField emailParam={emailParam} field="cns" label="CNS (Cartão SUS)" value={patient?.cns} numeric placeholder="000 0000 0000 0000" note="Necessário para a LME/CEAF. Se este paciente precisar, cadastre agora — senão, pode deixar em branco." onSaved={load} />
             <PatientLmeField emailParam={emailParam} field="motherName" label="Nome da mãe" value={patient?.motherName} placeholder="Nome completo da mãe" note="Aparece no formulário oficial da LME. Cadastre para já sair preenchido nas próximas LMEs." onSaved={load} />
@@ -887,6 +889,7 @@ export default function ProntuarioPage() {
 
         {tab === "documentos" && (
           <div className="space-y-4">
+            <DocumentWorkflowPanel patientKey={emailParam} />
             {hasLetterhead === false ? (
               <div className="panel border-[var(--border-gold)] bg-[var(--gold-soft)]">
                 <p className="font-semibold text-[var(--text)]">Adicione seu papel timbrado</p>
@@ -923,12 +926,14 @@ export default function ProntuarioPage() {
                   <a href={`/documento/${d.id}`} target="_blank" rel="noopener noreferrer" className="min-w-0 flex-1">
                     <p className="truncate font-semibold text-[var(--text)]">{d.title}</p>
                     <p className="text-xs text-[var(--text-muted)]">
-                      {docTypeLabel(d.type)} · {fmt(d.createdAt)} · {digitalSignatureLabel(d)}
+                      {docTypeLabel(d.type)} · {fmt(d.createdAt)} · {chartSignatureLabel(d)}
                     </p>
                   </a>
                   <div className="flex shrink-0 items-center gap-3">
                     <a href={d.pdfPath ? `/api/documents/${d.id}/pdf` : `/documento/${d.id}`} target="_blank" rel="noopener noreferrer" className="text-sm font-semibold text-[var(--gold)]">Abrir PDF →</a>
-                    <button type="button" className="text-sm font-semibold text-[var(--text-muted)] hover:text-[var(--danger)]" onClick={() => removeDocument(d.id)}>Excluir</button>
+                    {d.status !== "signed" && (
+                      <button type="button" className="text-sm font-semibold text-[var(--text-muted)] hover:text-[var(--danger)]" onClick={() => removeDocument(d.id)}>Excluir</button>
+                    )}
                   </div>
                 </div>
                 {d.pdfPath && (
@@ -940,7 +945,8 @@ export default function ProntuarioPage() {
                     title={d.title}
                     pdfHref={`/api/documents/${d.id}/pdf`}
                     alreadySigned={d.status === "signed" && d.signatureMethod === "certificada"}
-                    signedDocumentId={d.status === "signed" && d.signatureMethod === "certificada" ? d.id : null}
+                    alreadyManual={d.status === "signed" && d.signatureMethod === "imagem"}
+                    signedDocumentId={d.status === "signed" && (d.signatureMethod === "certificada" || d.signatureMethod === "imagem") ? d.id : null}
                     patientPhone={patient?.phone}
                     onSigned={() => { void load(); }}
                   />

@@ -96,10 +96,10 @@ function ComporDocumentoInner() {
     writeLmeDocDraft(lmeId, type, { title, body: content });
   }, [lmeId, type, title, content]);
 
-  function payload(preview: boolean) {
+  function payload(preview: boolean, plainPaper = false) {
     return {
       patientKey: patientParam,
-      letterheadId: letterheadId || null,
+      letterheadId: plainPaper ? null : letterheadId || null,
       type,
       title,
       content,
@@ -109,34 +109,39 @@ function ComporDocumentoInner() {
     };
   }
 
-  async function preview() {
+  async function preview(plainPaper = false) {
     setBusy(true); setMsg("");
     try {
       const res = await fetch("/api/documents/generate", {
         method: "POST",
         credentials: "include",
         headers: { "Content-Type": "application/json; charset=utf-8" },
-        body: JSON.stringify(payload(true)),
+        body: JSON.stringify(payload(true, plainPaper)),
       });
       const blob = await fetchPdfBlob(res, "Não foi possível pré-visualizar. Tente novamente.");
       if (previewUrl?.startsWith("blob:")) URL.revokeObjectURL(previewUrl);
       setPreviewUrl(URL.createObjectURL(blob));
-      if (res.headers.get("x-meurim-warning") === "letterhead-unavailable") {
-        setMsg("Não deu para usar o papel timbrado neste arquivo. A prévia saiu em papel branco.");
+      if (plainPaper || res.headers.get("x-meurim-warning") === "letterhead-unavailable") {
+        setMsg("Papel timbrado indisponível no momento. A prévia saiu em papel branco.");
       }
     } catch (e) {
+      if (!plainPaper && letterheadId) {
+        setMsg("O papel timbrado falhou. Gerando prévia em papel branco…");
+        await preview(true);
+        return;
+      }
       setMsg(toFriendlyMessage(e instanceof Error ? new FriendlyError(e.message) : e, "Não foi possível pré-visualizar. Tente novamente."));
-    } finally { setBusy(false); }
+    } finally { if (!plainPaper) setBusy(false); }
   }
 
-  async function salvar() {
+  async function salvar(plainPaper = false) {
     setBusy(true); setMsg("");
     try {
       const res = await fetch("/api/documents/generate", {
         method: "POST",
         credentials: "include",
         headers: { "Content-Type": "application/json; charset=utf-8" },
-        body: JSON.stringify(payload(false)),
+        body: JSON.stringify(payload(false, plainPaper)),
       });
       if (!res.ok) throw new FriendlyError(await readApiError(res, DOC_PDF_USER_ERROR));
       const d = (await res.json().catch(() => ({}))) as { id?: string; warning?: string };
@@ -144,10 +149,15 @@ function ComporDocumentoInner() {
       setSavedId(d.id); setStatus("final"); setSignedDocId(null);
       setPreviewUrl(`/api/documents/${d.id}/pdf`);
       if (lmeId) clearLmeDocDraft(lmeId, type);
-      setMsg(d.warning || "Documento gerado e salvo no prontuário.");
+      setMsg(d.warning || (plainPaper ? "Documento gerado em papel branco (timbrado indisponível)." : "Documento gerado e salvo no prontuário."));
     } catch (e) {
+      if (!plainPaper && letterheadId) {
+        setMsg("O papel timbrado falhou. Salvando em papel branco…");
+        await salvar(true);
+        return;
+      }
       setMsg(toFriendlyMessage(e, DOC_PDF_USER_ERROR));
-    } finally { setBusy(false); }
+    } finally { if (!plainPaper) setBusy(false); }
   }
 
   async function assinar() {

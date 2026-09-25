@@ -37,23 +37,21 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
   }
 
   const doctor = await getDoctorById(doctorId);
-  let bytes: Uint8Array;
-  let label: string;
-  try {
-    const built = await buildOfficialCeafPdf(protocolId, "ter", {
+  const built = await buildOfficialCeafPdf({
+    protocol: protocolId,
+    doc: "ter",
+    values: {
       name: lme.patientName || "",
       doctor: lme.doctorName || doctor?.name || "",
       crm: lme.doctorCrm || doctor?.crm || "",
       date: todayBr(),
       cpf: lme.patientCpf || "",
-      birth: "",
-    });
-    bytes = built.bytes;
-    label = built.label;
-  } catch (err) {
-    console.error("[lme/oficial-doc]", err instanceof Error ? err.message : err);
-    return jsonUtf8({ error: "Não foi possível montar o TER oficial. Tente de novo." }, 500);
-  }
+    },
+    medNames: (lme.medications || []).map((m) => m.name),
+  });
+  if (!built.ok) return jsonUtf8({ error: built.error }, built.status);
+  const bytes = built.pdf;
+  const label = built.label;
 
   let saved;
   try {

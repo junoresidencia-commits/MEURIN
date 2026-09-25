@@ -6,6 +6,9 @@ import {
   parseSignedPdfUpload,
   requireProviderId,
 } from "@/lib/digital-signature/attach-signed";
+import { fileToSignedPdfBuffer } from "@/lib/digital-signature/file-to-pdf";
+import { completeSession, getOpenSession } from "@/lib/document-workflow/sessions";
+import { logDocumentEvent } from "@/lib/document-workflow/audit";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -26,18 +29,39 @@ export async function POST(req: Request, ctx: { params: Promise<{ id: string }> 
     const form = await req.formData();
     const file = form.get("file");
     const uploaded = file instanceof File ? file : null;
-    const size = uploaded?.size ?? 0;
-    const bad = parseSignedPdfUpload(uploaded, size);
-    if (bad || !uploaded) return jsonUtf8({ error: bad || "Envie o PDF já assinado." }, 400);
+    if (!uploaded) return jsonUtf8({ error: "Envie o PDF já assinado." }, 400);
+    const converted = await fileToSignedPdfBuffer(uploaded);
+    if (converted.error) return jsonUtf8({ error: converted.error }, 400);
+    const bad = parseSignedPdfUpload(
+      new File([new Uint8Array(converted.buffer)], uploaded.name.replace(/\.[^.]+$/, ".pdf"), { type: "application/pdf" }),
+      converted.buffer.length,
+    );
+    if (bad) return jsonUtf8({ error: bad }, 400);
 
-    const providerId = requireProviderId(String(form.get("provider") || "vidaas"));
-    const buffer = Buffer.from(await uploaded.arrayBuffer());
+    const rawProvider = String(form.get("provider") || "vidaas");
+    const method = String(form.get("method") || "") === "manual" ? "imagem" : "certificada";
+    const providerId = method === "imagem" ? "manual" : requireProviderId(rawProvider);
     const result = await attachSignedPdf({
       doctorId,
       providerId,
-      buffer,
-      filename: uploaded.name,
+      buffer: converted.buffer,
+      filename: uploaded.name.replace(/\.[^.]+$/, ".pdf"),
       original,
+      signatureMethod: method,
+    });
+
+    const open = await getOpenSession({
+      documentId: original.id,
+      doctorId,
+      method: method === "imagem" ? "MANUAL" : "DIGITAL",
+    }).catch(() => null);
+    if (open) await completeSession(open.id, { status: "completed" }).catch(() => null);
+    await logDocumentEvent({
+      event: method === "imagem" ? "MANUAL_SIGNED_DOCUMENT_UPLOADED" : "DIGITAL_SIGNATURE_COMPLETED",
+      doctorId,
+      patientKey: original.patientEmail,
+      documentId: result.signed.id,
+      detail: `original:${original.id}`,
     });
 
     return jsonUtf8(
@@ -46,7 +70,7 @@ export async function POST(req: Request, ctx: { params: Promise<{ id: string }> 
         id: result.signed.id,
         pdfUrl: `/api/documents/${result.signed.id}/pdf`,
         originalId: original.id,
-        status: "Assinado digitalmente",
+        status: method === "imagem" ? "Assinatura manual registrada" : "Assinado digitalmente",
         provider: providerId,
         signedAt: result.signed.signedAt,
         signedBy: result.signed.signedBy,

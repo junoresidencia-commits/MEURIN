@@ -4,7 +4,10 @@ import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import { SignDocumentPanel } from "@/components/SignDocumentFlow";
+import { OfficialCeafDocs } from "@/components/OfficialCeafDocs";
 import { LmeComplementaryDocs } from "@/components/LmeComplementaryDocs";
+import { inferCeafProtocols } from "@/lib/ceaf-catalog";
+import { inferProtocolFromMedNames } from "@/lib/ceaf-documents";
 
 type Med = { name: string; presentation?: string; monthlyQty?: string };
 type Lme = {
@@ -81,6 +84,10 @@ export default function LmePage() {
   if (!lme) return <div className="mx-auto max-w-2xl px-5 py-20 text-[var(--text-muted)]">Carregando…</div>;
 
   const date = new Date(lme.createdAt).toLocaleDateString("pt-BR");
+  const inferredProtocol =
+    inferProtocolFromMedNames((lme.medications || []).map((m) => m.name || "")) ||
+    inferCeafProtocols({ cid10: lme.cid10, medications: lme.medications })[0];
+  const medNames = (lme.medications || []).map((m) => m.name).filter(Boolean).join(", ");
 
   async function downloadPdf() {
     if (!lme) return;
@@ -168,6 +175,29 @@ export default function LmePage() {
         <iframe ref={frameRef} title="LME oficial preenchida" src={officialUrl} className="h-[82vh] w-full" />
       </div>
 
+      {/* TER / consentimento — todas as LME. NÃO altera o PDF oficial da LME. */}
+      {isDoctor && (
+        <section className="mt-6 rounded-[16px] border border-[var(--border-gold)] bg-white p-5 shadow-[var(--shadow)] print:hidden">
+          <h2 className="font-display text-lg font-extrabold text-[var(--text)]">Termo de esclarecimento e consentimento</h2>
+          <p className="mt-1 text-sm text-[var(--text-soft)]">
+            Junto com a LME vão o <b>TER</b> e o formulário oficial da SESAB (páginas exatas do pacote). Abra o desta LME
+            ou qualquer outro protocolo — o Meu Rim preenche o nome quando o arquivo tem campo.
+          </p>
+          <OfficialCeafDocs
+            protocolId={inferredProtocol}
+            lmeId={lme.id}
+            patientName={lme.patientName || undefined}
+            doctorName={lme.doctorName || undefined}
+            crm={lme.doctorCrm || undefined}
+            patientCpf={lme.patientCpf || undefined}
+            patientKey={lme.patientEmail || undefined}
+            meds={medNames}
+            service={lme.establishmentName || undefined}
+            showAllProtocols
+          />
+        </section>
+      )}
+
       {isDoctor && lme.patientEmail && (
         <LmeComplementaryDocs lmeId={lme.id} patientEmail={lme.patientEmail} />
       )}
@@ -179,7 +209,7 @@ export default function LmePage() {
           O campo <b>17 — Assinatura e carimbo do médico</b> fica em branco de propósito. Assine de um destes jeitos:
         </p>
         <ol className="mt-2 list-decimal space-y-1 pl-5 text-sm text-[var(--text-soft)]">
-          <li><b>VIDaaS ou gov.br (recomendado)</b>: baixe o PDF final e assine com o certificado ICP-Brasil. Vale juridicamente; confira em validar.iti.gov.br.</li>
+          <li><b>VIDaaS / gov.br (recomendado)</b>: baixe o PDF, envie no <b>Assinador gov.br</b> (é lá que vai o arquivo) e leia o QR com o app VIDaaS. Ou mande para a Prescrição eletrônica do CFM.</li>
           <li><b>À mão</b>: imprima e assine/carimbe no campo 17.</li>
         </ol>
         <SignDocumentPanel
@@ -189,6 +219,11 @@ export default function LmePage() {
           title={`LME — ${lme.patientName || "paciente"}`}
           patientKey={lme.patientEmail}
           patientPhone={lme.patientPhone}
+          signContext={{
+            patientName: lme.patientName,
+            patientCpf: lme.patientCpf,
+            doctorCrm: lme.doctorCrm,
+          }}
         />
       </section>
 

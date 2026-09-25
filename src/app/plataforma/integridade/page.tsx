@@ -56,6 +56,60 @@ export default function IntegridadePage() {
           </div>
         ))}
       </div>
+
+      <DocumentIntegrityPanel />
+    </div>
+  );
+}
+
+function DocumentIntegrityPanel() {
+  const [data, setData] = useState<{
+    at?: string;
+    registrySize?: number;
+    findings?: { code: string; severity: string; label: string; count: number; detail?: string }[];
+    integraIcp?: { ready: boolean; missing?: string };
+  } | null>(null);
+  const [err, setErr] = useState("");
+
+  useEffect(() => {
+    fetch("/api/document-workflow/health")
+      .then(async (r) => {
+        const d = await r.json();
+        if (!r.ok) throw new Error(d.error || "Não foi possível carregar a integridade documental.");
+        setData(d);
+      })
+      .catch((e) => setErr(e instanceof Error ? e.message : "Erro"));
+  }, []);
+
+  return (
+    <div className="mt-10">
+      <h2 className="font-display text-2xl font-extrabold text-[var(--text)]">Integridade documental</h2>
+      <p className="mt-1 text-sm text-[var(--text-muted)]">
+        Somente leitura. Templates, LME, TER, consentimentos e órfãos. Sem conteúdo clínico no detalhe.
+      </p>
+      {err && <p className="mt-3 text-sm text-[var(--danger)]">{err}</p>}
+      {data?.at && (
+        <p className="mt-2 text-xs text-[var(--text-muted)]">
+          Registry ativo: {data.registrySize ?? "—"} tipos · {new Date(data.at).toLocaleString("pt-BR")}
+        </p>
+      )}
+      {data?.integraIcp && !data.integraIcp.ready && (
+        <p className="mt-3 rounded-xl border border-[var(--border)] bg-white px-3 py-2 text-sm text-[var(--text-soft)]">
+          Channel IntegraICP ausente. Fallback Assinador gov.br + VIDaaS permanece ativo. {data.integraIcp.missing}
+        </p>
+      )}
+      <div className="mt-4 grid gap-3 sm:grid-cols-3">
+        {(data?.findings || []).map((f) => (
+          <div key={f.code} className="panel">
+            <p className="text-[11px] uppercase tracking-wider text-[var(--text-muted)]">{f.label}</p>
+            <p className="font-display text-2xl font-extrabold">{f.count}</p>
+            <p className="text-xs text-[var(--text-muted)]">
+              {f.severity === "ok" ? "ok" : f.severity === "warning" ? "aviso" : "crítico"}
+            </p>
+            {f.detail && <p className="mt-1 text-[11px] text-[var(--text-muted)]">{f.detail}</p>}
+          </div>
+        ))}
+      </div>
     </div>
   );
 }

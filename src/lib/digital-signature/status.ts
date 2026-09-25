@@ -21,3 +21,16 @@ export function digitalSignatureLabel(doc: {
 }): string {
   return digitalSignatureStatus(doc) === "signed" ? DIGITAL_SIGNED_LABEL : DIGITAL_UNSIGNED_LABEL;
 }
+
+/** Rótulo acessível do prontuário (digital ≠ manual ≠ pendente). */
+export function chartSignatureLabel(doc: {
+  status?: string | null;
+  signatureMethod?: string | null;
+}): string {
+  if (doc.status === "signed" && doc.signatureMethod === "certificada") return "🟢 Assinado digitalmente";
+  if (doc.status === "signed" && doc.signatureMethod === "imagem") return "🔵 Assinado manualmente";
+  if (doc.status === "signed" && doc.signatureMethod === "eletronica") {
+    return "🟡 Assinatura eletrônica (login) — não é ICP-Brasil";
+  }
+  return "🟡 Aguardando assinatura";
+}

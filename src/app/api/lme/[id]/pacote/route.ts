@@ -4,17 +4,21 @@ import { getDoctorSessionId } from "@/lib/auth";
 import { getLme } from "@/lib/lme-store";
 import { getDocuments } from "@/lib/patient-store";
 import { readFile, DOCPDF_BUCKET } from "@/lib/doc-storage";
-import { buildOfficialCeafPdf } from "@/lib/ceaf-official-pdf";
+import { inferProtocolFromMedNames, officialDocPages } from "@/lib/ceaf-documents";
+import { inferCeafProtocols } from "@/lib/ceaf-catalog";
+import { buildOfficialCeafPdf, type FillValues } from "@/lib/ceaf-official-pdf";
 import { inferProtocolId, officialTerSlot } from "@/lib/complementary-docs";
+import { getDoctorById } from "@/lib/store";
+import { resolvePatientAccess } from "@/lib/doctor-access";
 import { jsonUtf8 } from "@/lib/json-utf8";
-import { todayBr } from "@/lib/pdf-winansi";
+import { idadeFromBirthdate, todayBr } from "@/lib/pdf-winansi";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
 
 /**
- * Pacote da LME: LME oficial + Receita + Relatório + TER oficial, nesta ordem.
+ * Pacote da LME: LME oficial + Receita + Relatório + TER oficial (+ formulário, se existir).
  * Cada bloco começa com uma página de identificação. Não altera a LME oficial.
  */
 export async function GET(req: Request, { params }: { params: Promise<{ id: string }> }) {
@@ -40,14 +44,19 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
   const receita = pick("receita");
   const relatorio = pick("relatorio");
   const terSaved = pick("ter");
-  const protocolId = inferProtocolId(lme);
-  const terSlot = officialTerSlot(protocolId);
+  const medNames = (lme.medications || []).map((m) => m.name || "").filter(Boolean);
+  const protocolId =
+    inferProtocolId(lme) ||
+    inferProtocolFromMedNames(medNames) ||
+    inferCeafProtocols({ cid10: lme.cid10, medications: lme.medications })[0] ||
+    "";
+  const terSlot = officialTerSlot(protocolId || null);
 
   const missing: string[] = [];
   if (!receita) missing.push("Receita");
   if (!relatorio) missing.push("Relatório médico");
   if (!terSaved && terSlot.status !== "available") missing.push("TER oficial (não disponível neste protocolo)");
-  else if (!terSaved) missing.push("TER oficial");
+  else if (!terSaved && !protocolId) missing.push("TER oficial");
 
   const merged = await PDFDocument.create();
   const font = await merged.embedFont(StandardFonts.Helvetica);
@@ -95,27 +104,49 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
     }
   }
 
+  const doctor = await getDoctorById(doctorId);
+  const values: FillValues = {
+    introName: lme.patientName || "",
+    name: lme.patientName || "",
+    cpf: lme.patientCpf || "",
+    cns: lme.patientCns || "",
+    introDoctor: lme.doctorName || doctor?.name || "",
+    doctor: lme.doctorName || doctor?.name || "",
+    crm: (lme.doctorCrm || [doctor?.crm, doctor?.crmState].filter(Boolean).join("-") || "").replace(/^-+|-+$/g, ""),
+    date: new Date(lme.createdAt).toLocaleDateString("pt-BR", { timeZone: "America/Bahia" }) || todayBr(),
+    service: lme.establishmentName || "",
+    uf: (doctor?.crmState || "BA").toUpperCase().slice(0, 2),
+  };
+  const crmNum = String(values.crm || "").match(/(\d{3,})/)?.[1] || String(values.crm || "").replace(/-.*$/, "").trim();
+  if (crmNum) values.crm = crmNum;
+  const access = await resolvePatientAccess(lme.patientEmail);
+  if (access?.allowed) {
+    values.age = idadeFromBirthdate(access.birthdate);
+    if (!values.cpf) values.cpf = access.cpf || "";
+    if (!values.cns) values.cns = access.cns || "";
+    values.city = (access.city || "").split(/[,\-/]/).map((p) => p.trim()).filter(Boolean).pop() || "";
+    values.local = values.city || values.service || "";
+  }
+
   let terBytes: Uint8Array | null = null;
   if (terSaved?.pdfPath) {
     const file = await readFile(DOCPDF_BUCKET, terSaved.pdfStorage || "local", terSaved.pdfPath);
     if (file) terBytes = new Uint8Array(file.buffer);
   } else if (protocolId && terSlot.status === "available") {
-    try {
-      const built = await buildOfficialCeafPdf(protocolId, "ter", {
-        name: lme.patientName || "",
-        doctor: lme.doctorName || "",
-        crm: lme.doctorCrm || "",
-        date: todayBr(),
-        cpf: lme.patientCpf || "",
-      });
-      terBytes = built.bytes;
-    } catch {
-      terBytes = null;
-    }
+    const built = await buildOfficialCeafPdf({ protocol: protocolId, doc: "ter", values, medNames });
+    if (built.ok) terBytes = built.pdf;
   }
   if (terBytes) {
     await addLabel(4, "TER oficial — Termo de esclarecimento e responsabilidade");
     await addPdf(terBytes);
+  }
+
+  if (protocolId && officialDocPages(protocolId, "form")) {
+    const built = await buildOfficialCeafPdf({ protocol: protocolId, doc: "form", values, medNames });
+    if (built.ok) {
+      await addLabel(5, "Formulário oficial");
+      await addPdf(built.pdf);
+    }
   }
 
   if (merged.getPageCount() === 0) {

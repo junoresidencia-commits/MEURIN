@@ -45,9 +45,10 @@ for (const provider of DIGITAL_SIGNATURE_PROVIDERS) {
 }
 
 const vidaas = getDigitalSignatureProvider("vidaas")!;
-assert.equal(vidaas.officialLinks[0].href, SIGNATURE_LINKS.vidaasInfo);
+assert.equal(vidaas.officialLinks[0].href, SIGNATURE_LINKS.govAssinador, "primeiro link VIDaaS é o Assinador gov.br (onde vai o PDF)");
+assert.ok(vidaas.officialLinks.some((l) => l.href === SIGNATURE_LINKS.vidaasInfo));
 const cfm = getDigitalSignatureProvider("cfm")!;
-assert.equal(cfm.officialLinks[0].href, SIGNATURE_LINKS.cfmCertificado);
+assert.equal(cfm.officialLinks[0].href, SIGNATURE_LINKS.cfmPrescricao, "primeiro link CFM é a Prescrição eletrônica");
 assert.match(cfm.honesty, /Credencial Médica/i);
 
 assert.equal(digitalSignatureStatus({ status: "final" }), "unsigned");
