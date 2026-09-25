@@ -169,7 +169,15 @@ export type ClinicFinanceEventKind =
   | "checkin"
   | "closing"
   | "payout"
-  | "adjustment";
+  | "adjustment"
+  | "expense"
+  | "expense_correction"
+  | "cash_close"
+  | "receipt"
+  | "nfse_request"
+  | "nfse_issue"
+  | "nfse_cancel"
+  | "nfse_attach";
 
 export type ClinicFinanceEvent = {
   id: string;
@@ -274,3 +282,145 @@ export type SaasMrrSnapshot = {
 export const FOUNDER_SUPER_ADMIN_EMAIL = (
   process.env.PLATFORM_SUPER_ADMIN_EMAIL || "junoresidencia@gmail.com"
 ).toLowerCase();
+
+/** Permissões financeiras da clínica (gestora configura no vínculo). Ausente = padrão do papel. */
+export const CLINIC_CASH_PERM_KEYS = [
+  "expense",
+  "close_cash",
+  "receipt",
+  "nfse_request",
+  "finance_view",
+] as const;
+export type ClinicCashPermKey = (typeof CLINIC_CASH_PERM_KEYS)[number];
+
+export const CLINIC_STOCK_PERM_KEYS = [
+  "stock_view",
+  "stock_out",
+  "stock_in",
+  "stock_request",
+  "stock_manage",
+] as const;
+export type ClinicStockPermKey = (typeof CLINIC_STOCK_PERM_KEYS)[number];
+
+export const CLINIC_EXPENSE_CATEGORIES = [
+  "material_medico",
+  "material_escritorio",
+  "limpeza",
+  "medicamentos",
+  "manutencao",
+  "alimentacao",
+  "transporte",
+  "pagamento_funcionario",
+  "taxas",
+  "outros",
+] as const;
+export type ClinicExpenseCategory = (typeof CLINIC_EXPENSE_CATEGORIES)[number];
+
+export const CLINIC_EXPENSE_METHODS = [
+  "dinheiro",
+  "pix",
+  "debito",
+  "credito",
+  "transferencia",
+  "outro",
+] as const;
+export type ClinicExpenseMethod = (typeof CLINIC_EXPENSE_METHODS)[number];
+
+export const CLINIC_CASH_ORIGINS = [
+  "caixa_fisico",
+  "conta_clinica",
+  "pix_clinica",
+  "outro",
+] as const;
+export type ClinicCashOrigin = (typeof CLINIC_CASH_ORIGINS)[number];
+
+export type ClinicExpense = {
+  id: string;
+  clinicId: string;
+  occurredAt: string;
+  amountCents: number;
+  category: ClinicExpenseCategory;
+  description: string;
+  method: ClinicExpenseMethod;
+  origin: ClinicCashOrigin;
+  responsibleName: string;
+  locationLabel: string | null;
+  notes: string | null;
+  attachmentPath: string | null;
+  attachmentStorage: "supabase" | "local" | null;
+  attachmentName: string | null;
+  attachmentMime: string | null;
+  correctedFromId: string | null;
+  voidedAt: string | null;
+  voidReason: string | null;
+  voidedByKind: string | null;
+  voidedById: string | null;
+  recordedByKind: string | null;
+  recordedById: string | null;
+  recordedByEmail: string | null;
+  createdAt: string;
+};
+
+export type ClinicCashSession = {
+  id: string;
+  clinicId: string;
+  day: string;
+  openingCents: number;
+  inCents: number;
+  outCents: number;
+  expectedCents: number;
+  countedCents: number;
+  differenceCents: number;
+  justification: string | null;
+  byMethod: Record<string, number>;
+  closedByKind: string | null;
+  closedById: string | null;
+  closedByName: string | null;
+  closedByEmail: string | null;
+  createdAt: string;
+};
+
+export type ClinicFiscalKind = "recibo" | "nfse";
+export type ClinicNfseStatus =
+  | "not_requested"
+  | "pending"
+  | "issuing"
+  | "issued"
+  | "error"
+  | "cancelled";
+export type ClinicFiscalStatus = "issued" | ClinicNfseStatus;
+
+export type ClinicFiscalDoc = {
+  id: string;
+  clinicId: string;
+  encounterId: string | null;
+  patientKey: string;
+  kind: ClinicFiscalKind;
+  status: ClinicFiscalStatus;
+  amountCents: number;
+  serviceLabel: string;
+  paymentMethod: string | null;
+  patientName: string;
+  patientCpf: string | null;
+  patientEmail: string | null;
+  patientPhone: string | null;
+  patientAddress: string | null;
+  doctorId: string | null;
+  doctorName: string | null;
+  doctorCrm: string | null;
+  clinicName: string | null;
+  number: string | null;
+  issuedAt: string | null;
+  providerRef: string | null;
+  errorMessage: string | null;
+  pdfPath: string | null;
+  pdfStorage: "supabase" | "local" | null;
+  xmlPath: string | null;
+  xmlStorage: "supabase" | "local" | null;
+  xmlName: string | null;
+  requestedByKind: string | null;
+  requestedById: string | null;
+  requestedByEmail: string | null;
+  createdAt: string;
+  updatedAt: string;
+};

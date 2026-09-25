@@ -4,22 +4,14 @@ import { getProfilesByDoctor } from "./clinical-profile-store";
 import { getLabResults } from "./patient-store";
 import { computeImc } from "./clinical-fields";
 import { RESEARCH_VARS_BY_KEY, type Operator } from "./research-fields";
+import { resolvePatientAge } from "./patient-age";
+import { listHdLinkedPatientIds } from "./hd-research";
 
 export type CohortRecord = Record<string, string | number | null> & {
   __id: string;
   __name: string;
 };
 
-function ageFromBirthdate(birthdate?: string | null): number | null {
-  if (!birthdate) return null;
-  const d = new Date(birthdate);
-  if (Number.isNaN(d.getTime())) return null;
-  const now = new Date();
-  let age = now.getFullYear() - d.getFullYear();
-  const m = now.getMonth() - d.getMonth();
-  if (m < 0 || (m === 0 && now.getDate() < d.getDate())) age--;
-  return age >= 0 && age < 130 ? age : null;
-}
 function normSex(sex?: string | null): string {
   const s = String(sex || "").toLowerCase();
   if (/^f|fem|mulher/.test(s)) return "feminino";
@@ -27,9 +19,27 @@ function normSex(sex?: string | null): string {
   return "desconhecido";
 }
 
+export type CohortSource = "prontuario" | "hemodialise";
+
+export type BuildCohortOpts = {
+  /** Data de inclusão / referência da idade. Sem valor = hoje. */
+  ageAt?: string | Date | null;
+  /** Se incluir "hemodialise", restringe aos pacientes vinculados na HD. */
+  sources?: CohortSource[] | string[] | null;
+};
+
+export function cohortOptsFromStudy(study: { sources?: string[] | null; ageReferenceDate?: string | null }): BuildCohortOpts {
+  return { ageAt: study.ageReferenceDate || null, sources: study.sources || [] };
+}
+
 /** Monta um registro achatado por paciente com todas as variáveis de pesquisa. */
-export async function buildCohortRecords(doctorId: string): Promise<CohortRecord[]> {
-  const patients = await listPatientsByDoctor(doctorId);
+export async function buildCohortRecords(doctorId: string, opts: BuildCohortOpts = {}): Promise<CohortRecord[]> {
+  let patients = await listPatientsByDoctor(doctorId);
+  const sources = (opts.sources || []).map(String);
+  if (sources.includes("hemodialise")) {
+    const hdIds = await listHdLinkedPatientIds(doctorId);
+    patients = patients.filter((p) => hdIds.has(p.id));
+  }
   const profiles = await getProfilesByDoctor(doctorId);
   const profileByKey = new Map(profiles.map((p) => [p.patientKey, p.data]));
 
@@ -39,7 +49,10 @@ export async function buildCohortRecords(doctorId: string): Promise<CohortRecord
     const data = profileByKey.get(key) || {};
     const rec: CohortRecord = { __id: p.id, __name: p.name };
 
-    rec.idade = ageFromBirthdate(p.birthdate);
+    rec.idade = resolvePatientAge(
+      { birthdate: p.birthdate, ageYears: p.ageYears, ageReportedAt: p.ageReportedAt },
+      opts.ageAt
+    );
     rec.sexo = normSex(p.sex);
     rec.cidade = p.address || "";
     rec.imc = computeImc(data);
@@ -85,6 +98,8 @@ function matches(rec: CohortRecord, f: Filter): boolean {
       case "!=": return n !== a;
       case ">": return n > a;
       case "<": return n < a;
+      case ">=": return n >= a;
+      case "<=": return n <= a;
       case "entre": return Number.isFinite(a) && Number.isFinite(b) && n >= a && n <= b;
       default: return true;
     }

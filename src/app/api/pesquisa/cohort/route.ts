@@ -6,7 +6,7 @@ export async function POST(req: Request) {
   const doctorId = await getDoctorSessionId();
   if (!doctorId) return NextResponse.json({ error: "Não autenticado." }, { status: 401 });
 
-  let body: { filters?: Filter[]; anonymize?: boolean };
+  let body: { filters?: Filter[]; anonymize?: boolean; sources?: string[]; ageReferenceDate?: string | null };
   try {
     body = await req.json();
   } catch {
@@ -15,7 +15,10 @@ export async function POST(req: Request) {
   const filters = Array.isArray(body.filters) ? body.filters : [];
   const anonymize = body.anonymize !== false; // padrão: anonimizado
 
-  const all = await buildCohortRecords(doctorId);
+  const all = await buildCohortRecords(doctorId, {
+    sources: Array.isArray(body.sources) ? body.sources : [],
+    ageAt: body.ageReferenceDate || null,
+  });
   const matched = applyFilters(all, filters);
   const stats = describe(matched);
 

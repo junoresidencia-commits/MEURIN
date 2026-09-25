@@ -245,12 +245,12 @@ export default function PainelMedicoPage() {
         </Link>
       )}
 
-      {/* Bento premium: consultas | alertas+exames | retornos+pendências */}
-      <div className="mt-6 grid gap-6 lg:grid-cols-3">
-        {/* Coluna 1 — Consultas de hoje */}
+      {/* Bento: tarefas/alertas em destaque; consultas compactas quando vazias */}
+      <div className={`mt-6 grid gap-6 ${todaysBookings.length === 0 ? "lg:grid-cols-2" : "lg:grid-cols-3"}`}>
+        {todaysBookings.length > 0 && (
         <section className="panel !p-5">
           <div className="flex items-center justify-between gap-3">
-            <h2 className="font-display text-xl text-[var(--text)]">Consultar de hoje</h2>
+            <h2 className="font-display text-xl text-[var(--text)]">Consultas de hoje</h2>
             <Link href="/medicos/agenda" className="text-sm font-semibold text-[var(--gold)]">Ver agenda completa</Link>
           </div>
           {todaysBookings.length === 0 ? (
@@ -278,13 +278,26 @@ export default function PainelMedicoPage() {
           )}
           <Link href="/medicos/agenda" className="btn-gold mt-4 block text-center">+ Nova consulta</Link>
         </section>
+        )}
+
+        {todaysBookings.length === 0 && (
+          <section className="panel !p-4 lg:col-span-2">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <div>
+                <h2 className="font-display text-lg text-[var(--text)]">Consultas de hoje</h2>
+                <p className="text-sm text-[var(--text-muted)]">Nenhuma consulta agendada para hoje.</p>
+              </div>
+              <Link href="/medicos/agenda" className="btn-gold text-sm">+ Nova consulta</Link>
+            </div>
+          </section>
+        )}
 
         {/* Coluna 2 — Alertas + Exames recentes */}
         <div className="flex flex-col gap-6">
-          <section id="alertas" className="panel !p-5 scroll-mt-4">
+          <section id="alertas" className={`panel !p-5 scroll-mt-4 ${(dash?.counts.alertas ?? 0) > 0 ? "border-[var(--border-gold)] ring-1 ring-[var(--gold)]/20" : ""}`}>
             <div className="flex items-center justify-between gap-3">
               <h2 className="font-display text-xl text-[var(--text)]">Alertas clínicos</h2>
-              {dash && dash.counts.alertas > 0 && <span className="text-sm font-semibold text-[var(--gold)]">{dash.counts.alertas}</span>}
+              {dash && dash.counts.alertas > 0 && <span className="rounded-full bg-[#fdecea] px-2 py-0.5 text-sm font-bold text-[#e86761]">{dash.counts.alertas}</span>}
             </div>
             {(!dash || dash.alertas.length === 0) ? (
               <p className="mt-3 text-sm text-[var(--text-muted)]">✓ Nenhum alerta ativo.</p>
@@ -369,8 +382,8 @@ export default function PainelMedicoPage() {
             )}
           </section>
 
-          <section id="pendencias" className="panel !p-5 scroll-mt-4">
-            <h2 className="font-display text-xl text-[var(--text)]">Pendências</h2>
+          <section id="pendencias" className={`panel !p-5 scroll-mt-4 ${(dash?.counts.pendencias ?? 0) > 0 ? "border-[var(--border-gold)] ring-1 ring-[var(--gold)]/20" : ""}`}>
+            <h2 className="font-display text-xl text-[var(--text)]">Pendências{(dash?.counts.pendencias ?? 0) > 0 ? ` · ${dash?.counts.pendencias}` : ""}</h2>
             {(!dash || dash.pendencias.length === 0) ? (
               <p className="mt-3 text-sm text-[var(--text-muted)]">✓ Nada pendente.</p>
             ) : (

@@ -13,6 +13,8 @@ export interface PatientAccess {
   phone: string;
   email: string;
   birthdate: string | null;
+  ageYears: number | null;
+  ageReportedAt: string | null;
   sex: string | null;
   cpf: string | null;
   cns: string | null;
@@ -34,6 +36,8 @@ function emptyAccess(partial: Partial<PatientAccess> & Pick<PatientAccess, "key"
     city: "",
     phone: "",
     birthdate: null,
+    ageYears: null,
+    ageReportedAt: null,
     sex: null,
     cpf: null,
     cns: null,
@@ -54,6 +58,8 @@ function fromPatient(patient: Patient, bookings: PatientAccess["bookings"]): Pat
     phone: patient.phone || "",
     email: patient.email || "",
     birthdate: patient.birthdate || null,
+    ageYears: patient.ageYears ?? null,
+    ageReportedAt: patient.ageReportedAt || null,
     sex: patient.sex || null,
     cpf: patient.cpf || null,
     cns: patient.cns || null,
@@ -111,6 +117,8 @@ export async function resolvePatientAccess(param: string): Promise<PatientAccess
         phone: ownedPatient?.phone || latest.patientPhone,
         email,
         birthdate: ownedPatient?.birthdate || null,
+        ageYears: ownedPatient?.ageYears ?? null,
+        ageReportedAt: ownedPatient?.ageReportedAt || null,
         sex: ownedPatient?.sex || null,
         cpf: ownedPatient?.cpf || null,
         cns: ownedPatient?.cns || null,
@@ -137,6 +145,8 @@ export async function resolvePatientAccess(param: string): Promise<PatientAccess
         phone: "",
         email,
         birthdate: null,
+        ageYears: null,
+        ageReportedAt: null,
         sex: null,
         cpf: null,
         cns: null,
@@ -172,6 +182,8 @@ export async function resolvePatientAccess(param: string): Promise<PatientAccess
       phone: "",
       email: "",
       birthdate: null,
+      ageYears: null,
+      ageReportedAt: null,
       sex: null,
       cpf: null,
       cns: null,

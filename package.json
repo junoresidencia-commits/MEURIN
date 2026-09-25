@@ -11,7 +11,13 @@
     "check:document-pdf": "npx tsx scripts/test-document-pdf.ts",
     "check:signature-links": "npx tsx scripts/test-signature-links.ts",
     "check:document-registry": "npx tsx scripts/test-document-registry-integrity.ts",
-    "check:document-workflow": "npx tsx scripts/test-document-workflow.ts"
+    "check:document-workflow": "npx tsx scripts/test-document-workflow.ts",
+    "check:clinic-cash": "env -u NEXT_PUBLIC_SUPABASE_URL -u SUPABASE_SERVICE_ROLE_KEY NODE_OPTIONS='--require ./scripts/shim-server-only.cjs' npx tsx scripts/test-clinic-cash.ts",
+    "check:clinic-stock": "env -u NEXT_PUBLIC_SUPABASE_URL -u SUPABASE_SERVICE_ROLE_KEY NODE_OPTIONS='--require ./scripts/shim-server-only.cjs' npx tsx scripts/test-clinic-stock.ts",
+    "check:hemodialise": "env -u NEXT_PUBLIC_SUPABASE_URL -u SUPABASE_SERVICE_ROLE_KEY NODE_OPTIONS='--require ./scripts/shim-server-only.cjs' npx tsx scripts/test-hemodialise.ts",
+    "check:patient-age": "env -u NEXT_PUBLIC_SUPABASE_URL -u SUPABASE_SERVICE_ROLE_KEY NODE_OPTIONS='--require ./scripts/shim-server-only.cjs' npx tsx scripts/test-patient-age.ts",
+    "check:lme-docs": "npx tsx scripts/test-lme-complementary.ts",
+    "check:calculators": "npx tsx scripts/test-calculators.ts"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.110.3",

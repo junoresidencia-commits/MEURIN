@@ -55,6 +55,15 @@ type ClinicId = {
   cnpj: string;
   city: string;
 };
+type Resultado = {
+  receitaBrutaCents: number;
+  despesaTotalCents: number;
+  resultadoCents: number;
+  clinicShareCents: number;
+  doctorShareCents: number;
+  receitas: { consultasCents: number; procedimentosCents: number; outrosCents: number };
+  despesas: { materiaisCents: number; funcionariosCents: number; manutencaoCents: number; taxasCents: number; outrosCents: number };
+};
 
 function sit(status: string) {
   if (status === "paid") return "Quitado";
@@ -83,11 +92,12 @@ export default function ClinicaRelatoriosPage() {
   const [summary, setSummary] = useState<Summary | null>(null);
   const [rows, setRows] = useState<Encounter[]>([]);
   const [err, setErr] = useState("");
-  const [view, setView] = useState<"tabela" | "oficial" | "painel">("tabela");
+  const [view, setView] = useState<"tabela" | "oficial" | "painel" | "resultado">("tabela");
   const [savingId, setSavingId] = useState(false);
   const [idMsg, setIdMsg] = useState("");
   const [fileMsg, setFileMsg] = useState("");
   const [busy, setBusy] = useState<"xlsx" | "pdf" | "print" | "">("");
+  const [resultado, setResultado] = useState<Resultado | null>(null);
 
   function applyPeriod(key: ReportPeriodKey) {
     const r = reportRangeFor(key);
@@ -133,6 +143,18 @@ export default function ClinicaRelatoriosPage() {
         setErr("");
       })
       .catch((e) => setErr(e instanceof Error ? e.message : "Erro"));
+  }, [params.id, from, to]);
+
+  useEffect(() => {
+    const q = new URLSearchParams();
+    if (from) q.set("from", from);
+    if (to) q.set("to", to);
+    fetch(`/api/clinica/${params.id}/resultado-operacional?${q}`)
+      .then((r) => r.json())
+      .then((d) => {
+        if (d.receitaBrutaCents != null) setResultado(d);
+      })
+      .catch(() => {});
   }, [params.id, from, to]);
 
   const chronological = useMemo(
@@ -502,6 +524,15 @@ export default function ClinicaRelatoriosPage() {
           >
             Painel interno
           </button>
+          <button
+            type="button"
+            onClick={() => setView("resultado")}
+            className={`rounded-full border px-3 py-1.5 text-xs font-bold ${
+              view === "resultado" ? "border-[var(--gold)] bg-[var(--gold-soft)] text-[var(--gold)]" : "border-[var(--border)]"
+            }`}
+          >
+            Resultado operacional
+          </button>
         </div>
         {err && <p className="mt-3 text-sm text-[var(--danger)]">{err}</p>}
       </div>
@@ -744,6 +775,44 @@ export default function ClinicaRelatoriosPage() {
                 ))}
               </tbody>
             </table>
+          </div>
+        </div>
+      )}
+
+      {view === "resultado" && resultado && (
+        <div className="mt-6 print:hidden">
+          <h2 className="font-display text-2xl font-extrabold">Resultado operacional</h2>
+          <p className="text-sm text-[var(--text-muted)]">
+            Receita bruta − despesas = resultado. O repasse médico/clínica continua o das regras já cadastradas.
+          </p>
+          <div className="mt-4 grid gap-3 sm:grid-cols-2">
+            <div className="panel">
+              <p className="text-xs font-bold uppercase text-[var(--gold)]">Receitas</p>
+              <p className="mt-2 text-sm">Consultas {money(resultado.receitas.consultasCents)}</p>
+              <p className="text-sm">Procedimentos {money(resultado.receitas.procedimentosCents)}</p>
+              <p className="text-sm">Outros recebimentos {money(resultado.receitas.outrosCents)}</p>
+            </div>
+            <div className="panel">
+              <p className="text-xs font-bold uppercase text-[var(--gold)]">Despesas</p>
+              <p className="mt-2 text-sm">Materiais {money(resultado.despesas.materiaisCents)}</p>
+              <p className="text-sm">Funcionários/prestadores {money(resultado.despesas.funcionariosCents)}</p>
+              <p className="text-sm">Manutenção {money(resultado.despesas.manutencaoCents)}</p>
+              <p className="text-sm">Taxas {money(resultado.despesas.taxasCents)}</p>
+              <p className="text-sm">Outros {money(resultado.despesas.outrosCents)}</p>
+            </div>
+            <div className="panel"><p className="text-xs uppercase text-[var(--text-muted)]">Receita bruta</p><p className="font-display text-2xl font-extrabold">{money(resultado.receitaBrutaCents)}</p></div>
+            <div className="panel"><p className="text-xs uppercase text-[var(--text-muted)]">Despesas</p><p className="font-display text-2xl font-extrabold">{money(resultado.despesaTotalCents)}</p></div>
+            <div className="panel sm:col-span-2"><p className="text-xs uppercase text-[var(--text-muted)]">Resultado operacional</p><p className="font-display text-2xl font-extrabold">{money(resultado.resultadoCents)}</p></div>
+            <div className="panel"><p className="text-xs uppercase text-[var(--text-muted)]">Parte da clínica</p><p className="font-display text-2xl font-extrabold">{money(resultado.clinicShareCents)}</p></div>
+            <div className="panel"><p className="text-xs uppercase text-[var(--text-muted)]">Parte dos médicos</p><p className="font-display text-2xl font-extrabold">{money(resultado.doctorShareCents)}</p></div>
+          </div>
+          <div className="mt-4 flex flex-wrap gap-2">
+            <a className="btn-gold" href={`/api/clinica/${params.id}/resultado-operacional?from=${from}&to=${to}&format=xlsx`}>
+              Baixar Excel
+            </a>
+            <a className="btn-ghost" href={`/api/clinica/${params.id}/resultado-operacional?from=${from}&to=${to}&format=pdf`} target="_blank" rel="noreferrer">
+              Baixar PDF
+            </a>
           </div>
         </div>
       )}

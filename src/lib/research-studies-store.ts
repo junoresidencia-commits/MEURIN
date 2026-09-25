@@ -37,6 +37,10 @@ export interface Study {
   variables: string[];
   journal?: string | null;
   status: StudyStatus;
+  /** Fontes da coorte. Vazio = prontuário (comportamento atual). */
+  sources?: string[];
+  /** Data em que a idade é calculada (inclusão no estudo). Vazio = hoje. */
+  ageReferenceDate?: string | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -72,8 +76,18 @@ let casesTableMissing = false;
 function isMissing(error: unknown): boolean {
   const e = error as { code?: string; message?: string } | null;
   if (!e) return false;
-  if (e.code === "42P01" || e.code === "PGRST205" || e.code === "PGRST204") return true;
-  return Boolean(e.message && /does not exist|could not find the table|schema cache/i.test(e.message));
+  if (e.code === "42P01" || e.code === "PGRST205") return true;
+  return Boolean(e.message && /relation .* does not exist|could not find the table/i.test(e.message));
+}
+
+function missingColumnName(error: { code?: string; message?: string } | null): string | null {
+  if (!error) return null;
+  if (error.code !== "PGRST204" && error.code !== "42703" && !/column|schema cache/i.test(error.message || "")) return null;
+  const msg = error.message || "";
+  let m = msg.match(/find the '([^']+)' column/i);
+  if (m) return m[1];
+  m = msg.match(/column "?([a-z0-9_]+)"? .*does not exist/i);
+  return m ? m[1] : null;
 }
 function studiesActive() {
   return Boolean(getSupabaseAdmin()) && !studiesTableMissing;
@@ -107,6 +121,8 @@ function mapStudy(r: Record<string, unknown>): Study {
     variables: (r.variables as string[]) ?? [],
     journal: (r.journal as string | null) ?? null,
     status: (r.status as StudyStatus) ?? "rascunho",
+    sources: Array.isArray(r.sources) ? (r.sources as string[]) : [],
+    ageReferenceDate: (r.age_reference_date as string | null) ?? (r.ageReferenceDate as string | null) ?? null,
     createdAt: String(r.created_at ?? r.createdAt ?? new Date().toISOString()),
     updatedAt: String(r.updated_at ?? r.updatedAt ?? new Date().toISOString()),
   };
@@ -122,6 +138,8 @@ function studyRow(s: Study) {
     variables: s.variables,
     journal: s.journal ?? null,
     status: s.status,
+    sources: s.sources ?? [],
+    age_reference_date: s.ageReferenceDate || null,
     created_at: s.createdAt,
     updated_at: s.updatedAt,
   };
@@ -157,13 +175,32 @@ export async function getStudy(doctorId: string, id: string): Promise<Study | nu
 
 export async function createStudy(input: Omit<Study, "id" | "createdAt" | "updatedAt">): Promise<Study> {
   const now = new Date().toISOString();
-  const study: Study = { ...input, id: randomUUID(), createdAt: now, updatedAt: now };
+  const study: Study = {
+    ...input,
+    sources: input.sources ?? [],
+    ageReferenceDate: input.ageReferenceDate ?? null,
+    id: randomUUID(),
+    createdAt: now,
+    updatedAt: now,
+  };
   if (studiesActive()) {
     const s = getSupabaseAdmin()!;
-    const { error } = await s.from("research_studies").insert(studyRow(study));
-    if (!error) return study;
-    if (isMissing(error)) studiesTableMissing = true;
-    else throw error;
+    const row: Record<string, unknown> = studyRow(study);
+    let error: { code?: string; message?: string } | null = null;
+    for (let attempt = 0; attempt < 6; attempt++) {
+      const res = await s.from("research_studies").insert(row);
+      error = res.error;
+      if (!error) return study;
+      const col = missingColumnName(error);
+      if (col && col in row) { delete row[col]; continue; }
+      break;
+    }
+    if (error) {
+      if (isMissing(error)) studiesTableMissing = true;
+      else throw error;
+    } else {
+      return study;
+    }
   }
   const rows = await readJson<Study>(STUDIES_FILE);
   rows.push(study);
@@ -184,10 +221,22 @@ export async function updateStudy(doctorId: string, id: string, patch: Partial<S
   };
   if (studiesActive()) {
     const s = getSupabaseAdmin()!;
-    const { error } = await s.from("research_studies").update(studyRow(updated)).eq("id", id).eq("doctor_id", doctorId);
-    if (!error) return updated;
-    if (isMissing(error)) studiesTableMissing = true;
-    else throw error;
+    const row: Record<string, unknown> = studyRow(updated);
+    let error: { code?: string; message?: string } | null = null;
+    for (let attempt = 0; attempt < 6; attempt++) {
+      const res = await s.from("research_studies").update(row).eq("id", id).eq("doctor_id", doctorId);
+      error = res.error;
+      if (!error) return updated;
+      const col = missingColumnName(error);
+      if (col && col in row) { delete row[col]; continue; }
+      break;
+    }
+    if (error) {
+      if (isMissing(error)) studiesTableMissing = true;
+      else throw error;
+    } else {
+      return updated;
+    }
   }
   const rows = await readJson<Study>(STUDIES_FILE);
   const i = rows.findIndex((r) => r.id === id);

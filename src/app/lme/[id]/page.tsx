@@ -3,9 +3,9 @@
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
-import { receitaFromLme, relatorioFromLme, composerHref } from "@/lib/complementary-docs";
 import { SignDocumentPanel } from "@/components/SignDocumentFlow";
 import { OfficialCeafDocs } from "@/components/OfficialCeafDocs";
+import { LmeComplementaryDocs } from "@/components/LmeComplementaryDocs";
 import { inferCeafProtocols } from "@/lib/ceaf-catalog";
 import { inferProtocolFromMedNames } from "@/lib/ceaf-documents";
 
@@ -198,30 +198,8 @@ export default function LmePage() {
         </section>
       )}
 
-      {/* Documentos complementares — só para o médico logado. NÃO altera a LME. */}
       {isDoctor && lme.patientEmail && (
-        <section className="mt-6 rounded-[16px] border border-[var(--border-gold)] bg-[var(--gold-soft)] p-5 shadow-[var(--shadow)] print:hidden">
-          <h2 className="font-display text-lg font-extrabold text-[var(--text)]">Documentos complementares</h2>
-          <p className="mt-1 text-sm text-[var(--text-soft)]">
-            A partir desta LME, gere a <b>Receita</b> e o <b>Relatório médico</b> já pré-preenchidos com os dados do paciente e do medicamento.
-            Você edita o texto, confere no papel timbrado e assina — a LME oficial <b>não é alterada</b>.
-          </p>
-          <div className="mt-3 flex flex-wrap gap-2">
-            <Link href={composerHref(lme.patientEmail, receitaFromLme(lme), lme.id)} className="btn-gold">Gerar Receita</Link>
-            <Link href={composerHref(lme.patientEmail, relatorioFromLme(lme), lme.id)} className="btn-ghost">Gerar Relatório Médico</Link>
-          </div>
-          <div className="mt-3 border-t border-[var(--border-gold)]/60 pt-3">
-            <p className="text-xs font-bold uppercase tracking-wider text-[var(--gold)]">Pacote (LME + TER + Receita + Relatório)</p>
-            <p className="mt-1 text-xs text-[var(--text-muted)]">Junta a LME oficial com o TER/formulário oficiais (quando existirem no pacote SESAB) e a Receita e o Relatório já gerados em PDF.</p>
-            <div className="mt-2 flex flex-wrap gap-2">
-              <a href={`/api/lme/${lme.id}/pacote?download=1`} target="_blank" rel="noopener noreferrer" className="btn-gold text-sm">Baixar pacote (PDF)</a>
-              <a href={`/api/lme/${lme.id}/pacote`} target="_blank" rel="noopener noreferrer" className="btn-ghost text-sm">Abrir / imprimir pacote</a>
-            </div>
-          </div>
-          <p className="mt-2 text-xs text-[var(--text-muted)]">
-            Dica: no compositor você pode salvar prescrições/relatórios como <b>modelo</b> e reutilizar nas próximas LME (padrões do médico).
-          </p>
-        </section>
+        <LmeComplementaryDocs lmeId={lme.id} patientEmail={lme.patientEmail} />
       )}
 
       {/* Assinatura digital (ICP-Brasil / VIDaaS / gov.br) */}

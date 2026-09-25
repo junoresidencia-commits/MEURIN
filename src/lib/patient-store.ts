@@ -49,7 +49,7 @@ export interface ClinicalNote {
   createdAt: string;
 }
 
-export type DocumentType = "receita" | "exame" | "relatorio";
+export type DocumentType = "receita" | "exame" | "relatorio" | "ter" | "consentimento" | "livre";
 
 export interface DocHistoryEntry {
   at: string;
@@ -83,6 +83,8 @@ export interface ClinicalDocument {
   availableAt?: string | null;
   patientViewedAt?: string | null;
   history?: DocHistoryEntry[];
+  /** LME de origem (receita/relatório/TER gerados a partir dela). */
+  sourceLmeId?: string | null;
 }
 
 export interface PatientData {
@@ -438,6 +440,7 @@ function mapDocumentRow(row: Record<string, unknown>): ClinicalDocument {
     availableAt: (row.available_at as string) ?? null,
     patientViewedAt: (row.patient_viewed_at as string) ?? null,
     history: Array.isArray(row.history) ? (row.history as DocHistoryEntry[]) : [],
+    sourceLmeId: (row.source_lme_id as string) ?? (row.sourceLmeId as string) ?? null,
   };
 }
 
@@ -476,9 +479,38 @@ export async function addDocument(
       signature_hash: doc.signatureHash ?? null,
       available_at: doc.availableAt ?? null,
       history: doc.history ?? [],
+      source_lme_id: doc.sourceLmeId ?? null,
     });
     if (error) {
-      if (isMissingTableError(error)) missingTables.add("documents");
+      if (isMissingTableError(error) && /source_lme_id|column/i.test((error as { message?: string }).message || "")) {
+        const { error: retry } = await supabase.from("documents").insert({
+          id: doc.id,
+          patient_email: doc.patientEmail,
+          doctor_id: doc.doctorId,
+          doctor_name: doc.doctorName,
+          doctor_crm: doc.doctorCrm ?? null,
+          type: doc.type,
+          title: doc.title,
+          body: doc.body,
+          shared_with_patient: doc.sharedWithPatient,
+          created_at: doc.createdAt,
+          letterhead_id: doc.letterheadId ?? null,
+          pdf_path: doc.pdfPath ?? null,
+          pdf_storage: doc.pdfStorage ?? null,
+          status: doc.status ?? "final",
+          version: doc.version ?? 1,
+          group_id: doc.groupId ?? null,
+          signed_at: doc.signedAt ?? null,
+          signed_by: doc.signedBy ?? null,
+          signature_method: doc.signatureMethod ?? null,
+          signature_hash: doc.signatureHash ?? null,
+          available_at: doc.availableAt ?? null,
+          history: doc.history ?? [],
+        });
+        if (!retry) return doc;
+        if (isMissingTableError(retry)) missingTables.add("documents");
+        else throw retry;
+      } else if (isMissingTableError(error)) missingTables.add("documents");
       else throw error;
     } else {
       return doc;
@@ -803,6 +835,7 @@ export async function updateDocument(id: string, patch: Partial<ClinicalDocument
   m("status", "status"); m("version", "version"); m("groupId", "group_id");
   m("signedAt", "signed_at"); m("signedBy", "signed_by"); m("signatureMethod", "signature_method"); m("signatureHash", "signature_hash");
   m("availableAt", "available_at"); m("patientViewedAt", "patient_viewed_at"); m("history", "history");
+  m("sourceLmeId", "source_lme_id");
 
   if (supabaseActive("documents")) {
     const supabase = getSupabaseAdmin()!;
@@ -857,4 +890,17 @@ export async function markPatientViewed(id: string): Promise<void> {
   const doc = await getDocumentById(id);
   if (!doc || doc.patientViewedAt) return;
   await updateDocument(id, { patientViewedAt: new Date().toISOString() });
+}
+
+/** Documento complementar já ligado a uma LME (mesmo tipo). Prefere o mais recente. */
+export async function findLmeLinkedDocument(
+  patientEmail: string,
+  lmeId: string,
+  type: string,
+): Promise<ClinicalDocument | null> {
+  const list = await getDocuments(patientEmail);
+  const hits = list.filter((d) => d.type === type && d.sourceLmeId === lmeId);
+  if (hits.length) return hits[0];
+  // Fallback: rascunho do wizard (mesmo tipo, sem PDF, recém-criado) — evita duplicar.
+  return null;
 }

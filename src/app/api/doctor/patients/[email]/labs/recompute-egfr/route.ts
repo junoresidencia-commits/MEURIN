@@ -27,7 +27,7 @@ export async function POST(_req: Request, { params }: { params: Promise<{ email:
 
   const creat = lastOf("creatinina");
   if (creat) {
-    const egfr = estimateEgfr(creat.value, access.birthdate, access.sex, creat.measuredAt);
+    const egfr = estimateEgfr(creat.value, access.birthdate, access.sex, creat.measuredAt, { ageYears: access.ageYears, ageReportedAt: access.ageReportedAt });
     const already = labs.some((l) => l.testKey === "tfge" && dayOf(l.measuredAt) === dayOf(creat.measuredAt) && String(l.origin || "").includes("CKD-EPI"));
     if (egfr != null && !already) {
       await addLabResult({
@@ -42,7 +42,7 @@ export async function POST(_req: Request, { params }: { params: Promise<{ email:
 
   const cys = lastOf("cistatina_c");
   if (cys) {
-    const egfr = estimateEgfrCystatin(cys.value, access.birthdate, access.sex, cys.measuredAt);
+    const egfr = estimateEgfrCystatin(cys.value, access.birthdate, access.sex, cys.measuredAt, { ageYears: access.ageYears, ageReportedAt: access.ageReportedAt });
     const already = labs.some((l) => l.testKey === "tfge_cistatina" && dayOf(l.measuredAt) === dayOf(cys.measuredAt) && String(l.origin || "").includes("Cistatina"));
     if (egfr != null && !already) {
       await addLabResult({

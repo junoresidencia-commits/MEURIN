@@ -3,7 +3,7 @@ import { getDoctorSessionId } from "@/lib/auth";
 import { getDoctorById } from "@/lib/store";
 import { getLetterhead, getDefaultLetterhead, type LetterheadArea } from "@/lib/letterheads-store";
 import { LETTERHEADS_BUCKET, readFile } from "@/lib/doc-storage";
-import { buildDocumentPdfDetailed, fillFields, LETTERHEAD_EMBED_MAX_BYTES, type DocBackground } from "@/lib/document-engine";
+import { buildDocumentPdfDetailed, fillFields, type DocBackground } from "@/lib/document-engine";
 import { jsonUtf8 } from "@/lib/json-utf8";
 import { todayBr } from "@/lib/pdf-winansi";
 
@@ -48,7 +48,7 @@ export async function POST(req: Request) {
           : null;
       if (lh && lh.doctorId === doctorId) {
         const file = await readFile(LETTERHEADS_BUCKET, lh.storage, lh.filePath);
-        if (file && file.buffer.length <= LETTERHEAD_EMBED_MAX_BYTES) {
+        if (file) {
           background = { kind: lh.kind, bytes: file.buffer, mime: lh.mime || file.mime };
           area = lh.area;
         }

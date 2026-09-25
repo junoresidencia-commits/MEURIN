@@ -13,6 +13,7 @@ import { STUDY_TYPE_LABEL, STUDY_STATUS_LABEL, STUDY_STATUSES, type StudyLite } 
 import { ResearchGovernancePanel } from "@/components/ResearchGovernancePanel";
 import { emptyProtocol, type ResearchConsent, type ResearchProtocol } from "@/lib/research-governance";
 import { guessSexFromName } from "@/lib/sex-guess";
+import { AgeBandChips } from "@/components/AgeBandChips";
 
 type Filter = { field: string; op: Operator; value: string; value2?: string };
 type NumStats = { n: number; mean: number; sd: number; median: number; q1: number; q3: number; min: number; max: number };
@@ -45,6 +46,8 @@ export default function EstudoDetailPage() {
   const [protocol, setProtocol] = useState<ResearchProtocol | null>(null);
   const [consents, setConsents] = useState<ResearchConsent[]>([]);
   const [exportGate, setExportGate] = useState({ ok: false, reason: "Registre a governança antes de exportar." });
+  const [hdSource, setHdSource] = useState(false);
+  const [ageRef, setAgeRef] = useState("");
 
   useEffect(() => {
     fetch("/api/auth").then((r) => r.json()).then((d) => {
@@ -62,6 +65,8 @@ export default function EstudoDetailPage() {
     setStudy(data.study);
     setFilters(data.study.filters || []);
     setVariables(data.study.variables || []);
+    setHdSource(Array.isArray(data.study.sources) && data.study.sources.includes("hemodialise"));
+    setAgeRef(data.study.ageReferenceDate ? String(data.study.ageReferenceDate).slice(0, 10) : "");
     if (data.governance) {
       setProtocol(data.governance.protocol);
       setConsents(data.governance.consents || []);
@@ -199,6 +204,34 @@ export default function EstudoDetailPage() {
             </label>
             <div className="flex flex-wrap items-center gap-3">
               <label className="flex items-center gap-2 text-sm text-[var(--text-soft)]">
+                <input
+                  type="checkbox"
+                  className="h-4 w-4 accent-[var(--gold)]"
+                  checked={hdSource}
+                  onChange={(e) => {
+                    const on = e.target.checked;
+                    setHdSource(on);
+                    let nextVars = variables;
+                    if (on && variables.length > 0 && !variables.includes("idade")) {
+                      nextVars = [...variables, "idade"];
+                      setVariables(nextVars);
+                    }
+                    save({ sources: on ? ["hemodialise"] : [], ...(nextVars !== variables ? { variables: nextVars } : {}) }, true);
+                  }}
+                />
+                Fonte: Hemodiálise
+              </label>
+              <label className="flex items-center gap-2 text-sm text-[var(--text-soft)]">
+                Idade na data
+                <input
+                  type="date"
+                  className="input-field !w-auto !py-2"
+                  value={ageRef}
+                  onChange={(e) => setAgeRef(e.target.value)}
+                  onBlur={(e) => save({ ageReferenceDate: e.target.value || null }, true)}
+                />
+              </label>
+              <label className="flex items-center gap-2 text-sm text-[var(--text-soft)]">
                 Status
                 <select className="input-field !w-auto !py-2" value={study.status} onChange={(e) => save({ status: e.target.value })}>
                   {STUDY_STATUSES.map((s) => <option key={s} value={s}>{STUDY_STATUS_LABEL[s]}</option>)}
@@ -249,9 +282,13 @@ export default function EstudoDetailPage() {
                 </div>
               );
             })}
+            <AgeBandChips onPick={(f) => setFilters((fs) => {
+              const rest = fs.filter((x) => x.field !== "idade");
+              return [...rest, f];
+            })} />
             <div className="flex flex-wrap items-center gap-3">
               <button type="button" className="text-sm font-semibold text-[var(--gold)]" onClick={() => setFilters((fs) => [...fs, { field: "drc", op: "=", value: "sim" }])}>+ Adicionar critério</button>
-              <button type="button" className="btn-gold" onClick={() => save({ filters, variables }, true)} disabled={saving || loading}>Salvar e recalcular</button>
+              <button type="button" className="btn-gold" onClick={() => save({ filters, variables, sources: hdSource ? ["hemodialise"] : [], ageReferenceDate: ageRef || null }, true)} disabled={saving || loading}>Salvar e recalcular</button>
             </div>
           </div>
 
@@ -299,11 +336,15 @@ export default function EstudoDetailPage() {
                 <div className="mt-2 grid gap-1.5">
                   {analysis.quality.map((q) => (
                     <div key={q.key} className="flex items-center gap-2 text-sm">
-                      <span className="w-48 shrink-0 truncate text-[var(--text-soft)]">{q.label}</span>
+                      <span className="w-48 shrink-0 truncate text-[var(--text-soft)]">{q.key === "idade" ? "Idade disponível" : q.label}</span>
                       <div className="h-2 flex-1 overflow-hidden rounded-full bg-[var(--border)]">
                         <div className={`h-full ${q.pct >= 70 ? "bg-emerald-500" : q.pct >= 40 ? "bg-amber-400" : "bg-red-400"}`} style={{ width: `${q.pct}%` }} />
                       </div>
-                      <span className="w-24 shrink-0 text-right text-xs text-[var(--text-muted)]">{q.available}/{q.total} · {num(q.pct)}%</span>
+                      <span className="w-40 shrink-0 text-right text-xs text-[var(--text-muted)]">
+                        {q.key === "idade"
+                          ? `disponível: ${num(q.pct)}% · ausente: ${num(Math.round((100 - q.pct) * 10) / 10)}%`
+                          : `${q.available}/${q.total} · ${num(q.pct)}%`}
+                      </span>
                     </div>
                   ))}
                 </div>
@@ -346,7 +387,7 @@ export default function EstudoDetailPage() {
                                   </span>
                                 ) : (
                                   <Link key={m.key} href={fixHref(p.id, m.fixTab)} className="rounded-lg border border-[var(--border)] bg-white px-2 py-1 text-xs font-semibold text-[var(--text-soft)] transition hover:border-[var(--gold)] hover:text-[var(--gold)]">
-                                    {m.label} <span className="text-[var(--text-muted)]">· corrigir →</span>
+                                    {m.key === "idade" ? "Idade · Dado ausente" : m.label} <span className="text-[var(--text-muted)]">· corrigir →</span>
                                   </Link>
                                 )
                               ))}
@@ -373,7 +414,7 @@ export default function EstudoDetailPage() {
                         <td className="py-1.5 pr-3 text-[var(--text-soft)]">{r.label}{r.type === "num" && r.unit ? ` (${r.unit})` : ""}</td>
                         <td className="py-1.5 text-right text-[var(--text)]">
                           {r.type === "num"
-                            ? (r.num ? <span>{num(r.num.mean)} ± {num(r.num.sd)} <span className="text-[var(--text-muted)]">(mediana {num(r.num.median)} [{num(r.num.q1)}–{num(r.num.q3)}]; n={r.num.n})</span></span> : <span className="text-[var(--text-muted)]">sem dados</span>)
+                            ? (r.num ? <span>{num(r.num.mean)} ± {num(r.num.sd)} <span className="text-[var(--text-muted)]">(mediana {num(r.num.median)} [{num(r.num.q1)}–{num(r.num.q3)}]; n={r.num.n})</span></span> : <span className="text-[var(--text-muted)]">{r.key === "idade" ? "Dado ausente" : "sem dados"}</span>)
                             : (
                               <span className="inline-flex flex-wrap justify-end gap-x-3">
                                 {Object.entries(r.cat).sort((a, b) => b[1] - a[1]).map(([k, v]) => (

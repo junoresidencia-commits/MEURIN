@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { getDoctorSessionId } from "@/lib/auth";
 import { getStudy } from "@/lib/research-studies-store";
-import { buildCohortRecords, applyFilters } from "@/lib/research";
+import { applyFilters, buildCohortRecords, cohortOptsFromStudy } from "@/lib/research";
 import { compareGroups } from "@/lib/research-compare";
 import { RESEARCH_VARS_BY_KEY } from "@/lib/research-fields";
 
@@ -14,7 +14,7 @@ export async function GET(req: Request, ctx: { params: Promise<{ id: string }> }
   const study = await getStudy(doctorId, id);
   if (!study) return NextResponse.json({ error: "Estudo não encontrado." }, { status: 404 });
 
-  const all = await buildCohortRecords(doctorId);
+  const all = await buildCohortRecords(doctorId, cohortOptsFromStudy(study));
   const matched = applyFilters(all, study.filters);
   const variables = study.variables.length ? study.variables : DEFAULT_VARS;
 

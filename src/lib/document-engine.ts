@@ -10,8 +10,10 @@ const INK = rgb(0.043, 0.184, 0.271);
 const MUTED = rgb(0.35, 0.45, 0.52);
 const LINE = rgb(0.75, 0.82, 0.85);
 
-/** Timbrado maior que isso estoura memória no Vercel. O PDF sai mesmo assim, em papel branco. */
-export const LETTERHEAD_EMBED_MAX_BYTES = 800 * 1024;
+/** Teto igual ao upload (12 MB). Não pulamos o timbrado “porque é um pouco grande”. */
+export const LETTERHEAD_EMBED_MAX_BYTES = 12 * 1024 * 1024;
+/** A4 ~180 dpi: escaneado enorme é reduzido, mas o fundo continua no PDF. */
+const LETTERHEAD_MAX_PX = { w: 1488, h: 2104 };
 
 export interface DocPatient {
   name?: string;
@@ -153,17 +155,53 @@ function wrapRuns(runs: Run[], maxWidth: number, size: number, font: PDFFont, fo
   return lines;
 }
 
+async function shrinkLetterheadImage(
+  bytes: Uint8Array,
+  kind: "png" | "jpg",
+): Promise<{ bytes: Uint8Array; kind: "png" | "jpg" }> {
+  if (bytes.byteLength < 350 * 1024) return { bytes, kind };
+  try {
+    const sharp = (await import("sharp")).default;
+    const meta = await sharp(bytes, { failOn: "none" }).rotate().metadata();
+    const tooManyPx =
+      (meta.width || 0) > LETTERHEAD_MAX_PX.w || (meta.height || 0) > LETTERHEAD_MAX_PX.h;
+    if (!tooManyPx && bytes.byteLength < 900 * 1024) return { bytes, kind };
+    let pipeline = sharp(bytes, { failOn: "none" }).rotate();
+    if (tooManyPx) {
+      pipeline = pipeline.resize({
+        width: LETTERHEAD_MAX_PX.w,
+        height: LETTERHEAD_MAX_PX.h,
+        fit: "inside",
+        withoutEnlargement: true,
+      });
+    }
+    if (kind === "png") {
+      const out = await pipeline.png({ compressionLevel: 8 }).toBuffer();
+      return { bytes: new Uint8Array(out), kind: "png" };
+    }
+    const out = await pipeline.jpeg({ quality: 80, mozjpeg: true }).toBuffer();
+    return { bytes: new Uint8Array(out), kind: "jpg" };
+  } catch {
+    return { bytes, kind };
+  }
+}
+
 async function embedBackground(
   out: PDFDocument,
   background: DocBackground | null | undefined,
 ): Promise<{ bgImage: PDFImage | null; bgPage: PDFEmbeddedPage | null; skipped: boolean }> {
   const empty = { bgImage: null, bgPage: null, skipped: false };
   if (!background?.bytes) return empty;
-  const bytes = asBytes(background.bytes);
+  let bytes = asBytes(background.bytes);
   if (bytes.byteLength > LETTERHEAD_EMBED_MAX_BYTES) {
     return { bgImage: null, bgPage: null, skipped: true };
   }
-  const kind = sniffBg(bytes, background.kind, background.mime);
+  let kind = sniffBg(bytes, background.kind, background.mime);
+  if (kind === "png" || kind === "jpg") {
+    const shrunk = await shrinkLetterheadImage(bytes, kind);
+    bytes = shrunk.bytes;
+    kind = shrunk.kind;
+  }
   try {
     if (kind === "png") {
       return { bgImage: await out.embedPng(bytes), bgPage: null, skipped: false };

@@ -51,7 +51,7 @@ function drawFields(pages: PDFPage[], font: PDFFont, fields: OverlayField[] | un
   }
 }
 
-export type OfficialPdfOk = { ok: true; pdf: Uint8Array; filename: string; pages: number[] };
+export type OfficialPdfOk = { ok: true; pdf: Uint8Array; filename: string; label: string; pages: number[] };
 export type OfficialPdfErr = { ok: false; error: string; status: number; reason?: string };
 
 /** Extrai as páginas oficiais do pacote SESAB e preenche identificação. */
@@ -111,7 +111,7 @@ export async function buildOfficialCeafPdf(opts: {
 
     const pdf = await out.save();
     console.info("[ceaf/official]", { protocolId: protocol, doc: opts.doc, status: 200, path: filePath, pages: valid });
-    return { ok: true, pdf, filename: asciiName(protocol || "ceaf", opts.doc), pages: valid };
+    return { ok: true, pdf, filename: asciiName(protocol || "ceaf", opts.doc), label: slot.label, pages: valid };
   } catch (err) {
     const tried = err && typeof err === "object" && "tried" in err ? (err as { tried?: string[] }).tried : undefined;
     console.error("[ceaf/official]", { protocolId: protocol, doc: opts.doc, status: 500, path: tried, error: "falha ao ler/gerar" });

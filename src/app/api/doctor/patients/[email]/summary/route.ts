@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { getLabResults, getPatientData, latestOfKind } from "@/lib/patient-store";
 import { getProfile } from "@/lib/clinical-profile-store";
 import { resolvePatientAccess } from "@/lib/doctor-access";
-import { ageFromBirthdate } from "@/lib/egfr";
+import { resolvePatientAge } from "@/lib/patient-age";
 import { NEPHRO_LABS } from "@/lib/labs";
 
 type LatestLab = { value: number; unit: string | null; date: string; trend: "up" | "down" | "flat" | null };
@@ -79,7 +79,7 @@ export async function GET(
     patient: {
       name: access.name,
       city: access.city,
-      age: ageFromBirthdate(access.birthdate),
+      age: resolvePatientAge({ birthdate: access.birthdate, ageYears: access.ageYears, ageReportedAt: access.ageReportedAt }),
       sex: access.sex,
     },
     drc: { g: drcG, a: drcA },
@@ -89,6 +89,8 @@ export async function GET(
       creatinina: latest["creatinina"] || null,
       rac: latest["rac"] || null,
       proteinuria_24h: latest["proteinuria_24h"] || null,
+      albuminuria_24h: latest["albuminuria_24h"] || null,
+      microalbuminuria: latest["microalbuminuria"] || null,
       potassio: latest["potassio"] || null,
       hemoglobina: latest["hemoglobina"] || null,
     },

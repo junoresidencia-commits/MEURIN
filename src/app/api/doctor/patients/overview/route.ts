@@ -5,7 +5,7 @@ import { clinicalKey, findPatientByClinicalKey, listPatientsByDoctor } from "@/l
 import { getProfile, getProfilesByDoctor } from "@/lib/clinical-profile-store";
 import { listSharesForDoctor } from "@/lib/patient-shares-store";
 import { getLatestLabsByEmails } from "@/lib/patient-store";
-import { ageFromBirthdate } from "@/lib/egfr";
+import { resolvePatientAge } from "@/lib/patient-age";
 
 type LabVal = { value: number; unit: string | null; date: string } | null;
 type Row = {
@@ -41,12 +41,12 @@ export async function GET() {
   const createdEmails = new Set(created.map((p) => (p.email || "").toLowerCase()).filter(Boolean));
 
   // Chave clínica por linha (email ou pid:<id>) — usada para casar exames/perfil.
-  type Base = { key: string; clinicalKey: string; name: string; photoUrl: string | null; city: string; birthdate: string | null; sex: string | null; isCreated: boolean; shared?: boolean; lastSlot?: string };
+  type Base = { key: string; clinicalKey: string; name: string; photoUrl: string | null; city: string; birthdate: string | null; ageYears: number | null; ageReportedAt: string | null; sex: string | null; isCreated: boolean; shared?: boolean; lastSlot?: string };
   const bases: Base[] = [];
 
   for (const p of created) {
     if (p.status === "archived") continue;
-    bases.push({ key: p.id, clinicalKey: clinicalKey(p), name: p.name, photoUrl: p.photoUrl ?? null, city: p.address || "", birthdate: p.birthdate || null, sex: p.sex || null, isCreated: true });
+    bases.push({ key: p.id, clinicalKey: clinicalKey(p), name: p.name, photoUrl: p.photoUrl ?? null, city: p.address || "", birthdate: p.birthdate || null, ageYears: p.ageYears ?? null, ageReportedAt: p.ageReportedAt || null, sex: p.sex || null, isCreated: true });
   }
   const byEmail = new Map<string, Base & { lastSlot: string }>();
   for (const b of mine) {
@@ -54,7 +54,7 @@ export async function GET() {
     if (createdEmails.has(email)) continue;
     const cur = byEmail.get(email);
     if (!cur || b.slotStart > cur.lastSlot) {
-      byEmail.set(email, { key: email, clinicalKey: email, name: b.patientName, photoUrl: null, city: b.patientCity, birthdate: null, sex: null, isCreated: false, lastSlot: b.slotStart });
+      byEmail.set(email, { key: email, clinicalKey: email, name: b.patientName, photoUrl: null, city: b.patientCity, birthdate: null, ageYears: null, ageReportedAt: null, sex: null, isCreated: false, lastSlot: b.slotStart });
     }
   }
   for (const v of byEmail.values()) bases.push(v);
@@ -75,6 +75,8 @@ export async function GET() {
       photoUrl: patient?.photoUrl ?? null,
       city: patient?.address || "",
       birthdate: patient?.birthdate || null,
+      ageYears: patient?.ageYears ?? null,
+      ageReportedAt: patient?.ageReportedAt || null,
       sex: patient?.sex || null,
       isCreated: Boolean(patient),
       shared: true,
@@ -124,7 +126,7 @@ export async function GET() {
     const retornoPendente = past.length > 0 && future.length === 0;
     const active = Boolean(nextConsultation) || (lastConsultation ? now - new Date(lastConsultation).getTime() <= 180 * DAY : false) || bks.length === 0;
 
-    const age = ageFromBirthdate(b.birthdate);
+    const age = resolvePatientAge({ birthdate: b.birthdate, ageYears: b.ageYears, ageReportedAt: b.ageReportedAt });
     return {
       key: b.key,
       name: b.name,

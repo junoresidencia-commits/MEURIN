@@ -37,6 +37,8 @@ export interface LmeRequest {
   responsibleName?: string | null;
   medications: LmeMedication[];
   status: string;
+  /** Protocolo CEAF oficial escolhido no assistente (para TER/formulário). */
+  protocolId?: string | null;
   /** Preenchido quando o médico marca a LME como assinada (à mão ou digital). */
   signedAt?: string | null;
   signedBy?: string | null;
@@ -96,6 +98,7 @@ function mapRow(r: Record<string, unknown>): LmeRequest {
     responsibleName: (r.responsible_name as string | null) ?? null,
     medications: Array.isArray(r.medications) ? (r.medications as LmeMedication[]) : [],
     status: String(r.status || "rascunho"),
+    protocolId: (r.protocol_id as string | null) ?? (r.protocolId as string | null) ?? null,
     signedAt: r.signed_at ? new Date(String(r.signed_at)).toISOString() : null,
     signedBy: (r.signed_by as string | null) ?? null,
     createdAt: new Date(String(r.created_at)).toISOString(),
@@ -138,10 +141,44 @@ export async function createLme(input: Omit<LmeRequest, "id" | "createdAt">): Pr
       responsible_name: row.responsibleName ?? null,
       medications: row.medications,
       status: row.status,
+      protocol_id: row.protocolId ?? null,
       created_at: row.createdAt,
     });
     if (error) {
-      if (isMissing(error)) tableMissing = true;
+      if (isMissing(error) && /protocol_id|column/i.test(error.message || "")) {
+        const { error: retry } = await supabase.from("lme_requests").insert({
+          id: row.id,
+          patient_email: row.patientEmail,
+          doctor_id: row.doctorId ?? null,
+          doctor_name: row.doctorName ?? null,
+          doctor_crm: row.doctorCrm ?? null,
+          doctor_cns: row.doctorCns ?? null,
+          establishment_name: row.establishmentName ?? null,
+          cnes: row.cnes ?? null,
+          patient_name: row.patientName ?? null,
+          mother_name: row.motherName ?? null,
+          weight_kg: row.weightKg ?? null,
+          height_cm: row.heightCm ?? null,
+          patient_cpf: row.patientCpf ?? null,
+          patient_cns: row.patientCns ?? null,
+          patient_phone: row.patientPhone ?? null,
+          patient_email_contact: row.patientEmailContact ?? null,
+          race: row.race ?? null,
+          cid10: row.cid10 ?? null,
+          diagnosis: row.diagnosis ?? null,
+          anamnesis: row.anamnesis ?? null,
+          prior_treatment: row.priorTreatment,
+          prior_treatment_desc: row.priorTreatmentDesc ?? null,
+          incapable: row.incapable,
+          responsible_name: row.responsibleName ?? null,
+          medications: row.medications,
+          status: row.status,
+          created_at: row.createdAt,
+        });
+        if (!retry) return row;
+        if (isMissing(retry)) tableMissing = true;
+        else throw retry;
+      } else if (isMissing(error)) tableMissing = true;
       else throw error;
     } else {
       return row;

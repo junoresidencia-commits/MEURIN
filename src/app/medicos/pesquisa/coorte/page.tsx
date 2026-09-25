@@ -13,6 +13,7 @@ import {
   OPERATORS_NUM,
   type Operator,
 } from "@/lib/research-fields";
+import { AgeBandChips } from "@/components/AgeBandChips";
 
 type Filter = { field: string; op: Operator; value: string; value2?: string };
 type Stats = {
@@ -42,6 +43,8 @@ export default function CoortePage() {
   const [loading, setLoading] = useState(false);
   const [exportVars, setExportVars] = useState<string[]>(DEFAULT_EXPORT_VARS);
   const [pickVars, setPickVars] = useState(false);
+  const [hdSource, setHdSource] = useState(false);
+  const [ageRef, setAgeRef] = useState("");
 
   useEffect(() => {
     fetch("/api/auth").then((r) => r.json()).then((d) => {
@@ -66,7 +69,7 @@ export default function CoortePage() {
       const res = await fetch("/api/pesquisa/cohort", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ filters, anonymize }),
+        body: JSON.stringify({ filters, anonymize, sources: hdSource ? ["hemodialise"] : [], ageReferenceDate: ageRef || null }),
       });
       const data = await res.json();
       if (res.ok) setResult(data);
@@ -173,10 +176,24 @@ export default function CoortePage() {
                 </div>
               );
             })}
+            <AgeBandChips onPick={(f) => setFilters((fs) => {
+              const rest = fs.filter((x) => x.field !== "idade");
+              return [...rest, f];
+            })} />
             <div className="flex flex-wrap gap-2">
-              <button type="button" className="text-sm font-semibold text-[var(--gold)]" onClick={() => setFilters((fs) => [...fs, { field: "idade", op: ">", value: "18" }])}>
+              <button type="button" className="text-sm font-semibold text-[var(--gold)]" onClick={() => setFilters((fs) => [...fs, { field: "idade", op: ">=", value: "18" }])}>
                 + Adicionar filtro
               </button>
+            </div>
+            <div className="flex flex-wrap items-center gap-3 text-sm text-[var(--text-soft)]">
+              <label className="flex items-center gap-2">
+                <input type="checkbox" className="h-4 w-4 accent-[var(--gold)]" checked={hdSource} onChange={(e) => setHdSource(e.target.checked)} />
+                Fonte: Hemodiálise
+              </label>
+              <label className="flex items-center gap-2">
+                Idade na data
+                <input type="date" className="input-field !w-auto !py-2" value={ageRef} onChange={(e) => setAgeRef(e.target.value)} />
+              </label>
             </div>
             <div className="flex flex-wrap items-center gap-3 border-t border-[var(--border)] pt-3">
               <button type="button" className="btn-gold" onClick={run} disabled={loading}>

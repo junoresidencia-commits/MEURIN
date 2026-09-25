@@ -47,7 +47,7 @@ function profileVar(): ResearchVar[] {
 }
 
 const DERIVED: ResearchVar[] = [
-  { key: "idade", label: "Idade", type: "num", group: "Demografia", source: "calculado", unit: "anos", description: "Calculada a partir da data de nascimento." },
+  { key: "idade", label: "Idade", type: "num", group: "Demografia", source: "calculado", unit: "anos", description: "Calculada a partir da data de nascimento (fonte principal) ou da idade manual na data de referência do estudo. Sem dado: ausente — não se estima." },
   { key: "sexo", label: "Sexo", type: "cat", group: "Demografia", source: "informado", options: [
     { value: "masculino", label: "Masculino" },
     { value: "feminino", label: "Feminino" },
@@ -72,6 +72,6 @@ export const RESEARCH_VARS_BY_KEY = new Map(RESEARCH_VARS.map((v) => [v.key, v])
 
 export const RESEARCH_GROUPS = Array.from(new Set(RESEARCH_VARS.map((v) => v.group)));
 
-export type Operator = "=" | "!=" | ">" | "<" | "entre";
-export const OPERATORS_NUM: Operator[] = ["=", "!=", ">", "<", "entre"];
+export type Operator = "=" | "!=" | ">" | "<" | ">=" | "<=" | "entre";
+export const OPERATORS_NUM: Operator[] = ["=", "!=", ">", "<", ">=", "<=", "entre"];
 export const OPERATORS_CAT: Operator[] = ["=", "!="];

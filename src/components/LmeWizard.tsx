@@ -91,13 +91,13 @@ export function LmeWizard({ emailParam, patientName, onCreated }: { emailParam: 
       const medications = selectedMeds.map((m) => ({ name: m.name, presentation: m.presentation, monthlyQty: qty[m.id] || "" }));
       const res = await fetch(`/api/doctor/patients/${encodePatientParam(emailParam)}/lme`, {
         method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ weightKg: form.weightKg || undefined, heightCm: form.heightCm || undefined, cid10: cid, diagnosis: form.diagnosis, anamnesis: form.justificativa, medications, establishmentName: establishment?.name, cnes: establishment?.cnes }),
+        body: JSON.stringify({ weightKg: form.weightKg || undefined, heightCm: form.heightCm || undefined, cid10: cid, diagnosis: form.diagnosis, anamnesis: form.justificativa, medications, establishmentName: establishment?.name, cnes: establishment?.cnes, protocolId: protocol.id }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Não foi possível gerar a LME.");
       if (alsoReceita) {
-        const body = selectedMeds.map((m) => `${m.name} (${m.presentation}) — ${form.posologia || qty[m.id] || ""}`.trim()).join("\n");
-        if (body) await fetch(`/api/doctor/patients/${encodePatientParam(emailParam)}/documents`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ type: "receita", body, sharedWithPatient: false }) });
+        const body = selectedMeds.map((m) => `${m.name} (${m.presentation}) — ${form.posologia || qty[m.id] || "____ (preencher dose, via e frequência)"}`.trim()).join("\n");
+        if (body) await fetch(`/api/doctor/patients/${encodePatientParam(emailParam)}/documents`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ type: "receita", body, sharedWithPatient: false, status: "draft", sourceLmeId: data.id }) });
       }
       if (alsoRelatorio) {
         const cidObj = protocol.cids.find((c) => c.code === cid);
@@ -118,7 +118,7 @@ export function LmeWizard({ emailParam, patientName, onCreated }: { emailParam: 
           "",
           `Declaro que o(a) paciente preenche os critérios do PCDT/SESAB para o(s) medicamento(s) solicitado(s).`,
         ].filter((l) => l !== "").join("\n");
-        await fetch(`/api/doctor/patients/${encodePatientParam(emailParam)}/documents`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ type: "relatorio", title: `Relatório médico — ${protocol.name}`, body: relatorio, sharedWithPatient: false }) });
+        await fetch(`/api/doctor/patients/${encodePatientParam(emailParam)}/documents`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ type: "relatorio", title: `Relatório médico — ${protocol.name}`, body: relatorio, sharedWithPatient: false, status: "draft", sourceLmeId: data.id }) });
       }
       await onCreated();
       if (data.id) window.open(`/lme/${data.id}`, "_blank");

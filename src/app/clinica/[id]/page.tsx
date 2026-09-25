@@ -30,6 +30,8 @@ export default function ClinicaHomePage() {
   const [planName, setPlanName] = useState<string | null>(null);
   const [resumo, setResumo] = useState<Resumo | null>(null);
   const [finErr, setFinErr] = useState("");
+  const [stockAlerts, setStockAlerts] = useState<Alert[]>([]);
+  const [stockView, setStockView] = useState(false);
 
   useEffect(() => {
     fetch(`/api/clinica/${params.id}/me`)
@@ -38,6 +40,7 @@ export default function ClinicaHomePage() {
         setClinic(d.clinic?.name || "");
         setStatus(d.clinic?.status || "");
         setCanAdmin(Boolean(d.staff?.canAdmin));
+        setStockView(Boolean(d.staff?.canAdmin || d.staff?.perms?.stock_view));
       })
       .catch(() => {});
     fetch(`/api/clinica/${params.id}/license`)
@@ -57,6 +60,14 @@ export default function ClinicaHomePage() {
       })
       .catch((e) => setFinErr(e instanceof Error ? e.message : "Não foi possível carregar o financeiro agora."));
   }, [params.id, canAdmin]);
+
+  useEffect(() => {
+    if (!stockView) return;
+    fetch(`/api/clinica/${params.id}/estoque?view=alerts`)
+      .then((r) => r.json())
+      .then((d) => setStockAlerts(d.alerts || []))
+      .catch(() => setStockAlerts([]));
+  }, [params.id, stockView]);
 
   return (
     <div>
@@ -101,6 +112,16 @@ export default function ClinicaHomePage() {
         </>
       )}
       {finErr && <p className="mt-4 text-sm text-[var(--danger)]">{finErr}</p>}
+      {stockAlerts.length > 0 && (
+        <div className="mt-4 space-y-2">
+          <p className="text-xs font-bold uppercase tracking-wider text-[var(--gold)]">Estoque</p>
+          {stockAlerts.map((a) => (
+            <div key={a.text} className={`rounded-2xl border px-4 py-3 text-sm font-semibold ${TONE[a.tone]}`}>
+              {a.tone === "red" ? "🔴" : "🟡"} {a.text}
+            </div>
+          ))}
+        </div>
+      )}
 
       <div className="mt-6 grid gap-3 sm:grid-cols-2">
         {canAdmin && (
@@ -135,6 +156,16 @@ export default function ClinicaHomePage() {
           <p className="font-bold">Check-in</p>
           <p className="mt-1 text-sm text-[var(--text-muted)]">Pago, pendente, cortesia, Pix, cartão ou dinheiro.</p>
         </Link>
+        <Link href={`/clinica/${params.id}/caixa-despesas`} className="panel block">
+          <p className="font-bold">Caixa e despesas</p>
+          <p className="mt-1 text-sm text-[var(--text-muted)]">Registrar saída, fluxo do dia e fechamento do caixa físico.</p>
+        </Link>
+        {stockView && (
+          <Link href={`/clinica/${params.id}/estoque`} className="panel block">
+            <p className="font-bold">Estoque</p>
+            <p className="mt-1 text-sm text-[var(--text-muted)]">Materiais, compras, validade e inventário desta clínica.</p>
+          </Link>
+        )}
       </div>
     </div>
   );

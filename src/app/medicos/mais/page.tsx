@@ -15,6 +15,7 @@ export default function MedicoMaisPage() {
   const [isAdmin, setIsAdmin] = useState(false);
   const [isSuperAdmin, setIsSuperAdmin] = useState(false);
   const [clinicAdmin, setClinicAdmin] = useState<{ clinicId: string; clinicName: string }[]>([]);
+  const [hdAllowed, setHdAllowed] = useState<boolean | null>(null);
 
   useEffect(() => {
     fetch("/api/auth").then((r) => r.json()).then((d) => {
@@ -23,6 +24,7 @@ export default function MedicoMaisPage() {
       setIsSuperAdmin(Array.isArray(d.doctor.platformRoles) && d.doctor.platformRoles.includes("SUPER_ADMIN"));
       setClinicAdmin(Array.isArray(d.doctor.clinicAdmin) ? d.doctor.clinicAdmin : []);
       fetch("/api/admin/session").then((r) => r.json()).then((x) => setIsAdmin(Boolean(x.admin))).catch(() => {});
+      fetch("/api/hemodialise?view=session").then((r) => r.json()).then((x) => setHdAllowed(Boolean(x.allowed))).catch(() => {});
     });
   }, [router]);
 
@@ -44,7 +46,7 @@ export default function MedicoMaisPage() {
       title: "Clínica e equipe",
       items: [
         { href: "/medicos/agenda/configurar", label: "Clínicas e horários", desc: "Locais de atendimento e períodos da agenda." },
-        { href: "/medicos/prontuario-inteligente", label: "Revisão de prontuário inteligente", desc: "Escolher o que sugerir e reler evoluções — nada entra no perfil sozinho." },
+        { href: "/medicos/prontuario-inteligente", label: "Revisão de prontuário", desc: "Escolher o que sugerir e reler evoluções — nada entra no perfil sozinho." },
         { href: "/medicos/equipe", label: "Atendentes", desc: "Sua equipe administrativa e permissões." },
         ...clinicAdmin.map((c) => ({ href: `/clinica/${c.clinicId}`, label: `Gestão · ${c.clinicName}`, desc: "Equipe, produção e check-in da clínica — separado do prontuário." })),
         { href: "/medicos/equipe-assistencial", label: "Minha Equipe", desc: "Médicos, nutrição, psicologia e enfermagem." },
@@ -52,9 +54,16 @@ export default function MedicoMaisPage() {
       ],
     },
     {
+      title: "Apoio clínico",
+      items: [
+        { href: "/medicos/calculadoras", label: "Calculadoras & Risco", desc: "CKD-EPI, KFRE, eletrólitos, ajuste renal e avaliações — sem inventar dado faltante." },
+      ],
+    },
+    {
       title: "Documentos e pesquisa",
       items: [
         { href: "/medicos/documentos", label: "Documento avulso", desc: "Receita, pedido ou relatório rápido sem paciente." },
+        ...(hdAllowed !== false ? [{ href: "/hemodialise", label: "Hemodiálise", desc: "Mapa, equipe, exames e revisão mensal — módulo isolado." }] : []),
         { href: "/medicos/configuracoes/documentos", label: "Papéis timbrados", desc: "Modelos de papel timbrado para os PDFs." },
         { href: "/medicos/pesquisa", label: "Estudos e Pesquisa", desc: "Casos, estudos, análises e exportação científica." },
         { href: "/medicos/links", label: "Links úteis", desc: "Sua biblioteca de links por condição." },

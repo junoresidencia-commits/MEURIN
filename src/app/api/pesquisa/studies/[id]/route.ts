@@ -40,6 +40,11 @@ export async function PUT(req: Request, ctx: { params: Promise<{ id: string }> }
   if (Array.isArray(body.variables)) patch.variables = body.variables.map(String);
   if (body.journal !== undefined) patch.journal = body.journal ? String(body.journal) : null;
   if (body.status !== undefined && STATUSES.includes(body.status)) patch.status = body.status;
+  if (Array.isArray(body.sources)) patch.sources = body.sources.map(String);
+  if (body.ageReferenceDate !== undefined) {
+    const raw = body.ageReferenceDate == null || body.ageReferenceDate === "" ? null : String(body.ageReferenceDate);
+    patch.ageReferenceDate = raw && /^\d{4}-\d{2}(-\d{2})?$/.test(raw) ? raw : null;
+  }
   const study = await updateStudy(doctorId, id, patch);
   if (!study) return NextResponse.json({ error: "Estudo não encontrado." }, { status: 404 });
   return NextResponse.json({ study });

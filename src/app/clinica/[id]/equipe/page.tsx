@@ -2,6 +2,9 @@
 
 import { useParams } from "next/navigation";
 import { useEffect, useState } from "react";
+import { CASH_PERM_LABEL } from "@/lib/clinic-cash-labels";
+import { STOCK_PERM_LABEL } from "@/lib/clinic-stock-labels";
+import { CLINIC_CASH_PERM_KEYS, CLINIC_STOCK_PERM_KEYS } from "@/lib/platform-types";
 
 function brl(cents: number) {
   return (cents / 100).toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
@@ -17,6 +20,7 @@ type Member = {
   email: string | null;
   feeCents: number | null;
   clinicSharePercent: number | null;
+  permissions?: Record<string, boolean>;
 };
 type Invite = { id: string; kind: string; name: string; email: string; status: string; token: string; createdAt: string; feeCents?: number | null; clinicSharePercent?: number | null };
 
@@ -81,6 +85,16 @@ export default function ClinicaEquipePage() {
     }
   }
 
+  async function savePerm(m: Member, key: string, value: boolean) {
+    const permissions = { ...(m.permissions || {}), [key]: value };
+    setMembers((xs) => xs.map((x) => (x.id === m.id ? { ...x, permissions } : x)));
+    await fetch(`/api/clinica/${params.id}/membros/${m.id}/permissoes`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ permissions: { [key]: value } }),
+    });
+  }
+
   return (
     <div>
       <h1 className="font-display text-3xl font-extrabold text-[var(--text)]">Equipe da clínica</h1>
@@ -135,6 +149,39 @@ export default function ClinicaEquipePage() {
                   ? `${brl(m.feeCents)} nesta clínica · ${m.clinicSharePercent ?? 0}% clínica`
                   : "Sem valor definido nesta clínica — cadastre na produção."}
               </p>
+            )}
+            {(m.actorKind === "attendant" || m.role === "MEDICO") && (
+              <div className="mt-3 grid gap-2 sm:grid-cols-2">
+                {m.actorKind === "attendant" && CLINIC_CASH_PERM_KEYS.map((key) => (
+                  <label key={key} className="flex items-center gap-2 text-sm">
+                    <input
+                      type="checkbox"
+                      className="accent-[var(--gold)]"
+                      checked={m.permissions?.[key] !== false}
+                      onChange={(e) => savePerm(m, key, e.target.checked)}
+                    />
+                    {CASH_PERM_LABEL[key]}
+                  </label>
+                ))}
+                {CLINIC_STOCK_PERM_KEYS.map((key) => {
+                  const isOn = m.role === "MEDICO"
+                    ? Boolean(m.permissions?.[key])
+                    : key === "stock_manage"
+                      ? m.permissions?.[key] === true
+                      : m.permissions?.[key] !== false;
+                  return (
+                  <label key={key} className="flex items-center gap-2 text-sm">
+                    <input
+                      type="checkbox"
+                      className="accent-[var(--gold)]"
+                      checked={isOn}
+                      onChange={(e) => savePerm(m, key, e.target.checked)}
+                    />
+                    {STOCK_PERM_LABEL[key]}
+                  </label>
+                  );
+                })}
+              </div>
             )}
           </div>
         ))}

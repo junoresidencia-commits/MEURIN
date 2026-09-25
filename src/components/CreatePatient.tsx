@@ -42,22 +42,25 @@ export function CreatePatient({ onCreated }: { onCreated: () => void }) {
     if (!form.name.trim()) { setError("Informe o nome completo."); return; }
     const ageNum = Number(String(form.age).replace(/\D/g, ""));
     const hasAge = form.age.trim() !== "" && ageNum > 0 && ageNum < 130;
-    if (!form.birthdate && !hasAge) { setError("Informe a data de nascimento OU a idade (necessária para calcular TFGe)."); return; }
+    if (!form.birthdate && !hasAge) { setError("Informe a data de nascimento OU a idade."); return; }
     if (!form.sex) { setError("Selecione o sexo (feminino ou masculino)."); return; }
     if (!form.address.trim()) { setError("Informe a cidade / região."); return; }
     setSaving(true);
     setError("");
     if (force) setDup(null);
-    // Sem data de nascimento? Deriva uma data aproximada a partir da idade (1º de janeiro
-    // do ano). Serve para os cálculos; o médico pode corrigir a data exata depois.
-    const birthdate = form.birthdate || (hasAge ? `${new Date().getFullYear() - ageNum}-01-01` : "");
     const { age: _age, ...rest } = form;
     void _age;
     try {
       const res = await fetch("/api/doctor/patients", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ ...rest, birthdate, force }),
+        body: JSON.stringify({
+          ...rest,
+          birthdate: form.birthdate || null,
+          ageYears: !form.birthdate && hasAge ? ageNum : null,
+          ageReportedAt: !form.birthdate && hasAge ? new Date().toISOString().slice(0, 10) : null,
+          force,
+        }),
       });
       const data = await res.json();
       if (data.possibleDuplicate) {
@@ -171,7 +174,7 @@ export function CreatePatient({ onCreated }: { onCreated: () => void }) {
   return (
     <div className="panel mt-4 space-y-3">
       <p className="text-xs font-bold uppercase tracking-wider text-[var(--gold)]">Novo paciente</p>
-      <p className="text-xs text-[var(--text-muted)]">Obrigatórios: nome, sexo, cidade e <b>data de nascimento OU idade</b>. Sem a data, informe a idade — a data exata pode ser preenchida depois.</p>
+      <p className="text-xs text-[var(--text-muted)]">Obrigatórios: nome, sexo, cidade e <b>data de nascimento OU idade</b>. Prefira a data de nascimento — a idade é calculada. Sem a data, a idade manual fica registrada com a data de hoje (sem inventar nascimento).</p>
       <div className="grid gap-3 sm:grid-cols-2">
         {fields.map(([k, label, type, required]) => (
           <label key={k} className="block">

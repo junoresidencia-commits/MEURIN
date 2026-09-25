@@ -23,13 +23,16 @@ import { CareTeamPatientCard, CareTimeline } from "@/components/CareTeamPatientC
 import { SharePatientWithDoctor } from "@/components/SharePatientWithDoctor";
 import { EncaminharHeaderButton } from "@/components/EncaminharHeaderButton";
 import { ClinicalSummaryBar } from "@/components/ClinicalSummaryBar";
+import { LabResultsTable, LabSparkline } from "@/components/LabResultsTable";
 import { PdModule } from "@/components/PdModule";
 import { encodePatientParam, postJson, toFriendlyMessage } from "@/lib/user-errors";
 import { clearEvolutionDraft, loadEvolutionDraft, saveEvolutionDraft } from "@/lib/evolution-draft";
-import { ageFromBirthdate } from "@/lib/egfr";
+import { resolvePatientAge } from "@/lib/patient-age";
 import { SignDocumentPanel } from "@/components/SignDocumentFlow";
 import { DocumentWorkflowPanel } from "@/components/DocumentWorkflowPanel";
 import { chartSignatureLabel } from "@/lib/digital-signature/status";
+import { PatientFinancePanel } from "@/components/PatientFinancePanel";
+import { PatientRisksPanel } from "@/components/calculators/PatientRisksPanel";
 
 type Lab = { id: string; testKey: string; value: number; unit?: string | null; measuredAt: string };
 type Upload = { id: string; name: string; category?: string | null; examDate?: string | null; signedUrl?: string | null };
@@ -71,7 +74,7 @@ type HomeRecord = {
 };
 type FoodLog = { id: string; food: string; meal?: string | null; quantity?: string | null; loggedAt: string };
 type Booking = { id: string; status: string; slotStart: string; careReason: string; meetingRoomId: string };
-type Patient = { email: string; name: string; city: string; phone: string; birthdate?: string | null; sex?: string | null; cns?: string | null; cpf?: string | null; motherName?: string | null; isCreated?: boolean };
+type Patient = { email: string; name: string; city: string; phone: string; birthdate?: string | null; ageYears?: number | null; ageReportedAt?: string | null; sex?: string | null; cns?: string | null; cpf?: string | null; motherName?: string | null; isCreated?: boolean };
 type Note = {
   id: string;
   doctorName: string;
@@ -108,6 +111,7 @@ const PRIMARY_TABS = [
   { id: "evolucao", label: "Evolução" },
   { id: "exames", label: "Exames" },
   { id: "resumo", label: "Resumo" },
+  { id: "riscos", label: "Riscos" },
   { id: "perfil", label: "Perfil" },
   { id: "documentos", label: "Documentos" },
   { id: "lme", label: "LME / CEAF" },
@@ -120,6 +124,7 @@ const MORE_TABS = [
   { id: "equipe", label: "Equipe" },
   { id: "encaminhamentos", label: "Encaminhamentos" },
   { id: "consultas", label: "Consultas" },
+  { id: "financeiro", label: "Financeiro" },
   { id: "pesquisa", label: "Pesquisa" },
 ] as const;
 const TABS = [...PRIMARY_TABS, ...MORE_TABS] as const;
@@ -167,6 +172,8 @@ export default function ProntuarioPage() {
   const [notes, setNotes] = useState<Note[]>([]);
   const [documents, setDocuments] = useState<Doc[]>([]);
   const [labs, setLabs] = useState<Lab[]>([]);
+  const [chartKey, setChartKey] = useState<string | null>(null);
+  const [sharePreview, setSharePreview] = useState(false);
   const [uploads, setUploads] = useState<Upload[]>([]);
   const [lmeList, setLmeList] = useState<Lme[]>([]);
   const [tab, setTab] = useState<Tab>("evolucao");
@@ -491,13 +498,12 @@ export default function ProntuarioPage() {
       .catch(() => setHasLetterhead(false));
   }, []);
 
-  const labKeys = Array.from(new Set(labs.map((l) => l.testKey)));
   const bp = records.find((r) => r.kind === "bp");
   const glucose = records.find((r) => r.kind === "glucose");
   const weight = records.find((r) => r.kind === "weight");
   const sinais = records.filter((r) => r.kind !== "symptom");
   const sintomas = records.filter((r) => r.kind === "symptom");
-  const age = ageFromBirthdate(patient?.birthdate);
+  const age = resolvePatientAge({ birthdate: patient?.birthdate, ageYears: patient?.ageYears, ageReportedAt: patient?.ageReportedAt });
   const patientLine = [age != null ? `${age} anos` : null, patient?.city].filter(Boolean).join(" · ");
   const moreTabs = [...MORE_TABS, ...(isPd ? [{ id: "dp" as const, label: "Diálise peritoneal" }] : [])];
   const moreActive = moreTabs.find((t) => t.id === tab);
@@ -572,7 +578,7 @@ export default function ProntuarioPage() {
       {editingPatient && patient && (
         <PatientEditForm
           emailParam={emailParam}
-          patient={{ name: patient.name, phone: patient.phone, email: patient.email, city: patient.city, birthdate: patient.birthdate, sex: patient.sex }}
+          patient={{ name: patient.name, phone: patient.phone, email: patient.email, city: patient.city, birthdate: patient.birthdate, ageYears: patient.ageYears, ageReportedAt: patient.ageReportedAt, sex: patient.sex }}
           onClose={() => setEditingPatient(false)}
           onSaved={load}
         />
@@ -662,6 +668,8 @@ export default function ProntuarioPage() {
           </div>
         )}
 
+        {tab === "riscos" && <PatientRisksPanel emailParam={emailParam} />}
+
         {tab === "perfil" && <ClinicalProfileEditor emailParam={emailParam} />}
 
         {tab === "evolucao" && (
@@ -679,7 +687,7 @@ export default function ProntuarioPage() {
               <label className="block">
                 <span className="mb-1.5 block text-xs font-bold uppercase tracking-wider text-[var(--gold)]">Evolução</span>
                 <textarea
-                  className="input-field min-h-[220px]"
+                  className="input-field min-h-[380px] lg:min-h-[460px]"
                   value={form.history}
                   onChange={(e) => setForm((f) => ({ ...f, history: e.target.value }))}
                   placeholder={"Escreva a evolução do jeito que preferir.\n\nPode colar exames assim:\n21/08/2026\nCR: 3,51\nU: 94\nK: 5,8"}
@@ -699,6 +707,22 @@ export default function ProntuarioPage() {
                 <input type="checkbox" checked={shared} onChange={(e) => setShared(e.target.checked)} className="h-4 w-4 accent-[var(--gold)]" />
                 Liberar um resumo desta evolução para o paciente ver
               </label>
+              <button type="button" className="text-sm font-semibold text-[var(--gold)]" onClick={() => setSharePreview((v) => !v)}>
+                {sharePreview ? "Ocultar pré-visualização" : "Pré-visualizar resumo do paciente"}
+              </button>
+              {sharePreview && (
+                <div className="rounded-xl border border-[var(--border)] bg-[var(--bg)] p-3 text-sm text-[var(--text-soft)]">
+                  <p className="text-xs font-bold uppercase tracking-wider text-[var(--gold)]">O paciente verá</p>
+                  {form.history.trim() ? (
+                    <p className="mt-1 whitespace-pre-wrap">{form.history.trim()}</p>
+                  ) : (
+                    <p className="mt-1 text-[var(--text-muted)]">Nada ainda — o resumo usa o texto da evolução.</p>
+                  )}
+                  {form.assessment && <p className="mt-2"><b>Avaliação:</b> {form.assessment}</p>}
+                  {form.plan && <p className="mt-1"><b>Orientações:</b> {form.plan}</p>}
+                  {!shared && <p className="mt-2 text-xs text-[var(--text-muted)]">Marque a caixa acima para liberar este resumo.</p>}
+                </div>
+              )}
 
               {saveErr && <p className="rounded-xl border border-[var(--danger)]/30 bg-[var(--danger)]/10 px-3 py-2 text-sm text-[var(--danger)]">{saveErr}</p>}
               {saveMsg && <p className="rounded-xl border border-[var(--green)]/30 bg-[var(--green)]/10 px-3 py-2 text-sm text-[var(--green)]">{saveMsg}</p>}
@@ -728,7 +752,7 @@ export default function ProntuarioPage() {
 
         {tab === "exames" && (
           <div className="space-y-4">
-            <EgfrReadinessBanner emailParam={emailParam} birthdate={patient?.birthdate} sex={patient?.sex} patientName={patient?.name} onFixed={load} />
+            <EgfrReadinessBanner emailParam={emailParam} birthdate={patient?.birthdate} ageYears={patient?.ageYears} ageReportedAt={patient?.ageReportedAt} sex={patient?.sex} patientName={patient?.name} onFixed={load} />
             <div className="panel space-y-3">
               <p className="text-xs font-bold uppercase tracking-wider text-[var(--gold)]">
                 Adicionar resultado de exame
@@ -764,14 +788,14 @@ export default function ProntuarioPage() {
                 Importar exames de texto (várias datas)
               </p>
               <p className="text-sm text-[var(--text-soft)]">
-                Cole um laudo com a <b>data em cima</b> e os exames embaixo (pode ter várias datas). O sistema
-                identifica e já lança no histórico — só pede conferência se faltar data ou houver conflito.
+                Cole um laudo com a <b>data em cima</b> e os exames embaixo (pode ter várias datas). Proteinúria 24h,
+                RAC, albumina urinária (mg/L) e albuminúria 24h entram em campos separados.
               </p>
               <textarea
                 className="input-field min-h-[120px] font-mono text-[13px]"
                 value={importText}
                 onChange={(e) => setImportText(e.target.value)}
-                placeholder={"Ex.:\n21/08/2026\nCR: 3,51\nU: 94\nK: 5,8\nNA: 141\nTFGE: 19\n\n17/07/2026\nHB: 12\nHT: 37\nLeuco: 14840\nPlaqueta: 375 mil\nCR: 2,99"}
+                placeholder={"Ex.:\n18/08/2026\nProteinúria 24h: 12.013 mg/24h\nAlbuminúria 24h: 6.379 mg/24h\n\n13/08/2026\nRAC: 806,6 mg/g\nAlbumina urinária: 40 mg/L"}
               />
               {importErr && <p className="text-sm text-[var(--danger)]">{importErr}</p>}
               {importMsg && <p className="rounded-xl border border-[var(--green)]/30 bg-[var(--green)]/10 px-3 py-2 text-sm text-[var(--green)]">{importMsg}</p>}
@@ -780,29 +804,20 @@ export default function ProntuarioPage() {
               </button>
             </div>
 
-            {labKeys.length === 0 && <p className="text-[var(--text-muted)]">Nenhum exame registrado ainda.</p>}
-            {labKeys.map((key) => {
-              const series = labs.filter((l) => l.testKey === key);
-              const last = series[series.length - 1];
-              return (
-                <div key={key} className="panel">
-                  <div className="flex items-center justify-between">
-                    <p className="font-bold text-[var(--text)]">{labLabel(key)}</p>
-                    <p className="text-sm text-[var(--gold)]">
-                      Último: {String(last.value).replace(".", ",")} {labUnit(key)}
-                    </p>
-                  </div>
-                  <LabChart points={series.map((s) => ({ x: s.measuredAt, y: s.value }))} />
-                  <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-xs text-[var(--text-muted)]">
-                    {series.map((s) => (
-                      <span key={s.id}>
-                        {new Date(s.measuredAt).toLocaleDateString("pt-BR")}: <b className="text-[var(--text-soft)]">{String(s.value).replace(".", ",")}</b>
-                      </span>
-                    ))}
-                  </div>
+            <LabResultsTable
+              labs={labs}
+              selectedKey={chartKey}
+              onSelect={(key) => setChartKey((cur) => (cur === key ? null : key))}
+            />
+            {chartKey && (
+              <div className="panel">
+                <div className="flex items-center justify-between gap-2">
+                  <p className="font-bold text-[var(--text)]">{labLabel(chartKey)} {labUnit(chartKey) ? `(${labUnit(chartKey)})` : ""}</p>
+                  <button type="button" className="text-sm font-semibold text-[var(--gold)]" onClick={() => setChartKey(null)}>Fechar gráfico</button>
                 </div>
-              );
-            })}
+                <LabSparkline points={labs.filter((l) => l.testKey === chartKey).map((s) => ({ x: s.measuredAt, y: s.value }))} />
+              </div>
+            )}
           </div>
         )}
 
@@ -1020,6 +1035,8 @@ export default function ProntuarioPage() {
           />
         )}
 
+        {tab === "financeiro" && <PatientFinancePanel emailParam={emailParam} />}
+
         {tab === "consultas" && (
           <div className="space-y-3">
             <div className="panel space-y-3">
@@ -1212,30 +1229,6 @@ function ChecklistItem({ ok, label }: { ok: boolean; label: string }) {
   );
 }
 
-function LabChart({ points }: { points: { x: string; y: number }[] }) {
-  if (points.length === 0) return null;
-  const w = 480;
-  const h = 120;
-  const p = 22;
-  const ys = points.map((d) => d.y);
-  const min = Math.min(...ys);
-  const max = Math.max(...ys);
-  const span = max - min || 1;
-  const n = points.length;
-  const xAt = (i: number) => (n === 1 ? w / 2 : p + (i * (w - 2 * p)) / (n - 1));
-  const yAt = (v: number) => h - p - ((v - min) / span) * (h - 2 * p);
-  const path = points.map((d, i) => `${i ? "L" : "M"}${xAt(i).toFixed(1)} ${yAt(d.y).toFixed(1)}`).join(" ");
-
-  return (
-    <svg viewBox={`0 0 ${w} ${h}`} className="mt-3 h-28 w-full" preserveAspectRatio="none">
-      {n > 1 && <path d={path} fill="none" stroke="var(--gold)" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />}
-      {points.map((d, i) => (
-        <circle key={i} cx={xAt(i)} cy={yAt(d.y)} r="3.5" fill="white" stroke="var(--gold)" strokeWidth="2.5" />
-      ))}
-    </svg>
-  );
-}
-
 function Metric({ label, value, unit }: { label: string; value: string; unit: string }) {
   return (
     <div className="rounded-[18px] border border-[var(--border)] bg-white p-3 text-center shadow-[var(--shadow)]">
@@ -1246,30 +1239,24 @@ function Metric({ label, value, unit }: { label: string; value: string; unit: st
   );
 }
 
-function EgfrReadinessBanner({ emailParam, birthdate, sex, patientName, onFixed }: { emailParam: string; birthdate?: string | null; sex?: string | null; patientName?: string | null; onFixed: () => Promise<void> | void }) {
-  const hasBirth = Boolean(birthdate);
+function EgfrReadinessBanner({ emailParam, birthdate, ageYears, ageReportedAt, sex, patientName, onFixed }: { emailParam: string; birthdate?: string | null; ageYears?: number | null; ageReportedAt?: string | null; sex?: string | null; patientName?: string | null; onFixed: () => Promise<void> | void }) {
+  const hasAge = Boolean(birthdate) || (ageYears != null && Number.isFinite(Number(ageYears)));
   const hasSex = Boolean(sex && /^(m|masc|homem|f|fem|mulher)/i.test(String(sex)));
   const [bd, setBd] = useState("");
   const [ageInput, setAgeInput] = useState("");
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState("");
   const guessed = guessSexFromName(patientName);
-  if (hasBirth && hasSex) return null;
+  void ageReportedAt;
+  if (hasAge && hasSex) return null;
 
-  // Idade -> data de nascimento aproximada (1º de julho do ano estimado).
-  function birthdateFromAge(age: number): string {
-    const y = new Date().getFullYear() - Math.round(age);
-    return `${y}-07-01`;
-  }
-
-  async function saveDemographics(patch: { sex?: string; birthdate?: string }) {
+  async function saveDemographics(patch: { sex?: string; birthdate?: string; ageYears?: number; ageReportedAt?: string }) {
     setBusy(true); setMsg("");
     try {
       const res = await fetch(`/api/doctor/patients/${encodePatientParam(emailParam)}/demographics`, {
         method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(patch),
       });
       if (!res.ok) { const d = await res.json().catch(() => ({})); throw new Error(d.error || "Erro"); }
-      // Recalcula a TFGe para creatinina/cistatina já lançadas.
       await fetch(`/api/doctor/patients/${encodePatientParam(emailParam)}/labs/recompute-egfr`, { method: "POST" });
       setMsg("Dados salvos. TFGe recalculada quando havia creatinina.");
       await onFixed();
@@ -1280,9 +1267,9 @@ function EgfrReadinessBanner({ emailParam, birthdate, sex, patientName, onFixed 
   return (
     <div className="panel border-[var(--warn)]/40 bg-[#fff7e8]">
       <p className="text-sm font-semibold text-[#7a5a12]">Para calcular a TFGe automaticamente, informe idade e sexo</p>
-      <p className="mt-1 text-xs text-[#7a5a12]">A equação CKD‑EPI usa idade e sexo. Complete abaixo — vale para creatinina e cistatina C.</p>
+      <p className="mt-1 text-xs text-[#7a5a12]">A equação CKD‑EPI usa idade e sexo. Prefira a data de nascimento; sem ela, informe a idade (sem inventar nascimento).</p>
       <div className="mt-2 flex flex-wrap items-end gap-3">
-        {!hasBirth && (
+        {!hasAge && (
           <>
             <label className="block">
               <span className="mb-1 block text-xs font-semibold text-[var(--text-muted)]">Data de nascimento</span>
@@ -1295,7 +1282,7 @@ function EgfrReadinessBanner({ emailParam, birthdate, sex, patientName, onFixed 
               <span className="mb-1 block text-xs font-semibold text-[var(--text-muted)]">…ou só a idade (anos)</span>
               <div className="flex items-center gap-2">
                 <input inputMode="numeric" className="input-field w-24" value={ageInput} onChange={(e) => setAgeInput(e.target.value)} placeholder="Ex.: 62" />
-                <button type="button" className="btn-ghost text-sm" disabled={busy || !ageInput} onClick={() => { const a = Number(ageInput); if (a > 0 && a < 130) saveDemographics({ birthdate: birthdateFromAge(a) }); }}>Usar idade</button>
+                <button type="button" className="btn-ghost text-sm" disabled={busy || !ageInput} onClick={() => { const a = Number(ageInput); if (a > 0 && a < 130) saveDemographics({ ageYears: a, ageReportedAt: new Date().toISOString().slice(0, 10) }); }}>Usar idade</button>
               </div>
             </label>
           </>

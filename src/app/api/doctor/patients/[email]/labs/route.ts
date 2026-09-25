@@ -23,7 +23,7 @@ async function autoEgfr(
   creatValue: number,
   at: string
 ): Promise<LabResult | null> {
-  const egfr = estimateEgfr(creatValue, access.birthdate, access.sex, at);
+  const egfr = estimateEgfr(creatValue, access.birthdate, access.sex, at, { ageYears: access.ageYears, ageReportedAt: access.ageReportedAt });
   if (egfr == null) return null;
   const labs = await getLabResults(access.key);
   const stale = labs.filter(
@@ -60,7 +60,7 @@ async function autoEgfrCystatin(
   cystatinValue: number,
   at: string
 ): Promise<LabResult | null> {
-  const egfr = estimateEgfrCystatin(cystatinValue, access.birthdate, access.sex, at);
+  const egfr = estimateEgfrCystatin(cystatinValue, access.birthdate, access.sex, at, { ageYears: access.ageYears, ageReportedAt: access.ageReportedAt });
   if (egfr == null) return null;
   const labs = await getLabResults(access.key);
   const stale = labs.filter(
