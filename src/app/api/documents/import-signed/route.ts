@@ -24,7 +24,9 @@ export async function POST(req: Request) {
     const bad = parseSignedPdfUpload(uploaded, size);
     if (bad || !uploaded) return jsonUtf8({ error: bad || "Envie o PDF já assinado." }, 400);
 
-    const providerId = requireProviderId(String(form.get("provider") || "vidaas"));
+    const rawProvider = String(form.get("provider") || "vidaas");
+    const method = String(form.get("method") || "") === "manual" ? "imagem" : "certificada";
+    const providerId = method === "imagem" ? "manual" : requireProviderId(rawProvider);
     const originalId = String(form.get("originalDocumentId") || "").trim();
     const original = originalId ? await getDocumentById(originalId) : null;
     if (originalId && (!original || original.doctorId !== doctorId)) {
@@ -41,6 +43,7 @@ export async function POST(req: Request) {
       patientKey: String(form.get("patientKey") || "").trim() || undefined,
       type: String(form.get("type") || "").trim() || undefined,
       title: String(form.get("title") || "").trim() || undefined,
+      signatureMethod: method,
     });
 
     return jsonUtf8(
@@ -49,7 +52,7 @@ export async function POST(req: Request) {
         id: result.signed.id,
         pdfUrl: `/api/documents/${result.signed.id}/pdf`,
         originalId: original?.id ?? null,
-        status: "Assinado digitalmente",
+        status: method === "imagem" ? "Assinatura manual registrada" : "Assinado digitalmente",
         provider: providerId,
         signedAt: result.signed.signedAt,
         signedBy: result.signed.signedBy,

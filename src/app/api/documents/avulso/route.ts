@@ -3,8 +3,9 @@ import { getDoctorSessionId } from "@/lib/auth";
 import { getDoctorById } from "@/lib/store";
 import { getLetterhead, getDefaultLetterhead, type LetterheadArea } from "@/lib/letterheads-store";
 import { LETTERHEADS_BUCKET, readFile } from "@/lib/doc-storage";
-import { buildDocumentPdf, fillFields, type DocBackground } from "@/lib/document-engine";
+import { buildDocumentPdfDetailed, fillFields, LETTERHEAD_EMBED_MAX_BYTES, type DocBackground } from "@/lib/document-engine";
 import { jsonUtf8 } from "@/lib/json-utf8";
+import { todayBr } from "@/lib/pdf-winansi";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -29,37 +30,45 @@ export async function POST(req: Request) {
     const title = String(body.title || "").trim() || tituloPadrao(type);
     const content = String(body.content || "");
     const patientName = String(body.patientName || "").trim();
-    // letterheadId: id específico, "" ou ausente => usa o timbrado padrão do médico.
-    const wantId = body.letterheadId !== undefined ? String(body.letterheadId) : null;
+    // letterheadId: id específico; ""/null = papel branco (retry); ausente = padrão do médico.
+    const letterheadRaw = body.letterheadId;
 
     const doctor = await getDoctorById(doctorId);
     if (!doctor) return jsonUtf8({ error: "Médico não encontrado." }, 404);
 
-    // Papel timbrado: o escolhido, senão o padrão do médico. Se não houver, fundo branco.
+    // Papel timbrado: o escolhido, senão o padrão. Qualquer falha → papel branco (não 500).
     let background: DocBackground | null = null;
     let area: LetterheadArea = defaultAreaNoLetterhead();
-    const lh = wantId ? await getLetterhead(wantId) : await getDefaultLetterhead(doctorId);
-    if (lh) {
-      if (lh.doctorId !== doctorId) return jsonUtf8({ error: "Papel timbrado inválido." }, 400);
-      const file = await readFile(LETTERHEADS_BUCKET, lh.storage, lh.filePath);
-      if (file) {
-        background = { kind: lh.kind, bytes: file.buffer, mime: lh.mime || file.mime };
-        area = lh.area;
+    try {
+      const wantId = letterheadRaw ? String(letterheadRaw) : "";
+      const lh = wantId
+        ? await getLetterhead(wantId)
+        : letterheadRaw === undefined
+          ? await getDefaultLetterhead(doctorId)
+          : null;
+      if (lh && lh.doctorId === doctorId) {
+        const file = await readFile(LETTERHEADS_BUCKET, lh.storage, lh.filePath);
+        if (file && file.buffer.length <= LETTERHEAD_EMBED_MAX_BYTES) {
+          background = { kind: lh.kind, bytes: file.buffer, mime: lh.mime || file.mime };
+          area = lh.area;
+        }
       }
+    } catch (err) {
+      console.warn("[documents/avulso] letterhead_load_fallback", err instanceof Error ? err.message : err);
     }
     // Sem nome de paciente => não mostra o cabeçalho "Paciente:".
     if (!patientName) area = { ...area, showPatientHeader: false };
 
     const vars: Record<string, string> = {
       paciente_nome: patientName,
-      data_atual: new Date().toLocaleDateString("pt-BR", { timeZone: "America/Bahia" }),
+      data_atual: todayBr(),
       medico_nome: doctor.name,
       medico_crm: [doctor.crm, doctor.crmState].filter(Boolean).join("-"),
       medico_rqe: doctor.rqe || "",
       medico_especialidade: doctor.specialty || "",
     };
 
-    const pdfBytes = await buildDocumentPdf({
+    const built = await buildDocumentPdfDetailed({
       title: fillFields(title, vars),
       content: fillFields(content, vars),
       patient: patientName ? { name: patientName } : undefined,
@@ -67,6 +76,7 @@ export async function POST(req: Request) {
       area,
       background,
     });
+    const pdfBytes = built.bytes;
 
     return new NextResponse(new Uint8Array(pdfBytes), {
       headers: {
@@ -78,7 +88,9 @@ export async function POST(req: Request) {
   } catch (err) {
     const name = err instanceof Error ? err.name : "Error";
     console.error("[documents/avulso]", { status: 500, error: name });
-    return jsonUtf8({ error: "Não foi possível gerar o documento." }, 500);
+    return jsonUtf8({
+      error: "Não foi possível gerar o documento. Tente de novo ou escolha “Sem papel timbrado”.",
+    }, 500);
   }
 }
 
