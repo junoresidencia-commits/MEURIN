@@ -3,6 +3,7 @@ import { getSupabaseAdmin } from "./supabase-admin";
 import { collectIntegrityCounts, latestIntegritySnapshot } from "./platform-integrity";
 import { listAudit, listClinics } from "./platform-store";
 import { listClosings } from "./clinic-closing-store";
+import { getReadinessAttestation } from "./readiness-store";
 
 export type HealthFlag = {
   id: string;
@@ -22,6 +23,7 @@ export type SystemHealth = {
   lastIntegrityAt: string | null;
   lastDeploy: string | null;
   backupRestoreTestedAt: string | null;
+  isolationTestedAt: string | null;
   stagingUrl: string | null;
   counts: Awaited<ReturnType<typeof collectIntegrityCounts>>;
   clinics: { total: number; pilot: number; active: number; suspended: number; draft: number };
@@ -45,12 +47,13 @@ async function probeDatabase(): Promise<boolean> {
 }
 
 export async function collectSystemHealth(): Promise<SystemHealth> {
-  const [counts, previous, clinics, saasTablesPresent, databaseOnline] = await Promise.all([
+  const [counts, previous, clinics, saasTablesPresent, databaseOnline, attested] = await Promise.all([
     collectIntegrityCounts(),
     latestIntegritySnapshot(),
     listClinics(),
     probeSaasTables(),
     probeDatabase(),
+    getReadinessAttestation(),
   ]);
 
   let unpaidClosings = 0;
@@ -61,8 +64,11 @@ export async function collectSystemHealth(): Promise<SystemHealth> {
 
   const sessionSecretSet = Boolean(process.env.SESSION_SECRET);
   const cronSecretSet = Boolean(process.env.CRON_SECRET);
-  const backupRestoreTestedAt = process.env.BACKUP_RESTORE_TESTED_AT || null;
-  const stagingUrl = process.env.STAGING_URL || process.env.NEXT_PUBLIC_STAGING_URL || null;
+  const backupRestoreTestedAt =
+    process.env.BACKUP_RESTORE_TESTED_AT || attested.backupRestoreTestedAt || null;
+  const isolationTestedAt = process.env.ISOLATION_TESTED_AT || attested.isolationTestedAt || null;
+  const stagingUrl =
+    process.env.STAGING_URL || process.env.NEXT_PUBLIC_STAGING_URL || attested.stagingUrl || null;
   const lastDeploy =
     process.env.VERCEL_GIT_COMMIT_SHA ||
     process.env.VERCEL_DEPLOYMENT_ID ||
@@ -110,23 +116,23 @@ export async function collectSystemHealth(): Promise<SystemHealth> {
       label: "Restore de backup testado",
       detail: backupRestoreTestedAt
         ? `Ensaiado em ${backupRestoreTestedAt}`
-        : "Ainda não ensaiado. Ver docs/BACKUP.md.",
+        : "Ainda não ensaiado. Restaure o dump só no staging e registre na tela de Prontidão (docs/BACKUP.md).",
       severity: backupRestoreTestedAt ? "ok" : "high",
     },
     {
       id: "staging",
       ok: Boolean(stagingUrl),
       label: "Staging",
-      detail: stagingUrl || "Nenhuma URL de staging configurada.",
+      detail: stagingUrl || "Nenhuma URL de staging. Cole o endereço do site de teste em Prontidão.",
       severity: stagingUrl ? "ok" : "high",
     },
     {
       id: "isolation",
-      ok: Boolean(process.env.ISOLATION_TESTED_AT),
+      ok: Boolean(isolationTestedAt),
       label: "Isolamento testado",
-      detail: process.env.ISOLATION_TESTED_AT
-        ? `Ensaiado em ${process.env.ISOLATION_TESTED_AT}`
-        : "Rodar scripts/test-clinic-isolation.ts no staging (env de produção desligado).",
+      detail: isolationTestedAt
+        ? `Ensaiado em ${isolationTestedAt}`
+        : "Rodar npm run check:clinic-isolation (env de produção desligado) e registrar em Prontidão.",
       severity: process.env.ISOLATION_TESTED_AT ? "ok" : "high",
     },
   ];
@@ -141,6 +147,7 @@ export async function collectSystemHealth(): Promise<SystemHealth> {
     lastIntegrityAt: previous?.createdAt ?? null,
     lastDeploy,
     backupRestoreTestedAt,
+    isolationTestedAt,
     stagingUrl,
     counts,
     clinics: {
@@ -187,7 +194,7 @@ export function readinessFromHealth(health: SystemHealth) {
     { id: "security", label: "Segurança (secrets)", ok: health.sessionSecretSet && health.cronSecretSet, critical: true },
     { id: "backup", label: "Backup / restore testado", ok: Boolean(health.backupRestoreTestedAt), critical: true },
     { id: "multiclinica", label: "Multi-clínica", ok: health.counts.clinics >= 0, critical: false },
-    { id: "isolation", label: "Isolamento (teste automático no repo)", ok: Boolean(process.env.ISOLATION_TESTED_AT), critical: true, detail: "Rodar scripts/test-clinic-isolation.ts no staging e gravar ISOLATION_TESTED_AT." },
+    { id: "isolation", label: "Isolamento (teste automático no repo)", ok: Boolean(health.isolationTestedAt), critical: true, detail: "Rodar npm run check:clinic-isolation com env de produção desligado e registrar nesta tela." },
     { id: "saas", label: "Tabelas SaaS", ok: health.saasTablesPresent, critical: false },
     { id: "database", label: "Banco online", ok: health.databaseOnline, critical: true },
     { id: "integrity", label: "Integridade (sem queda)", ok: Boolean(health.lastIntegrityAt), critical: false },

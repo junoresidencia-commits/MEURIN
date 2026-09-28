@@ -15,7 +15,9 @@
     "check:patient-age": "env -u NEXT_PUBLIC_SUPABASE_URL -u SUPABASE_SERVICE_ROLE_KEY NODE_OPTIONS='--require ./scripts/shim-server-only.cjs' npx tsx scripts/test-patient-age.ts",
     "check:lme-docs": "npx tsx scripts/test-lme-complementary.ts",
     "check:calculators": "npx tsx scripts/test-calculators.ts",
-    "check:signature-links": "npx tsx scripts/test-signature-links.ts"
+    "check:signature-links": "npx tsx scripts/test-signature-links.ts",
+    "check:clinic-isolation": "env -u NEXT_PUBLIC_SUPABASE_URL -u SUPABASE_SERVICE_ROLE_KEY NODE_OPTIONS='--require ./scripts/shim-server-only.cjs' npx tsx scripts/test-clinic-isolation.ts",
+    "check:readiness": "npx tsx scripts/test-readiness.ts"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.110.3",
