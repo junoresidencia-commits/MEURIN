@@ -69,7 +69,7 @@ export default function ProntidaoPage() {
         <p className={`mt-4 rounded-2xl px-4 py-3 text-sm font-semibold ${ready ? "bg-emerald-50 text-emerald-800" : "bg-red-50 text-red-800"}`}>
           {ready
             ? "Itens críticos medidos pelo app estão ok."
-            : `Ainda não está pronto: ${blocked.join(" · ")}. Os 3 itens vermelhos têm o formulário logo abaixo — preencha aqui, sem abrir a Vercel.`}
+            : `Ainda não está pronto: ${blocked.join(" · ")}. Cada item vermelho abaixo tem o campo para preencher — sem abrir a Vercel.`}
         </p>
       )}
 
