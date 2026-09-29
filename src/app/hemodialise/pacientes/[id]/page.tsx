@@ -3,6 +3,7 @@
 import { useParams } from "next/navigation";
 import { useEffect, useState } from "react";
 import { useHd } from "@/components/hd/HdShell";
+import { HdExamDocsPanel } from "@/components/hd/HdExamDocsPanel";
 import { HD_ALERT_LABEL, HD_EXAM_LABEL, HD_SHIFT_LABEL } from "@/lib/hd-labels";
 
 type Detail = {
@@ -54,26 +55,29 @@ export default function HdPacientePage() {
       </div>
 
       {tab === "Resumo" && (
-        <div className="mt-4 grid gap-4 lg:grid-cols-2">
-          <div className="panel">
-            <p className="font-bold">Exames atuais</p>
-            <ul className="mt-2 space-y-1 text-sm">
-              {Object.entries(d.labs).filter(([, v]) => v != null).map(([k, v]) => (
-                <li key={k}>{HD_EXAM_LABEL[k as keyof typeof HD_EXAM_LABEL] || k}: <strong>{v}</strong></li>
+        <div className="mt-4 space-y-4">
+          <div className="grid gap-4 lg:grid-cols-2">
+            <div className="panel">
+              <p className="font-bold">Exames atuais</p>
+              <ul className="mt-2 space-y-1 text-sm">
+                {Object.entries(d.labs).filter(([, v]) => v != null).map(([k, v]) => (
+                  <li key={k}>{HD_EXAM_LABEL[k as keyof typeof HD_EXAM_LABEL] || k}: <strong>{v}</strong></li>
+                ))}
+              </ul>
+              <p className="mt-3 text-sm">URR: {d.urr == null ? "—" : `${d.urr}%`} · Kt/V: {d.ktv == null ? "—" : d.ktv}</p>
+            </div>
+            <div className="panel">
+              <p className="font-bold">Alertas do protocolo</p>
+              {d.alerts.length === 0 && <p className="mt-2 text-sm text-[var(--green)]">OK — sem alerta prioritário.</p>}
+              {d.alerts.map((a) => (
+                <div key={a.code} className="mt-2 text-sm">
+                  <p className={a.level === "CRITICO" ? "font-bold text-[var(--danger)]" : "font-semibold text-[var(--warn)]"}>{a.message}</p>
+                  <p className="text-[var(--text-muted)]">{a.suggestion}</p>
+                </div>
               ))}
-            </ul>
-            <p className="mt-3 text-sm">URR: {d.urr == null ? "—" : `${d.urr}%`} · Kt/V: {d.ktv == null ? "—" : d.ktv}</p>
+            </div>
           </div>
-          <div className="panel">
-            <p className="font-bold">Alertas do protocolo</p>
-            {d.alerts.length === 0 && <p className="mt-2 text-sm text-[var(--green)]">OK — sem alerta prioritário.</p>}
-            {d.alerts.map((a) => (
-              <div key={a.code} className="mt-2 text-sm">
-                <p className={a.level === "CRITICO" ? "font-bold text-[var(--danger)]" : "font-semibold text-[var(--warn)]"}>{a.message}</p>
-                <p className="text-[var(--text-muted)]">{a.suggestion}</p>
-              </div>
-            ))}
-          </div>
+          <HdExamDocsPanel patientId={d.patient.id} compact tick={d.labRows.length} />
         </div>
       )}
 
@@ -106,6 +110,7 @@ export default function HdPacientePage() {
               </tbody>
             </table>
           </div>
+          <HdExamDocsPanel patientId={d.patient.id} compact tick={d.labRows.length} />
         </div>
       )}
 

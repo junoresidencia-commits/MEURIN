@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useHd } from "@/components/hd/HdShell";
+import { HdExamDocsPanel } from "@/components/hd/HdExamDocsPanel";
 import { HD_EXAM_LABEL, HD_EXAM_UNIT } from "@/lib/hd-labels";
 import { HD_EXAM_CODES } from "@/lib/hd-types";
 
@@ -40,6 +41,7 @@ export default function HdExamesPage() {
   const [busy, setBusy] = useState("");
   const [paste, setPaste] = useState("");
   const [hold, setHold] = useState<{ items: ParsedItem[]; fileId?: string; source: string } | null>(null);
+  const [docsTick, setDocsTick] = useState(0);
 
   async function load() {
     const u = new URLSearchParams({ view: "exams", year: String(year), month: String(month) });
@@ -50,6 +52,7 @@ export default function HdExamesPage() {
     setLabs(e.labs || []);
     setPending(e.pending || []);
     setPatients(p.patients || []);
+    setDocsTick((n) => n + 1);
   }
   useEffect(() => { load(); }, [year, month]);
 
@@ -145,6 +148,7 @@ export default function HdExamesPage() {
       <h2 className="font-display text-2xl font-extrabold">Exames</h2>
       <p className="text-sm text-[var(--text-muted)]">
         Mande o <b>PDF</b> ou a <b>foto/print</b> do laudo. O Meu Rim identifica exame, data e lança de uma vez.
+        Depois disso, já aparece a opinião do protocolo e a LME pronta (CNS, CNES, medicamento oficial e quantidade do mapa).
         Confiança baixa pede confirmação. Não inventa valor e não muda prescrição.
       </p>
 
@@ -281,6 +285,8 @@ export default function HdExamesPage() {
           </tbody>
         </table>
       </div>
+
+      <HdExamDocsPanel tick={docsTick} />
     </div>
   );
 }

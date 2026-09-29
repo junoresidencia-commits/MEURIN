@@ -1396,6 +1396,20 @@ export async function hdLinkMeuRimPatients(ctx: HdCtx) {
   });
 }
 
+export async function hdLinkOnePatient(ctx: HdCtx, hdPatientId: string, meuRimPatientId: string) {
+  const mine = await listPatientsByDoctor(ctx.actor.doctorId);
+  const hit = mine.find((x) => x.id === meuRimPatientId);
+  if (!hit) throw new Error("Paciente do Meu Rim não encontrado.");
+  return withDb((db) => {
+    const p = db.patients.find((x) => x.id === hdPatientId && x.unitId === ctx.unit.id);
+    if (!p) throw new Error("Paciente da hemodiálise não encontrado.");
+    p.patientId = hit.id;
+    p.updatedAt = nowIso();
+    audit(db, ctx.actor, ctx.unit.id, "link_patient", "patient", p.id, null, { meuRimPatientId: hit.id });
+    return p;
+  });
+}
+
 export async function hdMeuRimPatients(ctx: HdCtx) {
   const mine = await listPatientsByDoctor(ctx.actor.doctorId);
   return mine

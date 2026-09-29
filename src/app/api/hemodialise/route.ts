@@ -25,10 +25,12 @@ import {
   hdReviewQueue,
   hdSaveSettings,
   hdSearchDoctors,
+  hdLinkOnePatient,
   hdUpdateMapCell,
   hdUpdateMember,
   requireHd,
 } from "@/lib/hd-store";
+import { hdGenerateDocsFromExams, hdListDocsFromExams, hdPreviewDocsFromExams } from "@/lib/hd-docs-generate";
 import type { HdExamCode, HdMapField, HdReviewDecision, HdRole, HdShift } from "@/lib/hd-types";
 import { HD_EXAM_CODES, HD_MAP_FIELDS } from "@/lib/hd-types";
 
@@ -121,6 +123,16 @@ export async function GET(req: Request) {
     }
     if (view === "settings") return NextResponse.json(await hdGetSettings(ctx));
     if (view === "months") return NextResponse.json({ months: await hdListMonths(ctx) });
+    if (view === "docs_from_exams") {
+      if (!hdPerm(ctx.member, "view_exams", actor.isSuperAdmin)) return NextResponse.json({ error: "Sem permissão." }, { status: 403 });
+      const id = url.searchParams.get("id") || "";
+      if (id) {
+        const preview = await hdPreviewDocsFromExams(ctx, id, year, month);
+        if (!preview) return NextResponse.json({ error: "Paciente não encontrado." }, { status: 404 });
+        return NextResponse.json(preview);
+      }
+      return NextResponse.json(await hdListDocsFromExams(ctx, year, month));
+    }
     return NextResponse.json({ error: "Vista inválida." }, { status: 400 });
   } catch (err) {
     const message = err instanceof Error ? err.message : "Falha na Hemodiálise.";
@@ -252,6 +264,23 @@ export async function POST(req: Request) {
         expectedExams: expected,
       });
       return NextResponse.json({ settings });
+    }
+    if (action === "link_hd_patient") {
+      const patient = await hdLinkOnePatient(ctx, String(body.patientId || ""), String(body.meuRimPatientId || ""));
+      return NextResponse.json({ patient });
+    }
+    if (action === "generate_docs_from_exams") {
+      if (!hdPerm(ctx.member, "review", actor.isSuperAdmin)) {
+        return NextResponse.json({ error: "Só o médico gera a LME. A IA não prescreve." }, { status: 403 });
+      }
+      const result = await hdGenerateDocsFromExams(ctx, {
+        patientId: String(body.patientId || ""),
+        year,
+        month,
+        meuRimPatientId: body.meuRimPatientId ? String(body.meuRimPatientId) : undefined,
+        locationId: body.locationId ? String(body.locationId) : undefined,
+      });
+      return NextResponse.json(result);
     }
     return NextResponse.json({ error: "Ação inválida." }, { status: 400 });
   } catch (err) {
