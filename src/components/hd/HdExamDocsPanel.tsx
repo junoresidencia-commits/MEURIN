@@ -31,6 +31,7 @@ type Preview = {
     canGenerate: boolean;
   };
   blockers: string[];
+  canGenerate: boolean;
   cadastro?: {
     cpf: string;
     cns: string;
