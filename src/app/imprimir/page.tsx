@@ -15,12 +15,10 @@ function ImprimirInner() {
       try {
         win.focus();
         win.print();
-        return;
       } catch {
-        /* o diálogo do iframe às vezes é bloqueado — tenta a janela */
+        /* Chrome às vezes só imprime pelo ícone do visualizador — o PDF já está na tela. */
       }
     }
-    window.print();
   }, []);
 
   if (!src) {
@@ -29,16 +27,20 @@ function ImprimirInner() {
 
   return (
     <div className="fixed inset-0 bg-white">
-      <div className="print:hidden absolute right-3 top-3 z-10 flex gap-2">
-        <button type="button" className="btn-gold" onClick={goPrint}>Imprimir</button>
-      </div>
+      <button
+        type="button"
+        className="btn-gold print:hidden absolute right-3 top-3 z-10"
+        onClick={goPrint}
+      >
+        Imprimir
+      </button>
       <iframe
         ref={frameRef}
-        title="Documento para imprimir"
+        title="Documento impresso"
         src={src}
         className="h-full w-full border-0"
         onLoad={() => {
-          window.setTimeout(goPrint, 400);
+          window.setTimeout(goPrint, 500);
         }}
       />
     </div>

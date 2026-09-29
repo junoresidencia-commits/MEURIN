@@ -36,7 +36,8 @@ async function main() {
   assert.equal(matchCinacalcetPresentation("30 mg"), "cinacalcete_30");
   assert.equal(safePdfSrc("/api/documents/abc/pdf"), "/api/documents/abc/pdf");
   assert.equal(safePdfSrc("https://evil.example/x"), "");
-  assert.equal(printHref("/api/lme/1/oficial"), "/imprimir?src=%2Fapi%2Flme%2F1%2Foficial");
+  assert.equal(printHref("/api/lme/1/oficial"), "/imprimir?src=%2Fapi%2Flme%2F1%2Foficial%3Fprint%3D1");
+  assert.equal(safePdfSrc("/api/lme/1/oficial?print=1"), "/api/lme/1/oficial?print=1");
 
   const ferroLabs = evaluateHdLabs({ tsat: 15, ferritin: 80, hb: 11 }, rules);
   const ferro = suggestHdDocsFromExams({

@@ -2,12 +2,20 @@
 export function safePdfSrc(raw: string): string {
   const src = String(raw || "").trim();
   if (!src.startsWith("/api/")) return "";
-  if (src.includes("://") || src.startsWith("//")) return "";
+  if (src.includes("://")) return "";
+  const pathOnly = src.split("?")[0];
+  if (!pathOnly.startsWith("/api/") || pathOnly.includes("//")) return "";
   return src;
 }
 
+function withPrintFlag(src: string): string {
+  if (!/\/oficial(\?|$)/.test(src)) return src;
+  if (/[?&]print=/.test(src)) return src;
+  return src + (src.includes("?") ? "&" : "?") + "print=1";
+}
+
 export function printHref(pdfUrl: string): string {
-  const src = safePdfSrc(pdfUrl);
+  const src = withPrintFlag(safePdfSrc(pdfUrl));
   if (!src) return "";
   return `/imprimir?src=${encodeURIComponent(src)}`;
 }
