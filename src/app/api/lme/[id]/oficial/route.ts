@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { PDFDocument, StandardFonts, PDFName, PDFBool } from "pdf-lib";
+import { PDFDocument, StandardFonts, PDFName, PDFBool, PDFButton } from "pdf-lib";
 import { getDoctorSessionId } from "@/lib/auth";
 import { getPatientEmail } from "@/lib/patient-session";
 import { getLme } from "@/lib/lme-store";
@@ -157,6 +157,18 @@ export async function GET(
   }
 
   if (forPrint || forSigning) {
+    try {
+      // Botões do PDF oficial (OPÇÕES, Salvar, Limpar, Busca CNES) não vão para o papel.
+      for (const field of form.getFields().filter((f) => f instanceof PDFButton)) {
+        try {
+          form.removeField(field);
+        } catch {
+          /* segue */
+        }
+      }
+    } catch {
+      /* segue */
+    }
     try {
       form.flatten();
     } catch {
