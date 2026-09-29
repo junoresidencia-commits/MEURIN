@@ -5,7 +5,7 @@ import Link from "next/link";
 import { useParams } from "next/navigation";
 import { SignDocumentPanel } from "@/components/SignDocumentFlow";
 import { LmeComplementaryDocs } from "@/components/LmeComplementaryDocs";
-import { printHref } from "@/lib/print-pdf";
+import { flattenedSrc, printHref } from "@/lib/print-pdf";
 
 type Med = { name: string; presentation?: string; monthlyQty?: string };
 type Lme = {
@@ -157,7 +157,7 @@ export default function LmePage() {
 
       {/* PDF OFICIAL preenchido — conteúdo principal (impressão/print sai deste PDF) */}
       <div className="overflow-hidden rounded-[16px] border border-[var(--border)] bg-white shadow-[var(--shadow)] print:hidden">
-        <iframe title="LME oficial preenchida" src={officialUrl} className="h-[82vh] w-full" />
+        <iframe title="LME oficial preenchida" src={flattenedSrc(officialUrl) || officialUrl} className="h-[82vh] w-full" />
       </div>
 
       {isDoctor && lme.patientEmail && (

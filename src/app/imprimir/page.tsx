@@ -2,11 +2,11 @@
 
 import { useSearchParams } from "next/navigation";
 import { Suspense, useCallback, useRef } from "react";
-import { safePdfSrc } from "@/lib/print-pdf";
+import { flattenedSrc } from "@/lib/print-pdf";
 
 function ImprimirInner() {
   const sp = useSearchParams();
-  const src = safePdfSrc(sp.get("src") || "");
+  const src = flattenedSrc(sp.get("src") || "");
   const frameRef = useRef<HTMLIFrameElement>(null);
 
   const goPrint = useCallback(() => {
@@ -26,19 +26,17 @@ function ImprimirInner() {
   }
 
   return (
-    <div className="fixed inset-0 bg-white">
-      <button
-        type="button"
-        className="btn-gold print:hidden absolute right-3 top-3 z-10"
-        onClick={goPrint}
-      >
-        Imprimir
-      </button>
+    <div className="fixed inset-0 z-[200] flex flex-col bg-white">
+      <div className="print:hidden flex shrink-0 items-center justify-end border-b border-[var(--border)] bg-white px-3 py-2">
+        <button type="button" className="btn-gold" onClick={goPrint}>
+          Imprimir
+        </button>
+      </div>
       <iframe
         ref={frameRef}
         title="Documento impresso"
         src={src}
-        className="h-full w-full border-0"
+        className="min-h-0 w-full flex-1 border-0"
         onLoad={() => {
           window.setTimeout(goPrint, 500);
         }}

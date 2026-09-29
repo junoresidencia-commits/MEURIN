@@ -16,7 +16,7 @@ export async function GET(
 ) {
   const { id } = await params;
   const url = new URL(req.url);
-  // flatten=1: baixa como anexo para assinatura digital.
+  // flatten=1: baixa como anexo achatado para assinatura digital.
   // print=1: achata o formulário (já impresso) para o Chrome mostrar e imprimir os valores.
   const forSigning = url.searchParams.get("flatten") === "1";
   const forPrint = url.searchParams.get("print") === "1";
@@ -156,7 +156,7 @@ export async function GET(
     /* ok */
   }
 
-  if (forPrint) {
+  if (forPrint || forSigning) {
     try {
       form.flatten();
     } catch {

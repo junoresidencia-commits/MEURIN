@@ -14,8 +14,13 @@ function withPrintFlag(src: string): string {
   return src + (src.includes("?") ? "&" : "?") + "print=1";
 }
 
+/** PDF achatado (já impresso) — Chrome mostra os valores como tinta no papel. */
+export function flattenedSrc(pdfUrl: string): string {
+  return withPrintFlag(safePdfSrc(pdfUrl));
+}
+
 export function printHref(pdfUrl: string): string {
-  const src = withPrintFlag(safePdfSrc(pdfUrl));
+  const src = flattenedSrc(pdfUrl);
   if (!src) return "";
   return `/imprimir?src=${encodeURIComponent(src)}`;
 }
