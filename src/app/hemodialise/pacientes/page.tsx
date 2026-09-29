@@ -74,7 +74,7 @@ export default function HdPacientesPage() {
         <input className="rounded-xl border border-[var(--border)] px-3 py-2 text-sm sm:col-span-2" placeholder="Nome do paciente" value={name} onChange={(e) => setName(e.target.value)} required />
         <input className="rounded-xl border border-[var(--border)] px-3 py-2 text-sm" placeholder="Nome da mãe" value={motherName} onChange={(e) => setMotherName(e.target.value)} />
         <input className="rounded-xl border border-[var(--border)] px-3 py-2 text-sm" placeholder="CPF" value={cpf} onChange={(e) => setCpf(e.target.value)} inputMode="numeric" />
-        <input className="rounded-xl border border-[var(--border)] px-3 py-2 text-sm" placeholder="Cartão do SUS (CNS)" value={cns} onChange={(e) => setCns(e.target.value)} inputMode="numeric" />
+        <input className="rounded-xl border border-[var(--border)] px-3 py-2 text-sm sm:col-span-2" placeholder="Cartão do SUS (CNS)" value={cns} onChange={(e) => setCns(e.target.value)} inputMode="numeric" />
         <button className="btn-gold w-fit" type="submit">Adicionar à Hemodiálise</button>
       </form>
       {msg && <p className="mt-2 text-sm text-[var(--gold)]">{msg}</p>}
