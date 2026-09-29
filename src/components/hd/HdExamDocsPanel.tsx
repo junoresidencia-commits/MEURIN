@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useHd } from "@/components/hd/HdShell";
+import { printHref } from "@/lib/print-pdf";
 
 type Pack = {
   protocolId: string;
@@ -39,7 +40,6 @@ type Generated = {
   receitaUrl: string | null;
   relatorioUrl: string | null;
   terUrl: string | null;
-  packageUrl?: string;
 };
 
 export function HdExamDocsPanel({
@@ -191,14 +191,35 @@ export function HdExamDocsPanel({
           )}
 
           {(done[p.hdPatientId] || []).map((g) => (
-            <p key={g.lmeId} className="text-sm">
-              <a className="font-semibold text-[var(--gold)]" href={g.href} target="_blank" rel="noreferrer">{g.protocolName} — conferir LME</a>
-              {g.receitaUrl ? <> · <a className="text-[var(--gold)]" href={g.receitaUrl} target="_blank" rel="noreferrer">receita</a></> : null}
-              {g.relatorioUrl ? <> · <a className="text-[var(--gold)]" href={g.relatorioUrl} target="_blank" rel="noreferrer">relatório</a></> : null}
-              {g.terUrl ? <> · <a className="text-[var(--gold)]" href={g.terUrl} target="_blank" rel="noreferrer">TER</a></> : null}
-              {" · "}
-              <a className="text-[var(--gold)]" href={g.packageUrl || `/api/lme/${g.lmeId}/pacote`} target="_blank" rel="noreferrer">imprimir pacote</a>
-            </p>
+            <div key={g.lmeId} className="space-y-1 text-sm">
+              <p className="font-semibold">{g.protocolName}</p>
+              <p>
+                <b>LME</b> — <a className="text-[var(--gold)]" href={g.href} target="_blank" rel="noreferrer">conferir</a>
+                {" · "}
+                <a className="text-[var(--gold)]" href={printHref(`/api/lme/${g.lmeId}/oficial`)} target="_blank" rel="noreferrer">imprimir</a>
+              </p>
+              {g.receitaUrl ? (
+                <p>
+                  <b>Receita</b> — <a className="text-[var(--gold)]" href={g.receitaUrl} target="_blank" rel="noreferrer">conferir</a>
+                  {" · "}
+                  <a className="text-[var(--gold)]" href={printHref(g.receitaUrl)} target="_blank" rel="noreferrer">imprimir</a>
+                </p>
+              ) : null}
+              {g.relatorioUrl ? (
+                <p>
+                  <b>Relatório</b> — <a className="text-[var(--gold)]" href={g.relatorioUrl} target="_blank" rel="noreferrer">conferir</a>
+                  {" · "}
+                  <a className="text-[var(--gold)]" href={printHref(g.relatorioUrl)} target="_blank" rel="noreferrer">imprimir</a>
+                </p>
+              ) : null}
+              {g.terUrl ? (
+                <p>
+                  <b>TER</b> — <a className="text-[var(--gold)]" href={g.terUrl} target="_blank" rel="noreferrer">conferir</a>
+                  {" · "}
+                  <a className="text-[var(--gold)]" href={printHref(g.terUrl)} target="_blank" rel="noreferrer">imprimir</a>
+                </p>
+              ) : null}
+            </div>
           ))}
         </article>
       ))}

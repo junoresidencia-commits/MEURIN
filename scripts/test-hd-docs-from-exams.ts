@@ -8,6 +8,7 @@ import { getDocumentById } from "../src/lib/patient-store";
 import { readFile, DOCPDF_BUCKET } from "../src/lib/doc-storage";
 import { DEFAULT_HD_RULES, evaluateHdLabs } from "../src/lib/hd-rules";
 import { matchCinacalcetPresentation, matchEpoPresentation, suggestHdDocsFromExams } from "../src/lib/hd-docs-from-exams";
+import { printHref, safePdfSrc } from "../src/lib/print-pdf";
 import { hdGenerateDocsFromExams, hdPreviewDocsFromExams } from "../src/lib/hd-docs-generate";
 import {
   ensureHdSession,
@@ -33,6 +34,9 @@ async function main() {
   assert.equal(matchEpoPresentation("2.000"), "alfaepoetina_2000");
   assert.equal(matchCinacalcetPresentation("cinacalcete"), null);
   assert.equal(matchCinacalcetPresentation("30 mg"), "cinacalcete_30");
+  assert.equal(safePdfSrc("/api/documents/abc/pdf"), "/api/documents/abc/pdf");
+  assert.equal(safePdfSrc("https://evil.example/x"), "");
+  assert.equal(printHref("/api/lme/1/oficial"), "/imprimir?src=%2Fapi%2Flme%2F1%2Foficial");
 
   const ferroLabs = evaluateHdLabs({ tsat: 15, ferritin: 80, hb: 11 }, rules);
   const ferro = suggestHdDocsFromExams({
@@ -163,7 +167,6 @@ async function main() {
   assert.ok(ferroGen?.receitaId && ferroGen.receitaUrl);
   assert.ok(ferroGen.relatorioId && ferroGen.relatorioUrl);
   assert.ok(ferroGen.terId && ferroGen.terUrl);
-  assert.equal(ferroGen.packageUrl, `/api/lme/${ferroGen.lmeId}/pacote`);
   const rxDoc = await getDocumentById(ferroGen.receitaId);
   assert.ok(rxDoc?.pdfPath);
   assert.equal(rxDoc.status, "final");

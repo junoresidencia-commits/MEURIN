@@ -39,7 +39,6 @@ export type HdDocsGenerated = {
   relatorioUrl: string | null;
   terId: string | null;
   terUrl: string | null;
-  packageUrl: string;
 };
 
 export type HdDocsPreview = {
@@ -286,7 +285,7 @@ export async function hdGenerateDocsFromExams(
   const missingPdf = generated.filter((g) => !g.receitaUrl || !g.relatorioUrl || !g.terId).length;
   const note = missingPdf
     ? `Gerei ${generated.length} LME(s). Algum PDF (receita, relatório ou TER) faltou — abra a LME e imprima o que já está pronto.`
-    : `Gerei ${generated.length} LME(s) com receita, relatório e TER em PDF. Conferir e imprimir — o médico assina.`;
+    : `Gerei ${generated.length} LME(s) com receita, relatório e TER em PDF, cada um separado. Conferir e imprimir — o médico assina.`;
   return { preview, generated, note };
 }
 
@@ -392,6 +391,5 @@ async function createOnePack(
     relatorioUrl: relDoc?.url ?? null,
     terId: ter?.id ?? null,
     terUrl: ter?.url ?? null,
-    packageUrl: `/api/lme/${lme.id}/pacote`,
   };
 }
