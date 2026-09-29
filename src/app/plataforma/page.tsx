@@ -1,8 +1,17 @@
 "use client";
 
 import Link from "next/link";
+import { useEffect, useState } from "react";
 
 export default function PlataformaHomePage() {
+  const [pending, setPending] = useState(0);
+  useEffect(() => {
+    fetch("/api/plataforma/doctors")
+      .then((r) => r.json())
+      .then((d) => setPending(Number(d.pendingCount || 0)))
+      .catch(() => {});
+  }, []);
+
   return (
     <div>
       <p className="text-sm font-semibold text-[var(--gold)]">Administração Meu Rim</p>
@@ -12,6 +21,12 @@ export default function PlataformaHomePage() {
         <Link href="/medicos/painel" className="font-semibold text-[var(--gold)]"> Área médica</Link>.
         Nada aqui move pacientes nem altera o seu login.
       </p>
+      {pending > 0 && (
+        <Link href="/plataforma/usuarios" className="panel mt-4 block border-[var(--border-gold)]">
+          <p className="font-bold text-[var(--gold)]">{pending} cadastro{pending === 1 ? "" : "s"} aguardando aceite</p>
+          <p className="mt-1 text-sm text-[var(--text-muted)]">Aceitar ou recusar no seu login. Abre em Usuários.</p>
+        </Link>
+      )}
       <div className="mt-6 grid gap-3 sm:grid-cols-2">
         <Link href="/plataforma/saude" className="panel block">
           <p className="font-bold">Saúde do Meu Rim</p>
@@ -27,7 +42,7 @@ export default function PlataformaHomePage() {
         </Link>
         <Link href="/plataforma/usuarios" className="panel block">
           <p className="font-bold">Usuários</p>
-          <p className="mt-1 text-sm text-[var(--text-muted)]">Médicos existentes e papéis. Somente leitura de senha/ID.</p>
+          <p className="mt-1 text-sm text-[var(--text-muted)]">Adicionar, aceitar ou recusar médico. Sem outra conta.</p>
         </Link>
         <Link href="/plataforma/integridade" className="panel block">
           <p className="font-bold">Integridade</p>
