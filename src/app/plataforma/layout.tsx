@@ -23,6 +23,7 @@ export default function PlataformaLayout({ children }: { children: React.ReactNo
   const router = useRouter();
   const [ready, setReady] = useState(false);
   const [name, setName] = useState("");
+  const [pending, setPending] = useState(0);
 
   useEffect(() => {
     fetch("/api/plataforma/me")
@@ -36,6 +37,16 @@ export default function PlataformaLayout({ children }: { children: React.ReactNo
         setReady(true);
       })
       .catch(() => router.replace("/medicos/login"));
+    fetch("/api/plataforma/doctors")
+      .then((r) => r.json())
+      .then((d) => setPending(Number(d.pendingCount || 0)))
+      .catch(() => {});
+    function onPending(e: Event) {
+      const n = Number((e as CustomEvent).detail);
+      if (Number.isFinite(n)) setPending(n);
+    }
+    window.addEventListener("meurim-pending-doctors", onPending);
+    return () => window.removeEventListener("meurim-pending-doctors", onPending);
   }, [router]);
 
   if (!ready) {
@@ -69,6 +80,7 @@ export default function PlataformaLayout({ children }: { children: React.ReactNo
                 }`}
               >
                 {n.label}
+                {n.href === "/plataforma/usuarios" && pending > 0 ? ` (${pending})` : ""}
               </Link>
             ))}
           </nav>
@@ -84,6 +96,7 @@ export default function PlataformaLayout({ children }: { children: React.ReactNo
             {NAV.map((n) => (
               <Link key={n.href} href={n.href} className="rounded-full border border-[var(--border)] px-3 py-1 text-xs font-semibold">
                 {n.label}
+                {n.href === "/plataforma/usuarios" && pending > 0 ? ` (${pending})` : ""}
               </Link>
             ))}
           </div>
