@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { PDFDocument, StandardFonts, PDFName, PDFBool } from "pdf-lib";
+import { PDFDocument, StandardFonts, PDFName, PDFBool, PDFButton } from "pdf-lib";
 import { getDoctorSessionId } from "@/lib/auth";
 import { getPatientEmail } from "@/lib/patient-session";
 import { getLme } from "@/lib/lme-store";
@@ -15,8 +15,11 @@ export async function GET(
   { params }: { params: Promise<{ id: string }> }
 ) {
   const { id } = await params;
-  // flatten=1: baixa como anexo (download) para assinatura digital, em vez de exibir inline.
-  const forSigning = new URL(req.url).searchParams.get("flatten") === "1";
+  const url = new URL(req.url);
+  // flatten=1: baixa como anexo achatado para assinatura digital.
+  // print=1: achata o formulário (já impresso) para o Chrome mostrar e imprimir os valores.
+  const forSigning = url.searchParams.get("flatten") === "1";
+  const forPrint = url.searchParams.get("print") === "1";
   const lme = await getLme(id);
   if (!lme) return NextResponse.json({ error: "LME não encontrada." }, { status: 404 });
 
@@ -151,6 +154,26 @@ export async function GET(
     form.acroForm.dict.set(PDFName.of("NeedAppearances"), PDFBool.False);
   } catch {
     /* ok */
+  }
+
+  if (forPrint || forSigning) {
+    try {
+      // Botões do PDF oficial (OPÇÕES, Salvar, Limpar, Busca CNES) não vão para o papel.
+      for (const field of form.getFields().filter((f) => f instanceof PDFButton)) {
+        try {
+          form.removeField(field);
+        } catch {
+          /* segue */
+        }
+      }
+    } catch {
+      /* segue */
+    }
+    try {
+      form.flatten();
+    } catch {
+      /* se o flatten falhar, segue o PDF preenchido */
+    }
   }
 
   const out = await doc.save();

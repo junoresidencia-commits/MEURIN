@@ -4,12 +4,15 @@ import path from "path";
 import { v4 as uuid } from "uuid";
 import { getSupabaseAdmin } from "./supabase-admin";
 import { getDoctorByEmail, listDoctors } from "./store";
-import { listPatientsByDoctor } from "./patients-store";
+import { createPatient, findByCpf, getPatient, listPatientsByDoctor, updatePatient } from "./patients-store";
 import { HD_BUCKET, saveFile } from "./doc-storage";
 import { hdPerm, HD_ROLE_DEFAULTS, resolvedPerms } from "./hd-access";
 import { DEFAULT_HD_RULES, evaluateHdLabs, worstLevel, type LabMap } from "./hd-rules";
 import { calcKtv, calcUrr, parseHours, parseLocaleNumber } from "./hd-calcs";
 import { HD_EXAM_LABEL, HD_EXAM_UNIT } from "./hd-labels";
+import { matchExamCode, normName } from "./hd-store-names";
+import { parseHdLabsFromText } from "./hd-lab-import";
+import { extractLabFileText } from "./hd-lab-file-text";
 import { buildSalaBrancaWorkbook, parseDateBr, parseLabSpreadsheet, parseSalaBrancaWorkbook } from "./hd-xlsx";
 import type {
   HdActor,
@@ -51,6 +54,21 @@ function isMissing(error: { code?: string; message?: string } | null): boolean {
   if (!error) return false;
   if (error.code === "42P01" || error.code === "PGRST205") return true;
   return Boolean(error.message && /relation .* does not exist|could not find the table/i.test(error.message));
+}
+
+function missingColumnName(error: { code?: string; message?: string } | null): string | null {
+  if (!error) return null;
+  if (error.code !== "PGRST204" && error.code !== "42703" && !/column|schema cache/i.test(error.message || "")) return null;
+  const msg = error.message || "";
+  let m = msg.match(/find the '([^']+)' column/i);
+  if (m) return m[1];
+  m = msg.match(/column "?([a-z0-9_]+)"? .*does not exist/i);
+  return m ? m[1] : null;
+}
+
+export function hdDigits(v?: string | null, max?: number): string {
+  const d = String(v || "").replace(/\D/g, "");
+  return max ? d.slice(0, max) : d;
 }
 
 type HdDb = {
@@ -189,13 +207,23 @@ async function writeSb(prev: HdDb, next: HdDb) {
       continue;
     }
     const table = TABLES[key];
-    const rows = (next[key] as unknown as Record<string, unknown>[]).map((r) => toSnake(r));
+    let rows = (next[key] as unknown as Record<string, unknown>[]).map((r) => toSnake(r));
     if (rows.length === 0) continue;
-    const { error } = await sb.from(table).upsert(rows);
-    if (error) {
+    for (let attempt = 0; attempt < 8; attempt++) {
+      const { error } = await sb.from(table).upsert(rows);
+      if (!error) break;
       if (isMissing(error)) {
         tableMissing = true;
         return;
+      }
+      const col = missingColumnName(error);
+      if (col) {
+        rows = rows.map((r) => {
+          const copy = { ...r };
+          delete copy[col];
+          return copy;
+        });
+        continue;
       }
       throw error;
     }
@@ -280,14 +308,7 @@ function audit(
   });
 }
 
-export function normName(s: string): string {
-  return String(s || "")
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "")
-    .replace(/\s+/g, " ")
-    .trim()
-    .toUpperCase();
-}
+export { matchExamCode, normName } from "./hd-store-names";
 
 function findMember(db: HdDb, actor: HdActor): HdMember | null {
   return (
@@ -333,6 +354,7 @@ export async function ensureHdSession(actor: HdActor) {
         unitId: unit.id,
         expectedExams: [...HD_EXAM_CODES],
         centerName: "Hemodiálise",
+        cnes: "",
         updatedAt: t,
       });
       if (db.rules.length === 0) db.rules = seedRules();
@@ -483,6 +505,7 @@ function settingsOf(db: HdDb, unitId: string): HdSettings {
       unitId,
       expectedExams: [...HD_EXAM_CODES],
       centerName: "Hemodiálise",
+      cnes: "",
       updatedAt: nowIso(),
     }
   );
@@ -936,32 +959,6 @@ export async function hdExportXlsx(ctx: HdCtx, year?: number, month?: number) {
   });
 }
 
-export function matchExamCode(raw: string): HdExamCode | null {
-  const u = normName(raw);
-  const table: Array<[RegExp, HdExamCode]> = [
-    [/HEMOGLOB/, "hb"],
-    [/\bHB\b/, "hb"],
-    [/HEMATOCR/, "ht"],
-    [/\bHT\b/, "ht"],
-    [/FERRIT/, "ferritin"],
-    [/TSAT|SATURA/, "tsat"],
-    [/FERRO/, "serum_iron"],
-    [/CALCIO|CÁLCIO|\bCA\b/, "ca"],
-    [/FOSFOR|FÓSFOR|\bP\b/, "p"],
-    [/\bPTH\b|PARAT/, "pth"],
-    [/POTASS|POTÁSS|\bK\b/, "k"],
-    [/ALBUM/, "albumin"],
-    [/BICARB|HCO/, "hco3"],
-    [/UREIA PRE|UREIA PRÉ|PRE[- ]DIAL/, "urea_pre"],
-    [/UREIA POS|UREIA PÓS|POS[- ]DIAL/, "urea_post"],
-    [/UREIA/, "urea_pre"],
-    [/CREAT/, "creat"],
-    [/SODIO|SÓDIO|\bNA\b/, "na"],
-  ];
-  for (const [re, code] of table) if (re.test(u)) return code;
-  return null;
-}
-
 export async function hdAddLabs(
   ctx: HdCtx,
   items: Array<{
@@ -1070,6 +1067,115 @@ export async function hdSaveLabFile(
     db.labFiles.push(rec);
     audit(db, ctx.actor, ctx.unit.id, "upload_exam", "file", rec.id, null, { name: file.name });
     return rec;
+  });
+}
+
+export async function hdImportLabDocument(
+  ctx: HdCtx,
+  file: { name: string; type: string; buffer: Buffer } | null,
+  opts?: { year?: number; month?: number; patientId?: string; text?: string }
+) {
+  const rec = file
+    ? await hdSaveLabFile(ctx, file, opts?.year, opts?.month)
+    : null;
+  const extracted = opts?.text?.trim()
+    ? { text: opts.text, kind: "text" as const, ocr: false, note: undefined }
+    : file
+      ? await extractLabFileText(file)
+      : { text: "", kind: "unknown" as const, ocr: false, note: "Envie PDF, foto ou cole o laudo." };
+
+  const db = await load();
+  const patients = db.patients.filter((p) => p.unitId === ctx.unit.id);
+  const parsed = parseHdLabsFromText(extracted.text, patients, opts?.patientId);
+  const source: HdLabSource =
+    extracted.kind === "pdf" ? "pdf" : extracted.kind === "image" ? "image" : extracted.ocr ? "ocr" : "ocr";
+
+  if (!extracted.text.trim()) {
+    return {
+      file: rec,
+      created: 0,
+      pending: 0,
+      identified: 0,
+      needsPatient: false,
+      items: [] as ReturnType<typeof parseHdLabsFromText>["items"],
+      date: parsed.date,
+      note: extracted.note || "Não deu para ler o arquivo.",
+    };
+  }
+  if (parsed.items.length === 0) {
+    return {
+      file: rec,
+      created: 0,
+      pending: 0,
+      identified: 0,
+      needsPatient: false,
+      items: parsed.items,
+      date: parsed.date,
+      note: "Não reconheci exames neste laudo. Cole o texto ou confira se há nome do exame e o valor.",
+    };
+  }
+  if (parsed.needsPatient) {
+    return {
+      file: rec,
+      created: 0,
+      pending: 0,
+      identified: parsed.items.length,
+      needsPatient: true,
+      items: parsed.items,
+      date: parsed.date,
+      note: `Identifiquei ${parsed.items.length} exame(s)${parsed.date ? ` em ${parsed.date}` : ""}. Selecione o paciente para lançar — o nome não bateu com a lista.`,
+    };
+  }
+
+  const result = await hdAddLabs(
+    ctx,
+    parsed.items.map((it) => ({
+      patientId: it.patientId,
+      name: it.name,
+      exam: it.exam,
+      value: it.value,
+      unit: it.unit,
+      date: it.date,
+      confidence: it.confidence,
+      source,
+      fileId: rec?.id,
+    })),
+    opts?.year,
+    opts?.month
+  );
+  return {
+    file: rec,
+    ...result,
+    identified: parsed.items.length,
+    needsPatient: false,
+    items: parsed.items,
+    date: parsed.date,
+    note:
+      result.created === 0
+        ? "Exames lidos, mas nenhum paciente da unidade bateu com o laudo."
+        : `Lancei ${result.created} exame(s)${parsed.date ? ` (${parsed.date})` : ""}${
+            result.pending ? `. ${result.pending} pedem confirmação.` : "."
+          } A IA não prescreve.`,
+  };
+}
+
+export async function hdConfirmPendingLabs(ctx: HdCtx, year?: number, month?: number) {
+  return withDb((db) => {
+    const ym = year && month ? { year, month } : currentYearMonth();
+    const m = db.months.find((x) => x.unitId === ctx.unit.id && x.year === ym.year && x.month === ym.month);
+    if (!m) return { confirmed: 0 };
+    let confirmed = 0;
+    for (const lab of db.labs) {
+      if (lab.unitId !== ctx.unit.id || lab.monthId !== m.id || lab.status !== "pending") continue;
+      lab.status = "confirmed";
+      lab.confirmedBy = ctx.actor.doctorId;
+      lab.confirmedAt = nowIso();
+      confirmed += 1;
+    }
+    if (confirmed) {
+      audit(db, ctx.actor, ctx.unit.id, "confirm_ocr", "lab", m.id, null, { confirmed });
+    }
+    return { confirmed };
   });
 }
 
@@ -1235,12 +1341,13 @@ export async function hdGetSettings(ctx: HdCtx) {
 
 export async function hdSaveSettings(
   ctx: HdCtx,
-  patch: { centerName?: string; expectedExams?: HdExamCode[]; unitName?: string }
+  patch: { centerName?: string; expectedExams?: HdExamCode[]; unitName?: string; cnes?: string }
 ) {
   return withDb((db) => {
     const set = settingsOf(db, ctx.unit.id);
     if (patch.centerName != null) set.centerName = patch.centerName;
     if (patch.expectedExams) set.expectedExams = patch.expectedExams;
+    if (patch.cnes !== undefined) set.cnes = hdDigits(patch.cnes, 7);
     set.updatedAt = nowIso();
     if (!db.settings.some((s) => s.unitId === ctx.unit.id)) db.settings.push(set);
     const unit = db.units.find((u) => u.id === ctx.unit.id);
@@ -1253,13 +1360,25 @@ export async function hdSaveSettings(
   });
 }
 
-export async function hdAddPatient(ctx: HdCtx, input: { name: string; patientId?: string | null; notes?: string }) {
+export async function hdAddPatient(
+  ctx: HdCtx,
+  input: { name: string; patientId?: string | null; notes?: string; cpf?: string | null; cns?: string | null; motherName?: string | null }
+) {
   const name = input.name.trim();
   if (!name) throw new Error("Nome obrigatório.");
-  return withDb((db) => {
+  const cpf = hdDigits(input.cpf, 11) || null;
+  const cns = hdDigits(input.cns, 15) || null;
+  const motherName = String(input.motherName || "").trim() || null;
+  const created = await withDb((db) => {
     const n = normName(name);
     const exist = db.patients.find((p) => p.unitId === ctx.unit.id && normName(p.name) === n);
-    if (exist) return exist;
+    if (exist) {
+      if (cpf) exist.cpf = cpf;
+      if (cns) exist.cns = cns;
+      if (motherName) exist.motherName = motherName;
+      exist.updatedAt = nowIso();
+      return exist;
+    }
     const p: HdPatient = {
       id: uuid(),
       unitId: ctx.unit.id,
@@ -1267,6 +1386,9 @@ export async function hdAddPatient(ctx: HdCtx, input: { name: string; patientId?
       name,
       active: true,
       notes: input.notes || "",
+      cpf,
+      cns,
+      motherName,
       createdAt: nowIso(),
       updatedAt: nowIso(),
     };
@@ -1298,6 +1420,76 @@ export async function hdAddPatient(ctx: HdCtx, input: { name: string; patientId?
     audit(db, ctx.actor, ctx.unit.id, "add_patient", "patient", p.id, null, { name, linked: Boolean(input.patientId) });
     return p;
   });
+  return hdSyncPatientCadastro(ctx, created.id);
+}
+
+export async function hdSavePatientCadastro(
+  ctx: HdCtx,
+  hdPatientId: string,
+  patch: { cpf?: string | null; cns?: string | null; motherName?: string | null }
+) {
+  await withDb((db) => {
+    const p = db.patients.find((x) => x.id === hdPatientId && x.unitId === ctx.unit.id);
+    if (!p) throw new Error("Paciente da hemodiálise não encontrado.");
+    if (patch.cpf !== undefined) p.cpf = hdDigits(patch.cpf, 11) || null;
+    if (patch.cns !== undefined) p.cns = hdDigits(patch.cns, 15) || null;
+    if (patch.motherName !== undefined) p.motherName = String(patch.motherName || "").trim() || null;
+    p.updatedAt = nowIso();
+    audit(db, ctx.actor, ctx.unit.id, "save_patient_ids", "patient", p.id, null, {
+      cpf: p.cpf,
+      cns: p.cns,
+      motherName: p.motherName,
+    });
+    return p;
+  });
+  return hdSyncPatientCadastro(ctx, hdPatientId);
+}
+
+/** Copia CPF, Cartão do SUS e nome da mãe para o cadastro do Meu Rim (cria se ainda não existir). */
+export async function hdSyncPatientCadastro(ctx: HdCtx, hdPatientId: string) {
+  const db = await load();
+  const p = db.patients.find((x) => x.id === hdPatientId && x.unitId === ctx.unit.id);
+  if (!p) throw new Error("Paciente da hemodiálise não encontrado.");
+  const cpf = hdDigits(p.cpf, 11) || null;
+  const cns = hdDigits(p.cns, 15) || null;
+  const motherName = String(p.motherName || "").trim() || null;
+  if (!cpf && !cns && !motherName && !p.patientId) return p;
+
+  let linkedId = p.patientId;
+  if (!linkedId && cpf) {
+    const byCpf = await findByCpf(ctx.actor.doctorId, cpf);
+    if (byCpf) linkedId = byCpf.id;
+  }
+  if (linkedId) {
+    const current = await getPatient(linkedId);
+    if (current) {
+      await updatePatient(linkedId, {
+        cpf: cpf || current.cpf || null,
+        cns: cns || current.cns || null,
+        motherName: motherName || current.motherName || null,
+      });
+    }
+  } else if (cpf || cns || motherName) {
+    const created = await createPatient({
+      doctorId: ctx.actor.doctorId,
+      name: p.name,
+      cpf,
+      cns,
+      motherName,
+    });
+    linkedId = created.id;
+  }
+  if (linkedId && linkedId !== p.patientId) {
+    return withDb((db2) => {
+      const row = db2.patients.find((x) => x.id === hdPatientId && x.unitId === ctx.unit.id);
+      if (!row) return p;
+      row.patientId = linkedId;
+      row.updatedAt = nowIso();
+      return row;
+    });
+  }
+  const fresh = await load();
+  return fresh.patients.find((x) => x.id === hdPatientId) || p;
 }
 
 export async function hdLinkMeuRimPatients(ctx: HdCtx) {
@@ -1314,6 +1506,20 @@ export async function hdLinkMeuRimPatients(ctx: HdCtx) {
     }
     if (linked) audit(db, ctx.actor, ctx.unit.id, "link_patients", "patient", ctx.unit.id, null, { linked });
     return { linked };
+  });
+}
+
+export async function hdLinkOnePatient(ctx: HdCtx, hdPatientId: string, meuRimPatientId: string) {
+  const mine = await listPatientsByDoctor(ctx.actor.doctorId);
+  const hit = mine.find((x) => x.id === meuRimPatientId);
+  if (!hit) throw new Error("Paciente do Meu Rim não encontrado.");
+  return withDb((db) => {
+    const p = db.patients.find((x) => x.id === hdPatientId && x.unitId === ctx.unit.id);
+    if (!p) throw new Error("Paciente da hemodiálise não encontrado.");
+    p.patientId = hit.id;
+    p.updatedAt = nowIso();
+    audit(db, ctx.actor, ctx.unit.id, "link_patient", "patient", p.id, null, { meuRimPatientId: hit.id });
+    return p;
   });
 }
 

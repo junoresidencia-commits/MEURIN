@@ -41,7 +41,8 @@ export function SiteHeader() {
     pathname?.startsWith("/lme") ||
     pathname?.startsWith("/documento") ||
     pathname?.startsWith("/plataforma") ||
-    pathname?.startsWith("/clinica")
+    pathname?.startsWith("/clinica") ||
+    pathname?.startsWith("/imprimir")
   ) {
     return null;
   }

@@ -16,7 +16,8 @@ export function SiteFooter() {
     pathname?.startsWith("/enfermeiro") ||
     pathname?.startsWith("/consulta") ||
     pathname?.startsWith("/lme") ||
-    pathname?.startsWith("/documento")
+    pathname?.startsWith("/documento") ||
+    pathname?.startsWith("/imprimir")
   ) {
     return null;
   }

@@ -345,7 +345,7 @@ export async function getPatient(id: string): Promise<Patient | null> {
 export async function updatePatient(
   id: string,
   patch: Partial<
-    Pick<Patient, "name" | "phone" | "email" | "birthdate" | "ageYears" | "ageReportedAt" | "sex" | "address" | "doctorId" | "passwordHash" | "cns" | "motherName" | "photoUrl">
+    Pick<Patient, "name" | "phone" | "email" | "birthdate" | "ageYears" | "ageReportedAt" | "sex" | "address" | "doctorId" | "passwordHash" | "cns" | "motherName" | "photoUrl" | "cpf">
   >
 ): Promise<Patient | null> {
   const current = await getPatient(id);
@@ -369,6 +369,10 @@ export async function updatePatient(
     };
     if (patch.cns !== undefined) row.cns = updated.cns ?? null;
     if (patch.motherName !== undefined) row.mother_name = updated.motherName ?? null;
+    if (patch.cpf !== undefined) {
+      row.cpf = updated.cpf ?? null;
+      row.cpf_normalized = normalizeCpf(updated.cpf);
+    }
     if (patch.photoUrl !== undefined) row.photo_url = updated.photoUrl ?? null;
     if (patch.doctorId !== undefined) row.doctor_id = updated.doctorId;
     if (patch.passwordHash !== undefined) row.password_hash = updated.passwordHash ?? null;

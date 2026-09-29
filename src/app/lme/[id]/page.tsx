@@ -1,10 +1,11 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import { SignDocumentPanel } from "@/components/SignDocumentFlow";
 import { LmeComplementaryDocs } from "@/components/LmeComplementaryDocs";
+import { flattenedSrc, printHref } from "@/lib/print-pdf";
 
 type Med = { name: string; presentation?: string; monthlyQty?: string };
 type Lme = {
@@ -41,17 +42,8 @@ export default function LmePage() {
   const [error, setError] = useState("");
   const [copied, setCopied] = useState(false);
   const [isDoctor, setIsDoctor] = useState(false);
-  const frameRef = useRef<HTMLIFrameElement>(null);
 
   const officialUrl = `/api/lme/${id}/oficial`;
-
-  function printOficial() {
-    const win = frameRef.current?.contentWindow;
-    if (win) {
-      try { win.focus(); win.print(); return; } catch { /* fallback abaixo */ }
-    }
-    window.open(officialUrl, "_blank");
-  }
   function shareWhatsapp() {
     if (!lme) return;
     const url = typeof window !== "undefined" ? window.location.href : "";
@@ -152,7 +144,7 @@ export default function LmePage() {
           <h1 className="font-display text-2xl font-extrabold text-[var(--text)]">Formulário oficial preenchido</h1>
         </div>
         <div className="flex flex-wrap gap-2">
-          <button type="button" className="btn-gold" onClick={printOficial}>Imprimir</button>
+          <a className="btn-gold" href={printHref(officialUrl)} target="_blank" rel="noopener noreferrer">Imprimir</a>
           <a className="btn-ghost" href={officialUrl} target="_blank" rel="noopener noreferrer" download="lme-oficial.pdf">Baixar PDF</a>
           <button type="button" className="btn-ghost" onClick={shareWhatsapp}>WhatsApp</button>
           <button type="button" className="btn-ghost" onClick={copyLink}>{copied ? "Link copiado!" : "Copiar link"}</button>
@@ -165,7 +157,7 @@ export default function LmePage() {
 
       {/* PDF OFICIAL preenchido — conteúdo principal (impressão/print sai deste PDF) */}
       <div className="overflow-hidden rounded-[16px] border border-[var(--border)] bg-white shadow-[var(--shadow)] print:hidden">
-        <iframe ref={frameRef} title="LME oficial preenchida" src={officialUrl} className="h-[82vh] w-full" />
+        <iframe title="LME oficial preenchida" src={flattenedSrc(officialUrl) || officialUrl} className="h-[82vh] w-full" />
       </div>
 
       {isDoctor && lme.patientEmail && (

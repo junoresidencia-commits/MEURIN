@@ -7,6 +7,7 @@ import {
   hdAddPatient,
   hdCloseMonth,
   hdConfirmLab,
+  hdConfirmPendingLabs,
   hdDashboard,
   hdGetSettings,
   hdLinkMeuRimPatients,
@@ -24,10 +25,14 @@ import {
   hdReviewQueue,
   hdSaveSettings,
   hdSearchDoctors,
+  hdLinkOnePatient,
+  hdSavePatientCadastro,
   hdUpdateMapCell,
   hdUpdateMember,
   requireHd,
 } from "@/lib/hd-store";
+import { hdGenerateDocsFromExams, hdListDocsFromExams, hdPreviewDocsFromExams } from "@/lib/hd-docs-generate";
+import { getDoctorById, updateDb } from "@/lib/store";
 import type { HdExamCode, HdMapField, HdReviewDecision, HdRole, HdShift } from "@/lib/hd-types";
 import { HD_EXAM_CODES, HD_MAP_FIELDS } from "@/lib/hd-types";
 
@@ -118,8 +123,22 @@ export async function GET(req: Request) {
       if (!hdPerm(ctx.member, "view_audit", actor.isSuperAdmin)) return NextResponse.json({ error: "Sem permissão." }, { status: 403 });
       return NextResponse.json({ logs: await hdListAudit(ctx) });
     }
-    if (view === "settings") return NextResponse.json(await hdGetSettings(ctx));
+    if (view === "settings") {
+      const s = await hdGetSettings(ctx);
+      const doctor = await getDoctorById(ctx.actor.doctorId);
+      return NextResponse.json({ ...s, doctorCns: doctor?.cns || "" });
+    }
     if (view === "months") return NextResponse.json({ months: await hdListMonths(ctx) });
+    if (view === "docs_from_exams") {
+      if (!hdPerm(ctx.member, "view_exams", actor.isSuperAdmin)) return NextResponse.json({ error: "Sem permissão." }, { status: 403 });
+      const id = url.searchParams.get("id") || "";
+      if (id) {
+        const preview = await hdPreviewDocsFromExams(ctx, id, year, month);
+        if (!preview) return NextResponse.json({ error: "Paciente não encontrado." }, { status: 404 });
+        return NextResponse.json(preview);
+      }
+      return NextResponse.json(await hdListDocsFromExams(ctx, year, month));
+    }
     return NextResponse.json({ error: "Vista inválida." }, { status: 400 });
   } catch (err) {
     const message = err instanceof Error ? err.message : "Falha na Hemodiálise.";
@@ -175,6 +194,9 @@ export async function POST(req: Request) {
         name: String(body.name || ""),
         patientId: body.patientId ? String(body.patientId) : null,
         notes: body.notes ? String(body.notes) : undefined,
+        cpf: body.cpf != null ? String(body.cpf) : undefined,
+        cns: body.cns != null ? String(body.cns) : undefined,
+        motherName: body.motherName != null ? String(body.motherName) : undefined,
       });
       return NextResponse.json({ patient });
     }
@@ -190,20 +212,31 @@ export async function POST(req: Request) {
         ctx,
         items.map((it) => {
           const row = it as Record<string, unknown>;
+          const src = String(row.source || "manual");
+          const source =
+            src === "pdf" || src === "image" || src === "ocr" || src === "csv" || src === "xlsx" || src === "manual"
+              ? src
+              : "ocr";
           return {
             patientId: row.patientId ? String(row.patientId) : undefined,
             name: row.name ? String(row.name) : undefined,
-            exam: String(row.exam || ""),
+            exam: String(row.exam || row.examCode || ""),
             value: String(row.value ?? ""),
             unit: row.unit ? String(row.unit) : undefined,
             date: row.date ? String(row.date) : undefined,
-            confidence: typeof row.confidence === "number" ? row.confidence : 100,
-            source: "manual" as const,
+            confidence: typeof row.confidence === "number" ? row.confidence : src === "manual" ? 100 : 75,
+            source,
+            fileId: row.fileId ? String(row.fileId) : undefined,
           };
         }),
         year,
         month
       );
+      return NextResponse.json(result);
+    }
+    if (action === "confirm_pending") {
+      if (!hdPerm(ctx.member, "confirm_ocr", actor.isSuperAdmin)) return NextResponse.json({ error: "Sem permissão." }, { status: 403 });
+      const result = await hdConfirmPendingLabs(ctx, year, month);
       return NextResponse.json(result);
     }
     if (action === "confirm_lab") {
@@ -238,8 +271,43 @@ export async function POST(req: Request) {
         centerName: body.centerName ? String(body.centerName) : undefined,
         unitName: body.unitName ? String(body.unitName) : undefined,
         expectedExams: expected,
+        cnes: body.cnes !== undefined ? String(body.cnes) : undefined,
       });
-      return NextResponse.json({ settings });
+      if (body.doctorCns !== undefined) {
+        const cns = String(body.doctorCns || "").replace(/\D/g, "").slice(0, 15);
+        await updateDb((db) => {
+          const d = db.doctors.find((x) => x.id === ctx.actor.doctorId);
+          if (d) d.cns = cns || undefined;
+          return db;
+        });
+      }
+      const doctor = await getDoctorById(ctx.actor.doctorId);
+      return NextResponse.json({ settings, doctorCns: doctor?.cns || "" });
+    }
+    if (action === "link_hd_patient") {
+      const patient = await hdLinkOnePatient(ctx, String(body.patientId || ""), String(body.meuRimPatientId || ""));
+      return NextResponse.json({ patient });
+    }
+    if (action === "save_patient_ids") {
+      const patient = await hdSavePatientCadastro(ctx, String(body.patientId || ""), {
+        cpf: body.cpf != null ? String(body.cpf) : undefined,
+        cns: body.cns != null ? String(body.cns) : undefined,
+        motherName: body.motherName != null ? String(body.motherName) : undefined,
+      });
+      return NextResponse.json({ patient });
+    }
+    if (action === "generate_docs_from_exams") {
+      if (!hdPerm(ctx.member, "review", actor.isSuperAdmin)) {
+        return NextResponse.json({ error: "Só o médico gera a LME. A IA não prescreve." }, { status: 403 });
+      }
+      const result = await hdGenerateDocsFromExams(ctx, {
+        patientId: String(body.patientId || ""),
+        year,
+        month,
+        meuRimPatientId: body.meuRimPatientId ? String(body.meuRimPatientId) : undefined,
+        locationId: body.locationId ? String(body.locationId) : undefined,
+      });
+      return NextResponse.json(result);
     }
     return NextResponse.json({ error: "Ação inválida." }, { status: 400 });
   } catch (err) {

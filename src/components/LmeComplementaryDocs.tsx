@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState, type ReactNode } from "react";
 import Link from "next/link";
 import { composerHref, type ComplementarySlot } from "@/lib/complementary-docs";
+import { printHref } from "@/lib/print-pdf";
 
 type Info = {
   protocolId: string | null;
@@ -71,7 +72,7 @@ export function LmeComplementaryDocs({
     <section id="complementares" className="mt-6 scroll-mt-6 rounded-[16px] border border-[var(--border-gold)] bg-[var(--gold-soft)] p-5 shadow-[var(--shadow)] print:hidden">
       <h2 className="font-display text-lg font-extrabold text-[var(--text)]">Documentos complementares</h2>
       <p className="mt-1 text-sm text-[var(--text-soft)]">
-        Receita, relatório e TER oficial desta LME. A LME oficial <b>não é alterada</b>.
+        Cada documento sai separado: receita, relatório e TER. A LME oficial <b>não é misturada</b>.
         {info?.protocolName ? <> Protocolo: <b>{info.protocolName}</b>.</> : null}
       </p>
 
@@ -79,17 +80,33 @@ export function LmeComplementaryDocs({
         <DocRow
           slot={receita}
           action={
-            <Link href={composerHref(patientEmail, { type: "receita", title: "Receita médica" }, lmeId)} className="btn-gold text-sm">
-              {receita?.status === "gerado" ? "Revisar receita" : "Gerar receita"}
-            </Link>
+            <div className="flex flex-wrap gap-2">
+              <Link href={composerHref(patientEmail, { type: "receita", title: "Receita médica" }, lmeId)} className="btn-gold text-sm">
+                {receita?.status === "nao_gerado" ? "Gerar receita" : "Revisar"}
+              </Link>
+              {receita?.pdfUrl && (
+                <>
+                  <a href={receita.pdfUrl} target="_blank" rel="noopener noreferrer" className="btn-ghost text-sm">Abrir</a>
+                  <a href={printHref(receita.pdfUrl)} target="_blank" rel="noopener noreferrer" className="btn-ghost text-sm">Imprimir</a>
+                </>
+              )}
+            </div>
           }
         />
         <DocRow
           slot={relatorio}
           action={
-            <Link href={composerHref(patientEmail, { type: "relatorio", title: "Relatório médico" }, lmeId)} className="btn-ghost text-sm">
-              {relatorio?.status === "gerado" ? "Revisar relatório" : "Gerar relatório médico"}
-            </Link>
+            <div className="flex flex-wrap gap-2">
+              <Link href={composerHref(patientEmail, { type: "relatorio", title: "Relatório médico" }, lmeId)} className="btn-ghost text-sm">
+                {relatorio?.status === "nao_gerado" ? "Gerar relatório" : "Revisar"}
+              </Link>
+              {relatorio?.pdfUrl && (
+                <>
+                  <a href={relatorio.pdfUrl} target="_blank" rel="noopener noreferrer" className="btn-ghost text-sm">Abrir</a>
+                  <a href={printHref(relatorio.pdfUrl)} target="_blank" rel="noopener noreferrer" className="btn-ghost text-sm">Imprimir</a>
+                </>
+              )}
+            </div>
           }
         />
         <DocRow
@@ -98,32 +115,19 @@ export function LmeComplementaryDocs({
             ter?.status === "indisponivel" ? null : (
               <div className="flex flex-wrap gap-2">
                 <button type="button" className="btn-ghost text-sm" onClick={() => void gerarTer()} disabled={busy === "ter"}>
-                  {busy === "ter" ? "Preparando…" : ter?.status === "gerado" ? "Gerar TER novamente" : "Gerar TER oficial"}
+                  {busy === "ter" ? "Preparando…" : ter?.status === "gerado" ? "Gerar TER novamente" : "Gerar TER"}
                 </button>
                 {ter?.pdfUrl && (
-                  <a href={ter.pdfUrl} target="_blank" rel="noopener noreferrer" className="btn-ghost text-sm">Pré-visualizar</a>
+                  <>
+                    <a href={ter.pdfUrl} target="_blank" rel="noopener noreferrer" className="btn-ghost text-sm">Abrir</a>
+                    <a href={printHref(ter.pdfUrl)} target="_blank" rel="noopener noreferrer" className="btn-ghost text-sm">Imprimir</a>
+                  </>
                 )}
               </div>
             )
           }
         />
         <DocRow slot={consent} />
-      </div>
-
-      <div className="mt-4 border-t border-[var(--border-gold)]/60 pt-3">
-        <p className="text-xs font-bold uppercase tracking-wider text-[var(--gold)]">Pacote (LME + documentos)</p>
-        <p className="mt-1 text-xs text-[var(--text-muted)]">
-          Ordem: 1 LME oficial · 2 Receita · 3 Relatório · 4 TER oficial.
-          {info && !info.packageReady ? ` ${info.packageNote}` : " Pacote completo — pode baixar ou imprimir."}
-        </p>
-        <div className="mt-2 flex flex-wrap gap-2">
-          <a href={`/api/lme/${lmeId}/pacote?download=1`} target="_blank" rel="noopener noreferrer" className="btn-gold text-sm">
-            Baixar pacote (PDF)
-          </a>
-          <a href={`/api/lme/${lmeId}/pacote`} target="_blank" rel="noopener noreferrer" className="btn-ghost text-sm">
-            Abrir / imprimir pacote
-          </a>
-        </div>
       </div>
       {error && <p className="mt-2 text-sm font-semibold text-[var(--danger)]">{error}</p>}
     </section>
@@ -148,9 +152,6 @@ function DocRow({ slot, action }: { slot?: ComplementarySlot; action?: ReactNode
       </div>
       {slot.reason && <p className="mt-1 text-xs text-[var(--text-muted)]">{slot.reason}</p>}
       {action && <div className="mt-2">{action}</div>}
-      {slot.pdfUrl && slot.kind !== "ter" && (
-        <a href={slot.pdfUrl} target="_blank" rel="noopener noreferrer" className="mt-1 inline-block text-xs font-semibold text-[var(--gold)]">Abrir PDF salvo</a>
-      )}
     </div>
   );
 }

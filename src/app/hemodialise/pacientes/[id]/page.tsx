@@ -3,10 +3,12 @@
 import { useParams } from "next/navigation";
 import { useEffect, useState } from "react";
 import { useHd } from "@/components/hd/HdShell";
+import { HdExamDocsPanel } from "@/components/hd/HdExamDocsPanel";
+import { HdPatientIdsForm } from "@/components/hd/HdPatientIdsForm";
 import { HD_ALERT_LABEL, HD_EXAM_LABEL, HD_SHIFT_LABEL } from "@/lib/hd-labels";
 
 type Detail = {
-  patient: { id: string; name: string; notes: string; patientId: string | null };
+  patient: { id: string; name: string; notes: string; patientId: string | null; cpf?: string | null; cns?: string | null; motherName?: string | null };
   row: { shift: "MANHA" | "TARDE" | "NOITE"; machine: string; ward: string; access: string } | null;
   labs: Record<string, number | null>;
   labRows: Array<{ id: string; examCode: string; rawValue: string; unit: string; confidence: number; status: string; collectedAt: string | null }>;
@@ -54,44 +56,76 @@ export default function HdPacientePage() {
       </div>
 
       {tab === "Resumo" && (
-        <div className="mt-4 grid gap-4 lg:grid-cols-2">
+        <div className="mt-4 space-y-4">
           <div className="panel">
-            <p className="font-bold">Exames atuais</p>
-            <ul className="mt-2 space-y-1 text-sm">
-              {Object.entries(d.labs).filter(([, v]) => v != null).map(([k, v]) => (
-                <li key={k}>{HD_EXAM_LABEL[k as keyof typeof HD_EXAM_LABEL] || k}: <strong>{v}</strong></li>
+            <p className="font-bold">Cadastro para a LME</p>
+            <p className="mt-1 text-sm text-[var(--text-muted)]">CPF, Cartão do SUS e nome da mãe. O CNS do médico e o CNES da clínica vêm das configurações.</p>
+            <div className="mt-3">
+              <HdPatientIdsForm
+                patientId={d.patient.id}
+                initial={{ cpf: d.patient.cpf, cns: d.patient.cns, motherName: d.patient.motherName }}
+                onSaved={() => {
+                  const u = new URLSearchParams({ view: "patient", id, year: String(year), month: String(month) });
+                  fetch(`/api/hemodialise?${u}`).then((r) => r.json()).then((x) => { if (!x.error) setD(x); });
+                }}
+              />
+            </div>
+          </div>
+          <div className="grid gap-4 lg:grid-cols-2">
+            <div className="panel">
+              <p className="font-bold">Exames atuais</p>
+              <ul className="mt-2 space-y-1 text-sm">
+                {Object.entries(d.labs).filter(([, v]) => v != null).map(([k, v]) => (
+                  <li key={k}>{HD_EXAM_LABEL[k as keyof typeof HD_EXAM_LABEL] || k}: <strong>{v}</strong></li>
+                ))}
+              </ul>
+              <p className="mt-3 text-sm">URR: {d.urr == null ? "—" : `${d.urr}%`} · Kt/V: {d.ktv == null ? "—" : d.ktv}</p>
+            </div>
+            <div className="panel">
+              <p className="font-bold">Alertas do protocolo</p>
+              {d.alerts.length === 0 && <p className="mt-2 text-sm text-[var(--green)]">OK — sem alerta prioritário.</p>}
+              {d.alerts.map((a) => (
+                <div key={a.code} className="mt-2 text-sm">
+                  <p className={a.level === "CRITICO" ? "font-bold text-[var(--danger)]" : "font-semibold text-[var(--warn)]"}>{a.message}</p>
+                  <p className="text-[var(--text-muted)]">{a.suggestion}</p>
+                </div>
               ))}
-            </ul>
-            <p className="mt-3 text-sm">URR: {d.urr == null ? "—" : `${d.urr}%`} · Kt/V: {d.ktv == null ? "—" : d.ktv}</p>
+            </div>
           </div>
-          <div className="panel">
-            <p className="font-bold">Alertas do protocolo</p>
-            {d.alerts.length === 0 && <p className="mt-2 text-sm text-[var(--green)]">OK — sem alerta prioritário.</p>}
-            {d.alerts.map((a) => (
-              <div key={a.code} className="mt-2 text-sm">
-                <p className={a.level === "CRITICO" ? "font-bold text-[var(--danger)]" : "font-semibold text-[var(--warn)]"}>{a.message}</p>
-                <p className="text-[var(--text-muted)]">{a.suggestion}</p>
-              </div>
-            ))}
-          </div>
+          <HdExamDocsPanel patientId={d.patient.id} compact tick={d.labRows.length} />
         </div>
       )}
 
       {tab === "Exames" && (
-        <div className="panel mt-4 overflow-x-auto">
-          <table className="min-w-full text-sm">
-            <thead><tr className="text-xs uppercase text-[var(--text-muted)]"><th className="py-2 text-left">Exame</th><th>Valor</th><th>Confiança</th><th>Status</th></tr></thead>
-            <tbody>
-              {d.labRows.map((l) => (
-                <tr key={l.id} className="border-t border-[var(--border)]">
-                  <td className="py-2">{HD_EXAM_LABEL[l.examCode as keyof typeof HD_EXAM_LABEL] || l.examCode}</td>
-                  <td>{l.rawValue} {l.unit}</td>
-                  <td>{l.confidence}%</td>
-                  <td>{l.status}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+        <div className="mt-4 space-y-4">
+          {(can("upload_exams") || can("confirm_ocr")) && (
+            <HdPatientExamImport
+              patientId={d.patient.id}
+              year={year}
+              month={month}
+              onDone={() => {
+                const u = new URLSearchParams({ view: "patient", id, year: String(year), month: String(month) });
+                fetch(`/api/hemodialise?${u}`).then((r) => r.json()).then((x) => { if (!x.error) setD(x); });
+              }}
+            />
+          )}
+          <div className="panel overflow-x-auto">
+            <table className="min-w-full text-sm">
+              <thead><tr className="text-xs uppercase text-[var(--text-muted)]"><th className="py-2 text-left">Exame</th><th>Valor</th><th>Data</th><th>Confiança</th><th>Status</th></tr></thead>
+              <tbody>
+                {d.labRows.map((l) => (
+                  <tr key={l.id} className="border-t border-[var(--border)]">
+                    <td className="py-2">{HD_EXAM_LABEL[l.examCode as keyof typeof HD_EXAM_LABEL] || l.examCode}</td>
+                    <td>{l.rawValue} {l.unit}</td>
+                    <td>{l.collectedAt || "—"}</td>
+                    <td>{l.confidence}%</td>
+                    <td>{l.status}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          <HdExamDocsPanel patientId={d.patient.id} compact tick={d.labRows.length} />
         </div>
       )}
 
@@ -145,6 +179,79 @@ export default function HdPacientePage() {
           </ul>
         </div>
       )}
+    </div>
+  );
+}
+
+function HdPatientExamImport({
+  patientId,
+  year,
+  month,
+  onDone,
+}: {
+  patientId: string;
+  year: number;
+  month: number;
+  onDone: () => void;
+}) {
+  const [msg, setMsg] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [paste, setPaste] = useState("");
+
+  async function send(intent: string, file?: File, text?: string) {
+    setBusy(true);
+    setMsg("");
+    const fd = new FormData();
+    fd.set("intent", intent);
+    fd.set("year", String(year));
+    fd.set("month", String(month));
+    fd.set("patientId", patientId);
+    if (file) fd.set("file", file);
+    if (text) fd.set("text", text);
+    const r = await fetch("/api/hemodialise/arquivo", { method: "POST", body: fd });
+    const d = await r.json();
+    setBusy(false);
+    setMsg(d.error || d.note || `Lancei ${d.created ?? 0} exame(s).`);
+    if (!d.error) {
+      setPaste("");
+      onDone();
+    }
+  }
+
+  return (
+    <div className="panel space-y-3">
+      <p className="font-bold">Lançar pelo PDF ou pela foto</p>
+      <p className="text-sm text-[var(--text-muted)]">
+        O arquivo é deste paciente. Identificamos os exames e a data e lançamos juntos. A IA não prescreve.
+      </p>
+      <label className="block text-sm">
+        PDF ou print
+        <input
+          className="mt-1 block w-full"
+          type="file"
+          accept=".pdf,image/*"
+          disabled={busy}
+          onChange={(e) => {
+            const f = e.target.files?.[0];
+            if (f) void send("upload_exam", f);
+            e.target.value = "";
+          }}
+        />
+      </label>
+      <label className="block text-sm">
+        Ou cole o laudo
+        <textarea
+          className="mt-1 w-full rounded-xl border border-[var(--border)] px-3 py-2 text-sm"
+          rows={3}
+          value={paste}
+          onChange={(e) => setPaste(e.target.value)}
+          placeholder={"15/09/2026\nHb 10,2\nP 5,4\nPTH 480"}
+        />
+      </label>
+      <button type="button" className="btn-gold" disabled={busy || !paste.trim()} onClick={() => void send("paste_labs", undefined, paste)}>
+        {busy ? "Lendo…" : "Identificar e lançar"}
+      </button>
+      {msg && <p className="text-sm text-[var(--gold)]">{msg}</p>}
     </div>
   );
 }

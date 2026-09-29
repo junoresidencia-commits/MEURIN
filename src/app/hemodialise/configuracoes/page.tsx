@@ -10,6 +10,8 @@ type Rule = { code: string; domain: string; version: string; source: string; con
 export default function HdConfigPage() {
   const { can } = useHd();
   const [name, setName] = useState("");
+  const [cnes, setCnes] = useState("");
+  const [doctorCns, setDoctorCns] = useState("");
   const [expected, setExpected] = useState<HdExamCode[]>([...HD_EXAM_CODES]);
   const [rules, setRules] = useState<Rule[]>([]);
   const [msg, setMsg] = useState("");
@@ -17,6 +19,8 @@ export default function HdConfigPage() {
   useEffect(() => {
     fetch("/api/hemodialise?view=settings").then((r) => r.json()).then((d) => {
       setName(d.settings?.centerName || d.unit?.name || "");
+      setCnes(d.settings?.cnes || "");
+      setDoctorCns(d.doctorCns || "");
       setExpected(d.settings?.expectedExams || [...HD_EXAM_CODES]);
       setRules(d.rules || []);
     });
@@ -27,7 +31,7 @@ export default function HdConfigPage() {
     const r = await fetch("/api/hemodialise", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ action: "save_settings", centerName: name, unitName: name, expectedExams: expected }),
+      body: JSON.stringify({ action: "save_settings", centerName: name, unitName: name, cnes, doctorCns, expectedExams: expected }),
     });
     const d = await r.json();
     setMsg(d.error || "Configurações salvas.");
@@ -41,6 +45,14 @@ export default function HdConfigPage() {
       <form onSubmit={save} className="panel mt-4 grid gap-3">
         <label className="text-sm">Nome do centro
           <input className="mt-1 w-full rounded-xl border border-[var(--border)] px-3 py-2" value={name} onChange={(e) => setName(e.target.value)} />
+        </label>
+        <label className="text-sm">CNES da clínica de hemodiálise
+          <input className="mt-1 w-full rounded-xl border border-[var(--border)] px-3 py-2" value={cnes} onChange={(e) => setCnes(e.target.value)} inputMode="numeric" placeholder="0000000" />
+          <span className="mt-1 block text-xs text-[var(--text-muted)]">Sai no formulário oficial da LME. Cadastre uma vez.</span>
+        </label>
+        <label className="text-sm">CNS do médico (Cartão Nacional de Saúde)
+          <input className="mt-1 w-full rounded-xl border border-[var(--border)] px-3 py-2" value={doctorCns} onChange={(e) => setDoctorCns(e.target.value)} inputMode="numeric" placeholder="000 0000 0000 0000" />
+          <span className="mt-1 block text-xs text-[var(--text-muted)]">Já entra sozinho em toda LME. Preencha se ainda estiver em branco no seu perfil.</span>
         </label>
         <p className="font-bold">Exames esperados no mês</p>
         <div className="grid gap-2 sm:grid-cols-2">
