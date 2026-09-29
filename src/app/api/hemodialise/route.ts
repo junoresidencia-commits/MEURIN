@@ -7,6 +7,7 @@ import {
   hdAddPatient,
   hdCloseMonth,
   hdConfirmLab,
+  hdConfirmPendingLabs,
   hdDashboard,
   hdGetSettings,
   hdLinkMeuRimPatients,
@@ -190,20 +191,31 @@ export async function POST(req: Request) {
         ctx,
         items.map((it) => {
           const row = it as Record<string, unknown>;
+          const src = String(row.source || "manual");
+          const source =
+            src === "pdf" || src === "image" || src === "ocr" || src === "csv" || src === "xlsx" || src === "manual"
+              ? src
+              : "ocr";
           return {
             patientId: row.patientId ? String(row.patientId) : undefined,
             name: row.name ? String(row.name) : undefined,
-            exam: String(row.exam || ""),
+            exam: String(row.exam || row.examCode || ""),
             value: String(row.value ?? ""),
             unit: row.unit ? String(row.unit) : undefined,
             date: row.date ? String(row.date) : undefined,
-            confidence: typeof row.confidence === "number" ? row.confidence : 100,
-            source: "manual" as const,
+            confidence: typeof row.confidence === "number" ? row.confidence : src === "manual" ? 100 : 75,
+            source,
+            fileId: row.fileId ? String(row.fileId) : undefined,
           };
         }),
         year,
         month
       );
+      return NextResponse.json(result);
+    }
+    if (action === "confirm_pending") {
+      if (!hdPerm(ctx.member, "confirm_ocr", actor.isSuperAdmin)) return NextResponse.json({ error: "Sem permissão." }, { status: 403 });
+      const result = await hdConfirmPendingLabs(ctx, year, month);
       return NextResponse.json(result);
     }
     if (action === "confirm_lab") {

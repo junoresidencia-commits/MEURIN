@@ -3,10 +3,10 @@ import { getHdActor, hdPerm } from "@/lib/hd-access";
 import { buildHdMapPdf } from "@/lib/hd-pdf";
 import {
   hdExportXlsx,
+  hdImportLabDocument,
   hdImportLabSheet,
   hdImportSalaBranca,
   hdListMap,
-  hdSaveLabFile,
   requireHd,
 } from "@/lib/hd-store";
 import { HD_BUCKET, readFile } from "@/lib/doc-storage";
@@ -80,16 +80,20 @@ export async function POST(req: Request) {
   const intent = String(form.get("intent") || "import_map");
   const year = Number(form.get("year") || 0) || undefined;
   const month = Number(form.get("month") || 0) || undefined;
+  const patientId = form.get("patientId") ? String(form.get("patientId")) : undefined;
+  const pasted = form.get("text") ? String(form.get("text")) : undefined;
   const file = form.get("file");
-  if (!file || typeof file === "string") return NextResponse.json({ error: "Envie um arquivo." }, { status: 400 });
-  const buf = Buffer.from(await file.arrayBuffer());
-  if (buf.length > MAX) return NextResponse.json({ error: "Arquivo maior que 12 MB." }, { status: 400 });
+  const hasFile = Boolean(file && typeof file !== "string");
+  if (!hasFile && intent !== "paste_labs") return NextResponse.json({ error: "Envie um arquivo." }, { status: 400 });
+  const buf = hasFile && file && typeof file !== "string" ? Buffer.from(await file.arrayBuffer()) : null;
+  if (buf && buf.length > MAX) return NextResponse.json({ error: "Arquivo maior que 12 MB." }, { status: 400 });
 
   try {
     if (intent === "import_map") {
       if (!hdPerm(ctx.member, "manage_config", actor.isSuperAdmin) && !hdPerm(ctx.member, "edit_prescription", actor.isSuperAdmin)) {
         return NextResponse.json({ error: "Sem permissão para importar o mapa." }, { status: 403 });
       }
+      if (!buf || !file || typeof file === "string") return NextResponse.json({ error: "Envie um arquivo." }, { status: 400 });
       const result = await hdImportSalaBranca(ctx, buf, file.name);
       return NextResponse.json(result);
     }
@@ -97,6 +101,7 @@ export async function POST(req: Request) {
       if (!hdPerm(ctx.member, "upload_exams", actor.isSuperAdmin) && !hdPerm(ctx.member, "confirm_ocr", actor.isSuperAdmin)) {
         return NextResponse.json({ error: "Sem permissão para enviar exames." }, { status: 403 });
       }
+      if (!buf) return NextResponse.json({ error: "Envie um arquivo." }, { status: 400 });
       const result = await hdImportLabSheet(ctx, buf, year, month);
       return NextResponse.json(result);
     }
@@ -104,11 +109,20 @@ export async function POST(req: Request) {
       if (!hdPerm(ctx.member, "upload_exams", actor.isSuperAdmin) && !hdPerm(ctx.member, "confirm_ocr", actor.isSuperAdmin)) {
         return NextResponse.json({ error: "Sem permissão." }, { status: 403 });
       }
-      const rec = await hdSaveLabFile(ctx, { name: file.name, type: file.type || "application/octet-stream", buffer: buf }, year, month);
-      return NextResponse.json({
-        file: rec,
-        note: "Documento original guardado. A IA não prescreve. Confirme valores lidos ou digite o resultado.",
-      });
+      if (!buf || !file || typeof file === "string") return NextResponse.json({ error: "Envie um arquivo." }, { status: 400 });
+      const result = await hdImportLabDocument(
+        ctx,
+        { name: file.name, type: file.type || "application/octet-stream", buffer: buf },
+        { year, month, patientId, text: pasted }
+      );
+      return NextResponse.json(result);
+    }
+    if (intent === "paste_labs") {
+      if (!hdPerm(ctx.member, "upload_exams", actor.isSuperAdmin) && !hdPerm(ctx.member, "confirm_ocr", actor.isSuperAdmin)) {
+        return NextResponse.json({ error: "Sem permissão." }, { status: 403 });
+      }
+      const result = await hdImportLabDocument(ctx, null, { year, month, patientId, text: pasted });
+      return NextResponse.json(result);
     }
     return NextResponse.json({ error: "Intent inválido." }, { status: 400 });
   } catch (err) {

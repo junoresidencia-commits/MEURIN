@@ -10,6 +10,9 @@ import { hdPerm, HD_ROLE_DEFAULTS, resolvedPerms } from "./hd-access";
 import { DEFAULT_HD_RULES, evaluateHdLabs, worstLevel, type LabMap } from "./hd-rules";
 import { calcKtv, calcUrr, parseHours, parseLocaleNumber } from "./hd-calcs";
 import { HD_EXAM_LABEL, HD_EXAM_UNIT } from "./hd-labels";
+import { matchExamCode, normName } from "./hd-store-names";
+import { parseHdLabsFromText } from "./hd-lab-import";
+import { extractLabFileText } from "./hd-lab-file-text";
 import { buildSalaBrancaWorkbook, parseDateBr, parseLabSpreadsheet, parseSalaBrancaWorkbook } from "./hd-xlsx";
 import type {
   HdActor,
@@ -280,14 +283,7 @@ function audit(
   });
 }
 
-export function normName(s: string): string {
-  return String(s || "")
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "")
-    .replace(/\s+/g, " ")
-    .trim()
-    .toUpperCase();
-}
+export { matchExamCode, normName } from "./hd-store-names";
 
 function findMember(db: HdDb, actor: HdActor): HdMember | null {
   return (
@@ -936,32 +932,6 @@ export async function hdExportXlsx(ctx: HdCtx, year?: number, month?: number) {
   });
 }
 
-export function matchExamCode(raw: string): HdExamCode | null {
-  const u = normName(raw);
-  const table: Array<[RegExp, HdExamCode]> = [
-    [/HEMOGLOB/, "hb"],
-    [/\bHB\b/, "hb"],
-    [/HEMATOCR/, "ht"],
-    [/\bHT\b/, "ht"],
-    [/FERRIT/, "ferritin"],
-    [/TSAT|SATURA/, "tsat"],
-    [/FERRO/, "serum_iron"],
-    [/CALCIO|CÁLCIO|\bCA\b/, "ca"],
-    [/FOSFOR|FÓSFOR|\bP\b/, "p"],
-    [/\bPTH\b|PARAT/, "pth"],
-    [/POTASS|POTÁSS|\bK\b/, "k"],
-    [/ALBUM/, "albumin"],
-    [/BICARB|HCO/, "hco3"],
-    [/UREIA PRE|UREIA PRÉ|PRE[- ]DIAL/, "urea_pre"],
-    [/UREIA POS|UREIA PÓS|POS[- ]DIAL/, "urea_post"],
-    [/UREIA/, "urea_pre"],
-    [/CREAT/, "creat"],
-    [/SODIO|SÓDIO|\bNA\b/, "na"],
-  ];
-  for (const [re, code] of table) if (re.test(u)) return code;
-  return null;
-}
-
 export async function hdAddLabs(
   ctx: HdCtx,
   items: Array<{
@@ -1070,6 +1040,115 @@ export async function hdSaveLabFile(
     db.labFiles.push(rec);
     audit(db, ctx.actor, ctx.unit.id, "upload_exam", "file", rec.id, null, { name: file.name });
     return rec;
+  });
+}
+
+export async function hdImportLabDocument(
+  ctx: HdCtx,
+  file: { name: string; type: string; buffer: Buffer } | null,
+  opts?: { year?: number; month?: number; patientId?: string; text?: string }
+) {
+  const rec = file
+    ? await hdSaveLabFile(ctx, file, opts?.year, opts?.month)
+    : null;
+  const extracted = opts?.text?.trim()
+    ? { text: opts.text, kind: "text" as const, ocr: false, note: undefined }
+    : file
+      ? await extractLabFileText(file)
+      : { text: "", kind: "unknown" as const, ocr: false, note: "Envie PDF, foto ou cole o laudo." };
+
+  const db = await load();
+  const patients = db.patients.filter((p) => p.unitId === ctx.unit.id);
+  const parsed = parseHdLabsFromText(extracted.text, patients, opts?.patientId);
+  const source: HdLabSource =
+    extracted.kind === "pdf" ? "pdf" : extracted.kind === "image" ? "image" : extracted.ocr ? "ocr" : "ocr";
+
+  if (!extracted.text.trim()) {
+    return {
+      file: rec,
+      created: 0,
+      pending: 0,
+      identified: 0,
+      needsPatient: false,
+      items: [] as ReturnType<typeof parseHdLabsFromText>["items"],
+      date: parsed.date,
+      note: extracted.note || "Não deu para ler o arquivo.",
+    };
+  }
+  if (parsed.items.length === 0) {
+    return {
+      file: rec,
+      created: 0,
+      pending: 0,
+      identified: 0,
+      needsPatient: false,
+      items: parsed.items,
+      date: parsed.date,
+      note: "Não reconheci exames neste laudo. Cole o texto ou confira se há nome do exame e o valor.",
+    };
+  }
+  if (parsed.needsPatient) {
+    return {
+      file: rec,
+      created: 0,
+      pending: 0,
+      identified: parsed.items.length,
+      needsPatient: true,
+      items: parsed.items,
+      date: parsed.date,
+      note: `Identifiquei ${parsed.items.length} exame(s)${parsed.date ? ` em ${parsed.date}` : ""}. Selecione o paciente para lançar — o nome não bateu com a lista.`,
+    };
+  }
+
+  const result = await hdAddLabs(
+    ctx,
+    parsed.items.map((it) => ({
+      patientId: it.patientId,
+      name: it.name,
+      exam: it.exam,
+      value: it.value,
+      unit: it.unit,
+      date: it.date,
+      confidence: it.confidence,
+      source,
+      fileId: rec?.id,
+    })),
+    opts?.year,
+    opts?.month
+  );
+  return {
+    file: rec,
+    ...result,
+    identified: parsed.items.length,
+    needsPatient: false,
+    items: parsed.items,
+    date: parsed.date,
+    note:
+      result.created === 0
+        ? "Exames lidos, mas nenhum paciente da unidade bateu com o laudo."
+        : `Lancei ${result.created} exame(s)${parsed.date ? ` (${parsed.date})` : ""}${
+            result.pending ? `. ${result.pending} pedem confirmação.` : "."
+          } A IA não prescreve.`,
+  };
+}
+
+export async function hdConfirmPendingLabs(ctx: HdCtx, year?: number, month?: number) {
+  return withDb((db) => {
+    const ym = year && month ? { year, month } : currentYearMonth();
+    const m = db.months.find((x) => x.unitId === ctx.unit.id && x.year === ym.year && x.month === ym.month);
+    if (!m) return { confirmed: 0 };
+    let confirmed = 0;
+    for (const lab of db.labs) {
+      if (lab.unitId !== ctx.unit.id || lab.monthId !== m.id || lab.status !== "pending") continue;
+      lab.status = "confirmed";
+      lab.confirmedBy = ctx.actor.doctorId;
+      lab.confirmedAt = nowIso();
+      confirmed += 1;
+    }
+    if (confirmed) {
+      audit(db, ctx.actor, ctx.unit.id, "confirm_ocr", "lab", m.id, null, { confirmed });
+    }
+    return { confirmed };
   });
 }
 
