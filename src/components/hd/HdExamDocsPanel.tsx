@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { useHd } from "@/components/hd/HdShell";
 import { printHref } from "@/lib/print-pdf";
+import { HdPatientIdsForm } from "@/components/hd/HdPatientIdsForm";
 
 type Pack = {
   protocolId: string;
@@ -30,7 +31,14 @@ type Preview = {
     canGenerate: boolean;
   };
   blockers: string[];
-  canGenerate: boolean;
+  cadastro?: {
+    cpf: string;
+    cns: string;
+    motherName: string;
+    clinicCnes: string;
+    clinicName: string;
+    doctorCns: string;
+  };
 };
 
 type Generated = {
@@ -119,9 +127,14 @@ export function HdExamDocsPanel({
               <p className="font-bold">{p.hdPatientName}</p>
               <p className="text-xs text-[var(--text-muted)]">
                 {p.linked
-                  ? `Meu Rim: ${p.linked.name}${p.linked.cns ? ` · CNS ${p.linked.cns}` : " · sem CNS"}`
-                  : "Ainda sem vínculo com o cadastro do Meu Rim"}
-                {p.establishment ? ` · ${p.establishment.name} · CNES ${p.establishment.cnes}` : " · sem CNES"}
+                  ? `Meu Rim: ${p.linked.name}${p.cadastro?.cns ? ` · CNS ${p.cadastro.cns}` : " · sem Cartão do SUS"}`
+                  : "Cadastre CPF, Cartão do SUS e nome da mãe neste paciente"}
+                {p.cadastro?.clinicCnes
+                  ? ` · ${p.cadastro.clinicName} · CNES ${p.cadastro.clinicCnes}`
+                  : p.establishment
+                    ? ` · ${p.establishment.name} · CNES ${p.establishment.cnes}`
+                    : " · sem CNES da clínica"}
+                {p.cadastro?.doctorCns ? ` · médico CNS ${p.cadastro.doctorCns}` : " · CNS do médico ainda não cadastrado"}
               </p>
             </div>
           </div>
@@ -150,6 +163,19 @@ export function HdExamDocsPanel({
             </div>
           ))}
 
+          {(!p.cadastro?.cpf || !p.cadastro?.cns || !p.cadastro?.motherName) && (
+            <div className="rounded-xl border border-[var(--border)] px-3 py-3">
+              <p className="text-sm font-semibold">Cadastrar dados da LME</p>
+              <p className="text-xs text-[var(--text-muted)]">CPF, Cartão do SUS e nome da mãe. O CNES da clínica e o CNS do médico ficam em Configurações.</p>
+              <div className="mt-2">
+                <HdPatientIdsForm
+                  patientId={p.hdPatientId}
+                  initial={{ cpf: p.cadastro?.cpf, cns: p.cadastro?.cns, motherName: p.cadastro?.motherName }}
+                  onSaved={() => void load()}
+                />
+              </div>
+            </div>
+          )}
           {!p.linked && (
             <label className="block text-sm">
               Vincular ao paciente do Meu Rim

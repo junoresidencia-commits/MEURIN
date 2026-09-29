@@ -15,6 +15,8 @@ import {
   hdAddLabs,
   hdAddPatient,
   hdListMap,
+  hdSavePatientCadastro,
+  hdSaveSettings,
   hdUpdateMapCell,
   requireHd,
 } from "../src/lib/hd-store";
@@ -108,7 +110,7 @@ async function main() {
       d.id === carlos.id
         ? {
             ...d,
-            cns: d.cns || "989000000000000",
+            cns: "989000000000000",
             locations: [
               ...(d.locations || []),
               { id: "loc-hd-ceaf", name: "Clínica HD Teste", city: "Salvador", type: "clinica", active: true, cnes: "1234567" },
@@ -155,12 +157,23 @@ async function main() {
   assert.ok(preview.suggestion.packages.some((p) => p.protocolId === "anemia_drc_ferro" && p.medications[0]?.monthlyQty === "8 ampolas / mês"));
   assert.ok(preview.suggestion.packages.some((p) => p.protocolId === "anemia_drc_alfaepoetina" && p.medications[0]?.medId === "alfaepoetina_4000"));
 
+  await hdSaveSettings(ctx, { cnes: "7654321", centerName: "Clínica HD Unidade" });
+  await hdSavePatientCadastro(ctx, hd.id, { motherName: "ANA MAE HD", cpf: "52998224725", cns: "898000000000000" });
+  const previewClinic = await hdPreviewDocsFromExams(ctx, hd.id, 2026, 9);
+  assert.ok(previewClinic);
+  assert.equal(previewClinic.cadastro.clinicCnes, "7654321");
+  assert.equal(previewClinic.establishment?.cnes, "7654321");
+  assert.equal(previewClinic.cadastro.motherName, "ANA MAE HD");
+  assert.equal(previewClinic.cadastro.doctorCns, "989000000000000");
+
   const gen = await hdGenerateDocsFromExams(ctx, { patientId: hd.id, year: 2026, month: 9 });
   assert.ok(gen.generated.length >= 2, `esperava 2 LMEs, veio ${gen.generated.length}`);
   const ferroLme = await getLme(gen.generated.find((g) => g.protocolId === "anemia_drc_ferro")!.lmeId);
   assert.ok(ferroLme);
   assert.equal(ferroLme.patientCns, "898000000000000");
-  assert.equal(ferroLme.cnes, "1234567");
+  assert.equal(ferroLme.cnes, "7654321");
+  assert.equal(ferroLme.motherName, "ANA MAE HD");
+  assert.equal(ferroLme.doctorCns, "989000000000000");
   assert.equal(ferroLme.cid10, "N18.0");
   assert.equal(ferroLme.medications[0]?.name, "Sacarato de hidróxido férrico 100 mg injetável");
   assert.equal(ferroLme.medications[0]?.monthlyQty, "8 ampolas / mês");

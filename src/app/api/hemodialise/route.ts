@@ -26,11 +26,13 @@ import {
   hdSaveSettings,
   hdSearchDoctors,
   hdLinkOnePatient,
+  hdSavePatientCadastro,
   hdUpdateMapCell,
   hdUpdateMember,
   requireHd,
 } from "@/lib/hd-store";
 import { hdGenerateDocsFromExams, hdListDocsFromExams, hdPreviewDocsFromExams } from "@/lib/hd-docs-generate";
+import { getDoctorById, updateDb } from "@/lib/store";
 import type { HdExamCode, HdMapField, HdReviewDecision, HdRole, HdShift } from "@/lib/hd-types";
 import { HD_EXAM_CODES, HD_MAP_FIELDS } from "@/lib/hd-types";
 
@@ -121,7 +123,11 @@ export async function GET(req: Request) {
       if (!hdPerm(ctx.member, "view_audit", actor.isSuperAdmin)) return NextResponse.json({ error: "Sem permissão." }, { status: 403 });
       return NextResponse.json({ logs: await hdListAudit(ctx) });
     }
-    if (view === "settings") return NextResponse.json(await hdGetSettings(ctx));
+    if (view === "settings") {
+      const s = await hdGetSettings(ctx);
+      const doctor = await getDoctorById(ctx.actor.doctorId);
+      return NextResponse.json({ ...s, doctorCns: doctor?.cns || "" });
+    }
     if (view === "months") return NextResponse.json({ months: await hdListMonths(ctx) });
     if (view === "docs_from_exams") {
       if (!hdPerm(ctx.member, "view_exams", actor.isSuperAdmin)) return NextResponse.json({ error: "Sem permissão." }, { status: 403 });
@@ -188,6 +194,9 @@ export async function POST(req: Request) {
         name: String(body.name || ""),
         patientId: body.patientId ? String(body.patientId) : null,
         notes: body.notes ? String(body.notes) : undefined,
+        cpf: body.cpf != null ? String(body.cpf) : undefined,
+        cns: body.cns != null ? String(body.cns) : undefined,
+        motherName: body.motherName != null ? String(body.motherName) : undefined,
       });
       return NextResponse.json({ patient });
     }
@@ -262,11 +271,29 @@ export async function POST(req: Request) {
         centerName: body.centerName ? String(body.centerName) : undefined,
         unitName: body.unitName ? String(body.unitName) : undefined,
         expectedExams: expected,
+        cnes: body.cnes !== undefined ? String(body.cnes) : undefined,
       });
-      return NextResponse.json({ settings });
+      if (body.doctorCns !== undefined) {
+        const cns = String(body.doctorCns || "").replace(/\D/g, "").slice(0, 15);
+        await updateDb((db) => {
+          const d = db.doctors.find((x) => x.id === ctx.actor.doctorId);
+          if (d) d.cns = cns || undefined;
+          return db;
+        });
+      }
+      const doctor = await getDoctorById(ctx.actor.doctorId);
+      return NextResponse.json({ settings, doctorCns: doctor?.cns || "" });
     }
     if (action === "link_hd_patient") {
       const patient = await hdLinkOnePatient(ctx, String(body.patientId || ""), String(body.meuRimPatientId || ""));
+      return NextResponse.json({ patient });
+    }
+    if (action === "save_patient_ids") {
+      const patient = await hdSavePatientCadastro(ctx, String(body.patientId || ""), {
+        cpf: body.cpf != null ? String(body.cpf) : undefined,
+        cns: body.cns != null ? String(body.cns) : undefined,
+        motherName: body.motherName != null ? String(body.motherName) : undefined,
+      });
       return NextResponse.json({ patient });
     }
     if (action === "generate_docs_from_exams") {

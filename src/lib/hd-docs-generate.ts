@@ -11,7 +11,7 @@ import { buildDocumentPdfDetailed, type DocBackground } from "@/lib/document-eng
 import { getDefaultLetterhead } from "@/lib/letterheads-store";
 import { DOCPDF_BUCKET, LETTERHEADS_BUCKET, readFile, saveFile } from "@/lib/doc-storage";
 import { todayBr } from "@/lib/pdf-winansi";
-import { hdLinkMeuRimPatients, hdLinkOnePatient, hdListPatients, hdPatientDetail, type HdCtx } from "@/lib/hd-store";
+import { hdGetSettings, hdLinkMeuRimPatients, hdLinkOnePatient, hdListPatients, hdPatientDetail, hdSyncPatientCadastro, type HdCtx } from "@/lib/hd-store";
 import { suggestHdDocsFromExams, type HdDocPackage, type HdDocSuggestion } from "@/lib/hd-docs-from-exams";
 
 export type HdDocsLinked = {
@@ -20,6 +20,7 @@ export type HdDocsLinked = {
   key: string;
   cns: string | null;
   cpf: string | null;
+  motherName: string | null;
 };
 
 export type HdDocsEstablishment = {
@@ -50,6 +51,14 @@ export type HdDocsPreview = {
   suggestion: HdDocSuggestion;
   blockers: string[];
   canGenerate: boolean;
+  cadastro: {
+    cpf: string;
+    cns: string;
+    motherName: string;
+    clinicCnes: string;
+    clinicName: string;
+    doctorCns: string;
+  };
 };
 
 function pickLocations(doctor: { locations?: Array<{ id: string; name: string; cnes?: string; active?: boolean }> } | null): HdDocsEstablishment[] {
@@ -65,16 +74,16 @@ function txt(v?: string | null) {
 async function resolveLinked(ctx: HdCtx, hdPatientId: string, linkedId: string | null): Promise<HdDocsLinked | null> {
   if (linkedId) {
     const p = await getPatient(linkedId);
-    if (p) return { id: p.id, name: p.name, key: clinicalKey(p), cns: p.cns || null, cpf: p.cpf || null };
+    if (p) return { id: p.id, name: p.name, key: clinicalKey(p), cns: p.cns || null, cpf: p.cpf || null, motherName: p.motherName || null };
   }
   await hdLinkMeuRimPatients(ctx);
   const detail = await hdPatientDetail(ctx, hdPatientId);
   const again = detail?.patient.patientId ? await getPatient(detail.patient.patientId) : null;
-  if (again) return { id: again.id, name: again.name, key: clinicalKey(again), cns: again.cns || null, cpf: again.cpf || null };
+  if (again) return { id: again.id, name: again.name, key: clinicalKey(again), cns: again.cns || null, cpf: again.cpf || null, motherName: again.motherName || null };
   const mine = await listPatientsByDoctor(ctx.actor.doctorId);
   const byName = mine.find((x) => x.name.trim().toLowerCase() === (detail?.patient.name || "").trim().toLowerCase());
   if (!byName) return null;
-  return { id: byName.id, name: byName.name, key: clinicalKey(byName), cns: byName.cns || null, cpf: byName.cpf || null };
+  return { id: byName.id, name: byName.name, key: clinicalKey(byName), cns: byName.cns || null, cpf: byName.cpf || null, motherName: byName.motherName || null };
 }
 
 export async function hdPreviewDocsFromExams(
@@ -86,17 +95,31 @@ export async function hdPreviewDocsFromExams(
   const detail = await hdPatientDetail(ctx, patientId, year, month);
   if (!detail) return null;
   const doctor = await getDoctorById(ctx.actor.doctorId);
-  const locations = pickLocations(doctor);
+  const hdSet = await hdGetSettings(ctx);
+  const clinicCnes = txt(hdSet.settings.cnes).replace(/\D/g, "").slice(0, 7);
+  const clinicName = txt(hdSet.settings.centerName) || txt(hdSet.unit.name) || "Hemodiálise";
+  const clinicLoc: HdDocsEstablishment[] = clinicCnes
+    ? [{ id: `hd:${ctx.unit.id}`, name: clinicName, cnes: clinicCnes }]
+    : [];
+  const locations = [
+    ...clinicLoc,
+    ...pickLocations(doctor).filter((l) => !clinicCnes || l.cnes !== clinicCnes),
+  ];
   const suggestion = suggestHdDocsFromExams({
     labs: detail.labs,
     alerts: detail.alerts,
     map: detail.prescription,
   });
   const linked = await resolveLinked(ctx, patientId, detail.patient.patientId);
+  const cpf = txt(detail.patient.cpf) || txt(linked?.cpf);
+  const cns = txt(detail.patient.cns) || txt(linked?.cns);
+  const motherName = txt(detail.patient.motherName) || txt(linked?.motherName);
+  const doctorCns = txt(doctor?.cns);
   const blockers: string[] = [];
-  if (!linked) blockers.push("Vincule este paciente da hemodiálise ao cadastro do Meu Rim para gerar a LME com CNS.");
-  else if (!linked.cns) blockers.push("Cadastro sem CNS. A LME sai pronta, mas o CNS fica em branco até o médico completar o paciente.");
-  if (!locations.length) blockers.push("Nenhum local da agenda tem CNES. Cadastre o CNES em Configurar agenda → Locais — a LME usa esse número.");
+  if (!linked) blockers.push("Cadastre CPF, Cartão do SUS e nome da mãe neste paciente — a LME usa esses dados.");
+  else if (!cns) blockers.push("Cadastre o Cartão do SUS (CNS) do paciente. A LME sai, mas o campo fica em branco até completar.");
+  if (!clinicCnes && !locations.length) blockers.push("Cadastre o CNES da clínica em Hemodiálise → Configurações.");
+  if (!doctorCns) blockers.push("Cadastre o CNS do médico em Hemodiálise → Configurações. Vai para todas as LMEs.");
   if (!suggestion.canGenerate) blockers.push("Sem medicamento oficial para gerar. Preencha ferro/EPO/DMO no mapa ou publique exames com alerta.");
   return {
     hdPatientId: detail.patient.id,
@@ -107,6 +130,14 @@ export async function hdPreviewDocsFromExams(
     suggestion,
     blockers,
     canGenerate: suggestion.canGenerate && Boolean(linked),
+    cadastro: {
+      cpf,
+      cns,
+      motherName,
+      clinicCnes,
+      clinicName,
+      doctorCns,
+    },
   };
 }
 
@@ -263,9 +294,10 @@ export async function hdGenerateDocsFromExams(
   if (input.meuRimPatientId) {
     await hdLinkOnePatient(ctx, input.patientId, input.meuRimPatientId);
   }
+  await hdSyncPatientCadastro(ctx, input.patientId);
   const preview = await hdPreviewDocsFromExams(ctx, input.patientId, input.year, input.month);
   if (!preview) throw new Error("Paciente não encontrado.");
-  if (!preview.linked) throw new Error("Vincule o paciente do Meu Rim para gerar a LME com CNS.");
+  if (!preview.linked) throw new Error("Cadastre CPF, Cartão do SUS e nome da mãe neste paciente para gerar a LME.");
   const ready = preview.suggestion.packages.filter((p) => p.ready);
   if (!ready.length) throw new Error("Sem medicamento oficial para gerar. Não inventamos dose nem apresentação.");
 
@@ -304,13 +336,13 @@ async function createOnePack(
     doctorCrm: doctor?.crm ?? null,
     doctorCns: doctor?.cns ?? null,
     establishmentName: loc?.name ?? null,
-    cnes: loc?.cnes ?? null,
+    cnes: loc?.cnes || preview.cadastro.clinicCnes || null,
     patientName: linked.name,
-    motherName: null,
+    motherName: preview.cadastro.motherName || linked.motherName || null,
     weightKg: null,
     heightCm: null,
-    patientCpf: linked.cpf,
-    patientCns: linked.cns,
+    patientCpf: preview.cadastro.cpf || linked.cpf,
+    patientCns: preview.cadastro.cns || linked.cns,
     patientPhone: null,
     patientEmailContact: linked.key.includes("@") ? linked.key : null,
     race: null,

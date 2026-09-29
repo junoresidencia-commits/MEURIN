@@ -4,7 +4,7 @@ import path from "path";
 import { v4 as uuid } from "uuid";
 import { getSupabaseAdmin } from "./supabase-admin";
 import { getDoctorByEmail, listDoctors } from "./store";
-import { listPatientsByDoctor } from "./patients-store";
+import { createPatient, findByCpf, getPatient, listPatientsByDoctor, updatePatient } from "./patients-store";
 import { HD_BUCKET, saveFile } from "./doc-storage";
 import { hdPerm, HD_ROLE_DEFAULTS, resolvedPerms } from "./hd-access";
 import { DEFAULT_HD_RULES, evaluateHdLabs, worstLevel, type LabMap } from "./hd-rules";
@@ -54,6 +54,21 @@ function isMissing(error: { code?: string; message?: string } | null): boolean {
   if (!error) return false;
   if (error.code === "42P01" || error.code === "PGRST205") return true;
   return Boolean(error.message && /relation .* does not exist|could not find the table/i.test(error.message));
+}
+
+function missingColumnName(error: { code?: string; message?: string } | null): string | null {
+  if (!error) return null;
+  if (error.code !== "PGRST204" && error.code !== "42703" && !/column|schema cache/i.test(error.message || "")) return null;
+  const msg = error.message || "";
+  let m = msg.match(/find the '([^']+)' column/i);
+  if (m) return m[1];
+  m = msg.match(/column "?([a-z0-9_]+)"? .*does not exist/i);
+  return m ? m[1] : null;
+}
+
+export function hdDigits(v?: string | null, max?: number): string {
+  const d = String(v || "").replace(/\D/g, "");
+  return max ? d.slice(0, max) : d;
 }
 
 type HdDb = {
@@ -192,13 +207,23 @@ async function writeSb(prev: HdDb, next: HdDb) {
       continue;
     }
     const table = TABLES[key];
-    const rows = (next[key] as unknown as Record<string, unknown>[]).map((r) => toSnake(r));
+    let rows = (next[key] as unknown as Record<string, unknown>[]).map((r) => toSnake(r));
     if (rows.length === 0) continue;
-    const { error } = await sb.from(table).upsert(rows);
-    if (error) {
+    for (let attempt = 0; attempt < 8; attempt++) {
+      const { error } = await sb.from(table).upsert(rows);
+      if (!error) break;
       if (isMissing(error)) {
         tableMissing = true;
         return;
+      }
+      const col = missingColumnName(error);
+      if (col) {
+        rows = rows.map((r) => {
+          const copy = { ...r };
+          delete copy[col];
+          return copy;
+        });
+        continue;
       }
       throw error;
     }
@@ -329,6 +354,7 @@ export async function ensureHdSession(actor: HdActor) {
         unitId: unit.id,
         expectedExams: [...HD_EXAM_CODES],
         centerName: "Hemodiálise",
+        cnes: "",
         updatedAt: t,
       });
       if (db.rules.length === 0) db.rules = seedRules();
@@ -479,6 +505,7 @@ function settingsOf(db: HdDb, unitId: string): HdSettings {
       unitId,
       expectedExams: [...HD_EXAM_CODES],
       centerName: "Hemodiálise",
+      cnes: "",
       updatedAt: nowIso(),
     }
   );
@@ -1314,12 +1341,13 @@ export async function hdGetSettings(ctx: HdCtx) {
 
 export async function hdSaveSettings(
   ctx: HdCtx,
-  patch: { centerName?: string; expectedExams?: HdExamCode[]; unitName?: string }
+  patch: { centerName?: string; expectedExams?: HdExamCode[]; unitName?: string; cnes?: string }
 ) {
   return withDb((db) => {
     const set = settingsOf(db, ctx.unit.id);
     if (patch.centerName != null) set.centerName = patch.centerName;
     if (patch.expectedExams) set.expectedExams = patch.expectedExams;
+    if (patch.cnes !== undefined) set.cnes = hdDigits(patch.cnes, 7);
     set.updatedAt = nowIso();
     if (!db.settings.some((s) => s.unitId === ctx.unit.id)) db.settings.push(set);
     const unit = db.units.find((u) => u.id === ctx.unit.id);
@@ -1332,13 +1360,25 @@ export async function hdSaveSettings(
   });
 }
 
-export async function hdAddPatient(ctx: HdCtx, input: { name: string; patientId?: string | null; notes?: string }) {
+export async function hdAddPatient(
+  ctx: HdCtx,
+  input: { name: string; patientId?: string | null; notes?: string; cpf?: string | null; cns?: string | null; motherName?: string | null }
+) {
   const name = input.name.trim();
   if (!name) throw new Error("Nome obrigatório.");
-  return withDb((db) => {
+  const cpf = hdDigits(input.cpf, 11) || null;
+  const cns = hdDigits(input.cns, 15) || null;
+  const motherName = String(input.motherName || "").trim() || null;
+  const created = await withDb((db) => {
     const n = normName(name);
     const exist = db.patients.find((p) => p.unitId === ctx.unit.id && normName(p.name) === n);
-    if (exist) return exist;
+    if (exist) {
+      if (cpf) exist.cpf = cpf;
+      if (cns) exist.cns = cns;
+      if (motherName) exist.motherName = motherName;
+      exist.updatedAt = nowIso();
+      return exist;
+    }
     const p: HdPatient = {
       id: uuid(),
       unitId: ctx.unit.id,
@@ -1346,6 +1386,9 @@ export async function hdAddPatient(ctx: HdCtx, input: { name: string; patientId?
       name,
       active: true,
       notes: input.notes || "",
+      cpf,
+      cns,
+      motherName,
       createdAt: nowIso(),
       updatedAt: nowIso(),
     };
@@ -1377,6 +1420,76 @@ export async function hdAddPatient(ctx: HdCtx, input: { name: string; patientId?
     audit(db, ctx.actor, ctx.unit.id, "add_patient", "patient", p.id, null, { name, linked: Boolean(input.patientId) });
     return p;
   });
+  return hdSyncPatientCadastro(ctx, created.id);
+}
+
+export async function hdSavePatientCadastro(
+  ctx: HdCtx,
+  hdPatientId: string,
+  patch: { cpf?: string | null; cns?: string | null; motherName?: string | null }
+) {
+  await withDb((db) => {
+    const p = db.patients.find((x) => x.id === hdPatientId && x.unitId === ctx.unit.id);
+    if (!p) throw new Error("Paciente da hemodiálise não encontrado.");
+    if (patch.cpf !== undefined) p.cpf = hdDigits(patch.cpf, 11) || null;
+    if (patch.cns !== undefined) p.cns = hdDigits(patch.cns, 15) || null;
+    if (patch.motherName !== undefined) p.motherName = String(patch.motherName || "").trim() || null;
+    p.updatedAt = nowIso();
+    audit(db, ctx.actor, ctx.unit.id, "save_patient_ids", "patient", p.id, null, {
+      cpf: p.cpf,
+      cns: p.cns,
+      motherName: p.motherName,
+    });
+    return p;
+  });
+  return hdSyncPatientCadastro(ctx, hdPatientId);
+}
+
+/** Copia CPF, Cartão do SUS e nome da mãe para o cadastro do Meu Rim (cria se ainda não existir). */
+export async function hdSyncPatientCadastro(ctx: HdCtx, hdPatientId: string) {
+  const db = await load();
+  const p = db.patients.find((x) => x.id === hdPatientId && x.unitId === ctx.unit.id);
+  if (!p) throw new Error("Paciente da hemodiálise não encontrado.");
+  const cpf = hdDigits(p.cpf, 11) || null;
+  const cns = hdDigits(p.cns, 15) || null;
+  const motherName = String(p.motherName || "").trim() || null;
+  if (!cpf && !cns && !motherName && !p.patientId) return p;
+
+  let linkedId = p.patientId;
+  if (!linkedId && cpf) {
+    const byCpf = await findByCpf(ctx.actor.doctorId, cpf);
+    if (byCpf) linkedId = byCpf.id;
+  }
+  if (linkedId) {
+    const current = await getPatient(linkedId);
+    if (current) {
+      await updatePatient(linkedId, {
+        cpf: cpf || current.cpf || null,
+        cns: cns || current.cns || null,
+        motherName: motherName || current.motherName || null,
+      });
+    }
+  } else if (cpf || cns || motherName) {
+    const created = await createPatient({
+      doctorId: ctx.actor.doctorId,
+      name: p.name,
+      cpf,
+      cns,
+      motherName,
+    });
+    linkedId = created.id;
+  }
+  if (linkedId && linkedId !== p.patientId) {
+    return withDb((db2) => {
+      const row = db2.patients.find((x) => x.id === hdPatientId && x.unitId === ctx.unit.id);
+      if (!row) return p;
+      row.patientId = linkedId;
+      row.updatedAt = nowIso();
+      return row;
+    });
+  }
+  const fresh = await load();
+  return fresh.patients.find((x) => x.id === hdPatientId) || p;
 }
 
 export async function hdLinkMeuRimPatients(ctx: HdCtx) {

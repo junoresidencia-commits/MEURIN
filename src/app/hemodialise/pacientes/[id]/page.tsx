@@ -4,10 +4,11 @@ import { useParams } from "next/navigation";
 import { useEffect, useState } from "react";
 import { useHd } from "@/components/hd/HdShell";
 import { HdExamDocsPanel } from "@/components/hd/HdExamDocsPanel";
+import { HdPatientIdsForm } from "@/components/hd/HdPatientIdsForm";
 import { HD_ALERT_LABEL, HD_EXAM_LABEL, HD_SHIFT_LABEL } from "@/lib/hd-labels";
 
 type Detail = {
-  patient: { id: string; name: string; notes: string; patientId: string | null };
+  patient: { id: string; name: string; notes: string; patientId: string | null; cpf?: string | null; cns?: string | null; motherName?: string | null };
   row: { shift: "MANHA" | "TARDE" | "NOITE"; machine: string; ward: string; access: string } | null;
   labs: Record<string, number | null>;
   labRows: Array<{ id: string; examCode: string; rawValue: string; unit: string; confidence: number; status: string; collectedAt: string | null }>;
@@ -56,6 +57,20 @@ export default function HdPacientePage() {
 
       {tab === "Resumo" && (
         <div className="mt-4 space-y-4">
+          <div className="panel">
+            <p className="font-bold">Cadastro para a LME</p>
+            <p className="mt-1 text-sm text-[var(--text-muted)]">CPF, Cartão do SUS e nome da mãe. O CNS do médico e o CNES da clínica vêm das configurações.</p>
+            <div className="mt-3">
+              <HdPatientIdsForm
+                patientId={d.patient.id}
+                initial={{ cpf: d.patient.cpf, cns: d.patient.cns, motherName: d.patient.motherName }}
+                onSaved={() => {
+                  const u = new URLSearchParams({ view: "patient", id, year: String(year), month: String(month) });
+                  fetch(`/api/hemodialise?${u}`).then((r) => r.json()).then((x) => { if (!x.error) setD(x); });
+                }}
+              />
+            </div>
+          </div>
           <div className="grid gap-4 lg:grid-cols-2">
             <div className="panel">
               <p className="font-bold">Exames atuais</p>

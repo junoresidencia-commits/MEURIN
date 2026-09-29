@@ -108,6 +108,11 @@ export type HdPatient = {
   name: string;
   active: boolean;
   notes: string;
+  /** CPF do paciente — sai na LME. */
+  cpf?: string | null;
+  /** Cartão Nacional de Saúde (Cartão do SUS). */
+  cns?: string | null;
+  motherName?: string | null;
   createdAt: string;
   updatedAt: string;
 };
@@ -256,6 +261,8 @@ export type HdSettings = {
   unitId: string;
   expectedExams: HdExamCode[];
   centerName: string;
+  /** CNES da clínica de hemodiálise — sai na LME oficial. */
+  cnes?: string | null;
   updatedAt: string;
 };
 

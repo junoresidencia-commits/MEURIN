@@ -22,6 +22,9 @@ export default function HdPacientesPage() {
   const { year, month, shift, q, can } = useHd();
   const [rows, setRows] = useState<Row[]>([]);
   const [name, setName] = useState("");
+  const [cpf, setCpf] = useState("");
+  const [cns, setCns] = useState("");
+  const [motherName, setMotherName] = useState("");
   const [msg, setMsg] = useState("");
 
   useEffect(() => {
@@ -34,13 +37,16 @@ export default function HdPacientesPage() {
     const r = await fetch("/api/hemodialise", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ action: "add_patient", name }),
+      body: JSON.stringify({ action: "add_patient", name, cpf, cns, motherName }),
     });
     const d = await r.json();
     if (d.error) setMsg(d.error);
     else {
       setName("");
-      setMsg("Paciente incluído na ficha da Hemodiálise (sem duplicar cadastro do Meu Rim).");
+      setCpf("");
+      setCns("");
+      setMotherName("");
+      setMsg("Paciente incluído. CPF, Cartão do SUS e nome da mãe já valem para a LME.");
       const u = new URLSearchParams({ view: "patients", year: String(year), month: String(month), shift, q });
       const n = await fetch(`/api/hemodialise?${u}`).then((x) => x.json());
       setRows(n.patients || []);
@@ -64,9 +70,12 @@ export default function HdPacientesPage() {
           <button type="button" className="btn-ghost" onClick={link}>Vincular cadastros existentes</button>
         )}
       </div>
-      <form onSubmit={add} className="mt-4 flex flex-wrap gap-2">
-        <input className="min-w-64 flex-1 rounded-xl border border-[var(--border)] px-3 py-2 text-sm" placeholder="Nome do paciente" value={name} onChange={(e) => setName(e.target.value)} />
-        <button className="btn-gold" type="submit">Adicionar à Hemodiálise</button>
+      <form onSubmit={add} className="mt-4 grid gap-2 sm:grid-cols-2">
+        <input className="rounded-xl border border-[var(--border)] px-3 py-2 text-sm sm:col-span-2" placeholder="Nome do paciente" value={name} onChange={(e) => setName(e.target.value)} required />
+        <input className="rounded-xl border border-[var(--border)] px-3 py-2 text-sm" placeholder="Nome da mãe" value={motherName} onChange={(e) => setMotherName(e.target.value)} />
+        <input className="rounded-xl border border-[var(--border)] px-3 py-2 text-sm" placeholder="CPF" value={cpf} onChange={(e) => setCpf(e.target.value)} inputMode="numeric" />
+        <input className="rounded-xl border border-[var(--border)] px-3 py-2 text-sm" placeholder="Cartão do SUS (CNS)" value={cns} onChange={(e) => setCns(e.target.value)} inputMode="numeric" />
+        <button className="btn-gold w-fit" type="submit">Adicionar à Hemodiálise</button>
       </form>
       {msg && <p className="mt-2 text-sm text-[var(--gold)]">{msg}</p>}
       <div className="mt-4 overflow-x-auto">
