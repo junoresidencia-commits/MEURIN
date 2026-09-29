@@ -47,7 +47,13 @@ export default function UsuariosPage() {
     const r = await fetch("/api/plataforma/doctors");
     const d = await r.json();
     if (!r.ok) throw new Error(d.error || "Não foi possível carregar.");
-    setDoctors(d.doctors || []);
+    const list = (d.doctors || []) as Doc[];
+    setDoctors(list);
+    window.dispatchEvent(
+      new CustomEvent("meurim-pending-doctors", {
+        detail: list.filter((x) => x.status === "pending" || x.status === "correction").length,
+      })
+    );
   }, []);
 
   useEffect(() => {

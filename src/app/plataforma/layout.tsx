@@ -41,6 +41,12 @@ export default function PlataformaLayout({ children }: { children: React.ReactNo
       .then((r) => r.json())
       .then((d) => setPending(Number(d.pendingCount || 0)))
       .catch(() => {});
+    function onPending(e: Event) {
+      const n = Number((e as CustomEvent).detail);
+      if (Number.isFinite(n)) setPending(n);
+    }
+    window.addEventListener("meurim-pending-doctors", onPending);
+    return () => window.removeEventListener("meurim-pending-doctors", onPending);
   }, [router]);
 
   if (!ready) {
