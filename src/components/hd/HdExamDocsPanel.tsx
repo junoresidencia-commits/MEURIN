@@ -209,7 +209,7 @@ export function HdExamDocsPanel({
             <button
               type="button"
               className="btn-gold"
-              disabled={Boolean(busy) || (!p.canGenerate && !linkFor[p.hdPatientId])}
+              disabled={Boolean(busy) || (!p.suggestion.canGenerate && !linkFor[p.hdPatientId])}
               onClick={() => void generate(p)}
             >
               {busy === p.hdPatientId ? "Gerando…" : "Gerar LME, receita e termos"}

@@ -22,7 +22,7 @@ async function extractPdfText(buf: Buffer): Promise<string> {
   const { extractText, getDocumentProxy } = await import("unpdf");
   const pdf = await getDocumentProxy(new Uint8Array(buf));
   const result = await extractText(pdf, { mergePages: true });
-  return typeof result.text === "string" ? result.text : result.text.join("\n");
+  return result.text;
 }
 
 async function extractImageText(buf: Buffer): Promise<string> {
