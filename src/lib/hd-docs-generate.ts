@@ -7,7 +7,9 @@ import { createLme } from "@/lib/lme-store";
 import { addDocument } from "@/lib/patient-store";
 import { receitaFromLme, relatorioFromLme, officialTerSlot } from "@/lib/complementary-docs";
 import { buildOfficialCeafPdf } from "@/lib/ceaf-official-pdf";
-import { DOCPDF_BUCKET, saveFile } from "@/lib/doc-storage";
+import { buildDocumentPdfDetailed, type DocBackground } from "@/lib/document-engine";
+import { getDefaultLetterhead } from "@/lib/letterheads-store";
+import { DOCPDF_BUCKET, LETTERHEADS_BUCKET, readFile, saveFile } from "@/lib/doc-storage";
 import { todayBr } from "@/lib/pdf-winansi";
 import { hdLinkMeuRimPatients, hdLinkOnePatient, hdListPatients, hdPatientDetail, type HdCtx } from "@/lib/hd-store";
 import { suggestHdDocsFromExams, type HdDocPackage, type HdDocSuggestion } from "@/lib/hd-docs-from-exams";
@@ -32,9 +34,12 @@ export type HdDocsGenerated = {
   protocolName: string;
   href: string;
   receitaId: string | null;
+  receitaUrl: string | null;
   relatorioId: string | null;
+  relatorioUrl: string | null;
   terId: string | null;
   terUrl: string | null;
+  packageUrl: string;
 };
 
 export type HdDocsPreview = {
@@ -154,6 +159,75 @@ async function saveTer(opts: {
   }
 }
 
+async function letterheadBackground(doctorId: string): Promise<DocBackground | null> {
+  const lh = await getDefaultLetterhead(doctorId).catch(() => null);
+  if (!lh) return null;
+  const file = await readFile(LETTERHEADS_BUCKET, lh.storage, lh.filePath).catch(() => null);
+  if (!file) return null;
+  return { kind: lh.kind, bytes: file.buffer, mime: lh.mime || file.mime };
+}
+
+async function savePrintableDoc(opts: {
+  type: "receita" | "relatorio";
+  title: string;
+  body: string;
+  patientKey: string;
+  patientName: string;
+  patientCpf: string | null;
+  doctor: {
+    id: string;
+    name: string;
+    crm?: string | null;
+    crmState?: string | null;
+    rqe?: string | null;
+    specialty?: string | null;
+  };
+  lmeId: string;
+}): Promise<{ id: string; url: string } | null> {
+  try {
+    const background = await letterheadBackground(opts.doctor.id);
+    const built = await buildDocumentPdfDetailed({
+      title: opts.title,
+      content: opts.body,
+      patient: { name: opts.patientName, cpf: opts.patientCpf || undefined },
+      doctor: {
+        name: opts.doctor.name,
+        crm: opts.doctor.crm || undefined,
+        crmState: opts.doctor.crmState || undefined,
+        rqe: opts.doctor.rqe || undefined,
+        specialty: opts.doctor.specialty || undefined,
+      },
+      area: { marginTop: 0.08, marginBottom: 0.1, marginLeft: 0.1, marginRight: 0.1, repeat: "all", showPatientHeader: true, showSignature: true },
+      background,
+    });
+    const saved = await saveFile(DOCPDF_BUCKET, opts.doctor.id, {
+      name: `${opts.type}.pdf`,
+      type: "application/pdf",
+      buffer: Buffer.from(built.bytes),
+    });
+    const doc = await addDocument({
+      patientEmail: opts.patientKey,
+      doctorId: opts.doctor.id,
+      doctorName: opts.doctor.name,
+      doctorCrm: opts.doctor.crm ?? null,
+      type: opts.type,
+      title: opts.title,
+      body: opts.body,
+      sharedWithPatient: false,
+      letterheadId: null,
+      pdfPath: saved.path,
+      pdfStorage: saved.storage,
+      status: "final",
+      version: 1,
+      groupId: uuid(),
+      sourceLmeId: opts.lmeId,
+    });
+    return { id: doc.id, url: `/api/documents/${doc.id}/pdf` };
+  } catch {
+    return null;
+  }
+}
+
 function anamnesisOf(preview: HdDocsPreview, pack: HdDocPackage): string {
   const lines = [
     "Paciente em programa de hemodiálise.",
@@ -209,10 +283,10 @@ export async function hdGenerateDocsFromExams(
     generated.push(item);
   }
 
-  const missingTer = generated.filter((g) => !g.terId).length;
-  const note = missingTer
-    ? `Gerei ${generated.length} LME(s) com receita e relatório. TER oficial faltou em ${missingTer} — abra a LME e gere o termo.`
-    : `Gerei ${generated.length} LME(s) com receita, relatório e TER oficial. Médico revisa e assina.`;
+  const missingPdf = generated.filter((g) => !g.receitaUrl || !g.relatorioUrl || !g.terId).length;
+  const note = missingPdf
+    ? `Gerei ${generated.length} LME(s). Algum PDF (receita, relatório ou TER) faltou — abra a LME e imprima o que já está pronto.`
+    : `Gerei ${generated.length} LME(s) com receita, relatório e TER em PDF. Conferir e imprimir — o médico assina.`;
   return { preview, generated, note };
 }
 
@@ -267,34 +341,34 @@ async function createOnePack(
     .filter(Boolean)
     .join("\n");
 
-  let receitaId: string | null = null;
-  let relatorioId: string | null = null;
-  const receitaDoc = await addDocument({
-    patientEmail: linked.key,
-    doctorId: doctor?.id ?? ctx.actor.doctorId,
-    doctorName: doctor?.name ?? ctx.actor.name,
-    doctorCrm: doctor?.crm ?? null,
+  const docDoctor = {
+    id: doctor?.id ?? ctx.actor.doctorId,
+    name: doctor?.name ?? ctx.actor.name,
+    crm: doctor?.crm ?? null,
+    crmState: doctor?.crmState ?? null,
+    rqe: doctor?.rqe ?? null,
+    specialty: doctor?.specialty ?? null,
+  };
+  const receitaDoc = await savePrintableDoc({
     type: "receita",
     title: rx.title,
     body: rx.body,
-    sharedWithPatient: false,
-    status: "draft",
-    sourceLmeId: lme.id,
+    patientKey: linked.key,
+    patientName: linked.name,
+    patientCpf: linked.cpf,
+    doctor: docDoctor,
+    lmeId: lme.id,
   });
-  receitaId = receitaDoc.id;
-  const relDoc = await addDocument({
-    patientEmail: linked.key,
-    doctorId: doctor?.id ?? ctx.actor.doctorId,
-    doctorName: doctor?.name ?? ctx.actor.name,
-    doctorCrm: doctor?.crm ?? null,
+  const relDoc = await savePrintableDoc({
     type: "relatorio",
     title: `Relatório médico — ${pack.protocolName}`,
     body: relBody,
-    sharedWithPatient: false,
-    status: "draft",
-    sourceLmeId: lme.id,
+    patientKey: linked.key,
+    patientName: linked.name,
+    patientCpf: linked.cpf,
+    doctor: docDoctor,
+    lmeId: lme.id,
   });
-  relatorioId = relDoc.id;
 
   const ter = await saveTer({
     protocolId: pack.protocolId,
@@ -312,9 +386,12 @@ async function createOnePack(
     protocolId: pack.protocolId,
     protocolName: pack.protocolName,
     href: `/lme/${lme.id}`,
-    receitaId,
-    relatorioId,
+    receitaId: receitaDoc?.id ?? null,
+    receitaUrl: receitaDoc?.url ?? null,
+    relatorioId: relDoc?.id ?? null,
+    relatorioUrl: relDoc?.url ?? null,
     terId: ter?.id ?? null,
     terUrl: ter?.url ?? null,
+    packageUrl: `/api/lme/${lme.id}/pacote`,
   };
 }

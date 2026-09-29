@@ -36,7 +36,10 @@ type Generated = {
   lmeId: string;
   protocolName: string;
   href: string;
+  receitaUrl: string | null;
+  relatorioUrl: string | null;
   terUrl: string | null;
+  packageUrl?: string;
 };
 
 export function HdExamDocsPanel({
@@ -189,10 +192,12 @@ export function HdExamDocsPanel({
 
           {(done[p.hdPatientId] || []).map((g) => (
             <p key={g.lmeId} className="text-sm">
-              <a className="font-semibold text-[var(--gold)]" href={g.href} target="_blank" rel="noreferrer">{g.protocolName} — abrir LME</a>
+              <a className="font-semibold text-[var(--gold)]" href={g.href} target="_blank" rel="noreferrer">{g.protocolName} — conferir LME</a>
+              {g.receitaUrl ? <> · <a className="text-[var(--gold)]" href={g.receitaUrl} target="_blank" rel="noreferrer">receita</a></> : null}
+              {g.relatorioUrl ? <> · <a className="text-[var(--gold)]" href={g.relatorioUrl} target="_blank" rel="noreferrer">relatório</a></> : null}
               {g.terUrl ? <> · <a className="text-[var(--gold)]" href={g.terUrl} target="_blank" rel="noreferrer">TER</a></> : null}
               {" · "}
-              <a className="text-[var(--gold)]" href={`/api/lme/${g.lmeId}/pacote`} target="_blank" rel="noreferrer">pacote PDF</a>
+              <a className="text-[var(--gold)]" href={g.packageUrl || `/api/lme/${g.lmeId}/pacote`} target="_blank" rel="noreferrer">imprimir pacote</a>
             </p>
           ))}
         </article>

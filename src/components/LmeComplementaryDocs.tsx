@@ -79,17 +79,27 @@ export function LmeComplementaryDocs({
         <DocRow
           slot={receita}
           action={
-            <Link href={composerHref(patientEmail, { type: "receita", title: "Receita médica" }, lmeId)} className="btn-gold text-sm">
-              {receita?.status === "gerado" ? "Revisar receita" : "Gerar receita"}
-            </Link>
+            <div className="flex flex-wrap gap-2">
+              <Link href={composerHref(patientEmail, { type: "receita", title: "Receita médica" }, lmeId)} className="btn-gold text-sm">
+                {receita?.status === "nao_gerado" ? "Gerar receita" : "Revisar receita"}
+              </Link>
+              {receita?.pdfUrl && (
+                <a href={receita.pdfUrl} target="_blank" rel="noopener noreferrer" className="btn-ghost text-sm">Abrir / imprimir</a>
+              )}
+            </div>
           }
         />
         <DocRow
           slot={relatorio}
           action={
-            <Link href={composerHref(patientEmail, { type: "relatorio", title: "Relatório médico" }, lmeId)} className="btn-ghost text-sm">
-              {relatorio?.status === "gerado" ? "Revisar relatório" : "Gerar relatório médico"}
-            </Link>
+            <div className="flex flex-wrap gap-2">
+              <Link href={composerHref(patientEmail, { type: "relatorio", title: "Relatório médico" }, lmeId)} className="btn-ghost text-sm">
+                {relatorio?.status === "nao_gerado" ? "Gerar relatório médico" : "Revisar relatório"}
+              </Link>
+              {relatorio?.pdfUrl && (
+                <a href={relatorio.pdfUrl} target="_blank" rel="noopener noreferrer" className="btn-ghost text-sm">Abrir / imprimir</a>
+              )}
+            </div>
           }
         />
         <DocRow
@@ -101,7 +111,7 @@ export function LmeComplementaryDocs({
                   {busy === "ter" ? "Preparando…" : ter?.status === "gerado" ? "Gerar TER novamente" : "Gerar TER oficial"}
                 </button>
                 {ter?.pdfUrl && (
-                  <a href={ter.pdfUrl} target="_blank" rel="noopener noreferrer" className="btn-ghost text-sm">Pré-visualizar</a>
+                  <a href={ter.pdfUrl} target="_blank" rel="noopener noreferrer" className="btn-ghost text-sm">Abrir / imprimir</a>
                 )}
               </div>
             )
