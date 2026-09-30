@@ -7,6 +7,7 @@ import { DoctorSidebar } from "@/components/DoctorSidebar";
 import { DoctorMobileNav } from "@/components/DoctorMobileNav";
 import { VidaasSignBox } from "@/components/VidaasSignBox";
 import { getDigitalSignatureProvider } from "@/lib/digital-signature/providers";
+import { CFM_PRESCRICAO_URL, CFM_SIGN_HELP } from "@/lib/digital-signature/cfm-flow";
 
 type Visual = { kind: "typed" | "image" | "draw"; value: string } | null;
 type Icp = { configured: boolean; providerId: string | null };
@@ -105,6 +106,17 @@ export default function MinhaAssinaturaPage() {
           <Link href="/medicos/mais" className="text-sm font-semibold text-[var(--gold)]">← Mais</Link>
           <h1 className="font-display text-3xl font-extrabold text-[var(--text)]">Minha assinatura digital</h1>
           <p className="mt-1 text-sm text-[var(--text-muted)]">{docInfo.name} · {docInfo.crm}{docInfo.rqe ? ` · RQE ${docInfo.rqe}` : ""}</p>
+          <p className="mt-3 rounded-xl border border-[var(--border-gold)] bg-[var(--gold-soft)] px-3 py-2 text-sm text-[var(--text-soft)]">
+            {CFM_SIGN_HELP}
+          </p>
+          <a
+            className="btn-gold mt-3 inline-flex text-sm"
+            href={CFM_PRESCRICAO_URL}
+            target="_blank"
+            rel="noopener noreferrer"
+          >
+            Assinar no CFM
+          </a>
 
           {/* ICP-Brasil / VIDaaS */}
           <section className="panel mt-6">

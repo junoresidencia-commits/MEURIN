@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useId, useRef, useState, type RefObject } from "react";
+import { CfmPdfActions } from "@/components/CfmPdfActions";
 import {
   listDigitalSignatureProviders,
   type DigitalSignatureProvider,
@@ -70,44 +71,35 @@ export function SignDocumentPanel(props: Props) {
             {signed ? `✅ ${DIGITAL_SIGNED_LABEL}` : DIGITAL_UNSIGNED_LABEL}
           </p>
         </div>
+        <CfmPdfActions
+          compact
+          pdfHref={props.signedDocumentId ? `/api/documents/${props.signedDocumentId}/pdf` : props.pdfHref}
+          pdfBlob={props.pdfBlob}
+          filename={props.filename || pdfName(props.documentType, props.title)}
+          title={props.title}
+          documentId={props.documentId}
+          patientKey={props.patientKey}
+          documentType={props.documentType}
+          alreadySigned={signed}
+          onSigned={props.onSigned}
+        />
         {!signed && (
-          <>
+          <details className="mt-3">
+            <summary className="cursor-pointer text-xs font-semibold text-[var(--text-muted)]">VIDaaS e outras formas</summary>
             <p className="mt-1 text-xs text-[var(--text-muted)]">
-              A assinatura acontece no VIDaaS ou nos serviços oficiais do CFM — o Meu Rim não guarda senha, PIN nem certificado.
+              A assinatura acontece no ambiente oficial. O Meu Rim não guarda senha, PIN nem certificado.
             </p>
-            <div className="mt-3 grid grid-cols-1 gap-2 sm:grid-cols-2">
-              {PROVIDERS.map((p) => (
-                <button
-                  key={p.id}
-                  type="button"
-                  className={p.primary ? "btn-gold text-sm" : "btn-ghost text-sm"}
-                  onClick={() => openAs(p.id)}
-                >
+            <div className="mt-2 flex flex-wrap gap-2">
+              {PROVIDERS.filter((p) => p.id === "vidaas").map((p) => (
+                <button key={p.id} type="button" className="btn-ghost text-sm" onClick={() => openAs(p.id)}>
                   {p.label}
                 </button>
               ))}
-            </div>
-            <div className="mt-2 flex flex-wrap gap-2">
               <button type="button" className="btn-ghost text-sm" onClick={() => openAs("choose")}>
-                Assinar digitalmente
-              </button>
-              <button
-                type="button"
-                className="btn-ghost text-sm"
-                onClick={() => {
-                  void shareOrDownloadPdf({
-                    blob: props.pdfBlob,
-                    href: props.pdfHref,
-                    filename: props.filename || pdfName(props.documentType, props.title),
-                    title: props.title || "Documento Meu Rim",
-                    prefer: "download",
-                  });
-                }}
-              >
-                Baixar PDF sem assinatura
+                Outras opções
               </button>
             </div>
-          </>
+          </details>
         )}
         {signed && (
           <PostSignActions
