@@ -45,8 +45,10 @@ const PROVIDERS = listDigitalSignatureProviders();
 
 function pdfName(type?: string, title?: string) {
   const base = (title || type || "documento-meurim")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
     .toLowerCase()
-    .replace(/[^a-z0-9]+/gi, "-")
+    .replace(/[^a-z0-9]+/g, "-")
     .replace(/^-|-$/g, "")
     .slice(0, 60);
   return `${base || "documento-meurim"}.pdf`;
