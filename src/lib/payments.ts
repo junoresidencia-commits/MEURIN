@@ -4,6 +4,7 @@ import { v4 as uuid } from "uuid";
 import { updateDb } from "./store";
 import { sendEmail } from "./email";
 import { sendNotification, patientKey, links, fmtDateTime, firstName } from "./notify";
+import { notifyDoctorOnPayment } from "./whatsapp-payment";
 import { computeSplit, resolveDoctorSharePercent } from "./types";
 import type { Booking, Doctor } from "./types";
 
@@ -330,6 +331,7 @@ export async function confirmBookingPaid(
       relatedType: "booking",
       relatedId: booking.id,
     });
+    await notifyDoctorOnPayment(doctor, booking).catch(() => {});
   } catch {
     // notificação não deve quebrar o pagamento
   }

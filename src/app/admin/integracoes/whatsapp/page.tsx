@@ -84,7 +84,11 @@ export default function WhatsAppIntegracaoPage() {
       <Link href="/admin" className="text-sm font-semibold text-[var(--gold)]">← Administração</Link>
       <p className="mt-2 text-xs font-bold uppercase tracking-wide text-[var(--gold)]">Configurações › Integrações</p>
       <h1 className="font-display text-3xl font-extrabold text-[var(--text)]">WhatsApp</h1>
-      <p className="mt-1 text-[var(--text-muted)]">Envio de convites e mensagens de acesso. Quando a API oficial estiver configurada, o envio é automático pelo número oficial; enquanto isso, usa o wa.me (envio assistido).</p>
+      <p className="mt-1 text-[var(--text-muted)]">
+        Convites, mensagens de acesso e <strong>aviso automático ao médico quando o paciente pagar</strong>.
+        Com a API oficial da Meta, o WhatsApp sai sozinho para o número privado do médico (Configurações → notificações).
+        Sem a API, o envio fica só no log (wa.me).
+      </p>
 
       {/* 1. Status */}
       <section className="panel mt-6">
