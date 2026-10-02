@@ -26,6 +26,8 @@ export interface PatientAccess {
     slotStart: string;
     careReason: string;
     meetingRoomId: string;
+    priceCents?: number;
+    courtesyKind?: "retorno" | "gratis";
   }[];
 }
 
@@ -96,6 +98,8 @@ export async function resolvePatientAccess(param: string): Promise<PatientAccess
         slotStart: b.slotStart,
         careReason: b.careReason,
         meetingRoomId: b.meetingRoomId,
+        priceCents: b.priceCents,
+        courtesyKind: b.courtesyKind,
       }));
   }
 

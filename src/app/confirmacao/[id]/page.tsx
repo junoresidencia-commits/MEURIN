@@ -8,6 +8,7 @@ import { PixCheckout } from "@/components/PixCheckout";
 import { formatBRL, formatSlotLabel } from "@/lib/scheduling-client";
 import { whatsappLink } from "@/lib/contact";
 import type { Booking } from "@/lib/types";
+import { courtesyLabel } from "@/lib/courtesy";
 
 const REASON_LABEL: Record<Booking["careReason"], string> = {
   pressa: "Com pressa / horário próximo",
@@ -265,7 +266,7 @@ export default function ConfirmacaoPage() {
         <p>
           <span className="text-[var(--text-muted)]">Motivo:</span>{" "}
           <span className="text-[var(--text)]">
-            {REASON_LABEL[booking.careReason] || "Consulta online"}
+            {booking.courtesyKind ? courtesyLabel(booking.courtesyKind) : REASON_LABEL[booking.careReason] || "Consulta online"}
           </span>
         </p>
         <p>
@@ -278,7 +279,9 @@ export default function ConfirmacaoPage() {
         </p>
         <p>
           <span className="text-[var(--text-muted)]">Valor:</span>{" "}
-          <span className="text-[var(--gold)]">{formatBRL(booking.priceCents)}</span>
+          <span className="text-[var(--gold)]">
+            {booking.courtesyKind || booking.priceCents === 0 ? "Sem cobrança" : formatBRL(booking.priceCents)}
+          </span>
         </p>
         <p className="break-all rounded-xl border border-[var(--border-gold)] bg-[var(--gold-soft)] p-3 text-[var(--gold)]">
           Link da sala: {meetingAbsolute}

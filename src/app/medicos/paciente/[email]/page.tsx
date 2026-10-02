@@ -28,6 +28,8 @@ import { PdModule } from "@/components/PdModule";
 import { encodePatientParam, postJson, toFriendlyMessage } from "@/lib/user-errors";
 import { clearEvolutionDraft, loadEvolutionDraft, saveEvolutionDraft } from "@/lib/evolution-draft";
 import { resolvePatientAge } from "@/lib/patient-age";
+import { CourtesyConsultPanel } from "@/components/CourtesyConsultPanel";
+import { courtesyLabel, type CourtesyKind } from "@/lib/courtesy";
 import { SignDocumentPanel } from "@/components/SignDocumentFlow";
 import { digitalSignatureLabel } from "@/lib/digital-signature/status";
 import { PatientFinancePanel } from "@/components/PatientFinancePanel";
@@ -72,7 +74,15 @@ type HomeRecord = {
   measuredAt: string;
 };
 type FoodLog = { id: string; food: string; meal?: string | null; quantity?: string | null; loggedAt: string };
-type Booking = { id: string; status: string; slotStart: string; careReason: string; meetingRoomId: string };
+type Booking = {
+  id: string;
+  status: string;
+  slotStart: string;
+  careReason: string;
+  meetingRoomId: string;
+  priceCents?: number;
+  courtesyKind?: CourtesyKind;
+};
 type Patient = { email: string; name: string; city: string; phone: string; birthdate?: string | null; ageYears?: number | null; ageReportedAt?: string | null; sex?: string | null; cns?: string | null; cpf?: string | null; motherName?: string | null; isCreated?: boolean };
 type Note = {
   id: string;
@@ -209,6 +219,7 @@ export default function ProntuarioPage() {
   // Agendamento pelo médico
   const [apptDate, setApptDate] = useState("");
   const [apptTime, setApptTime] = useState("");
+  const [apptKind, setApptKind] = useState<"" | CourtesyKind>("retorno");
   const [apptSaving, setApptSaving] = useState(false);
   const [apptErr, setApptErr] = useState("");
   const [loading, setLoading] = useState(true);
@@ -295,7 +306,11 @@ export default function ProntuarioPage() {
       const res = await fetch(`/api/doctor/patients/${encodePatientParam(emailParam)}/appointments`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ slotStart: `${apptDate}T${apptTime}:00`, careReason: "acompanhamento" }),
+        body: JSON.stringify({
+          slotStart: `${apptDate}T${apptTime}:00`,
+          careReason: "acompanhamento",
+          courtesyKind: apptKind || undefined,
+        }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Não foi possível agendar.");
@@ -1035,6 +1050,24 @@ export default function ProntuarioPage() {
           <div className="space-y-3">
             <div className="panel space-y-3">
               <p className="text-xs font-bold uppercase tracking-wider text-[var(--gold)]">Agendar consulta</p>
+              <div className="flex flex-wrap gap-2">
+                {([
+                  ["retorno", "Retorno grátis"],
+                  ["gratis", "Consulta grátis"],
+                  ["", "Consulta (valor normal)"],
+                ] as const).map(([id, label]) => (
+                  <button
+                    key={id || "paga"}
+                    type="button"
+                    onClick={() => setApptKind(id)}
+                    className={`min-h-12 rounded-full px-4 text-sm font-bold ${
+                      apptKind === id ? "bg-[var(--gold)] text-white" : "border border-[var(--border)] text-[var(--text-soft)]"
+                    }`}
+                  >
+                    {label}
+                  </button>
+                ))}
+              </div>
               <div className="grid gap-3 sm:grid-cols-2">
                 <label className="block">
                   <span className="mb-1 block text-xs font-semibold text-[var(--text-muted)]">Data</span>
@@ -1046,16 +1079,22 @@ export default function ProntuarioPage() {
                 </label>
               </div>
               {apptErr && <p className="text-sm text-[var(--danger)]">{apptErr}</p>}
-              <button type="button" className="btn-gold" onClick={saveAppointment} disabled={apptSaving}>
-                {apptSaving ? "Agendando…" : "Agendar consulta"}
+              <button type="button" className="btn-gold min-h-12" onClick={saveAppointment} disabled={apptSaving}>
+                {apptSaving ? "Agendando…" : apptKind === "retorno" ? "Agendar retorno grátis" : apptKind === "gratis" ? "Agendar consulta grátis" : "Agendar consulta"}
               </button>
+            </div>
+            <div className="panel">
+              <CourtesyConsultPanel patientKey={emailParam} />
             </div>
             {bookings.length === 0 && <p className="text-[var(--text-muted)]">Nenhuma consulta ainda.</p>}
             {bookings.map((b) => (
               <div key={b.id} className="panel flex items-center justify-between gap-3">
                 <div>
                   <p className="font-semibold text-[var(--text)]">{formatSlotLabel(b.slotStart)}</p>
-                  <p className="text-xs text-[var(--text-muted)]">{REASON[b.careReason] || "Consulta"}</p>
+                  <p className="text-xs text-[var(--text-muted)]">
+                    {b.courtesyKind ? courtesyLabel(b.courtesyKind) : REASON[b.careReason] || "Consulta"}
+                    {b.courtesyKind || b.priceCents === 0 ? " · sem cobrança" : ""}
+                  </p>
                 </div>
                 {b.status === "confirmed" && (
                   <Link href={`/consulta/${b.meetingRoomId}`} className="btn-gold">

@@ -541,7 +541,7 @@ function mapDoctorRow(row: Record<string, unknown>): Doctor {
   };
 }
 
-function mapBookingRow(row: Record<string, unknown>) {
+function mapBookingRow(row: Record<string, unknown>): Booking {
   return {
     id: String(row.id),
     doctorId: String(row.doctor_id),
@@ -581,6 +581,8 @@ function mapBookingRow(row: Record<string, unknown>) {
     paidAt: row.paid_at ? new Date(String(row.paid_at)).toISOString() : undefined,
     confirmationEmailSent: Boolean(row.confirmation_email_sent),
     createdAt: new Date(String(row.created_at)).toISOString(),
+    courtesyKind:
+      row.courtesy_kind === "retorno" ? "retorno" : row.courtesy_kind === "gratis" ? "gratis" : undefined,
   };
 }
 
@@ -891,6 +893,7 @@ async function writeSupabaseDb(db: Database): Promise<void> {
     paid_at: booking.paidAt ?? null,
     confirmation_email_sent: booking.confirmationEmailSent,
     created_at: booking.createdAt,
+    courtesy_kind: booking.courtesyKind ?? null,
   }));
 
   const payments = db.payments.map((payment) => ({

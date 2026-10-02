@@ -239,6 +239,8 @@ export interface Booking {
   // Lembretes já enviados (evita reenviar). 24h e 2h antes da consulta.
   reminder24Sent?: boolean;
   reminder2Sent?: boolean;
+  /** Cortesia escolhida pelo médico: retorno grátis ou consulta grátis. Sem cobrança. */
+  courtesyKind?: "retorno" | "gratis";
 }
 
 export type ConsultationStage =

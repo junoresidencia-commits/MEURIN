@@ -10,6 +10,8 @@ import { processReminders } from "@/lib/reminders";
 import { sendNotification, patientKey, links, fmtDateTime } from "@/lib/notify";
 import { trackFunnelEvent } from "@/lib/analytics-store";
 import type { Booking, ConsultationEvent, Modality, PaymentMethod } from "@/lib/types";
+import { consumeCourtesyCredit, findOpenCourtesy } from "@/lib/courtesy-credits-store";
+import { courtesyLabel } from "@/lib/courtesy";
 
 const REASONS = new Set(["pressa", "acompanhamento", "segunda_opiniao", "outro"]);
 
@@ -53,7 +55,7 @@ export async function POST(req: Request) {
     !patientEmail ||
     !slotStart ||
     !slotEnd ||
-    !paymentMethod
+    !(paymentMethod || body.useCourtesy)
   ) {
     return NextResponse.json({ error: "Dados incompletos." }, { status: 400 });
   }
@@ -94,27 +96,46 @@ export async function POST(req: Request) {
   }
 
   const reason = REASONS.has(careReason) ? careReason : "outro";
+  const email = String(patientEmail).toLowerCase();
+  const courtesy = body.useCourtesy ? await findOpenCourtesy(String(doctorId), email) : null;
+  if (body.useCourtesy && !courtesy) {
+    return NextResponse.json(
+      { error: "Este médico ainda não liberou retorno ou consulta grátis para você." },
+      { status: 400 }
+    );
+  }
 
   const booking: Booking = {
     id: uuid(),
     doctorId,
     patientName: String(patientName),
-    patientEmail: String(patientEmail).toLowerCase(),
+    patientEmail: email,
     patientPhone: String(patientPhone || ""),
     patientCity: String(patientCity || ""),
     careReason: reason as Booking["careReason"],
     slotStart: slot.start,
     slotEnd: slot.end,
-    priceCents: slot.priceCents, // valor por local/modalidade
-    paymentMethod: paymentMethod as PaymentMethod,
-    status: "pending_payment",
+    priceCents: courtesy ? 0 : slot.priceCents,
+    paymentMethod: (paymentMethod || "pix") as PaymentMethod,
+    status: courtesy ? "confirmed" : "pending_payment",
     meetingRoomId: uuid(),
     confirmationEmailSent: false,
     createdAt: new Date().toISOString(),
     modality: slot.modality,
     locationId: slot.locationId,
     locationName: slot.locationName,
-    events: [ev("paciente", "solicitada", `Paciente solicitou a consulta (${slot.modality === "presencial" ? `presencial — ${slot.locationName ?? "clínica"}` : "teleconsulta"}).`)],
+    courtesyKind: courtesy?.kind,
+    stage: courtesy ? "confirmada" : undefined,
+    events: [
+      ev(
+        "paciente",
+        "solicitada",
+        courtesy
+          ? `${courtesyLabel(courtesy.kind)} — sem cobrança (${slot.modality === "presencial" ? `presencial — ${slot.locationName ?? "clínica"}` : "teleconsulta"}).`
+          : `Paciente solicitou a consulta (${slot.modality === "presencial" ? `presencial — ${slot.locationName ?? "clínica"}` : "teleconsulta"}).`
+      ),
+      ...(courtesy ? [ev("medico", "confirmada", "Cortesia liberada pelo médico. Consulta confirmada.")] : []),
+    ],
   };
 
   await updateDb((current) => ({
@@ -122,10 +143,30 @@ export async function POST(req: Request) {
     bookings: [...current.bookings, booking],
   }));
 
+  if (courtesy) {
+    await consumeCourtesyCredit(String(doctorId), email, booking.id);
+    if (booking.patientEmail?.includes("@")) {
+      const meetingUrl = `${appOrigin()}/consulta/${booking.meetingRoomId}`;
+      await sendEmail(buildConfirmationEmail(booking, doctor, meetingUrl));
+    }
+    const quando = fmtDateTime(booking.slotStart, doctor.tz);
+    await sendNotification({
+      userId: patientKey(booking.patientEmail),
+      role: "paciente",
+      type: "consulta_confirmada",
+      title: courtesyLabel(courtesy.kind),
+      body: `Sua ${courtesyLabel(courtesy.kind).toLowerCase()} está confirmada para ${quando}. Sem cobrança.`,
+      targetUrl: links.patientConsulta(booking.id),
+      tag: `booking-${booking.id}`,
+      relatedType: "booking",
+      relatedId: booking.id,
+    });
+  }
+
   // Libera a reserva temporária deste paciente (a consulta agora ocupa o horário).
   if (holder) await releaseHold(doctorId, iso, holder);
 
-  return NextResponse.json({ booking }, { status: 201 });
+  return NextResponse.json({ booking, courtesy: Boolean(courtesy) }, { status: 201 });
 }
 
 // Ações do MÉDICO sobre a consulta (dono da consulta, autenticado).
