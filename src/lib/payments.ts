@@ -4,6 +4,7 @@ import { v4 as uuid } from "uuid";
 import { updateDb } from "./store";
 import { sendEmail } from "./email";
 import { sendNotification, patientKey, links, fmtDateTime, firstName } from "./notify";
+import { notifyDoctorOnPayment } from "./whatsapp-payment";
 import { computeSplit, resolveDoctorSharePercent } from "./types";
 import type { Booking, Doctor } from "./types";
 
@@ -37,10 +38,13 @@ export function isMercadoPagoEnabledFor(doctor?: { mpAccessToken?: string } | nu
 }
 
 export function appOrigin(): string {
-  return (
-    process.env.NEXT_PUBLIC_APP_URL ||
-    (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : "http://localhost:3000")
-  );
+  const explicit = process.env.NEXT_PUBLIC_APP_URL?.trim();
+  if (explicit) return explicit.replace(/\/$/, "");
+  if (process.env.VERCEL_URL) {
+    const host = process.env.VERCEL_URL.replace(/^https?:\/\//, "");
+    return `https://${host}`;
+  }
+  return "http://localhost:3000";
 }
 
 /**
@@ -56,30 +60,54 @@ export async function createCheckoutPreference(
   const doctorName = doctor.name;
 
   const origin = appOrigin();
-  const body = {
+  const method = booking.paymentMethod;
+  // Não excluir meios: cartão, saldo Mercado Livre e boleto precisam continuar
+  // disponíveis no Checkout Pro. Só sugerimos o tipo escolhido no agendamento.
+  const paymentMethods: Record<string, unknown> = {
+    installments: 12,
+    default_installments: 1,
+  };
+  if (method === "boleto") paymentMethods.default_payment_type_id = "ticket";
+  if (method === "card") paymentMethods.default_payment_type_id = "credit_card";
+  if (method === "pix") paymentMethods.default_payment_type_id = "bank_transfer";
+
+  const digits = (booking.patientPhone || "").replace(/\D/g, "");
+  const phone =
+    digits.length >= 10
+      ? { area_code: digits.slice(0, 2), number: digits.slice(2, 11) }
+      : undefined;
+
+  const body: Record<string, unknown> = {
     items: [
       {
         id: booking.id,
-        title: `Consulta Meu Rim — ${doctorName}`,
-        description: "Teleconsulta de nefrologia",
+        title: `Consulta Meu Rim — ${doctorName}`.slice(0, 60),
+        description: "Consulta de nefrologia — Meu Rim",
         quantity: 1,
         currency_id: "BRL",
         unit_price: Math.round(booking.priceCents) / 100,
       },
     ],
-    payer: { name: booking.patientName, email: booking.patientEmail },
+    payer: {
+      name: booking.patientName,
+      email: booking.patientEmail,
+      ...(phone ? { phone } : {}),
+    },
     external_reference: booking.id,
     back_urls: {
       success: `${origin}/confirmacao/${booking.id}`,
       pending: `${origin}/confirmacao/${booking.id}`,
       failure: `${origin}/confirmacao/${booking.id}`,
     },
-    auto_return: "approved",
-    // O ?doctor= diz ao webhook qual conta (token) usar para confirmar o pagamento.
-    notification_url: `${origin}/api/payments/webhook?doctor=${doctor.id}`,
     metadata: { booking_id: booking.id, doctor_id: doctor.id },
-    statement_descriptor: "MEU RIM",
+    statement_descriptor: "MEURIM",
+    binary_mode: false,
+    payment_methods: paymentMethods,
   };
+  // Mercado Pago rejeita notification_url em HTTP; auto_return trava o Pagar no boleto.
+  if (origin.startsWith("https://")) {
+    body.notification_url = `${origin}/api/payments/webhook?doctor=${doctor.id}`;
+  }
 
   const res = await fetch(`${MP_API}/checkout/preferences`, {
     method: "POST",
@@ -105,6 +133,63 @@ export async function createCheckoutPreference(
   const redirectUrl = (isTest ? data.sandbox_init_point : data.init_point) || data.init_point;
   if (!redirectUrl) throw new Error("Preferência sem URL de pagamento.");
   return { redirectUrl, preferenceId: data.id };
+}
+
+/**
+ * Cobra via Pix da API do Mercado Pago (QR + copia e cola), sem Checkout Pro.
+ * Usado quando o médico não cadastrou chave Pix própria.
+ * O dinheiro cai na conta MP do coletor (médico conectado ou plataforma).
+ */
+export async function createMercadoPagoPixPayment(
+  booking: Booking,
+  doctor: Pick<Doctor, "id" | "name" | "mpAccessToken">
+): Promise<{ brCode: string; qrDataUrl?: string; mpPaymentId: string } | null> {
+  const token = getCollectorToken(doctor);
+  if (!token) return null;
+
+  const origin = appOrigin();
+  const firstNamePayer = (booking.patientName || "Paciente").trim().split(/\s+/)[0] || "Paciente";
+  const body: Record<string, unknown> = {
+    transaction_amount: Math.round(booking.priceCents) / 100,
+    description: `Consulta Meu Rim — ${doctor.name}`.slice(0, 60),
+    payment_method_id: "pix",
+    payer: {
+      email: booking.patientEmail,
+      first_name: firstNamePayer,
+    },
+    external_reference: booking.id,
+    metadata: { booking_id: booking.id, doctor_id: doctor.id },
+  };
+  if (origin.startsWith("https://")) {
+    body.notification_url = `${origin}/api/payments/webhook?doctor=${doctor.id}`;
+  }
+
+  const res = await fetch(`${MP_API}/v1/payments`, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${token}`,
+      "Content-Type": "application/json",
+      "X-Idempotency-Key": `pix-${booking.id}`,
+    },
+    body: JSON.stringify(body),
+  });
+  if (!res.ok) return null;
+
+  const data = (await res.json()) as {
+    id?: number;
+    point_of_interaction?: {
+      transaction_data?: { qr_code?: string; qr_code_base64?: string };
+    };
+  };
+  const tx = data.point_of_interaction?.transaction_data;
+  const brCode = (tx?.qr_code || "").trim();
+  if (!brCode || !data.id) return null;
+  const raw = (tx?.qr_code_base64 || "").replace(/\s/g, "");
+  return {
+    brCode,
+    qrDataUrl: raw ? `data:image/png;base64,${raw}` : undefined,
+    mpPaymentId: String(data.id),
+  };
 }
 
 type MpPayment = {
@@ -246,6 +331,7 @@ export async function confirmBookingPaid(
       relatedType: "booking",
       relatedId: booking.id,
     });
+    await notifyDoctorOnPayment(doctor, booking).catch(() => {});
   } catch {
     // notificação não deve quebrar o pagamento
   }
