@@ -157,9 +157,6 @@ export default function DocumentoPage() {
         <button type="button" className="btn-ghost" onClick={shareWhatsApp}>
           Enviar no WhatsApp
         </button>
-        <button type="button" className="btn-ghost" onClick={() => window.print()}>
-          Imprimir
-        </button>
       </div>
       <div className="mb-4 print:hidden">
         <CfmPdfActions

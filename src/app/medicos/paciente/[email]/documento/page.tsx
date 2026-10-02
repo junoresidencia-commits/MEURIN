@@ -261,7 +261,6 @@ function ComporDocumentoInner() {
             <div className="mt-4 rounded-xl border border-[var(--border)] p-3">
               <p className="text-sm font-semibold text-[var(--text)]">Documento salvo no prontuário {status === "signed" && "· assinado"}</p>
               <div className="mt-2 flex flex-wrap gap-2">
-                <a className="btn-ghost text-sm" href={`/api/documents/${savedId}/pdf`} target="_blank" rel="noopener noreferrer">Abrir PDF</a>
                 {status !== "signed" && (
                   <button type="button" className="btn-ghost text-sm" onClick={assinar} disabled={busy}>
                     Registrar no Meu Rim
@@ -294,9 +293,6 @@ function ComporDocumentoInner() {
                   style={previewZoom > 1 ? { transform: `scale(${previewZoom})`, width: `${100 / previewZoom}%`, height: `${70 / previewZoom}vh` } : undefined}
                 />
               </div>
-              <a className="btn-ghost mt-2 inline-block text-sm" href={previewUrl} target="_blank" rel="noopener noreferrer">
-                Visualizar
-              </a>
               {!savedId && (
                 <CfmPdfActions
                   compact
