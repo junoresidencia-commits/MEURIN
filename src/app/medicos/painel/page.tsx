@@ -527,7 +527,7 @@ export default function PainelMedicoPage() {
                 <p className="text-sm text-[var(--text-muted)]">{formatSlotLabel(b.slotStart)}</p>
                 {(b.patientCity || b.careReason) && (
                   <p className="mt-1 text-sm text-[var(--text-soft)]">
-                    {[b.patientCity, b.careReason === "pressa" ? "com pressa" : b.careReason === "segunda_opiniao" ? "2ª opinião" : b.careReason === "acompanhamento" ? "acompanhamento" : null]
+                    {[b.patientCity, b.courtesyKind === "retorno" ? "retorno grátis" : b.courtesyKind === "gratis" ? "consulta grátis" : b.careReason === "pressa" ? "com pressa" : b.careReason === "segunda_opiniao" ? "2ª opinião" : b.careReason === "acompanhamento" ? "acompanhamento" : null]
                       .filter(Boolean)
                       .join(" · ")}
                   </p>

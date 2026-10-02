@@ -5,6 +5,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import type { Booking, Modality, PaymentMethod, PublicDoctor } from "@/lib/types";
 import { formatBRL } from "@/lib/scheduling-client";
 import { trackEvent } from "@/lib/analytics-client";
+import type { CourtesyKind } from "@/lib/courtesy";
 
 type Slot = {
   start: string;
@@ -111,6 +112,7 @@ export default function AgendarClient() {
   >([]);
   const [consentChecked, setConsentChecked] = useState<Record<string, boolean>>({});
   const [openConsent, setOpenConsent] = useState<string | null>(null);
+  const [courtesy, setCourtesy] = useState<{ kind: CourtesyKind; label: string } | null>(null);
 
   const doctor = useMemo(
     () => doctors.find((d) => d.id === doctorId) || null,
@@ -217,6 +219,28 @@ export default function AgendarClient() {
     };
   }
 
+  async function lookupCourtesy() {
+    if (!doctorId || !patientEmail.includes("@")) {
+      setCourtesy(null);
+      return null;
+    }
+    try {
+      const r = await fetch(
+        `/api/courtesy/lookup?doctorId=${encodeURIComponent(doctorId)}&email=${encodeURIComponent(patientEmail.trim())}`
+      );
+      const d = await r.json();
+      if (d?.hasCredit) {
+        const next = { kind: d.kind as CourtesyKind, label: String(d.label || "Consulta grátis") };
+        setCourtesy(next);
+        return next;
+      }
+    } catch {
+      /* segue para pagamento */
+    }
+    setCourtesy(null);
+    return null;
+  }
+
   async function finishPayment() {
     if (!doctor || !slot) return;
     if (!consentReady) {
@@ -251,7 +275,8 @@ export default function AgendarClient() {
           careReason,
           slotStart: slot.start,
           slotEnd: slot.end,
-          paymentMethod,
+          paymentMethod: courtesy ? "pix" : paymentMethod,
+          useCourtesy: Boolean(courtesy),
           modality: slot.modality,
           locationId: slot.locationId,
           holder: holderToken(),
@@ -259,6 +284,12 @@ export default function AgendarClient() {
       });
       const bookingData = await bookingRes.json();
       if (!bookingRes.ok) throw new Error(bookingData.error || "Erro no agendamento");
+
+      if (courtesy || bookingData.courtesy) {
+        trackEvent("payment_completed", { doctorId: doctor.id, bookingId: bookingData.booking.id });
+        router.push(`/confirmacao/${bookingData.booking.id}`);
+        return;
+      }
 
       const payRes = await fetch("/api/payments", {
         method: "POST",
@@ -603,10 +634,10 @@ export default function AgendarClient() {
                   return;
                 }
                 setError("");
-                setStep(3);
+                void lookupCourtesy().then(() => setStep(3));
               }}
             >
-              Ir para pagamento
+              Continuar
             </button>
           </div>
         </div>
@@ -626,12 +657,14 @@ export default function AgendarClient() {
                 : "Teleconsulta (online)"}
             </p>
             <p className="mt-2 text-[var(--gold-light)]">
-              Total: {formatBRL(slot.priceCents ?? doctor.consultationPriceCents)} — vai para a conta
-              do médico
+              {courtesy
+                ? `${courtesy.label} — sem cobrança. Seu médico liberou este horário para você.`
+                : `Total: ${formatBRL(slot.priceCents ?? doctor.consultationPriceCents)} — vai para a conta do médico`}
             </p>
           </div>
 
-          <div>
+          {!courtesy && (
+            <div>
             <p className="mb-2 text-xs font-bold uppercase tracking-wider text-[var(--gold-light)]">
               Forma de pagamento
             </p>
@@ -657,9 +690,10 @@ export default function AgendarClient() {
                 </button>
               ))}
             </div>
-          </div>
+            </div>
+          )}
 
-          {paymentMethod === "card" && (
+          {paymentMethod === "card" && !courtesy && (
             <label className="block">
               <span className="mb-2 block text-xs font-bold uppercase tracking-wider text-[var(--gold-light)]">
                 Número do cartão (ambiente de demonstração)
@@ -673,17 +707,22 @@ export default function AgendarClient() {
             </label>
           )}
 
-          {paymentMethod === "pix" && (
+          {paymentMethod === "pix" && !courtesy && (
             <p className="text-sm text-[var(--text-muted)]">
               No Pix, a liberação é imediata neste demo: pagamento confirmado →
               consulta liberada → e-mail com o link.
             </p>
           )}
+          {courtesy && (
+            <p className="text-sm text-[var(--text-muted)]">
+              Não há pagamento. Ao confirmar, a consulta já fica liberada com o link da sala.
+            </p>
+          )}
 
           <p className="text-xs text-[var(--text-muted)]">
-            Depois de pagar, você recebe o link da sala Meu Rim. Guarde o
-            e-mail. Em emergência (dor forte, falta de ar, desmaio), procure
-            pronto-socorro.
+            {courtesy
+              ? "Você recebe o link da sala Meu Rim. Guarde o e-mail. Em emergência (dor forte, falta de ar, desmaio), procure pronto-socorro."
+              : "Depois de pagar, você recebe o link da sala Meu Rim. Guarde o e-mail. Em emergência (dor forte, falta de ar, desmaio), procure pronto-socorro."}
           </p>
 
           {/* Consentimento obrigatório antes de finalizar */}
@@ -732,7 +771,11 @@ export default function AgendarClient() {
               disabled={loading || !consentReady}
               onClick={finishPayment}
             >
-              {loading ? "Confirmando pagamento…" : "Pagar e liberar consulta"}
+              {loading
+                ? "Confirmando…"
+                : courtesy
+                  ? `Confirmar ${courtesy.label.toLowerCase()}`
+                  : "Pagar e liberar consulta"}
             </button>
           </div>
         </div>

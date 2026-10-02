@@ -37,6 +37,7 @@ export default function RetornosPage() {
   const [buckets, setBuckets] = useState<Buckets | null>(null);
   const [error, setError] = useState("");
   const [tab, setTab] = useState<keyof Buckets>("atrasados");
+  const [freeList, setFreeList] = useState<{ id: string; patientName: string; patientKey: string; kind: string; status: string }[]>([]);
 
   function load() {
     setError("");
@@ -47,6 +48,10 @@ export default function RetornosPage() {
   }
   useEffect(() => {
     load();
+    fetch("/api/doctor/courtesy-credits")
+      .then((r) => r.json())
+      .then((d) => setFreeList((d.credits || []).filter((c: { status: string }) => c.status === "open")))
+      .catch(() => {});
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -71,7 +76,22 @@ export default function RetornosPage() {
         <div className="mx-auto max-w-4xl px-5 pb-28 pt-8 lg:pb-8">
           <Link href="/medicos/painel" className="text-sm font-semibold text-[var(--gold)]">← Painel</Link>
           <h1 className="font-display text-2xl font-extrabold text-[var(--text)] sm:text-3xl">Central de retornos</h1>
-          <p className="mt-1 text-sm text-[var(--text-muted)]">Pacientes que precisam retornar. Um retorno some daqui quando existe uma consulta futura marcada.</p>
+          <p className="mt-1 text-sm text-[var(--text-muted)]">Pacientes que precisam retornar. Você escolhe quem faz retorno grátis ou consulta grátis — o paciente agenda online sem pagar. Um retorno some daqui quando existe uma consulta futura marcada.</p>
+
+          {freeList.length > 0 && (
+            <div className="panel mt-4">
+              <p className="text-xs font-bold uppercase tracking-wider text-[var(--gold)]">Já liberados para agendar grátis</p>
+              <ul className="mt-2 space-y-1 text-sm">
+                {freeList.map((c) => (
+                  <li key={c.id} className="flex flex-wrap items-center justify-between gap-2">
+                    <span className="font-semibold text-[var(--text)]">{c.patientName}</span>
+                    <span className="text-[var(--text-muted)]">{c.kind === "retorno" ? "Retorno grátis" : "Consulta grátis"}</span>
+                    <Link href={`/medicos/paciente/${encodeURIComponent(c.patientKey)}?tab=consultas`} className="font-semibold text-[var(--gold)]">Abrir</Link>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
 
           <div className="mt-4 -mx-5 overflow-x-auto px-5">
             <div className="flex w-max gap-2">
@@ -110,7 +130,24 @@ export default function RetornosPage() {
                       </p>
                     </div>
                     <div className="flex flex-wrap gap-2">
-                      <Link href={`/medicos/paciente/${encodeURIComponent(it.patientKey)}`} className="btn-gold text-sm">Agendar / Abrir</Link>
+                      <Link href={`/medicos/paciente/${encodeURIComponent(it.patientKey)}?tab=consultas`} className="btn-gold text-sm">Agendar / Abrir</Link>
+                      <button
+                        type="button"
+                        className="btn-ghost text-sm"
+                        onClick={async () => {
+                          const r = await fetch("/api/doctor/courtesy-credits", {
+                            method: "POST",
+                            headers: { "Content-Type": "application/json" },
+                            body: JSON.stringify({ patientKey: it.patientKey, kind: "retorno" }),
+                          });
+                          const d = await r.json().catch(() => ({}));
+                          const list = await fetch("/api/doctor/courtesy-credits").then((x) => x.json()).catch(() => ({ credits: [] }));
+                          setFreeList((list.credits || []).filter((c: { status: string }) => c.status === "open"));
+                          window.alert(d.message || d.error || "Retorno grátis liberado.");
+                        }}
+                      >
+                        Liberar retorno grátis
+                      </button>
                       <button type="button" className="btn-ghost text-sm" onClick={() => whats(it)}>WhatsApp</button>
                       <button type="button" className="btn-ghost text-sm text-[var(--text-muted)]" onClick={() => resolve(it.id)}>Resolvido</button>
                     </div>
