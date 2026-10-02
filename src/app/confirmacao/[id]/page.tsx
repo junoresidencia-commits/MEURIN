@@ -32,6 +32,7 @@ export default function ConfirmacaoPage() {
   const [origin, setOrigin] = useState("");
   const [pix, setPix] = useState<PixInfo | null>(null);
   const [pixHint, setPixHint] = useState("");
+  const [pixLoading, setPixLoading] = useState(true);
   const pixPosted = useRef(false);
 
   useEffect(() => {
@@ -75,6 +76,8 @@ export default function ConfirmacaoPage() {
         }
       } catch {
         /* QR é complementar — a página ainda mostra o status */
+      } finally {
+        setPixLoading(false);
       }
     }
 
@@ -148,6 +151,11 @@ export default function ConfirmacaoPage() {
                 window.location.reload();
               }}
             />
+          </div>
+        ) : pixLoading ? (
+          <div className="panel mt-6 flex items-center gap-3">
+            <span className="h-4 w-4 animate-spin rounded-full border-2 border-[var(--gold)] border-t-transparent" />
+            <span className="text-sm text-[var(--text-muted)]">Gerando QR Code Pix…</span>
           </div>
         ) : (
           <div className="panel mt-6 space-y-3">
