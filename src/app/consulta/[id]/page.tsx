@@ -235,11 +235,11 @@ export default function ConsultaPage() {
   const sairButton = (
     <button
       type="button"
-      className="inline-flex min-h-[42px] items-center justify-center rounded-full border-[1.5px] border-red-200 bg-red-50 px-4 text-xs font-extrabold text-red-700 transition hover:bg-red-100 disabled:opacity-50"
+      className="inline-flex min-h-[44px] items-center justify-center rounded-full bg-[var(--danger)] px-5 text-sm font-extrabold text-white shadow-sm transition hover:brightness-95 disabled:opacity-50"
       onClick={() => void hangUp()}
       disabled={leaving}
     >
-      {leaving ? "Saindo…" : "Sair"}
+      {leaving ? "Saindo…" : "Sair da consulta"}
     </button>
   );
 
