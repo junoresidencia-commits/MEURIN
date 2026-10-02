@@ -37,10 +37,13 @@ export function isMercadoPagoEnabledFor(doctor?: { mpAccessToken?: string } | nu
 }
 
 export function appOrigin(): string {
-  return (
-    process.env.NEXT_PUBLIC_APP_URL ||
-    (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : "http://localhost:3000")
-  );
+  const explicit = process.env.NEXT_PUBLIC_APP_URL?.trim();
+  if (explicit) return explicit.replace(/\/$/, "");
+  if (process.env.VERCEL_URL) {
+    const host = process.env.VERCEL_URL.replace(/^https?:\/\//, "");
+    return `https://${host}`;
+  }
+  return "http://localhost:3000";
 }
 
 /**
@@ -56,30 +59,54 @@ export async function createCheckoutPreference(
   const doctorName = doctor.name;
 
   const origin = appOrigin();
-  const body = {
+  const method = booking.paymentMethod;
+  // Não excluir meios: cartão, saldo Mercado Livre e boleto precisam continuar
+  // disponíveis no Checkout Pro. Só sugerimos o tipo escolhido no agendamento.
+  const paymentMethods: Record<string, unknown> = {
+    installments: 12,
+    default_installments: 1,
+  };
+  if (method === "boleto") paymentMethods.default_payment_type_id = "ticket";
+  if (method === "card") paymentMethods.default_payment_type_id = "credit_card";
+  if (method === "pix") paymentMethods.default_payment_type_id = "bank_transfer";
+
+  const digits = (booking.patientPhone || "").replace(/\D/g, "");
+  const phone =
+    digits.length >= 10
+      ? { area_code: digits.slice(0, 2), number: digits.slice(2, 11) }
+      : undefined;
+
+  const body: Record<string, unknown> = {
     items: [
       {
         id: booking.id,
-        title: `Consulta Meu Rim — ${doctorName}`,
-        description: "Teleconsulta de nefrologia",
+        title: `Consulta Meu Rim — ${doctorName}`.slice(0, 60),
+        description: "Consulta de nefrologia — Meu Rim",
         quantity: 1,
         currency_id: "BRL",
         unit_price: Math.round(booking.priceCents) / 100,
       },
     ],
-    payer: { name: booking.patientName, email: booking.patientEmail },
+    payer: {
+      name: booking.patientName,
+      email: booking.patientEmail,
+      ...(phone ? { phone } : {}),
+    },
     external_reference: booking.id,
     back_urls: {
       success: `${origin}/confirmacao/${booking.id}`,
       pending: `${origin}/confirmacao/${booking.id}`,
       failure: `${origin}/confirmacao/${booking.id}`,
     },
-    auto_return: "approved",
-    // O ?doctor= diz ao webhook qual conta (token) usar para confirmar o pagamento.
-    notification_url: `${origin}/api/payments/webhook?doctor=${doctor.id}`,
     metadata: { booking_id: booking.id, doctor_id: doctor.id },
-    statement_descriptor: "MEU RIM",
+    statement_descriptor: "MEURIM",
+    binary_mode: false,
+    payment_methods: paymentMethods,
   };
+  // Mercado Pago rejeita notification_url em HTTP; auto_return trava o Pagar no boleto.
+  if (origin.startsWith("https://")) {
+    body.notification_url = `${origin}/api/payments/webhook?doctor=${doctor.id}`;
+  }
 
   const res = await fetch(`${MP_API}/checkout/preferences`, {
     method: "POST",

@@ -698,7 +698,8 @@ function FinanceCard() {
         </p>
         <p className="mt-1 text-2xl font-bold text-[var(--text)]">{data.commissionPercent}%</p>
         <p className="text-xs text-[var(--text-muted)]">
-          Plataforma: {data.platformPercent}% · definido pela administração
+          Plataforma: {data.platformPercent}% · definido pela administração.
+          No Pix, o valor cai na chave cadastrada; o percentual aparece no relatório.
         </p>
       </div>
       <div>

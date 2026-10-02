@@ -71,7 +71,10 @@ export function DoctorPixSettings() {
   return (
     <div className="panel mt-4 space-y-3">
       <p className="text-sm text-[var(--text-soft)]">
-        Cadastre a sua chave Pix para receber consultas diretamente. O paciente poderá copiar o código Pix e pagar pelo próprio banco.
+        Cadastre a sua chave Pix para receber consultas diretamente. O valor cai
+        100% nessa chave, na conta de quem cadastrou. A porcentagem da plataforma
+        (se houver) é definida no admin e entra no relatório — o Pix em si não é
+        dividido automaticamente.
       </p>
       <div className="grid gap-3 sm:grid-cols-2">
         <label className="block">

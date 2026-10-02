@@ -285,6 +285,9 @@ export default function AdminPage() {
                   <p><span className="text-[var(--text-muted)]">Valor da consulta:</span> {formatBRL(d.consultationPriceCents)}</p>
                   <p><span className="text-[var(--text-muted)]">Repasse do médico:</span> {d.commissionPercent}%</p>
                   <p><span className="text-[var(--text-muted)]">Parte da plataforma:</span> {d.platformPercent}%</p>
+                  <p className="sm:col-span-2 text-xs text-[var(--text-muted)]">
+                    No Pix direto o valor inteiro cai na chave do médico. O percentual entra no relatório (não divide o Pix automaticamente).
+                  </p>
                   <p>
                     <span className="text-[var(--text-muted)]">Mercado Pago:</span>{" "}
                     {d.mpConnected ? "Conectado" : "Não conectado"}
