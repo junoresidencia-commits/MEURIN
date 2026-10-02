@@ -5,6 +5,17 @@ import { useRouter, useSearchParams } from "next/navigation";
 import type { Booking, Modality, PaymentMethod, PublicDoctor } from "@/lib/types";
 import { formatBRL } from "@/lib/scheduling-client";
 import { trackEvent } from "@/lib/analytics-client";
+import { PixCheckout } from "@/components/PixCheckout";
+
+type PixCharge = {
+  bookingId: string;
+  brCode: string;
+  qrDataUrl: string;
+  amountCents: number;
+  holderName: string;
+  doctorName?: string;
+  mpError?: string;
+};
 
 type Slot = {
   start: string;
@@ -111,6 +122,7 @@ export default function AgendarClient() {
   >([]);
   const [consentChecked, setConsentChecked] = useState<Record<string, boolean>>({});
   const [openConsent, setOpenConsent] = useState<string | null>(null);
+  const [pixCharge, setPixCharge] = useState<PixCharge | null>(null);
 
   const doctor = useMemo(
     () => doctors.find((d) => d.id === doctorId) || null,
@@ -271,7 +283,21 @@ export default function AgendarClient() {
       const payData = await payRes.json();
       if (!payRes.ok) throw new Error(payData.error || "Pagamento recusado");
 
-      // Pagamento real (Mercado Pago): redireciona para o checkout.
+      // Pix na chave do médico: QR Code nesta tela (não vai para o Mercado Pago).
+      if (payData.provider === "pix" && payData.brCode) {
+        setPixCharge({
+          bookingId: bookingData.booking.id,
+          brCode: payData.brCode,
+          qrDataUrl: payData.qrDataUrl || "",
+          amountCents: payData.amountCents,
+          holderName: payData.holderName || doctor.name,
+          doctorName: payData.doctorName || doctor.name,
+          mpError: payData.mpError,
+        });
+        return;
+      }
+
+      // Cartão / boleto: Checkout Pro do Mercado Pago.
       if (payData.redirectUrl) {
         window.location.href = payData.redirectUrl;
         return;
@@ -612,7 +638,31 @@ export default function AgendarClient() {
         </div>
       )}
 
-      {step === 3 && doctor && slot && (
+      {step === 3 && doctor && slot && pixCharge && (
+        <div className="panel mt-8 space-y-5">
+          {pixCharge.mpError && (
+            <p className="rounded-xl border border-[var(--border-gold)] bg-[var(--gold-soft)] p-3 text-sm text-[var(--text)]">
+              {pixCharge.mpError}
+            </p>
+          )}
+          <PixCheckout
+            pix={pixCharge}
+            onPaid={async () => {
+              const res = await fetch("/api/payments", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ bookingId: pixCharge.bookingId, pixDeclared: true }),
+              });
+              const data = await res.json().catch(() => ({}));
+              if (!res.ok) throw new Error(data.error || "Não foi possível confirmar o Pix.");
+              trackEvent("payment_completed", { doctorId: doctor.id, bookingId: pixCharge.bookingId });
+              router.push(`/confirmacao/${pixCharge.bookingId}`);
+            }}
+          />
+        </div>
+      )}
+
+      {step === 3 && doctor && slot && !pixCharge && (
         <div className="panel mt-8 space-y-5">
           <div className="rounded-2xl border border-[var(--border-gold)] bg-[var(--gold-soft)] p-4 text-sm">
             <p className="font-semibold text-[var(--text)]">{product.title}</p>
@@ -638,7 +688,7 @@ export default function AgendarClient() {
             <div className="flex flex-wrap gap-2">
               {(
                 [
-                  ["pix", "Pix (mais rápido)"],
+                  ["pix", "Pix (QR Code)"],
                   ["card", "Cartão"],
                   ["boleto", "Boleto"],
                 ] as const
@@ -675,8 +725,16 @@ export default function AgendarClient() {
 
           {paymentMethod === "pix" && (
             <p className="text-sm text-[var(--text-muted)]">
-              No Pix, a liberação é imediata neste demo: pagamento confirmado →
-              consulta liberada → e-mail com o link.
+              Você vai ver um QR Code Pix. O valor cai na chave cadastrada pelo
+              médico. Não usa a tela amarela do Mercado Pago (lá o botão Pagar
+              fica cinza).
+            </p>
+          )}
+          {paymentMethod !== "pix" && (
+            <p className="text-sm text-[var(--text-muted)]">
+              Cartão, boleto e saldo do Mercado Livre estão com o botão Pagar
+              travado. Na próxima tela você paga com QR Code Pix, na chave do
+              médico.
             </p>
           )}
 

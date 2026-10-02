@@ -167,35 +167,93 @@ export async function listWhatsAppMessages(limit = 50): Promise<WhatsAppMessageL
 }
 
 // ---------- Send ----------
-function waMeLink(phone: string, text: string): string {
-  const digits = String(phone || "").replace(/\D/g, "").replace(/^(?!55)/, "55");
-  return `https://wa.me/${digits}?text=${encodeURIComponent(text)}`;
-}
-
 export interface SendResult { ok: boolean; method: "api" | "wame"; status: string; url?: string; detail?: string }
 
-/** Envia (API oficial quando configurada) ou devolve o link wa.me (envio assistido). */
-export async function sendWhatsApp(toPhone: string, text: string): Promise<SendResult> {
+function waDigits(phone: string): string {
+  return String(phone || "").replace(/\D/g, "").replace(/^(?!55)/, "55");
+}
+
+function waMeLink(phone: string, text: string): string {
+  return `https://wa.me/${waDigits(phone)}?text=${encodeURIComponent(text)}`;
+}
+
+async function sendWhatsAppTemplate(
+  phoneNumberId: string,
+  token: string,
+  to: string,
+  templateName: string
+): Promise<SendResult> {
+  const languages = ["pt_BR", "pt_PT", "en_US"];
+  let lastDetail = "";
+  for (const code of languages) {
+    const res = await fetch(`https://graph.facebook.com/v20.0/${phoneNumberId}/messages`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+      body: JSON.stringify({
+        messaging_product: "whatsapp",
+        to,
+        type: "template",
+        template: { name: templateName, language: { code } },
+      }),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (res.ok) {
+      return { ok: true, method: "api", status: "enviado", detail: data?.messages?.[0]?.id || templateName };
+    }
+    lastDetail = data?.error?.message || `HTTP ${res.status}`;
+  }
+  return { ok: false, method: "api", status: "falhou", detail: lastDetail };
+}
+
+/** Envia (API oficial quando configurada) ou devolve o link wa.me (envio assistido).
+ *  `automatic: true` força a API (aviso de pagamento) — não abre wa.me como se tivesse enviado. */
+export async function sendWhatsApp(
+  toPhone: string,
+  text: string,
+  opts?: { automatic?: boolean }
+): Promise<SendResult> {
   const s = await getWhatsAppSettings();
   const token = decryptSecret(s.accessTokenEnc);
-  const canApi = s.mode === "api" && Boolean(s.phoneNumberId) && Boolean(token);
-  if (!canApi) {
-    return { ok: true, method: "wame", status: "assistido", url: waMeLink(toPhone, text) };
+  const hasCreds = Boolean(s.phoneNumberId) && Boolean(token);
+  const useApi = hasCreds && (opts?.automatic || s.mode === "api");
+
+  if (!useApi) {
+    return {
+      ok: !opts?.automatic,
+      method: "wame",
+      status: "assistido",
+      url: waMeLink(toPhone, text),
+      detail: opts?.automatic ? "API WhatsApp não configurada" : undefined,
+    };
   }
+
+  const to = waDigits(toPhone);
   try {
-    const to = String(toPhone || "").replace(/\D/g, "").replace(/^(?!55)/, "55");
     const res = await fetch(`https://graph.facebook.com/v20.0/${s.phoneNumberId}/messages`, {
       method: "POST",
       headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
       body: JSON.stringify({ messaging_product: "whatsapp", to, type: "text", text: { body: text } }),
     });
     const data = await res.json().catch(() => ({}));
-    if (!res.ok) {
-      return { ok: false, method: "api", status: "falhou", detail: data?.error?.message || `HTTP ${res.status}`, url: waMeLink(toPhone, text) };
+    if (res.ok) {
+      return { ok: true, method: "api", status: "enviado", detail: data?.messages?.[0]?.id || "" };
     }
-    return { ok: true, method: "api", status: "enviado", detail: data?.messages?.[0]?.id || "" };
+    const errCode = data?.error?.code;
+    const errMsg = data?.error?.message || `HTTP ${res.status}`;
+    if (opts?.automatic && s.templateName && (errCode === 131047 || errCode === 131026 || res.status >= 400)) {
+      const templated = await sendWhatsAppTemplate(s.phoneNumberId!, token!, to, s.templateName);
+      if (templated.ok) return templated;
+      return { ...templated, url: waMeLink(toPhone, text), detail: `${errMsg}; template: ${templated.detail}` };
+    }
+    return { ok: false, method: "api", status: "falhou", detail: errMsg, url: waMeLink(toPhone, text) };
   } catch (err) {
-    return { ok: false, method: "api", status: "falhou", detail: err instanceof Error ? err.message : "erro", url: waMeLink(toPhone, text) };
+    return {
+      ok: false,
+      method: "api",
+      status: "falhou",
+      detail: err instanceof Error ? err.message : "erro",
+      url: waMeLink(toPhone, text),
+    };
   }
 }
 

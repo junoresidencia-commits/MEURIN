@@ -1,9 +1,10 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import { ShareButton } from "@/components/ShareButton";
+import { PixCheckout } from "@/components/PixCheckout";
 import { formatBRL, formatSlotLabel } from "@/lib/scheduling-client";
 import { whatsappLink } from "@/lib/contact";
 import type { Booking } from "@/lib/types";
@@ -15,37 +16,96 @@ const REASON_LABEL: Record<Booking["careReason"], string> = {
   outro: "Consulta online",
 };
 
+type PixInfo = {
+  brCode: string;
+  qrDataUrl: string;
+  amountCents: number;
+  holderName: string;
+  doctorName?: string;
+};
+
 export default function ConfirmacaoPage() {
   const params = useParams<{ id: string }>();
   const [booking, setBooking] = useState<Booking | null>(null);
   const [doctorName, setDoctorName] = useState("");
   const [error, setError] = useState("");
   const [origin, setOrigin] = useState("");
+  const [pix, setPix] = useState<PixInfo | null>(null);
+  const [pixHint, setPixHint] = useState("");
+  const [pixLoading, setPixLoading] = useState(true);
+  const pixPosted = useRef(false);
 
   useEffect(() => {
     setOrigin(window.location.origin);
     let tries = 0;
     let timer: ReturnType<typeof setTimeout>;
+    let cancelled = false;
+
+    async function loadPix(bookingId: string) {
+      try {
+        const r = await fetch(`/api/payments?bookingId=${encodeURIComponent(bookingId)}`);
+        const data = await r.json();
+        if (r.ok && data.brCode) {
+          setPix({
+            brCode: data.brCode,
+            qrDataUrl: data.qrDataUrl || "",
+            amountCents: data.amountCents,
+            holderName: data.holderName,
+            doctorName: data.doctorName,
+          });
+          return;
+        }
+        // Sem chave cadastrada: gera QR uma vez (Pix nativo ou Pix do Mercado Pago).
+        // Não reabre a tela amarela do Checkout Pro.
+        if (pixPosted.current) return;
+        pixPosted.current = true;
+        const p = await fetch("/api/payments", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ bookingId }),
+        });
+        const pay = await p.json().catch(() => ({}));
+        if (p.ok && pay.brCode) {
+          setPix({
+            brCode: pay.brCode,
+            qrDataUrl: pay.qrDataUrl || "",
+            amountCents: pay.amountCents,
+            holderName: pay.holderName,
+            doctorName: pay.doctorName,
+          });
+        }
+      } catch {
+        /* QR é complementar — a página ainda mostra o status */
+      } finally {
+        setPixLoading(false);
+      }
+    }
 
     async function fetchBooking() {
       try {
         const r = await fetch(`/api/bookings/${params.id}`);
         const data = await r.json();
         if (!r.ok) throw new Error(data.error || "Erro");
+        if (cancelled) return;
         setBooking(data.booking);
         setDoctorName(data.doctor?.name || "");
-        // Pagamento real confirma pelo webhook — se ainda pendente, repete a busca.
+        if (data.booking?.status === "pending_payment") {
+          void loadPix(data.booking.id);
+        }
         if (data.booking?.status !== "confirmed" && tries < 20) {
           tries += 1;
           timer = setTimeout(fetchBooking, 3000);
         }
       } catch (e) {
-        setError(e instanceof Error ? e.message : "Erro");
+        if (!cancelled) setError(e instanceof Error ? e.message : "Erro");
       }
     }
 
     fetchBooking();
-    return () => clearTimeout(timer);
+    return () => {
+      cancelled = true;
+      clearTimeout(timer);
+    };
   }, [params.id]);
 
   if (error) {
@@ -55,6 +115,87 @@ export default function ConfirmacaoPage() {
     return (
       <div className="mx-auto max-w-xl px-5 py-20 text-[var(--text-muted)]">
         Carregando confirmação…
+      </div>
+    );
+  }
+
+  if (booking.status === "pending_payment") {
+    return (
+      <div className="mx-auto max-w-xl px-5 py-16">
+        <p className="text-xs font-bold uppercase tracking-[0.22em] text-[var(--warn)]">
+          Pagamento pendente
+        </p>
+        <h1 className="font-display mt-2 text-3xl font-extrabold text-[var(--text)]">
+          Pague com Pix para liberar a consulta
+        </h1>
+        <p className="mt-4 text-[var(--text-soft)]">
+          A tela amarela do Mercado Pago (saldo em conta, cartão, boleto) está com
+          o botão Pagar cinza. Pague pelo QR Code abaixo. O valor vai para a chave
+          cadastrada por{" "}
+          <strong className="text-[var(--text)]">{doctorName || "o médico"}</strong>.
+        </p>
+        {pix ? (
+          <div className="mt-6">
+            {pixHint && <p className="mb-3 text-sm text-[var(--green)]">{pixHint}</p>}
+            <PixCheckout
+              pix={pix}
+              onPaid={async () => {
+                const res = await fetch("/api/payments", {
+                  method: "POST",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify({ bookingId: booking.id, pixDeclared: true }),
+                });
+                const data = await res.json().catch(() => ({}));
+                if (!res.ok) throw new Error(data.error || "Não foi possível confirmar o Pix.");
+                setPixHint("Pix informado. Atualizando…");
+                window.location.reload();
+              }}
+            />
+          </div>
+        ) : pixLoading ? (
+          <div className="panel mt-6 flex items-center gap-3">
+            <span className="h-4 w-4 animate-spin rounded-full border-2 border-[var(--gold)] border-t-transparent" />
+            <span className="text-sm text-[var(--text-muted)]">Gerando QR Code Pix…</span>
+          </div>
+        ) : (
+          <div className="panel mt-6 space-y-3">
+            <p className="text-sm text-[var(--text-muted)]">
+              Ainda não deu para montar o QR Code. Peça ao médico para cadastrar a
+              chave Pix nas configurações.
+            </p>
+            <button
+              type="button"
+              className="btn-gold min-h-12 w-full"
+              onClick={async () => {
+                const res = await fetch("/api/payments", {
+                  method: "POST",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify({ bookingId: booking.id }),
+                });
+                const data = await res.json().catch(() => ({}));
+                if (data.brCode) {
+                  setPix({
+                    brCode: data.brCode,
+                    qrDataUrl: data.qrDataUrl || "",
+                    amountCents: data.amountCents,
+                    holderName: data.holderName,
+                    doctorName: data.doctorName,
+                  });
+                  return;
+                }
+                setError(data.error || "Não foi possível gerar o QR Code Pix.");
+              }}
+            >
+              Gerar QR Code Pix
+            </button>
+          </div>
+        )}
+        <div className="mt-6 flex flex-wrap gap-2">
+          <button type="button" className="btn-ghost" onClick={() => window.location.reload()}>
+            Já paguei — atualizar
+          </button>
+          <Link href="/minhas-consultas" className="btn-ghost">Minhas consultas</Link>
+        </div>
       </div>
     );
   }
@@ -141,10 +282,6 @@ export default function ConfirmacaoPage() {
         </p>
         <p className="break-all rounded-xl border border-[var(--border-gold)] bg-[var(--gold-soft)] p-3 text-[var(--gold)]">
           Link da sala: {meetingAbsolute}
-        </p>
-        <p className="rounded-xl border border-[var(--border-gold)] bg-[var(--gold-soft)] p-3 text-[var(--gold-light)]">
-          Pagamento direcionado à conta do médico (demo: 95% médico / 5%
-          plataforma).
         </p>
       </div>
 

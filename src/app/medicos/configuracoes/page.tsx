@@ -209,7 +209,10 @@ export default function ConfiguracoesMedicoPage() {
             </label>
             <div className="mt-4 rounded-2xl border border-[var(--border)] bg-[var(--bg-soft,#f8fafc)] p-4">
               <p className="text-xs font-bold uppercase tracking-wider text-[var(--gold)]">WhatsApp e comunicação</p>
-              <p className="mt-1 text-xs text-[var(--text-muted)]">O número de <strong>notificações é só seu</strong> — nunca é mostrado ao paciente.</p>
+              <p className="mt-1 text-xs text-[var(--text-muted)]">
+                O número de <strong>notificações é só seu</strong> — nunca é mostrado ao paciente.
+                Quando o paciente pagar (Pix), o Meu Rim manda WhatsApp automático neste número.
+              </p>
               <label className="mt-3 block">
                 <span className="mb-1 block text-xs font-semibold text-[var(--text-muted)]">Número para receber notificações (privado)</span>
                 <input className="input-field" inputMode="tel" value={notifyWa} onChange={(e) => setNotifyWa(e.target.value)} placeholder="Seu WhatsApp pessoal/profissional" />
