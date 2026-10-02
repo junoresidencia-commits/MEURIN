@@ -1,13 +1,14 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { useParams } from "next/navigation";
+import { useParams, useRouter } from "next/navigation";
 import { formatSlotLabel } from "@/lib/scheduling-client";
 
 type Role = "doctor" | "patient";
 
 export default function ConsultaPage() {
   const params = useParams<{ id: string }>();
+  const router = useRouter();
   const roomId = params.id;
   const localVideo = useRef<HTMLVideoElement>(null);
   const remoteVideo = useRef<HTMLVideoElement>(null);
@@ -15,6 +16,8 @@ export default function ConsultaPage() {
   const streamRef = useRef<MediaStream | null>(null);
   const roleRef = useRef<Role>("patient");
   const lastPoll = useRef("");
+  const hungUp = useRef(false);
+  const joinedRef = useRef(false);
   const [role, setRole] = useState<Role>("patient");
   const [info, setInfo] = useState<{
     patientName: string;
@@ -24,6 +27,7 @@ export default function ConsultaPage() {
   const [status, setStatus] = useState("Preparando sala…");
   const [error, setError] = useState("");
   const [joined, setJoined] = useState(false);
+  const [leaving, setLeaving] = useState(false);
   const [muted, setMuted] = useState(false);
   const [camOff, setCamOff] = useState(false);
   const [copied, setCopied] = useState(false);
@@ -87,6 +91,11 @@ export default function ConsultaPage() {
   const handleRemote = useCallback(
     async (msg: { from: Role; type: string; payload: string; createdAt: string }) => {
       if (msg.from === roleRef.current) return;
+      if (msg.type === "leave") {
+        setStatus("O outro participante saiu da sala.");
+        if (remoteVideo.current) remoteVideo.current.srcObject = null;
+        return;
+      }
       const pc = await ensurePc();
       const data = JSON.parse(msg.payload);
       if (msg.type === "offer") {
@@ -123,11 +132,66 @@ export default function ConsultaPage() {
     return () => clearInterval(timer);
   }, [joined, roomId, handleRemote]);
 
+  function stopCallMedia() {
+    streamRef.current?.getTracks().forEach((t) => t.stop());
+    streamRef.current = null;
+    pcRef.current?.close();
+    pcRef.current = null;
+    if (localVideo.current) localVideo.current.srcObject = null;
+    if (remoteVideo.current) remoteVideo.current.srcObject = null;
+  }
+
+  function destinationAfterLeave() {
+    return roleRef.current === "doctor" ? "/medicos/agenda" : "/minhas-consultas";
+  }
+
+  async function hangUp() {
+    if (hungUp.current || leaving) return;
+    hungUp.current = true;
+    setLeaving(true);
+    if (joinedRef.current) {
+      try {
+        await postSignal("leave", {});
+      } catch {
+        /* ignore */
+      }
+    }
+    stopCallMedia();
+    setJoined(false);
+    joinedRef.current = false;
+    router.push(destinationAfterLeave());
+  }
+
+  useEffect(() => {
+    return () => {
+      streamRef.current?.getTracks().forEach((t) => t.stop());
+      streamRef.current = null;
+      pcRef.current?.close();
+      pcRef.current = null;
+      if (!hungUp.current && joinedRef.current) {
+        hungUp.current = true;
+        void fetch("/api/signaling", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            roomId,
+            from: roleRef.current,
+            type: "leave",
+            payload: "{}",
+          }),
+          keepalive: true,
+        });
+      }
+    };
+  }, [roomId]);
+
   async function joinAs(nextRole: Role) {
     try {
+      hungUp.current = false;
       setRole(nextRole);
       roleRef.current = nextRole;
       setJoined(true);
+      joinedRef.current = true;
       setStatus("Pedindo câmera e microfone…");
       const pc = await ensurePc();
       if (nextRole === "doctor") {
@@ -143,6 +207,7 @@ export default function ConsultaPage() {
         "Não foi possível acessar câmera/microfone. Permita no navegador e tente de novo (HTTPS ou localhost)."
       );
       setJoined(false);
+      joinedRef.current = false;
     }
   }
 
@@ -167,25 +232,44 @@ export default function ConsultaPage() {
     setTimeout(() => setCopied(false), 2000);
   }
 
+  const sairButton = (
+    <button
+      type="button"
+      className="inline-flex min-h-[42px] items-center justify-center rounded-full border-[1.5px] border-red-200 bg-red-50 px-4 text-xs font-extrabold text-red-700 transition hover:bg-red-100 disabled:opacity-50"
+      onClick={() => void hangUp()}
+      disabled={leaving}
+    >
+      {leaving ? "Saindo…" : "Sair"}
+    </button>
+  );
+
   if (error) {
     return (
       <div className="mx-auto max-w-2xl px-5 py-20">
-        <p className="text-red-300">{error}</p>
-        <button type="button" className="btn-gold mt-6" onClick={() => window.location.reload()}>
-          Tentar de novo
-        </button>
+        <p className="text-red-600">{error}</p>
+        <div className="mt-6 flex flex-wrap gap-3">
+          <button type="button" className="btn-gold" onClick={() => window.location.reload()}>
+            Tentar de novo
+          </button>
+          {sairButton}
+        </div>
       </div>
     );
   }
 
   return (
-    <div className="mx-auto max-w-5xl px-5 py-10">
-      <p className="text-xs font-bold uppercase tracking-[0.22em] text-[var(--gold)]">
-        Sala Meu Rim
-      </p>
-      <h1 className="font-display mt-2 text-3xl text-[var(--text)] sm:text-4xl">
-        Consulta online
-      </h1>
+    <div className={`mx-auto max-w-5xl px-5 py-10 ${joined ? "pb-28 lg:pb-10" : ""}`}>
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <p className="text-xs font-bold uppercase tracking-[0.22em] text-[var(--gold)]">
+            Sala Meu Rim
+          </p>
+          <h1 className="font-display mt-2 text-3xl text-[var(--text)] sm:text-4xl">
+            Consulta online
+          </h1>
+        </div>
+        {sairButton}
+      </div>
       {info && (
         <p className="mt-2 text-sm text-[var(--text-muted)]">
           {info.doctorName} · {info.patientName} · {formatSlotLabel(info.slotStart)}
@@ -251,6 +335,35 @@ export default function ConsultaPage() {
         testar. Em redes do interior, a qualidade pode variar — em produção
         vamos acrescentar servidor TURN.
       </p>
+
+      {joined && (
+        <div className="fixed inset-x-0 bottom-0 z-30 border-t border-[var(--border)] bg-white/95 px-4 py-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] shadow-[0_-8px_24px_rgba(14,49,68,0.08)] lg:hidden">
+          <div className="mx-auto flex max-w-5xl gap-2">
+            <button
+              type="button"
+              className="btn-ghost !min-h-[44px] flex-1 !px-3 !text-xs"
+              onClick={toggleMute}
+            >
+              {muted ? "Microfone" : "Mutar"}
+            </button>
+            <button
+              type="button"
+              className="btn-ghost !min-h-[44px] flex-1 !px-3 !text-xs"
+              onClick={toggleCam}
+            >
+              {camOff ? "Câmera" : "Câmera off"}
+            </button>
+            <button
+              type="button"
+              className="inline-flex min-h-[44px] flex-1 items-center justify-center rounded-full bg-[var(--danger)] px-3 text-xs font-extrabold text-white disabled:opacity-50"
+              onClick={() => void hangUp()}
+              disabled={leaving}
+            >
+              {leaving ? "Saindo…" : "Sair"}
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
