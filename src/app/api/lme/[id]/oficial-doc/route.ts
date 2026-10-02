@@ -5,7 +5,8 @@ import { getLme } from "@/lib/lme-store";
 import { addDocument, findLmeLinkedDocument, updateDocument } from "@/lib/patient-store";
 import { DOCPDF_BUCKET, saveFile } from "@/lib/doc-storage";
 import { buildOfficialCeafPdf } from "@/lib/ceaf-official-pdf";
-import { inferProtocolId, officialTerSlot } from "@/lib/complementary-docs";
+import { officialTerSlot } from "@/lib/complementary-docs";
+import { inferLmeProtocolId } from "@/lib/lme-protocol-resolve";
 import { jsonUtf8 } from "@/lib/json-utf8";
 import { todayBr } from "@/lib/pdf-winansi";
 
@@ -30,7 +31,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     }, 400);
   }
 
-  const protocolId = inferProtocolId({ ...lme, protocolId: lme.protocolId || (body.protocolId ? String(body.protocolId) : null) });
+  const protocolId = await inferLmeProtocolId({ ...lme, protocolId: lme.protocolId || (body.protocolId ? String(body.protocolId) : null) });
   const slot = officialTerSlot(protocolId);
   if (!protocolId || slot.status !== "available") {
     return jsonUtf8({ error: slot.status === "unavailable" ? slot.reason : "TER oficial indisponível neste protocolo." }, 404);

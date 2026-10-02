@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   CFM_DOWNLOAD_BUTTON,
   CFM_PRESCRICAO_URL,
@@ -26,6 +26,7 @@ type Props = {
   onSigned?: (info: SignedInfo) => void;
   onLargerType?: () => void;
   largerTypeLabel?: string;
+  onDigitalSign?: () => void;
 };
 
 function pdfName(type?: string, title?: string) {
@@ -55,11 +56,22 @@ export function CfmPdfActions({
   onSigned,
   onLargerType,
   largerTypeLabel,
+  onDigitalSign,
 }: Props) {
   const [busy, setBusy] = useState("");
   const [msg, setMsg] = useState("");
   const [err, setErr] = useState("");
+  const [viewer, setViewer] = useState(false);
+  const [zoom, setZoom] = useState(1);
+  const [blobUrl, setBlobUrl] = useState<string | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    if (!viewer || pdfHref || !pdfBlob) return;
+    const url = URL.createObjectURL(pdfBlob);
+    setBlobUrl(url);
+    return () => URL.revokeObjectURL(url);
+  }, [viewer, pdfHref, pdfBlob]);
   const name = filename || pdfName(documentType, title);
   const label = title || "Documento Meu Rim";
   const canAttach = Boolean(documentId || patientKey);
@@ -91,6 +103,10 @@ export function CfmPdfActions({
   }
 
   async function viewPdf() {
+    if (pdfHref || pdfBlob) {
+      setViewer(true);
+      return;
+    }
     await shareOrDownloadPdf({
       blob: pdfBlob,
       href: pdfHref,
@@ -98,6 +114,13 @@ export function CfmPdfActions({
       title: label,
       prefer: "open",
     });
+  }
+
+  function largerType() {
+    const next = zoom >= 1.3 ? 1 : Number((zoom + 0.15).toFixed(2));
+    setZoom(next);
+    setViewer(true);
+    onLargerType?.();
   }
 
   async function sharePdf() {
@@ -181,9 +204,12 @@ export function CfmPdfActions({
         <button type="button" className={`btn-ghost ${BTN}`} disabled={Boolean(busy) || !ready} onClick={() => void run("share", sharePdf)}>
           {busy === "share" ? "Enviando…" : "Compartilhar"}
         </button>
-        {onLargerType && (
-          <button type="button" className={`btn-ghost ${BTN}`} disabled={Boolean(busy)} onClick={onLargerType}>
-            {largerTypeLabel || "Aumentar letra"}
+        <button type="button" className={`btn-ghost ${BTN}`} disabled={Boolean(busy) || !ready} onClick={largerType}>
+          {largerTypeLabel || (zoom > 1 ? `Letra ${Math.round(zoom * 100)}%` : "Aumentar letra")}
+        </button>
+        {onDigitalSign && (
+          <button type="button" className={`btn-ghost ${BTN}`} disabled={Boolean(busy)} onClick={onDigitalSign}>
+            Assinar digitalmente
           </button>
         )}
         <a className={`btn-gold ${BTN}`} href={CFM_PRESCRICAO_URL} target="_blank" rel="noopener noreferrer">
@@ -226,6 +252,43 @@ export function CfmPdfActions({
         <p className="text-sm font-semibold text-[var(--gold)]" role="status">
           {msg}
         </p>
+      )}
+      {viewer && ready && (
+        <div className="fixed inset-0 z-[110] flex flex-col bg-black/50 p-3 sm:p-6" onClick={() => setViewer(false)}>
+          <div
+            className="mx-auto flex h-full w-full max-w-4xl flex-col overflow-hidden rounded-2xl bg-white shadow-[var(--shadow)]"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex flex-wrap items-center justify-between gap-2 border-b border-[var(--border)] px-4 py-3">
+              <p className="font-semibold text-[var(--text)]">Visualizar · {label}</p>
+              <div className="flex flex-wrap gap-2">
+                <button type="button" className={`btn-ghost ${BTN}`} onClick={largerType}>
+                  {zoom > 1 ? `Letra ${Math.round(zoom * 100)}%` : "Aumentar letra"}
+                </button>
+                <button type="button" className={`btn-ghost ${BTN}`} onClick={() => void run("view", async () => {
+                  await shareOrDownloadPdf({ blob: pdfBlob, href: pdfHref, filename: name, title: label, prefer: "open" });
+                })}>
+                  Nova aba
+                </button>
+                <button type="button" className={`btn-ghost ${BTN}`} onClick={() => setViewer(false)}>
+                  Fechar
+                </button>
+              </div>
+            </div>
+            <div className="min-h-0 flex-1 overflow-auto bg-[var(--bg)]">
+              {(pdfHref || blobUrl) ? (
+                <iframe
+                  title={label}
+                  src={pdfHref || blobUrl || ""}
+                  className="h-full min-h-[70vh] w-full origin-top-left border-0"
+                  style={zoom > 1 ? { transform: `scale(${zoom})`, width: `${100 / zoom}%`, height: `${70 / zoom}vh` } : undefined}
+                />
+              ) : (
+                <p className="p-4 text-sm text-[var(--text-muted)]">Use Nova aba para ver este PDF.</p>
+              )}
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );

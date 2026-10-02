@@ -88,6 +88,7 @@ export function SignDocumentPanel(props: Props) {
           onSigned={props.onSigned}
           onLargerType={props.onLargerType}
           largerTypeLabel={props.largerTypeLabel}
+          onDigitalSign={signed ? undefined : () => openAs("choose")}
         />
         {!signed && (
           <details className="mt-3">
