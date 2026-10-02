@@ -3,7 +3,6 @@
 import { useCallback, useEffect, useState, type ReactNode } from "react";
 import Link from "next/link";
 import { composerHref, type ComplementarySlot } from "@/lib/complementary-docs";
-import { printHref } from "@/lib/print-pdf";
 import { CfmPdfActions } from "@/components/CfmPdfActions";
 
 type Info = {
@@ -86,12 +85,6 @@ export function LmeComplementaryDocs({
                 <Link href={composerHref(patientEmail, { type: "receita", title: "Receita médica" }, lmeId)} className="btn-gold text-sm">
                   {receita?.status === "nao_gerado" ? "Gerar receita" : "Revisar"}
                 </Link>
-                {receita?.pdfUrl && (
-                  <>
-                    <a href={receita.pdfUrl} target="_blank" rel="noopener noreferrer" className="btn-ghost text-sm">Abrir</a>
-                    <a href={printHref(receita.pdfUrl)} target="_blank" rel="noopener noreferrer" className="btn-ghost text-sm">Imprimir</a>
-                  </>
-                )}
               </div>
               {receita?.pdfUrl && (
                 <CfmPdfActions
@@ -115,12 +108,6 @@ export function LmeComplementaryDocs({
                 <Link href={composerHref(patientEmail, { type: "relatorio", title: "Relatório médico" }, lmeId)} className="btn-ghost text-sm">
                   {relatorio?.status === "nao_gerado" ? "Gerar relatório" : "Revisar"}
                 </Link>
-                {relatorio?.pdfUrl && (
-                  <>
-                    <a href={relatorio.pdfUrl} target="_blank" rel="noopener noreferrer" className="btn-ghost text-sm">Abrir</a>
-                    <a href={printHref(relatorio.pdfUrl)} target="_blank" rel="noopener noreferrer" className="btn-ghost text-sm">Imprimir</a>
-                  </>
-                )}
               </div>
               {relatorio?.pdfUrl && (
                 <CfmPdfActions
@@ -145,12 +132,6 @@ export function LmeComplementaryDocs({
                   <button type="button" className="btn-ghost text-sm" onClick={() => void gerarTer()} disabled={busy === "ter"}>
                     {busy === "ter" ? "Preparando…" : ter?.status === "gerado" ? "Gerar TER novamente" : "Gerar TER"}
                   </button>
-                  {ter?.pdfUrl && (
-                    <>
-                      <a href={ter.pdfUrl} target="_blank" rel="noopener noreferrer" className="btn-ghost text-sm">Abrir</a>
-                      <a href={printHref(ter.pdfUrl)} target="_blank" rel="noopener noreferrer" className="btn-ghost text-sm">Imprimir</a>
-                    </>
-                  )}
                 </div>
                 {ter?.pdfUrl && (
                   <CfmPdfActions

@@ -866,7 +866,7 @@ export default function ProntuarioPage() {
             </div>
 
             {/* Assistente de LME em 8 etapas */}
-            <LmeWizard emailParam={emailParam} patientName={patient?.name} onCreated={load} />
+            <LmeWizard emailParam={emailParam} patientName={patient?.name} patientAge={age} onCreated={load} />
 
             <p className="text-xs font-bold uppercase tracking-wider text-[var(--gold)]">LMEs geradas</p>
             {lmeList.length === 0 && <p className="text-[var(--text-muted)]">Nenhuma LME ainda.</p>}

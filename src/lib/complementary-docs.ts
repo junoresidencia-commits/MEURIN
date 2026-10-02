@@ -2,7 +2,7 @@
 // Não inventa exames, doses ou justificativas — apenas reaproveita o que está na LME.
 // O texto é sempre editável no compositor antes de assinar.
 
-import { CEAF_PROTOCOLS, getProtocol } from "@/lib/ceaf-catalog";
+import { CEAF_PROTOCOLS, getProtocol, protocolFitsAge } from "@/lib/ceaf-catalog";
 import { getProtocolOfficialDocs, type OfficialDocSlot } from "@/lib/ceaf-documents";
 
 export type LmeLike = {
@@ -13,6 +13,10 @@ export type LmeLike = {
   patientName?: string | null;
   protocolId?: string | null;
   medications?: { name: string; presentation?: string | null; monthlyQty?: string | null }[];
+};
+
+export type InferProtocolOpts = {
+  ageYears?: number | null;
 };
 
 export type InferredRoute = {
@@ -148,22 +152,56 @@ export function clearLmeDocDraft(lmeId: string, type: string) {
   try { window.localStorage.removeItem(lmeDocDraftKey(lmeId, type)); } catch { /* ignore */ }
 }
 
-/** Tenta achar o protocolo CEAF pelos medicamentos já gravados na LME. */
-export function inferProtocolId(lme: LmeLike): string | null {
+function normCid(code?: string | null) {
+  return String(code || "").toUpperCase().replace(/\s+/g, "");
+}
+
+function medScore(pMeds: { name: string }[], names: string[]) {
+  let score = 0;
+  for (const med of pMeds) {
+    const needle = med.name.toLowerCase();
+    const short = needle.slice(0, 16);
+    if (names.some((n) => n.includes(needle))) score += 10;
+    else if (names.some((n) => n.includes(short) || needle.includes(n.slice(0, 16)))) score += 3;
+  }
+  return score;
+}
+
+/**
+ * Escolhe protocolo por doença + CID + idade + indicação.
+ * Medicamento sozinho não decide quando há empate (ex.: ciclosporina em SN e LES).
+ */
+export function inferProtocolId(lme: LmeLike, opts: InferProtocolOpts = {}): string | null {
   if (lme.protocolId && getProtocol(lme.protocolId)) return lme.protocolId;
   const names = (lme.medications || []).map((m) => `${m.name} ${m.presentation || ""}`.toLowerCase());
-  if (!names.length) return null;
-  let best: { id: string; score: number } | null = null;
+  const cid = normCid(lme.cid10);
+  const dx = `${lme.diagnosis || ""} ${lme.anamnesis || ""}`.toLowerCase();
+  const ranked: { id: string; score: number; uniqueMed: boolean }[] = [];
   for (const p of CEAF_PROTOCOLS) {
+    if (!protocolFitsAge(p, opts.ageYears)) continue;
     let score = 0;
-    for (const med of p.medications) {
-      const needle = med.name.toLowerCase();
-      const short = needle.slice(0, 16);
-      if (names.some((n) => n.includes(needle) || n.includes(short) || needle.includes(n.slice(0, 16)))) score += 1;
+    if (cid && p.cids.some((c) => normCid(c.code) === cid)) score += 100;
+    else if (cid && p.cids.some((c) => cid.startsWith(normCid(c.code).slice(0, 3)) && normCid(c.code).startsWith(cid.slice(0, 3)))) {
+      const p3 = cid.slice(0, 3);
+      if (p.cids.some((c) => normCid(c.code).startsWith(p3))) score += 40;
     }
-    if (score > 0 && (!best || score > best.score)) best = { id: p.id, score };
+    const pname = p.name.toLowerCase();
+    if (dx && (dx.includes("lúpus") || dx.includes("lupus") || dx.includes("les")) && p.id === "les") score += 50;
+    if (dx && /nefrotic/.test(dx.normalize("NFD").replace(/[\u0300-\u036f]/g, "")) && p.id.startsWith("sindrome_nefrotica")) score += 30;
+    if (dx && /anemia/.test(dx) && p.id.startsWith("anemia_drc")) score += 30;
+    if (dx && pname.split("—")[0] && dx.includes(pname.split("—")[0].trim().slice(0, 12))) score += 8;
+    const drugs = names.length ? medScore(p.medications, names) : 0;
+    score += drugs;
+    if (score > 0) ranked.push({ id: p.id, score, uniqueMed: drugs >= 10 });
   }
-  return best?.id ?? null;
+  if (!ranked.length) return null;
+  ranked.sort((a, b) => b.score - a.score);
+  const top = ranked[0];
+  const tied = ranked.filter((r) => r.score === top.score);
+  if (tied.length > 1) return null;
+  if (top.score < 40 && !top.uniqueMed) return null;
+  if (top.score < 40 && ranked.filter((r) => r.uniqueMed).length > 1) return null;
+  return top.id;
 }
 
 export type ComplementaryKind = "receita" | "relatorio" | "ter" | "consentimento";

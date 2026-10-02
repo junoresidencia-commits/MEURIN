@@ -1,9 +1,9 @@
 import { getDoctorSessionId } from "@/lib/auth";
 import { getLme } from "@/lib/lme-store";
 import { getDocuments } from "@/lib/patient-store";
+import { inferLmeProtocolId } from "@/lib/lme-protocol-resolve";
 import { jsonUtf8 } from "@/lib/json-utf8";
 import {
-  inferProtocolId,
   officialConsentimentoSlot,
   officialTerSlot,
   packageMissingLabels,
@@ -33,7 +33,7 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
     linked.find((d) => d.type === type) ||
     docs.find((d) => d.type === type && !d.sourceLmeId);
 
-  const protocolId = inferProtocolId(lme);
+  const protocolId = await inferLmeProtocolId(lme);
   const protocolName = protocolId ? (await import("@/lib/ceaf-catalog")).getProtocol(protocolId)?.name : null;
   const terOfficial = officialTerSlot(protocolId);
   const consentOfficial = officialConsentimentoSlot(protocolId);

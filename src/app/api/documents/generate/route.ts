@@ -71,18 +71,27 @@ export async function POST(req: Request) {
     }
     if (!doctor) return jsonUtf8({ error: "Médico não encontrado." }, 404);
 
+    let lmeCid = "";
+    let clinicName = "";
     if (lmeId) {
       const lme = await getLme(lmeId).catch(() => null);
       if (!lme) return jsonUtf8({ error: "LME não encontrada." }, 404);
       if (lme.doctorId && lme.doctorId !== doctorId) return jsonUtf8({ error: "Sem acesso a esta LME." }, 403);
+      lmeCid = String(lme.cid10 || "").trim();
+      clinicName = String(lme.establishmentName || "").trim();
     }
 
     let cpf: string | undefined;
+    let cns: string | undefined;
     let birthdate: string | null = access.birthdate;
     if (!patientParam.includes("@")) {
       try {
         const p = await getPatient(patientParam);
-        if (p) { cpf = p.cpf || undefined; birthdate = p.birthdate || birthdate; }
+        if (p) {
+          cpf = p.cpf || undefined;
+          cns = p.cns || undefined;
+          birthdate = p.birthdate || birthdate;
+        }
       } catch (err) {
         console.warn("[documents/generate] getPatient", err instanceof Error ? err.message : "unknown");
       }
@@ -127,9 +136,13 @@ export async function POST(req: Request) {
         nascimento = "";
       }
     }
+    const fontScale = Math.min(1.4, Math.max(1, Number(body.fontScale) || 1));
+    const cid = String(body.cid || lmeCid || "").trim();
     const vars: Record<string, string> = {
       paciente_nome: access.name || "",
       paciente_cpf: cpf || "",
+      paciente_cns: cns || "",
+      paciente_cid: cid,
       paciente_data_nascimento: nascimento,
       paciente_idade: idadeFrom(birthdate) || "",
       data_atual: todayBr(),
@@ -137,6 +150,7 @@ export async function POST(req: Request) {
       medico_crm: [doctor.crm, doctor.crmState].filter(Boolean).join("-"),
       medico_rqe: doctor.rqe || "",
       medico_especialidade: doctor.specialty || "",
+      clinica_nome: clinicName,
     };
     const filledContent = fillFields(content, vars);
     const filledTitle = fillFields(title, vars);
@@ -146,10 +160,12 @@ export async function POST(req: Request) {
       const built = await buildDocumentPdfDetailed({
         title: filledTitle,
         content: filledContent,
-        patient: { name: access.name, cpf, birthdate, idade: idadeFrom(birthdate) },
+        patient: { name: access.name, cpf, birthdate, idade: idadeFrom(birthdate), cid, cns },
         doctor: { name: doctor.name, crm: doctor.crm, crmState: doctor.crmState, rqe: doctor.rqe, specialty: doctor.specialty },
         area,
         background,
+        clinicName: clinicName || undefined,
+        fontScale,
       });
       pdfBytes = built.bytes;
       if (built.letterheadSkipped) {

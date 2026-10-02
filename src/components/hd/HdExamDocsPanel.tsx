@@ -2,7 +2,6 @@
 
 import { useEffect, useState } from "react";
 import { useHd } from "@/components/hd/HdShell";
-import { printHref } from "@/lib/print-pdf";
 import { HdPatientIdsForm } from "@/components/hd/HdPatientIdsForm";
 import { CfmPdfActions } from "@/components/CfmPdfActions";
 
@@ -227,8 +226,6 @@ export function HdExamDocsPanel({
               <div>
                 <p>
                   <b>LME</b> — <a className="text-[var(--gold)]" href={g.href} target="_blank" rel="noreferrer">conferir</a>
-                  {" · "}
-                  <a className="text-[var(--gold)]" href={printHref(`/api/lme/${g.lmeId}/oficial`)} target="_blank" rel="noreferrer">imprimir</a>
                 </p>
                 <CfmPdfActions
                   compact
@@ -243,8 +240,6 @@ export function HdExamDocsPanel({
                 <div>
                   <p>
                     <b>Receita</b> — <a className="text-[var(--gold)]" href={g.receitaUrl} target="_blank" rel="noreferrer">conferir</a>
-                    {" · "}
-                    <a className="text-[var(--gold)]" href={printHref(g.receitaUrl)} target="_blank" rel="noreferrer">imprimir</a>
                   </p>
                   <CfmPdfActions
                     compact
@@ -261,8 +256,6 @@ export function HdExamDocsPanel({
                 <div>
                   <p>
                     <b>Relatório</b> — <a className="text-[var(--gold)]" href={g.relatorioUrl} target="_blank" rel="noreferrer">conferir</a>
-                    {" · "}
-                    <a className="text-[var(--gold)]" href={printHref(g.relatorioUrl)} target="_blank" rel="noreferrer">imprimir</a>
                   </p>
                   <CfmPdfActions
                     compact
@@ -279,8 +272,6 @@ export function HdExamDocsPanel({
                 <div>
                   <p>
                     <b>TER</b> — <a className="text-[var(--gold)]" href={g.terUrl} target="_blank" rel="noreferrer">conferir</a>
-                    {" · "}
-                    <a className="text-[var(--gold)]" href={printHref(g.terUrl)} target="_blank" rel="noreferrer">imprimir</a>
                   </p>
                   <CfmPdfActions
                     compact

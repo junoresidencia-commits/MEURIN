@@ -5,7 +5,8 @@ import { getLme } from "@/lib/lme-store";
 import { getDocuments } from "@/lib/patient-store";
 import { readFile, DOCPDF_BUCKET } from "@/lib/doc-storage";
 import { buildOfficialCeafPdf } from "@/lib/ceaf-official-pdf";
-import { inferProtocolId, officialTerSlot } from "@/lib/complementary-docs";
+import { officialTerSlot } from "@/lib/complementary-docs";
+import { inferLmeProtocolId } from "@/lib/lme-protocol-resolve";
 import { jsonUtf8 } from "@/lib/json-utf8";
 import { todayBr } from "@/lib/pdf-winansi";
 
@@ -40,7 +41,7 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
   const receita = pick("receita");
   const relatorio = pick("relatorio");
   const terSaved = pick("ter");
-  const protocolId = inferProtocolId(lme);
+  const protocolId = await inferLmeProtocolId(lme);
   const terSlot = officialTerSlot(protocolId);
 
   const missing: string[] = [];
