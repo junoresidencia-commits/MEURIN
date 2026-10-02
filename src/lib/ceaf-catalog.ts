@@ -53,6 +53,8 @@ export interface CeafProtocol {
   requiresAccessForm: boolean;
   renewalMonths?: number;
   notes?: string;
+  /** Faixa do protocolo oficial. any = vale em qualquer idade. */
+  audience?: "pediatric" | "adult" | "any";
 }
 
 const LAST_REVIEW = "2026-08-11";
@@ -154,6 +156,7 @@ export const CEAF_PROTOCOLS: CeafProtocol[] = [
     id: "sindrome_nefrotica_pediatrica",
     group: "nefrologia",
     name: "Síndrome Nefrótica Primária em Crianças e Adolescentes",
+    audience: "pediatric",
     source: "SESAB/BA",
     lastReview: LAST_REVIEW,
     version: 1,
@@ -197,6 +200,7 @@ export const CEAF_PROTOCOLS: CeafProtocol[] = [
     id: "sindrome_nefrotica_adultos",
     group: "nefrologia",
     name: "Síndrome Nefrótica Primária em Adultos",
+    audience: "adult",
     source: "SESAB/BA",
     lastReview: LAST_REVIEW,
     version: 1,
@@ -261,6 +265,22 @@ export const CEAF_PROTOCOLS: CeafProtocol[] = [
     notes: "Micofenolato pertence ao protocolo de LES (não à SN primária pediátrica). Exames adicionais conforme o medicamento e o protocolo oficial.",
   },
 ];
+
+export function protocolAudience(p: CeafProtocol): "pediatric" | "adult" | "any" {
+  if (p.audience) return p.audience;
+  const n = `${p.id} ${p.name}`.toLowerCase();
+  if (/pediatr|crianca|adolescent/.test(n)) return "pediatric";
+  if (/adulto/.test(n)) return "adult";
+  return "any";
+}
+
+/** Sem idade conhecida, não esconde protocolo. Com idade, some o pediátrico do adulto e o inverso. */
+export function protocolFitsAge(p: CeafProtocol, ageYears?: number | null): boolean {
+  const band = protocolAudience(p);
+  if (band === "any" || ageYears == null || !Number.isFinite(ageYears)) return true;
+  if (band === "pediatric") return ageYears < 18;
+  return ageYears >= 18;
+}
 
 export function getProtocol(id: string): CeafProtocol | undefined {
   return CEAF_PROTOCOLS.find((p) => p.id === id);

@@ -8,6 +8,7 @@ import {
   receitaFromLme,
   relatorioFromLme,
 } from "../src/lib/complementary-docs";
+import { protocolFitsAge, getProtocol } from "../src/lib/ceaf-catalog";
 import { buildClinicalSummary } from "../src/lib/clinical-summary";
 
 function main() {
@@ -49,6 +50,22 @@ function main() {
 
   assert.equal(inferProtocolId({ medications: [{ name: "Alfaepoetina 4.000 UI injetável", presentation: "frasco-ampola" }] }), "anemia_drc_alfaepoetina");
   assert.equal(inferProtocolId({ protocolId: "les", medications: [] }), "les");
+  assert.equal(
+    inferProtocolId({ cid10: "N04.0", medications: [{ name: "Ciclosporina 100 mg" }] }, { ageYears: 42 }),
+    "sindrome_nefrotica_adultos",
+  );
+  assert.equal(
+    inferProtocolId({ cid10: "N04.0", medications: [{ name: "Ciclosporina 100 mg" }] }, { ageYears: 10 }),
+    "sindrome_nefrotica_pediatrica",
+  );
+  assert.equal(
+    inferProtocolId({ cid10: "M32.1", medications: [{ name: "Ciclosporina 100 mg" }] }, { ageYears: 30 }),
+    "les",
+  );
+  assert.equal(inferProtocolId({ medications: [{ name: "Ciclosporina 100 mg" }] }), null);
+  assert.equal(protocolFitsAge(getProtocol("sindrome_nefrotica_pediatrica")!, 42), false);
+  assert.equal(protocolFitsAge(getProtocol("sindrome_nefrotica_adultos")!, 42), true);
+  assert.equal(protocolFitsAge(getProtocol("anemia_drc_alfaepoetina")!, 10), true);
 
   const ter = officialTerSlot("anemia_drc_alfaepoetina");
   assert.equal(ter.status, "available");

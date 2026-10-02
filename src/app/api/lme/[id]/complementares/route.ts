@@ -1,6 +1,8 @@
 import { getDoctorSessionId } from "@/lib/auth";
 import { getLme } from "@/lib/lme-store";
 import { getDocuments } from "@/lib/patient-store";
+import { findByEmailAny, getPatient } from "@/lib/patients-store";
+import { resolvePatientAge } from "@/lib/patient-age";
 import { jsonUtf8 } from "@/lib/json-utf8";
 import {
   inferProtocolId,
@@ -33,7 +35,16 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
     linked.find((d) => d.type === type) ||
     docs.find((d) => d.type === type && !d.sourceLmeId);
 
-  const protocolId = inferProtocolId(lme);
+  let ageYears: number | null = null;
+  try {
+    const byEmail = lme.patientEmail.includes("@") ? await findByEmailAny(lme.patientEmail) : null;
+    const byId = !byEmail && !lme.patientEmail.includes("@") ? await getPatient(lme.patientEmail) : null;
+    const p = byEmail || byId;
+    if (p) ageYears = resolvePatientAge({ birthdate: p.birthdate, ageYears: p.ageYears, ageReportedAt: p.ageReportedAt });
+  } catch {
+    ageYears = null;
+  }
+  const protocolId = inferProtocolId(lme, { ageYears });
   const protocolName = protocolId ? (await import("@/lib/ceaf-catalog")).getProtocol(protocolId)?.name : null;
   const terOfficial = officialTerSlot(protocolId);
   const consentOfficial = officialConsentimentoSlot(protocolId);

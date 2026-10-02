@@ -9,6 +9,7 @@ import type { TemplateType } from "@/lib/document-templates";
 import { FriendlyError, toFriendlyMessage } from "@/lib/user-errors";
 import { DOC_PDF_USER_ERROR, fetchPdfBlob, readApiError } from "@/lib/doc-pdf-client";
 import { SignDocumentPanel } from "@/components/SignDocumentFlow";
+import { CfmPdfActions } from "@/components/CfmPdfActions";
 import {
   clearLmeDocDraft,
   lmeComplementaresHref,
@@ -55,6 +56,8 @@ function ComporDocumentoInner() {
   const [status, setStatus] = useState<string>("");
   const [signedDocId, setSignedDocId] = useState<string | null>(null);
   const [draftHint, setDraftHint] = useState("");
+  const [fontScale, setFontScale] = useState(1);
+  const [previewZoom, setPreviewZoom] = useState(1);
 
   const load = useCallback(async () => {
     const r = await fetch("/api/doctor/letterheads").then((x) => x.json());
@@ -96,7 +99,7 @@ function ComporDocumentoInner() {
     writeLmeDocDraft(lmeId, type, { title, body: content });
   }, [lmeId, type, title, content]);
 
-  function payload(preview: boolean) {
+  function payload(preview: boolean, scale = fontScale) {
     return {
       patientKey: patientParam,
       letterheadId: letterheadId || null,
@@ -106,17 +109,18 @@ function ComporDocumentoInner() {
       preview,
       lmeId: lmeId || undefined,
       replaceId: savedId || undefined,
+      fontScale: scale,
     };
   }
 
-  async function preview() {
+  async function preview(scale = fontScale) {
     setBusy(true); setMsg("");
     try {
       const res = await fetch("/api/documents/generate", {
         method: "POST",
         credentials: "include",
         headers: { "Content-Type": "application/json; charset=utf-8" },
-        body: JSON.stringify(payload(true)),
+        body: JSON.stringify(payload(true, scale)),
       });
       const blob = await fetchPdfBlob(res, "Não foi possível pré-visualizar. Tente novamente.");
       if (previewUrl?.startsWith("blob:")) URL.revokeObjectURL(previewUrl);
@@ -238,7 +242,7 @@ function ComporDocumentoInner() {
               placeholder={"Escreva o conteúdo. Use **negrito**, listas com \"- \" e campos automáticos como {{paciente_nome}}, {{data_atual}}, {{medico_nome}}."} />
           </label>
           <p className="mt-1 text-xs text-[var(--text-muted)]">
-            Campos: <code>{"{{paciente_nome}}"}</code> <code>{"{{paciente_cpf}}"}</code> <code>{"{{paciente_idade}}"}</code> <code>{"{{data_atual}}"}</code> <code>{"{{medico_nome}}"}</code> <code>{"{{medico_crm}}"}</code> <code>{"{{medico_rqe}}"}</code>
+            Campos: <code>{"{{paciente_nome}}"}</code> <code>{"{{paciente_cpf}}"}</code> <code>{"{{paciente_idade}}"}</code> <code>{"{{paciente_cid}}"}</code> <code>{"{{data_atual}}"}</code> <code>{"{{medico_nome}}"}</code> <code>{"{{medico_crm}}"}</code> <code>{"{{medico_rqe}}"}</code>
           </p>
 
           <div className="mt-4 flex flex-wrap gap-2">
@@ -282,10 +286,32 @@ function ComporDocumentoInner() {
           <p className="mb-2 text-sm font-semibold text-[var(--text-muted)]">Pré-visualização</p>
           {previewUrl ? (
             <>
-              <iframe src={previewUrl} title="Pré-visualização" className="h-[70vh] w-full rounded-lg border border-[var(--border)]" />
+              <div className="overflow-auto rounded-lg border border-[var(--border)]">
+                <iframe
+                  src={previewUrl}
+                  title="Pré-visualização"
+                  className="h-[70vh] w-full origin-top-left"
+                  style={previewZoom > 1 ? { transform: `scale(${previewZoom})`, width: `${100 / previewZoom}%`, height: `${70 / previewZoom}vh` } : undefined}
+                />
+              </div>
               <a className="btn-ghost mt-2 inline-block text-sm" href={previewUrl} target="_blank" rel="noopener noreferrer">
-                Abrir PDF em nova aba
+                Visualizar
               </a>
+              {!savedId && (
+                <CfmPdfActions
+                  compact
+                  pdfHref={previewUrl}
+                  documentType={type}
+                  title={title || TYPES.find((t) => t.id === type)?.label}
+                  onLargerType={() => {
+                    const next = fontScale >= 1.3 ? 1 : Number((fontScale + 0.15).toFixed(2));
+                    setFontScale(next);
+                    setPreviewZoom(next);
+                    void preview(next);
+                  }}
+                  largerTypeLabel={fontScale > 1 ? `Letra ${Math.round(fontScale * 100)}%` : "Aumentar letra"}
+                />
+              )}
               {savedId && (
                 <SignDocumentPanel
                   documentId={savedId}
@@ -296,6 +322,13 @@ function ComporDocumentoInner() {
                   alreadySigned={Boolean(signedDocId)}
                   signedDocumentId={signedDocId}
                   onSigned={(info) => setSignedDocId(info.id)}
+                  onLargerType={() => {
+                    const next = fontScale >= 1.3 ? 1 : Number((fontScale + 0.15).toFixed(2));
+                    setFontScale(next);
+                    setPreviewZoom(next);
+                    void preview(next);
+                  }}
+                  largerTypeLabel={fontScale > 1 ? `Letra ${Math.round(fontScale * 100)}%` : "Aumentar letra"}
                 />
               )}
             </>

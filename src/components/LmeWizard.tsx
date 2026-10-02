@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { OfficialCeafDocs } from "@/components/OfficialCeafDocs";
-import { CEAF_PROTOCOLS, getProtocol } from "@/lib/ceaf-catalog";
+import { CEAF_PROTOCOLS, getProtocol, protocolFitsAge } from "@/lib/ceaf-catalog";
 import { encodePatientParam } from "@/lib/user-errors";
 
 const STEPS = ["Paciente", "Protocolo", "Medicamento", "CID / Diagnóstico", "Dose", "Exames", "Justificativa", "Revisão"];
@@ -17,7 +17,7 @@ type ExamCheck = {
  * Protocolo → medicamentos oficiais → CID permitido do protocolo → exames com validade
  * conferida no prontuário. Não permite CID/medicamento fora do protocolo (anti-devolução).
  */
-export function LmeWizard({ emailParam, patientName, onCreated }: { emailParam: string; patientName?: string; onCreated: () => void }) {
+export function LmeWizard({ emailParam, patientName, patientAge, onCreated }: { emailParam: string; patientName?: string; patientAge?: number | null; onCreated: () => void }) {
   const [step, setStep] = useState(0);
   const [protocolId, setProtocolId] = useState("");
   const [medIds, setMedIds] = useState<string[]>([]);
@@ -159,9 +159,12 @@ export function LmeWizard({ emailParam, patientName, onCreated }: { emailParam: 
 
       {step === 1 && (
         <div className="space-y-2">
-          <p className="text-sm text-[var(--text-soft)]">Escolha o protocolo oficial (SESAB/BA). Só aparecem CIDs e medicamentos oficiais daquele protocolo.</p>
+          <p className="text-sm text-[var(--text-soft)]">Escolha o protocolo oficial (SESAB/BA). Só aparecem CIDs e medicamentos oficiais daquele protocolo. A faixa etária do paciente filtra pediátrico e adulto.</p>
+          {patientAge == null && (
+            <p className="text-xs text-[var(--text-muted)]">Idade do paciente não informada — todos os protocolos aparecem. Cadastre a idade no prontuário para esconder o protocolo pediátrico no adulto (e o inverso).</p>
+          )}
           <div className="grid gap-2">
-            {CEAF_PROTOCOLS.map((p) => (
+            {CEAF_PROTOCOLS.filter((p) => protocolFitsAge(p, patientAge)).map((p) => (
               <button key={p.id} type="button" onClick={() => chooseProtocol(p.id)} className={`rounded-2xl border px-4 py-3 text-left text-sm transition ${protocolId === p.id ? "border-[var(--gold)] bg-[var(--gold-soft)]" : "border-[var(--border)]"}`}>
                 <span className="block font-semibold text-[var(--text)]">{p.name}</span>
                 <span className="block text-xs text-[var(--text-muted)]">{p.cids.map((c) => c.code).join(", ")} · {p.medications.length} medicamento(s) · Fonte: {p.source} · conferido em {new Date(p.lastReview).toLocaleDateString("pt-BR")}</span>

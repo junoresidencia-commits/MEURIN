@@ -20,6 +20,8 @@ export interface DocPatient {
   cpf?: string;
   birthdate?: string | null;
   idade?: string | number | null;
+  cid?: string | null;
+  cns?: string | null;
 }
 export interface DocDoctor {
   name: string;
@@ -41,6 +43,9 @@ export interface BuildDocInput {
   date?: string;
   area: LetterheadArea;
   background?: DocBackground | null;
+  clinicName?: string | null;
+  /** 1 = normal. 1.15 / 1.3 aumentam a letra sem cortar o texto. */
+  fontScale?: number;
 }
 
 export type BuildDocResult = {
@@ -125,22 +130,42 @@ function wrapRuns(runs: Run[], maxWidth: number, size: number, font: PDFFont, fo
   const lines: Run[][] = [];
   let current: Run[] = [];
   let width = 0;
-  const pushWord = (word: string, bold: boolean, spaceBefore: boolean) => {
+  const pushToken = (token: string, bold: boolean) => {
     const f = bold ? fontBold : font;
-    const token = fontSafeText(f, (spaceBefore ? " " : "") + word);
     const w = f.widthOfTextAtSize(token || " ", size);
     if (width + w > maxWidth && current.length > 0) {
       lines.push(current);
       current = [];
       width = 0;
-      const wordSafe = fontSafeText(f, word);
-      const w2 = f.widthOfTextAtSize(wordSafe || " ", size);
-      current.push({ text: wordSafe, bold });
-      width += w2;
-    } else {
-      current.push({ text: token, bold });
-      width += w;
     }
+    if (w > maxWidth) {
+      let chunk = "";
+      for (const ch of Array.from(token)) {
+        const next = chunk + ch;
+        if (f.widthOfTextAtSize(next || " ", size) > maxWidth && chunk) {
+          current.push({ text: chunk, bold });
+          lines.push(current);
+          current = [];
+          width = 0;
+          chunk = ch;
+        } else {
+          chunk = next;
+        }
+      }
+      if (chunk) {
+        current.push({ text: chunk, bold });
+        width += f.widthOfTextAtSize(chunk, size);
+      }
+      return;
+    }
+    current.push({ text: token, bold });
+    width += w;
+  };
+  const pushWord = (word: string, bold: boolean, spaceBefore: boolean) => {
+    const f = bold ? fontBold : font;
+    const token = fontSafeText(f, (spaceBefore ? " " : "") + word);
+    pushToken(token || " ", bold);
+    void f;
   };
   let first = true;
   for (const run of runs) {
@@ -330,66 +355,76 @@ async function renderOnce(input: BuildDocInput, useBackground: boolean): Promise
     y -= 14;
   };
 
+  const scale = Math.min(1.4, Math.max(1, Number(input.fontScale) || 1));
+  const bodySize = 11 * scale;
+  const titleSize = 15 * scale;
+  const metaSize = 10.5 * scale;
   const dateStr = dateBr(input.date);
+  const clinicName = input.clinicName ? safe(input.clinicName) : "";
 
   if (area.showPatientHeader && patient) {
-    const left = `Paciente: ${patient.name || ""}`;
-    const right = patient.cpf ? `CPF: ${patient.cpf}` : "";
-    drawSplit(page, x0, x1, y, left, right, font, 10.5, INK, MUTED);
-    y -= 15;
-    const left2 = `Data: ${dateStr}`;
-    const idade = patient.idade != null && String(patient.idade).trim() ? `Idade: ${patient.idade} anos` : "";
-    let nasc = "";
-    if (!idade && patient.birthdate) {
+    const headerBits = [
+      `Paciente: ${patient.name || ""}`,
+      patient.cpf ? `CPF: ${patient.cpf}` : "",
+      patient.cns ? `CNS: ${patient.cns}` : "",
+      patient.cid ? `CID-10: ${patient.cid}` : "",
+      `Data: ${dateStr}`,
+      patient.idade != null && String(patient.idade).trim() ? `Idade: ${patient.idade} anos` : "",
+    ].filter(Boolean);
+    if (!headerBits.some((b) => b.startsWith("Idade:")) && patient.birthdate) {
       try {
-        nasc = `Nasc.: ${new Date(patient.birthdate).toLocaleDateString("pt-BR")}`;
+        headerBits.push(`Nasc.: ${new Date(patient.birthdate).toLocaleDateString("pt-BR")}`);
       } catch {
-        nasc = "";
+        /* sem nascimento */
       }
     }
-    drawSplit(page, x0, x1, y, left2, idade || nasc, font, 10.5, INK, MUTED);
-    y -= 16;
+    if (clinicName) headerBits.push(`Clínica: ${clinicName}`);
+    for (const line of headerBits) drawParagraph(line, metaSize);
     hr();
     y -= 4;
   }
 
   if (title) {
-    ensure(20);
     const heading = fontSafeText(fontBold, title);
     if (heading) {
-      try {
-        page.drawText(heading, { x: x0, y: y - 15, size: 15, font: fontBold, color: INK });
-      } catch {
-        /* título residual: o corpo do documento segue */
-      }
+      const wrapped = wrapRuns([{ text: heading, bold: true }], usableWidth, titleSize, font, fontBold);
+      for (const lineRuns of wrapped) drawLine(lineRuns, titleSize, 1.25);
     }
-    y -= 26;
+    y -= 8;
   }
 
   const paragraphs = (content || "").split(/\r?\n/);
   for (const raw of paragraphs) {
     if (raw.trim() === "") {
-      y -= 7;
+      y -= 7 * scale;
       continue;
     }
     const bullet = /^\s*[-*]\s+/.test(raw);
     const text = bullet ? "-  " + raw.replace(/^\s*[-*]\s+/, "") : raw;
-    drawParagraph(text, 11);
+    drawParagraph(text, bodySize);
     y -= 2;
   }
 
   if (area.showSignature) {
-    const need = 70;
+    const need = 78 * scale;
     if (y - need < yBottom) newPage();
-    const sigY = yBottom + 46;
+    const sigY = yBottom + 48;
     const cx = (x0 + x1) / 2;
     page.drawLine({ start: { x: cx - 120, y: sigY + 16 }, end: { x: cx + 120, y: sigY + 16 }, thickness: 0.8, color: LINE });
     const cred = [doctor.crm ? `${doctor.crm}${doctor.crmState ? "-" + doctor.crmState : ""}` : "", doctor.rqe ? `RQE ${doctor.rqe}` : ""]
       .filter(Boolean)
       .join("  |  ");
-    centerText(page, cx, sigY, doctor.name, fontBold, 11, INK);
-    if (doctor.specialty) centerText(page, cx, sigY - 13, doctor.specialty, font, 9.5, MUTED);
-    if (cred) centerText(page, cx, sigY - 26, cred, font, 9.5, MUTED);
+    centerText(page, cx, sigY, doctor.name, fontBold, 11 * scale, INK);
+    let dy = 13 * scale;
+    if (doctor.specialty) {
+      centerText(page, cx, sigY - dy, doctor.specialty, font, 9.5 * scale, MUTED);
+      dy += 13 * scale;
+    }
+    if (cred) {
+      centerText(page, cx, sigY - dy, cred, font, 9.5 * scale, MUTED);
+      dy += 13 * scale;
+    }
+    if (clinicName) centerText(page, cx, sigY - dy, clinicName, font, 9 * scale, MUTED);
   }
 
   return { bytes: await out.save(), letterheadSkipped };

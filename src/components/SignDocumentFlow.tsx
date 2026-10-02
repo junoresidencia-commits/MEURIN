@@ -39,6 +39,8 @@ type Props = {
   alreadySigned?: boolean;
   signedDocumentId?: string | null;
   onSigned?: (info: SignedInfo) => void;
+  onLargerType?: () => void;
+  largerTypeLabel?: string;
 };
 
 const PROVIDERS = listDigitalSignatureProviders();
@@ -84,6 +86,8 @@ export function SignDocumentPanel(props: Props) {
           documentType={props.documentType}
           alreadySigned={signed}
           onSigned={props.onSigned}
+          onLargerType={props.onLargerType}
+          largerTypeLabel={props.largerTypeLabel}
         />
         {!signed && (
           <details className="mt-3">

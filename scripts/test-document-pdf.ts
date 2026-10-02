@@ -81,12 +81,16 @@ async function main() {
   const doctor = { name: "Dr. Carlos", crm: "12345", crmState: "BA", specialty: "Nefrologia" };
 
   const pdf = await buildDocumentPdf({
-    title: "Relatório médico",
+    title: "Relatório médico com título longo o suficiente para quebrar de linha no cabeçalho A4",
     content: scientific + "\n\n" + BUILTIN_TEMPLATES.find((t) => t.id === "rx_acidose")!.body,
-    patient: { name: "Maria da Prestação", cpf: "000.000.000-00", idade: 54 },
+    patient: { name: "Maria da Prestação", cpf: "000.000.000-00", idade: 54, cid: "N18.5" },
     doctor,
+    clinicName: "Clínica Renal Demo",
     area,
   });
+  const headerText = extractPdfLatin1(pdf);
+  assert.match(headerText, /N18\.5/);
+  assert.match(headerText, /Cl.nica Renal Demo|Clinica Renal Demo/);
   assert.equal(Buffer.from(pdf.slice(0, 5)).toString("latin1"), "%PDF-");
   assert.ok(pdf.byteLength > 800, `PDF pequeno demais: ${pdf.byteLength}`);
 
