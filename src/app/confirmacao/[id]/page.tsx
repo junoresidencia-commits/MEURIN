@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import { ShareButton } from "@/components/ShareButton";
@@ -32,6 +32,7 @@ export default function ConfirmacaoPage() {
   const [origin, setOrigin] = useState("");
   const [pix, setPix] = useState<PixInfo | null>(null);
   const [pixHint, setPixHint] = useState("");
+  const pixPosted = useRef(false);
 
   useEffect(() => {
     setOrigin(window.location.origin);
@@ -50,6 +51,26 @@ export default function ConfirmacaoPage() {
             amountCents: data.amountCents,
             holderName: data.holderName,
             doctorName: data.doctorName,
+          });
+          return;
+        }
+        // Sem chave cadastrada: gera QR uma vez (Pix nativo ou Pix do Mercado Pago).
+        // Não reabre a tela amarela do Checkout Pro.
+        if (pixPosted.current) return;
+        pixPosted.current = true;
+        const p = await fetch("/api/payments", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ bookingId }),
+        });
+        const pay = await p.json().catch(() => ({}));
+        if (p.ok && pay.brCode) {
+          setPix({
+            brCode: pay.brCode,
+            qrDataUrl: pay.qrDataUrl || "",
+            amountCents: pay.amountCents,
+            holderName: pay.holderName,
+            doctorName: pay.doctorName,
           });
         }
       } catch {
@@ -105,8 +126,9 @@ export default function ConfirmacaoPage() {
           Pague com Pix para liberar a consulta
         </h1>
         <p className="mt-4 text-[var(--text-soft)]">
-          Se o Mercado Pago não abriu ou o botão Pagar ficou cinza, use o QR Code
-          abaixo. O valor vai para a chave cadastrada por{" "}
+          A tela amarela do Mercado Pago (saldo em conta, cartão, boleto) está com
+          o botão Pagar cinza. Pague pelo QR Code abaixo. O valor vai para a chave
+          cadastrada por{" "}
           <strong className="text-[var(--text)]">{doctorName || "o médico"}</strong>.
         </p>
         {pix ? (
@@ -130,8 +152,8 @@ export default function ConfirmacaoPage() {
         ) : (
           <div className="panel mt-6 space-y-3">
             <p className="text-sm text-[var(--text-muted)]">
-              Este médico ainda não cadastrou chave Pix. Tente o checkout do Mercado Pago
-              de novo ou fale com a clínica.
+              Ainda não deu para montar o QR Code. Peça ao médico para cadastrar a
+              chave Pix nas configurações.
             </p>
             <button
               type="button"
@@ -143,10 +165,6 @@ export default function ConfirmacaoPage() {
                   body: JSON.stringify({ bookingId: booking.id }),
                 });
                 const data = await res.json().catch(() => ({}));
-                if (data.redirectUrl) {
-                  window.location.href = data.redirectUrl;
-                  return;
-                }
                 if (data.brCode) {
                   setPix({
                     brCode: data.brCode,
@@ -157,10 +175,10 @@ export default function ConfirmacaoPage() {
                   });
                   return;
                 }
-                setError(data.error || "Não foi possível reabrir o pagamento.");
+                setError(data.error || "Não foi possível gerar o QR Code Pix.");
               }}
             >
-              Tentar Mercado Pago de novo
+              Gerar QR Code Pix
             </button>
           </div>
         )}

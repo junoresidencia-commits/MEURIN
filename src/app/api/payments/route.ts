@@ -4,6 +4,7 @@ import { getBookingById, getDoctorById, readDb } from "@/lib/store";
 import {
   confirmBookingPaid,
   createCheckoutPreference,
+  createMercadoPagoPixPayment,
   isMercadoPagoEnabledFor,
 } from "@/lib/payments";
 import { buildBookingPix } from "@/lib/pix-brcode";
@@ -68,15 +69,38 @@ export async function POST(req: Request) {
     return NextResponse.json({ provider: "pix", booking: confirmed.booking, meetingUrl: confirmed.meetingUrl });
   }
 
-  // Pix direto na chave cadastrada pelo médico (QR Code). Não passa pelo Mercado Pago.
-  const wantsPix = booking.paymentMethod === "pix" || body.preferPix;
-  if (wantsPix && booking.status === "pending_payment") {
+  // QR Code Pix — caminho padrão. A tela amarela do Checkout Pro (saldo, cartão,
+  // boleto) trava o botão Pagar. Só abrimos ela se o cliente pedir (preferMp).
+  if (booking.status === "pending_payment" && !body.preferMp) {
     const pix = await pixPayload(bookingId);
     if (pix) return NextResponse.json(pix);
+
+    if (isMercadoPagoEnabledFor(doctor)) {
+      try {
+        const mpPix = await createMercadoPagoPixPayment(booking, doctor);
+        if (mpPix) {
+          const qrDataUrl =
+            mpPix.qrDataUrl ||
+            (await QRCode.toDataURL(mpPix.brCode, { width: 280, margin: 1, errorCorrectionLevel: "M" }));
+          return NextResponse.json({
+            provider: "pix",
+            bookingId: booking.id,
+            brCode: mpPix.brCode,
+            qrDataUrl,
+            amountCents: booking.priceCents,
+            holderName: doctor.name,
+            doctorName: doctor.name,
+            via: "mercadopago_pix",
+          });
+        }
+      } catch {
+        /* cai no Checkout Pro só se preferMp, senão erro honesto */
+      }
+    }
   }
 
-  // Cartão / boleto (e Pix se o médico não cadastrou chave): Checkout Pro.
-  if (isMercadoPagoEnabledFor(doctor) && booking.status === "pending_payment") {
+  // Checkout Pro só quando pedido explicitamente (cartão / saldo Mercado Livre).
+  if (body.preferMp && isMercadoPagoEnabledFor(doctor) && booking.status === "pending_payment") {
     try {
       const { redirectUrl } = await createCheckoutPreference(booking, doctor);
       return NextResponse.json({ provider: "mercadopago", redirectUrl });
@@ -93,6 +117,13 @@ export async function POST(req: Request) {
         { status: 502 }
       );
     }
+  }
+
+  if (isMercadoPagoEnabledFor(doctor) && booking.status === "pending_payment") {
+    return NextResponse.json(
+      { error: "Não foi possível gerar o QR Code Pix. Cadastre a chave Pix do médico nas configurações." },
+      { status: 502 }
+    );
   }
 
   // Modo demonstração: confirma na hora (pagamento simulado).

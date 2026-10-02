@@ -134,6 +134,63 @@ export async function createCheckoutPreference(
   return { redirectUrl, preferenceId: data.id };
 }
 
+/**
+ * Cobra via Pix da API do Mercado Pago (QR + copia e cola), sem Checkout Pro.
+ * Usado quando o médico não cadastrou chave Pix própria.
+ * O dinheiro cai na conta MP do coletor (médico conectado ou plataforma).
+ */
+export async function createMercadoPagoPixPayment(
+  booking: Booking,
+  doctor: Pick<Doctor, "id" | "name" | "mpAccessToken">
+): Promise<{ brCode: string; qrDataUrl?: string; mpPaymentId: string } | null> {
+  const token = getCollectorToken(doctor);
+  if (!token) return null;
+
+  const origin = appOrigin();
+  const firstNamePayer = (booking.patientName || "Paciente").trim().split(/\s+/)[0] || "Paciente";
+  const body: Record<string, unknown> = {
+    transaction_amount: Math.round(booking.priceCents) / 100,
+    description: `Consulta Meu Rim — ${doctor.name}`.slice(0, 60),
+    payment_method_id: "pix",
+    payer: {
+      email: booking.patientEmail,
+      first_name: firstNamePayer,
+    },
+    external_reference: booking.id,
+    metadata: { booking_id: booking.id, doctor_id: doctor.id },
+  };
+  if (origin.startsWith("https://")) {
+    body.notification_url = `${origin}/api/payments/webhook?doctor=${doctor.id}`;
+  }
+
+  const res = await fetch(`${MP_API}/v1/payments`, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${token}`,
+      "Content-Type": "application/json",
+      "X-Idempotency-Key": `pix-${booking.id}`,
+    },
+    body: JSON.stringify(body),
+  });
+  if (!res.ok) return null;
+
+  const data = (await res.json()) as {
+    id?: number;
+    point_of_interaction?: {
+      transaction_data?: { qr_code?: string; qr_code_base64?: string };
+    };
+  };
+  const tx = data.point_of_interaction?.transaction_data;
+  const brCode = (tx?.qr_code || "").trim();
+  if (!brCode || !data.id) return null;
+  const raw = (tx?.qr_code_base64 || "").replace(/\s/g, "");
+  return {
+    brCode,
+    qrDataUrl: raw ? `data:image/png;base64,${raw}` : undefined,
+    mpPaymentId: String(data.id),
+  };
+}
+
 type MpPayment = {
   id: number;
   status: string;

@@ -688,7 +688,7 @@ export default function AgendarClient() {
             <div className="flex flex-wrap gap-2">
               {(
                 [
-                  ["pix", "Pix (mais rápido)"],
+                  ["pix", "Pix (QR Code)"],
                   ["card", "Cartão"],
                   ["boleto", "Boleto"],
                 ] as const
@@ -725,14 +725,16 @@ export default function AgendarClient() {
 
           {paymentMethod === "pix" && (
             <p className="text-sm text-[var(--text-muted)]">
-              O Pix vai direto para a chave cadastrada pelo médico. Na próxima
-              tela você vê o QR Code e o copia e cola, com o valor da consulta.
+              Você vai ver um QR Code Pix. O valor cai na chave cadastrada pelo
+              médico. Não usa a tela amarela do Mercado Pago (lá o botão Pagar
+              fica cinza).
             </p>
           )}
           {paymentMethod !== "pix" && (
             <p className="text-sm text-[var(--text-muted)]">
-              Cartão, boleto e Mercado Livre abrem o checkout do Mercado Pago.
-              Se o botão Pagar não liberar, volte e pague com Pix (QR Code).
+              Cartão, boleto e saldo do Mercado Livre estão com o botão Pagar
+              travado. Na próxima tela você paga com QR Code Pix, na chave do
+              médico.
             </p>
           )}
 

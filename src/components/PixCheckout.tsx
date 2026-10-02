@@ -58,9 +58,9 @@ export function PixCheckout({
           <img
             src={pix.qrDataUrl}
             alt="QR Code Pix da consulta"
-            width={240}
-            height={240}
-            className="mx-auto mt-3 rounded-xl bg-white p-2"
+            width={260}
+            height={260}
+            className="mx-auto mt-3 h-auto w-full max-w-[260px] rounded-xl bg-white p-2"
           />
         ) : null}
         <p className="mt-2 text-xs text-[var(--text-muted)]">Abra o app do banco e aponte a câmera no QR Code.</p>
