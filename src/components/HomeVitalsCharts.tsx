@@ -106,8 +106,11 @@ export type HomeVital = {
   systolic?: number | null;
   diastolic?: number | null;
   glucoseMgDl?: number | null;
+  weightKg?: number | null;
   measuredAt: string;
 };
+
+export { SeriesChart };
 
 export function HomeVitalsCharts({ records }: { records: HomeVital[] }) {
   const bp = records
@@ -118,11 +121,16 @@ export function HomeVitalsCharts({ records }: { records: HomeVital[] }) {
     .filter((r) => r.kind === "glucose" && r.glucoseMgDl != null)
     .slice()
     .sort((a, b) => a.measuredAt.localeCompare(b.measuredAt));
+  const wt = records
+    .filter((r) => r.kind === "weight" && r.weightKg != null)
+    .slice()
+    .sort((a, b) => a.measuredAt.localeCompare(b.measuredAt));
 
   const lastBp = bp[bp.length - 1];
   const lastGlu = glu[glu.length - 1];
+  const lastWt = wt[wt.length - 1];
 
-  if (bp.length === 0 && glu.length === 0) return null;
+  if (bp.length === 0 && glu.length === 0 && wt.length === 0) return null;
 
   return (
     <div className="grid gap-3 md:grid-cols-2">
@@ -188,6 +196,27 @@ export function HomeVitalsCharts({ records }: { records: HomeVital[] }) {
         )}
         <p className="mt-1 text-[11px] text-[var(--text-muted)]">Linha pontilhada = 180 mg/dL</p>
       </div>
+
+      {wt.length > 0 && (
+        <div className="rounded-2xl border border-[var(--border)] bg-white p-3 md:col-span-2">
+          <div className="flex items-start justify-between gap-2">
+            <div>
+              <p className="text-[11px] font-bold uppercase tracking-wider text-[var(--gold)]">Peso</p>
+              <p className="text-xs text-[var(--text-muted)]">Medido em casa, ao longo do tempo</p>
+            </div>
+            {lastWt && (
+              <p className="text-right text-sm font-extrabold text-[var(--text)]">
+                {fmtVal(Number(lastWt.weightKg))} <span className="text-xs font-semibold text-[var(--text-muted)]">kg</span>
+                <span className="block text-[11px] font-normal text-[var(--text-muted)]">{shortWhen(lastWt.measuredAt)}</span>
+              </p>
+            )}
+          </div>
+          <SeriesChart
+            unit="kg"
+            series={[{ label: "Peso", color: "#7758c6", points: wt.map((r) => ({ x: r.measuredAt, y: Number(r.weightKg) })) }]}
+          />
+        </div>
+      )}
     </div>
   );
 }

@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { toFriendlyMessage } from "@/lib/user-errors";
+import { PatientMedicationsForm } from "@/components/PatientMedicationsForm";
 import { disablePush, enablePush, isSubscribed, pushSupported } from "@/lib/push-client";
 
 export default function MeusDadosPage() {
@@ -146,6 +147,10 @@ export default function MeusDadosPage() {
           <button type="submit" className="btn-gold w-full" disabled={saving}>{saving ? "Salvando…" : "Salvar meus dados"}</button>
         </form>
       )}
+
+      <section className="mt-6">
+        <PatientMedicationsForm />
+      </section>
 
       <PatientNotificationsCard />
     </div>

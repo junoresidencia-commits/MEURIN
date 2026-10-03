@@ -5,7 +5,7 @@ import { getSupabaseAdmin } from "./supabase-admin";
 import type { ClinicalProfileData } from "./clinical-fields";
 
 /** Proveniência por campo: de onde veio o valor atual. */
-export type FieldSource = "manual" | "evolução" | "pdf" | "cálculo" | "importação";
+export type FieldSource = "manual" | "paciente" | "evolução" | "pdf" | "cálculo" | "importação";
 export interface FieldMeta {
   source: FieldSource;
   by?: string | null;
@@ -153,6 +153,7 @@ function sameValue(a: unknown, b: unknown): boolean {
  */
 const SOURCE_RANK: Record<FieldSource, number> = {
   manual: 5,
+  paciente: 4,
   cálculo: 4,
   pdf: 3,
   importação: 3,
