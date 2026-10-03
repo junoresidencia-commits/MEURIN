@@ -333,7 +333,7 @@ export default function ConsultaPage() {
           className="h-full w-full object-cover"
         />
         <span className="absolute bottom-3 left-3 rounded-full bg-black/60 px-3 py-1 text-xs text-white">
-          {isDoctor ? info?.patientName || "Paciente" : `Você (${role === "doctor" ? "médico" : "paciente"})`}
+          {isDoctor ? info?.patientName || "Paciente" : "Você (paciente)"}
         </span>
       </div>
       <div
