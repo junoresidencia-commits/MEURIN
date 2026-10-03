@@ -1,6 +1,12 @@
 import assert from "node:assert/strict";
 import { SIGNATURE_LINKS } from "../src/lib/signature-links";
 import {
+  CFM_DOWNLOAD_BUTTON,
+  CFM_PRESCRICAO_URL,
+  CFM_SIGN_BUTTON,
+  CFM_SIGN_HELP,
+} from "../src/lib/digital-signature/cfm-flow";
+import {
   DIGITAL_SIGNATURE_PROVIDERS,
   getDigitalSignatureProvider,
   isDigitalSignatureProviderId,
@@ -55,5 +61,11 @@ assert.equal(digitalSignatureStatus({ status: "signed", signatureMethod: "eletro
 assert.equal(digitalSignatureStatus({ status: "signed", signatureMethod: "certificada" }), "signed");
 assert.equal(digitalSignatureLabel({ status: "signed", signatureMethod: "certificada" }), "Assinado digitalmente");
 assert.equal(digitalSignatureLabel({}), "Não assinado");
+
+assert.equal(CFM_PRESCRICAO_URL, "https://prescricaoeletronica.cfm.org.br/");
+assert.equal(CFM_SIGN_BUTTON, "Assinar no CFM");
+assert.equal(CFM_DOWNLOAD_BUTTON, "Baixar PDF");
+assert.match(CFM_SIGN_HELP, /Assinar no CFM/);
+assert.match(CFM_SIGN_HELP, /Conselho Federal de Medicina/);
 
 console.log("signature-links + digital-signature providers ok", Object.keys(SIGNATURE_LINKS));

@@ -70,7 +70,7 @@ export const DIGITAL_SIGNATURE_PROVIDERS: readonly DigitalSignatureProvider[] = 
     shortLabel: "CFM Digital",
     headline: "Serviços digitais oficiais do CFM",
     description:
-      "Acesso aos serviços digitais do Conselho Federal de Medicina. O certificado ICP-Brasil gratuito da AR-CFM é usado no VIDaaS. A Credencial Médica / e-CRM identifica o médico; não há API pública do CFM para assinar o PDF gerado no Meu Rim.",
+      "Gere o PDF no Meu Rim, clique em Assinar no CFM e faça a assinatura no site oficial da Prescrição Eletrônica. O Meu Rim não faz login automático nem guarda senha ou certificado.",
     primary: false,
     handoff: "official-portal",
     apiReady: false,
@@ -82,9 +82,9 @@ export const DIGITAL_SIGNATURE_PROVIDERS: readonly DigitalSignatureProvider[] = 
       { id: "cfm-ecrm", label: "e-CRM / Credencial Médica", href: SIGNATURE_LINKS.cfmEcrm },
     ],
     mobileHint:
-      "Abra o serviço oficial do CFM de que você precisa. Para assinar este PDF com o certificado emitido pelo CFM, compartilhe o arquivo e assine no VIDaaS — é o ambiente do certificado em nuvem da AR-CFM.",
+      "Baixe o PDF, toque em Assinar no CFM e anexe o arquivo no portal oficial do Conselho. Depois volte e anexe o PDF assinado no prontuário.",
     desktopHint:
-      "Use os portais oficiais do CFM no computador. O certificado da AR-CFM assina PDFs pelo VIDaaS Connect / Assinador gov.br, não pelo aplicativo de credencial médica.",
+      "Baixe o PDF, clique em Assinar no CFM (abre o portal oficial em nova aba) e importe o arquivo. Depois anexe o PDF assinado no prontuário.",
     honesty:
       "Não fingimos que a Credencial Médica assina o PDF do Meu Rim. A Prescrição Eletrônica é o portal próprio do CFM. Este documento é gerado aqui; depois de assinado no ambiente do certificado, anexe o PDF de volta ao prontuário.",
   },

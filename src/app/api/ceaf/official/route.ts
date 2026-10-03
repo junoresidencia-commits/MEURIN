@@ -44,11 +44,12 @@ export async function GET(req: Request) {
       birth: searchParams.get("birth") || "",
     });
     const fname = asciiName(protocol || "ceaf", doc);
+    const download = searchParams.get("download") === "1";
     console.info("[ceaf/official]", { protocolId: protocol, doc, status: 200, pages: built.pages });
     return new NextResponse(new Uint8Array(built.bytes), {
       headers: {
         "Content-Type": "application/pdf",
-        "Content-Disposition": `inline; filename="${fname}"`,
+        "Content-Disposition": `${download ? "attachment" : "inline"}; filename="${fname}"`,
         "Cache-Control": "private, no-store",
       },
     });

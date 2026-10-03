@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { PatientNav } from "@/components/PatientNav";
+import { DownloadPdfButton } from "@/components/CfmPdfActions";
 
 type Doc = {
   id: string; type: string; title: string; doctorName: string; createdAt: string;
@@ -52,7 +53,7 @@ export default function MeusDocumentosPage() {
             <p className="text-sm text-[var(--text-muted)]">{d.doctorName} · {new Date(d.createdAt).toLocaleDateString("pt-BR")}</p>
             <div className="mt-3 flex flex-wrap gap-2">
               <a href={d.viewUrl} target="_blank" rel="noopener noreferrer" className="btn-gold text-sm">Visualizar</a>
-              {d.pdfUrl && <a href={d.pdfUrl} download className="btn-ghost text-sm">Baixar PDF</a>}
+              {d.pdfUrl && <DownloadPdfButton href={d.pdfUrl} filename={`${d.type || "documento"}-meurim.pdf`} />}
             </div>
           </div>
         ))}
