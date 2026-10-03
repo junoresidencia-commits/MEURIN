@@ -21,10 +21,16 @@ function dayLabel(iso: string) {
 function range(values: number[], extras: number[]) {
   const all = [...values, ...extras].filter((n) => Number.isFinite(n));
   if (!all.length) return { min: 0, max: 1 };
-  const min = Math.min(...all);
-  const max = Math.max(...all);
-  const pad = Math.max(8, (max - min) * 0.18) || 10;
-  return { min: min - pad, max: max + pad };
+  const minV = Math.min(...all);
+  const maxV = Math.max(...all);
+  const spread = maxV - minV;
+  const magnitude = Math.max(Math.abs(maxV), Math.abs(minV), 1);
+  const pad = spread > 0 ? Math.max(spread * 0.22, magnitude * 0.06) : Math.max(magnitude * 0.12, 0.4);
+  let min = minV - pad;
+  let max = maxV + pad;
+  if (minV >= 0 && min < 0) min = 0;
+  if (max <= min) max = min + 1;
+  return { min, max };
 }
 
 function SeriesChart({
