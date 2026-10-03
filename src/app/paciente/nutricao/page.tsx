@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { PatientNav } from "@/components/PatientNav";
+import { PixCheckout } from "@/components/PixCheckout";
 
 type Track = { key: string; label: string; unit: string; total: number; goal: number | null; status: "verde" | "amarelo" | "vermelho" | "estimativa"; pct: number | null };
 type Entry = { id: string; kind: "alimento" | "liquido"; meal?: string | null; timeLabel?: string | null; food: string; grams?: number | null; volumeMl?: number | null; household?: string | null; nutrients: Record<string, number>; note?: string | null; photoUrl?: string | null };
@@ -54,7 +55,17 @@ export default function PacienteNutricaoPage() {
   const [labelFields, setLabelFields] = useState<Record<string, string | boolean> | null>(null);
   const [labelMsg, setLabelMsg] = useState("");
   // consultas de nutrição
-  const [appts, setAppts] = useState<{ id: string; status: string; priceCents: number; slotStart?: string | null; pixCopiaCola?: string | null; modality?: string }[]>([]);
+  const [appts, setAppts] = useState<{
+    id: string;
+    status: string;
+    priceCents: number;
+    slotStart?: string | null;
+    pixCopiaCola?: string | null;
+    pixQrDataUrl?: string | null;
+    pixHolderName?: string | null;
+    nutritionistName?: string | null;
+    modality?: string;
+  }[]>([]);
   const [apptMsg, setApptMsg] = useState("");
   // comparar alimentos
   const [cmpOpen, setCmpOpen] = useState(false);
@@ -118,7 +129,6 @@ export default function PacienteNutricaoPage() {
     if (resp.ok) { setApptMsg("Comprovante enviado. A nutricionista vai confirmar."); await loadAppts(); }
     else { const d = await resp.json().catch(() => ({})); setApptMsg(d.error || "Erro ao enviar."); }
   }
-  function copyPix(code: string) { navigator.clipboard?.writeText(code); setApptMsg("Pix copiado!"); setTimeout(() => setApptMsg(""), 1500); }
 
   useEffect(() => {
     if (kind !== "alimento") return;
@@ -380,12 +390,33 @@ export default function PacienteNutricaoPage() {
                   </span>
                 </div>
                 {a.status === "aguardando_pagamento" && a.pixCopiaCola && (
-                  <div className="mt-2">
-                    <p className="break-all rounded-lg bg-[var(--bg)] p-2 text-xs text-[var(--text-soft)]">{a.pixCopiaCola}</p>
-                    <div className="mt-2 flex flex-wrap gap-2">
-                      <button type="button" className="btn-ghost text-sm" onClick={() => copyPix(a.pixCopiaCola!)}>Copiar Pix</button>
-                      <label className="btn-gold cursor-pointer text-sm">Enviar comprovante<input type="file" accept="image/*" className="hidden" onChange={(e) => { const f = e.target.files?.[0]; if (f) sendProof(a.id, f); }} /></label>
-                    </div>
+                  <div className="mt-3">
+                    <p className="mb-2 text-xs text-[var(--text-muted)]">
+                      Pix para a chave cadastrada de {a.pixHolderName || a.nutritionistName || "nutricionista"}.
+                    </p>
+                    <PixCheckout
+                      pix={{
+                        brCode: a.pixCopiaCola,
+                        qrDataUrl: a.pixQrDataUrl || "",
+                        amountCents: a.priceCents,
+                        holderName: a.pixHolderName || a.nutritionistName || "Nutricionista",
+                      }}
+                      onPaid={async () => {
+                        const resp = await fetch("/api/patient/nutrition/appointments", {
+                          method: "POST",
+                          headers: { "Content-Type": "application/json" },
+                          body: JSON.stringify({ id: a.id, pixDeclared: true }),
+                        });
+                        const d = await resp.json().catch(() => ({}));
+                        if (!resp.ok) throw new Error(d.error || "Não foi possível confirmar.");
+                        setApptMsg("Pix declarado. A nutricionista vai confirmar o recebimento.");
+                        await loadAppts();
+                      }}
+                    />
+                    <label className="btn-ghost mt-2 inline-flex cursor-pointer text-sm">
+                      Enviar comprovante
+                      <input type="file" accept="image/*" className="hidden" onChange={(e) => { const f = e.target.files?.[0]; if (f) sendProof(a.id, f); }} />
+                    </label>
                   </div>
                 )}
                 {a.status === "aguardando_pagamento" && !a.pixCopiaCola && <p className="mt-1 text-xs text-[var(--text-muted)]">A nutricionista ainda não configurou a chave Pix. Combine o pagamento com ela.</p>}

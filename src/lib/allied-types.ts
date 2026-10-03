@@ -1,3 +1,5 @@
+import type { PixProfile } from "./types";
+
 /** Tipos da equipe assistencial (psicologia + enfermagem). Nutrição permanece no módulo próprio. */
 
 export const ALLIED_ROLES = ["psychology", "nursing"] as const;
@@ -24,6 +26,8 @@ export interface AlliedProfessional {
   photoUrl?: string | null;
   passwordHash?: string | null;
   status: AlliedStatus;
+  consultationPriceCents?: number | null;
+  pixProfile?: PixProfile | null;
   createdAt: string;
   lastAccessAt?: string | null;
 }

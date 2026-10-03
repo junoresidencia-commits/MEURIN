@@ -5,9 +5,12 @@ import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import { formatSlotLabel } from "@/lib/scheduling-client";
 import { ConsultChartPanel } from "@/components/ConsultChartPanel";
+import { CareConsultPanel } from "@/components/CareConsultPanel";
+import { PixCheckout } from "@/components/PixCheckout";
 
 type Role = "doctor" | "patient";
 type RoomRole = "doctor" | "patient" | "guest";
+type RoomKind = "doctor" | "psychology" | "nursing" | "nutrition";
 type IceServer = { urls: string | string[]; username?: string; credential?: string };
 
 const CARE_REASON: Record<string, string> = {
@@ -36,10 +39,15 @@ export default function ConsultaPage() {
   const [info, setInfo] = useState<{
     patientName: string;
     patientEmail?: string;
+    patientKey?: string;
     doctorName: string;
     slotStart: string;
     careReason?: string;
   } | null>(null);
+  const [roomKind, setRoomKind] = useState<RoomKind>("doctor");
+  const [hostLabel, setHostLabel] = useState("Médico");
+  const [homePath, setHomePath] = useState("/medicos/agenda");
+  const [loginPath, setLoginPath] = useState("/medicos/login");
   const [status, setStatus] = useState("Preparando sala…");
   const [error, setError] = useState("");
   const [joined, setJoined] = useState(false);
@@ -48,6 +56,20 @@ export default function ConsultaPage() {
   const [camOff, setCamOff] = useState(false);
   const [copied, setCopied] = useState(false);
   const [turnReady, setTurnReady] = useState(false);
+  const [paywall, setPaywall] = useState<{
+    brCode: string;
+    qrDataUrl: string;
+    amountCents: number;
+    holderName: string;
+  } | null>(null);
+  const [hostPay, setHostPay] = useState<{
+    status: "unpaid" | "declared" | "confirmed" | "free";
+    priceCents: number;
+    holderName: string;
+  } | null>(null);
+  const [awaitingHost, setAwaitingHost] = useState(false);
+  const [confirmingPix, setConfirmingPix] = useState(false);
+  const [confirmErr, setConfirmErr] = useState("");
 
   useEffect(() => {
     setShowTestHint(new URLSearchParams(window.location.search).get("teste") === "1");
@@ -57,21 +79,58 @@ export default function ConsultaPage() {
     fetch(`/api/rooms/${roomId}`)
       .then(async (r) => {
         const data = await r.json();
-        if (!r.ok) throw new Error(data.error || "Sala indisponível");
+        if (!r.ok) {
+          if (data.paymentRequired) {
+            setHostLabel(data.hostLabel || "Profissional");
+            setHomePath("/paciente/inicio");
+            setLoginPath(data.loginPath || "/paciente/entrar");
+            if (data.pix?.brCode) {
+              setPaywall({
+                brCode: data.pix.brCode,
+                qrDataUrl: data.pix.qrDataUrl || "",
+                amountCents: data.pix.amountCents,
+                holderName: data.pix.holderName || data.professionalName || "Profissional",
+              });
+              return;
+            }
+          }
+          if (data.awaitingHost) {
+            setHostLabel(data.hostLabel || "Profissional");
+            setAwaitingHost(true);
+            return;
+          }
+          throw new Error(data.error || "Sala indisponível");
+        }
         const nextRole: Role = data.you?.role === "doctor" ? "doctor" : "patient";
         setRoomRole(data.you?.role || "guest");
         setRole(nextRole);
         roleRef.current = nextRole;
+        setRoomKind((data.kind as RoomKind) || "doctor");
+        setHostLabel(data.hostLabel || "Médico");
+        setHomePath(data.homePath || "/medicos/agenda");
+        setLoginPath(data.loginPath || "/medicos/login");
         setInfo({
           patientName: data.booking.patientName,
           patientEmail: data.booking.patientEmail,
-          doctorName: data.doctor?.name || "Médico",
+          patientKey: data.booking.patientKey,
+          doctorName: data.doctor?.name || data.hostLabel || "Profissional",
           slotStart: data.booking.slotStart,
           careReason: data.booking.careReason,
         });
+        if (nextRole === "doctor" && data.payment?.priceCents > 0) {
+          setHostPay({
+            status: data.payment.status || "unpaid",
+            priceCents: data.payment.priceCents,
+            holderName: data.payment.holderName || data.doctor?.name || "você",
+          });
+        }
         setStatus(
           nextRole === "doctor"
-            ? "Sala liberada. Entre para atender o paciente."
+            ? data.payment?.status === "confirmed" || !data.payment?.priceCents
+              ? "Sala liberada. Entre para atender o paciente."
+              : data.payment?.status === "declared"
+                ? "Paciente declarou o Pix. Confira na sua conta e entre."
+                : "Aguardando o Pix do paciente. Você já pode entrar."
             : "Sala liberada. Entre quando estiver pronto."
         );
       })
@@ -203,7 +262,7 @@ export default function ConsultaPage() {
   }
 
   function destinationAfterLeave() {
-    return roleRef.current === "doctor" ? "/medicos/agenda" : "/minhas-consultas";
+    return roleRef.current === "doctor" ? homePath : "/paciente/inicio";
   }
 
   async function hangUp() {
@@ -260,7 +319,7 @@ export default function ConsultaPage() {
         await postSignal("offer", offer);
         setStatus("Aguardando o paciente entrar…");
       } else {
-        setStatus("Aguardando o médico iniciar a chamada…");
+        setStatus(`Aguardando ${hostLabel.toLowerCase()} iniciar a chamada…`);
       }
     } catch {
       setError(
@@ -303,6 +362,70 @@ export default function ConsultaPage() {
       {leaving ? "Saindo…" : "Sair da consulta"}
     </button>
   );
+
+  async function confirmPixAndStay() {
+    setConfirmingPix(true);
+    setConfirmErr("");
+    try {
+      const res = await fetch(`/api/care-rooms/${roomId}/pay`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ confirm: true }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error || "Não foi possível confirmar o Pix.");
+      setHostPay((prev) => (prev ? { ...prev, status: "confirmed" } : prev));
+      setStatus("Pix conferido. Entre para atender o paciente.");
+    } catch (e) {
+      setConfirmErr(e instanceof Error ? e.message : "Não foi possível confirmar.");
+    } finally {
+      setConfirmingPix(false);
+    }
+  }
+
+  if (awaitingHost) {
+    return (
+      <div className="mx-auto max-w-md px-5 py-16">
+        <p className="text-xs font-bold uppercase tracking-wider text-[var(--gold)]">Consulta da equipe</p>
+        <h1 className="font-display mt-2 text-2xl font-extrabold text-[var(--text)]">Pix enviado</h1>
+        <p className="mt-2 text-sm text-[var(--text-muted)]">
+          O {hostLabel.toLowerCase()} vai conferir o valor na chave Pix cadastrada e liberar a sala.
+        </p>
+        <button type="button" className="btn-gold mt-6 w-full" onClick={() => window.location.reload()}>
+          Já liberou? Atualizar
+        </button>
+        <Link href="/paciente/inicio" className="mt-4 inline-block text-sm font-semibold text-[var(--gold)]">
+          ← Voltar
+        </Link>
+      </div>
+    );
+  }
+
+  if (paywall) {
+    return (
+      <div className="mx-auto max-w-md px-5 py-16">
+        <p className="text-xs font-bold uppercase tracking-wider text-[var(--gold)]">Consulta da equipe</p>
+        <h1 className="font-display mt-2 text-2xl font-extrabold text-[var(--text)]">Pague o Pix para entrar</h1>
+        <p className="mt-2 text-sm text-[var(--text-muted)]">
+          O valor vai para a chave Pix cadastrada de {paywall.holderName} — não para o médico nem para a plataforma.
+        </p>
+        <div className="mt-6">
+          <PixCheckout
+            pix={paywall}
+            onPaid={async () => {
+              const res = await fetch(`/api/care-rooms/${roomId}/pay`, { method: "POST" });
+              const data = await res.json().catch(() => ({}));
+              if (!res.ok) throw new Error(data.error || "Não foi possível confirmar o Pix.");
+              window.location.reload();
+            }}
+          />
+        </div>
+        <Link href="/paciente/inicio" className="mt-6 inline-block text-sm font-semibold text-[var(--gold)]">
+          ← Voltar
+        </Link>
+      </div>
+    );
+  }
 
   if (error) {
     return (
@@ -351,7 +474,7 @@ export default function ConsultaPage() {
           className="h-full w-full object-cover"
         />
         <span className="absolute bottom-2 left-2 rounded-full bg-black/60 px-2 py-0.5 text-[10px] text-white">
-          {isDoctor ? "Você" : "Médico"}
+          {isDoctor ? "Você" : hostLabel}
         </span>
       </div>
     </div>
@@ -379,6 +502,34 @@ export default function ConsultaPage() {
         </p>
       )}
       <p className="mt-3 text-sm text-[var(--gold-light)]">{status}</p>
+      {isDoctor && hostPay && hostPay.status !== "free" && hostPay.priceCents > 0 && (
+        <div className="mt-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+          {hostPay.status === "confirmed" ? (
+            <p>Pix de R$ {(hostPay.priceCents / 100).toFixed(2).replace(".", ",")} conferido na sua chave. Pode atender.</p>
+          ) : hostPay.status === "declared" ? (
+            <p>
+              Paciente declarou o Pix de R$ {(hostPay.priceCents / 100).toFixed(2).replace(".", ",")} para {hostPay.holderName}.
+              Confira na sua conta e confirme o recebimento.
+            </p>
+          ) : (
+            <p>
+              Aguardando o paciente pagar R$ {(hostPay.priceCents / 100).toFixed(2).replace(".", ",")} na sua chave Pix.
+              Você já pode entrar e esperar.
+            </p>
+          )}
+          {hostPay.status !== "confirmed" && (
+            <button
+              type="button"
+              className="btn-gold mt-3 min-h-11"
+              disabled={confirmingPix}
+              onClick={() => void confirmPixAndStay()}
+            >
+              {confirmingPix ? "Confirmando…" : "Recebi o Pix"}
+            </button>
+          )}
+          {confirmErr && <p className="mt-2 font-semibold text-[var(--danger)]">{confirmErr}</p>}
+        </div>
+      )}
 
       <div className="mt-4 flex flex-wrap gap-2">
         {role === "doctor" && (
@@ -405,10 +556,10 @@ export default function ConsultaPage() {
           </button>
           {roomRole === "guest" && (
             <Link
-              href={`/medicos/login?next=/consulta/${roomId}`}
+              href={`${loginPath}?next=/consulta/${roomId}`}
               className="text-sm font-semibold text-[var(--gold)] underline"
             >
-              Sou o médico
+              Sou {hostLabel.toLowerCase()}
             </Link>
           )}
         </div>
@@ -416,7 +567,12 @@ export default function ConsultaPage() {
 
       <div className={`mt-8 ${isDoctor ? "grid items-start gap-4 xl:grid-cols-[minmax(0,1fr)_minmax(320px,400px)]" : ""}`}>
         {videos}
-        {isDoctor && info?.patientEmail && <ConsultChartPanel patientEmail={info.patientEmail} />}
+        {isDoctor && roomKind === "doctor" && info?.patientEmail && (
+          <ConsultChartPanel patientEmail={info.patientEmail} />
+        )}
+        {isDoctor && roomKind !== "doctor" && info?.patientKey && (
+          <CareConsultPanel kind={roomKind} patientKey={info.patientKey} />
+        )}
       </div>
 
       {showTestHint && (

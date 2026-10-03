@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { StartCareCallButton } from "@/components/StartCareCallButton";
 
 type Me = { nutritionist: { name: string; crn?: string | null; uf?: string | null; specialty?: string | null; photoUrl?: string | null }; doctors: { id: string; name: string }[] };
 type Patient = { key: string; name: string; cpf: string | null; doctorId: string };
@@ -77,17 +78,17 @@ export default function NutricionistaPainelPage() {
         ) : (
           <div className="mt-3 grid gap-2">
             {openReferrals.map((r) => (
-              <Link key={r.id} href={`/nutricionista/paciente/${encodeURIComponent(r.patientKey)}?ref=${r.id}`} className="panel flex flex-wrap items-center justify-between gap-2 transition hover:border-[var(--border-gold)]">
-                <div>
+              <div key={r.id} className="panel flex flex-wrap items-center justify-between gap-3 transition hover:border-[var(--border-gold)]">
+                <Link href={`/nutricionista/paciente/${encodeURIComponent(r.patientKey)}?ref=${r.id}`} className="min-w-0 flex-1">
                   <p className="font-semibold text-[var(--text)]">
                     {r.patientName || "Paciente"}
                     {r.priority === "alta" && <span className="ml-2 rounded-full bg-red-100 px-2 py-0.5 text-xs font-bold text-red-700">Prioridade alta</span>}
                   </p>
                   <p className="text-sm text-[var(--text-muted)]">{r.reason || "Encaminhamento nutricional"}{r.objective ? ` — ${r.objective}` : ""}</p>
                   <p className="text-xs text-[var(--text-muted)]">Encaminhado por {r.doctorName || "médico"}</p>
-                </div>
-                <span className="text-[var(--gold)]">Abrir →</span>
-              </Link>
+                </Link>
+                <StartCareCallButton patientKey={r.patientKey} label="Consulta online" />
+              </div>
             ))}
           </div>
         )}
@@ -101,13 +102,16 @@ export default function NutricionistaPainelPage() {
         <div className="mt-3 grid gap-2">
           {filtered.length === 0 && <p className="text-sm text-[var(--text-muted)]">Nenhum paciente encontrado.</p>}
           {filtered.map((p) => (
-            <Link key={p.key} href={`/nutricionista/paciente/${encodeURIComponent(p.key)}`} className="panel flex items-center justify-between transition hover:border-[var(--border-gold)]">
-              <div>
+            <div key={p.key} className="panel flex flex-wrap items-center justify-between gap-3 transition hover:border-[var(--border-gold)]">
+              <Link href={`/nutricionista/paciente/${encodeURIComponent(p.key)}`} className="min-w-0 flex-1">
                 <p className="font-semibold text-[var(--text)]">{p.name}</p>
                 {p.cpf && <p className="text-xs text-[var(--text-muted)]">CPF {p.cpf}</p>}
+              </Link>
+              <div className="flex flex-wrap items-center gap-2">
+                <StartCareCallButton patientKey={p.key} label="Consulta online" />
+                <Link href={`/nutricionista/paciente/${encodeURIComponent(p.key)}`} className="text-sm font-semibold text-[var(--gold)]">Prontuário →</Link>
               </div>
-              <span className="text-[var(--gold)]">Abrir →</span>
-            </Link>
+            </div>
           ))}
         </div>
       </section>
