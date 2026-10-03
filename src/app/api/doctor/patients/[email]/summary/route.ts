@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { getLabResults, getPatientData, latestOfKind } from "@/lib/patient-store";
+import { getClinicalNotes, getLabResults, getPatientData, latestOfKind } from "@/lib/patient-store";
 import { getProfile } from "@/lib/clinical-profile-store";
 import { resolvePatientAccess } from "@/lib/doctor-access";
 import { resolvePatientAge } from "@/lib/patient-age";
@@ -18,10 +18,11 @@ export async function GET(
   if (!access) return NextResponse.json({ error: "Não autenticado." }, { status: 401 });
   if (!access.allowed) return NextResponse.json({ error: "Sem acesso a este paciente." }, { status: 403 });
 
-  const [labs, patientData, profile] = await Promise.all([
+  const [labs, patientData, profile, notes] = await Promise.all([
     getLabResults(access.key),
     getPatientData(access.key, 120),
     getProfile(access.key),
+    getClinicalNotes(access.key),
   ]);
 
   const unitByKey = new Map(NEPHRO_LABS.map((l) => [l.key, l.unit]));
@@ -100,6 +101,16 @@ export async function GET(
     },
     lastConsultation: past[0]?.slotStart || null,
     nextConsultation: future[0]?.slotStart || null,
+    lastNote: notes[0]
+      ? {
+          createdAt: notes[0].createdAt,
+          doctorName: notes[0].doctorName,
+          chiefComplaint: notes[0].chiefComplaint,
+          history: notes[0].history,
+          assessment: notes[0].assessment,
+          plan: notes[0].plan,
+        }
+      : null,
     alerts,
   });
 }
