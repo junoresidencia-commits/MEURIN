@@ -1,14 +1,20 @@
 "use client";
 
-import { useState } from "react";
+import { Suspense, useState } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { postJson, toFriendlyMessage } from "@/lib/user-errors";
 import { GoogleSignInButton } from "@/components/GoogleSignInButton";
 import { AuthShell } from "@/components/AuthShell";
 
-export default function LoginMedicoPage() {
+function safeNext(raw: string | null): string {
+  if (!raw || !raw.startsWith("/") || raw.startsWith("//")) return "/medicos/painel";
+  return raw;
+}
+
+function LoginMedicoForm() {
   const router = useRouter();
+  const search = useSearchParams();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showPw, setShowPw] = useState(false);
@@ -21,7 +27,7 @@ export default function LoginMedicoPage() {
     setError("");
     try {
       await postJson("/api/auth", { email: email.trim(), password }, "E-mail ou senha inválidos.");
-      router.push("/medicos/painel");
+      router.push(safeNext(search.get("next")));
     } catch (err) {
       setError(toFriendlyMessage(err, "Não foi possível entrar. Tente novamente."));
     } finally {
@@ -89,5 +95,13 @@ export default function LoginMedicoPage() {
           <Link href="/enfermeiro/login" className="hover:text-[var(--gold)]">Sou enfermeiro(a)</Link>
         </div>
     </AuthShell>
+  );
+}
+
+export default function LoginMedicoPage() {
+  return (
+    <Suspense>
+      <LoginMedicoForm />
+    </Suspense>
   );
 }
