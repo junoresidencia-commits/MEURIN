@@ -72,7 +72,6 @@ export async function openCareRoomForPatient(patientKey: string): Promise<{ room
     patientName: name,
     patientEmail: email,
   });
-  void doctorId;
   return { room };
 }
 
