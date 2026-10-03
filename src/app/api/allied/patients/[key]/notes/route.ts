@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { requireAllied, resolveAlliedPatientAccess } from "@/lib/allied-access";
-import { addAlliedNote, listNotesForPatient } from "@/lib/allied-store";
+import { addAlliedNote, listNotesForPatient, updateAlliedNote } from "@/lib/allied-store";
 
 export async function GET(_req: Request, { params }: { params: Promise<{ key: string }> }) {
   const { key } = await params;
@@ -30,4 +30,25 @@ export async function POST(req: Request, { params }: { params: Promise<{ key: st
     body, payload, shareWithTeam, createdBy: pro.id, updatedBy: null,
   });
   return NextResponse.json({ ok: true, note }, { status: 201 });
+}
+
+export async function PATCH(req: Request, { params }: { params: Promise<{ key: string }> }) {
+  const { key } = await params;
+  const pro = await requireAllied();
+  if (!pro) return NextResponse.json({ error: "Não autenticado." }, { status: 401 });
+  const access = await resolveAlliedPatientAccess(decodeURIComponent(key), pro);
+  if (!access) return NextResponse.json({ error: "Sem acesso a este paciente." }, { status: 403 });
+  const b = await req.json().catch(() => ({}));
+  const id = String(b.id || "").trim();
+  if (!id) return NextResponse.json({ error: "Registro inválido." }, { status: 400 });
+  const body = String(b.body || "").trim();
+  if (!body) return NextResponse.json({ error: "Escreva a evolução." }, { status: 400 });
+  const note = await updateAlliedNote(id, {
+    body,
+    payload: b.payload && typeof b.payload === "object" ? b.payload as Record<string, unknown> : undefined,
+    shareWithTeam: b.shareWithTeam === undefined ? undefined : Boolean(b.shareWithTeam),
+    title: b.title != null ? String(b.title) : undefined,
+  }, pro.id);
+  if (!note) return NextResponse.json({ error: "Registro não encontrado." }, { status: 404 });
+  return NextResponse.json({ ok: true, note });
 }

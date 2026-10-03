@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
+import { StartCareCallButton } from "@/components/StartCareCallButton";
 
 type Lab = { key: string; label: string; value: number; unit?: string; measuredAt: string };
 type Summary = {
@@ -145,6 +146,10 @@ export default function NutriPacientePage() {
     <div className="mx-auto max-w-3xl px-5 py-8">
       <Link href="/nutricionista/painel" className="text-sm font-semibold text-[var(--gold)]">← Painel</Link>
       <h1 className="font-display mt-2 text-2xl font-extrabold text-[var(--text)]">{sum.patient.name}</h1>
+      <div className="mt-3">
+        <StartCareCallButton patientKey={sum.patient.key} />
+        <p className="mt-2 text-xs text-[var(--text-muted)]">Consulta online com vídeo. A evolução da chamada grava no prontuário nutricional.</p>
+      </div>
 
       {/* Resumo renal (somente leitura) */}
       <section className="panel mt-4">

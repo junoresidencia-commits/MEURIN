@@ -5,9 +5,11 @@ import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import { formatSlotLabel } from "@/lib/scheduling-client";
 import { ConsultChartPanel } from "@/components/ConsultChartPanel";
+import { CareConsultPanel } from "@/components/CareConsultPanel";
 
 type Role = "doctor" | "patient";
 type RoomRole = "doctor" | "patient" | "guest";
+type RoomKind = "doctor" | "psychology" | "nursing" | "nutrition";
 type IceServer = { urls: string | string[]; username?: string; credential?: string };
 
 const CARE_REASON: Record<string, string> = {
@@ -36,10 +38,15 @@ export default function ConsultaPage() {
   const [info, setInfo] = useState<{
     patientName: string;
     patientEmail?: string;
+    patientKey?: string;
     doctorName: string;
     slotStart: string;
     careReason?: string;
   } | null>(null);
+  const [roomKind, setRoomKind] = useState<RoomKind>("doctor");
+  const [hostLabel, setHostLabel] = useState("Médico");
+  const [homePath, setHomePath] = useState("/medicos/agenda");
+  const [loginPath, setLoginPath] = useState("/medicos/login");
   const [status, setStatus] = useState("Preparando sala…");
   const [error, setError] = useState("");
   const [joined, setJoined] = useState(false);
@@ -62,10 +69,15 @@ export default function ConsultaPage() {
         setRoomRole(data.you?.role || "guest");
         setRole(nextRole);
         roleRef.current = nextRole;
+        setRoomKind((data.kind as RoomKind) || "doctor");
+        setHostLabel(data.hostLabel || "Médico");
+        setHomePath(data.homePath || "/medicos/agenda");
+        setLoginPath(data.loginPath || "/medicos/login");
         setInfo({
           patientName: data.booking.patientName,
           patientEmail: data.booking.patientEmail,
-          doctorName: data.doctor?.name || "Médico",
+          patientKey: data.booking.patientKey,
+          doctorName: data.doctor?.name || data.hostLabel || "Profissional",
           slotStart: data.booking.slotStart,
           careReason: data.booking.careReason,
         });
@@ -203,7 +215,7 @@ export default function ConsultaPage() {
   }
 
   function destinationAfterLeave() {
-    return roleRef.current === "doctor" ? "/medicos/agenda" : "/minhas-consultas";
+    return roleRef.current === "doctor" ? homePath : "/paciente/inicio";
   }
 
   async function hangUp() {
@@ -260,7 +272,7 @@ export default function ConsultaPage() {
         await postSignal("offer", offer);
         setStatus("Aguardando o paciente entrar…");
       } else {
-        setStatus("Aguardando o médico iniciar a chamada…");
+        setStatus(`Aguardando ${hostLabel.toLowerCase()} iniciar a chamada…`);
       }
     } catch {
       setError(
@@ -351,7 +363,7 @@ export default function ConsultaPage() {
           className="h-full w-full object-cover"
         />
         <span className="absolute bottom-2 left-2 rounded-full bg-black/60 px-2 py-0.5 text-[10px] text-white">
-          {isDoctor ? "Você" : "Médico"}
+          {isDoctor ? "Você" : hostLabel}
         </span>
       </div>
     </div>
@@ -405,10 +417,10 @@ export default function ConsultaPage() {
           </button>
           {roomRole === "guest" && (
             <Link
-              href={`/medicos/login?next=/consulta/${roomId}`}
+              href={`${loginPath}?next=/consulta/${roomId}`}
               className="text-sm font-semibold text-[var(--gold)] underline"
             >
-              Sou o médico
+              Sou {hostLabel.toLowerCase()}
             </Link>
           )}
         </div>
@@ -416,7 +428,12 @@ export default function ConsultaPage() {
 
       <div className={`mt-8 ${isDoctor ? "grid items-start gap-4 xl:grid-cols-[minmax(0,1fr)_minmax(320px,400px)]" : ""}`}>
         {videos}
-        {isDoctor && info?.patientEmail && <ConsultChartPanel patientEmail={info.patientEmail} />}
+        {isDoctor && roomKind === "doctor" && info?.patientEmail && (
+          <ConsultChartPanel patientEmail={info.patientEmail} />
+        )}
+        {isDoctor && roomKind !== "doctor" && info?.patientKey && (
+          <CareConsultPanel kind={roomKind} patientKey={info.patientKey} />
+        )}
       </div>
 
       {showTestHint && (

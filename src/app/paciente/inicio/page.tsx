@@ -36,6 +36,14 @@ type Booking = {
   meetingRoomId: string;
 };
 
+type CareRoom = {
+  meetingRoomId: string;
+  area: string;
+  hostLabel: string;
+  professionalName: string;
+  href: string;
+};
+
 type SharedNote = {
   id: string;
   doctorName: string;
@@ -71,6 +79,7 @@ export default function PacienteInicioPage() {
   const [records, setRecords] = useState<HomeRecord[]>([]);
   const [food, setFood] = useState<FoodLog[]>([]);
   const [bookings, setBookings] = useState<Booking[]>([]);
+  const [careRooms, setCareRooms] = useState<CareRoom[]>([]);
   const [notes, setNotes] = useState<SharedNote[]>([]);
   const [documents, setDocuments] = useState<SharedDoc[]>([]);
   const [labs, setLabs] = useState<{ testKey: string; value: number; unit?: string | null; measuredAt: string }[]>([]);
@@ -148,6 +157,13 @@ export default function PacienteInicioPage() {
         const md = await me.json();
         if (md.found && md.patient?.name) setPatientName(md.patient.name);
         if (md.found && md.patient?.photoUrl) setPhotoUrl(md.patient.photoUrl);
+      } catch {
+        /* ignore */
+      }
+      try {
+        const cr = await fetch("/api/patient/care-rooms");
+        const cd = await cr.json();
+        setCareRooms(cd.rooms || []);
       } catch {
         /* ignore */
       }
@@ -352,6 +368,26 @@ export default function PacienteInicioPage() {
           </div>
         )}
       </div>
+
+      {careRooms.length > 0 && (
+        <>
+          <p className="mt-8 text-xs font-bold uppercase tracking-wider text-[var(--gold)]">
+            Consulta da equipe
+          </p>
+          <div className="mt-3 space-y-3">
+            {careRooms.map((r) => (
+              <div key={r.meetingRoomId} className="panel">
+                <p className="text-xs font-semibold uppercase tracking-wider text-[var(--gold)]">{r.area}</p>
+                <p className="mt-1 font-bold text-[var(--text)]">{r.professionalName}</p>
+                <p className="text-sm text-[var(--text-muted)]">{r.hostLabel} · sala aberta</p>
+                <Link href={r.href} className="btn-gold mt-4 inline-flex">
+                  Entrar na consulta online
+                </Link>
+              </div>
+            ))}
+          </div>
+        </>
+      )}
 
       {documents.length > 0 && (
         <>

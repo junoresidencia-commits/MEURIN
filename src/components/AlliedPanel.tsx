@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import type { AlliedRole } from "@/lib/allied-types";
+import { StartCareCallButton } from "@/components/StartCareCallButton";
 
 type Me = { professional: { name: string; registry?: string | null; uf?: string | null }; doctors: { id: string; name: string }[] };
 type Patient = { key: string; name: string; reason?: string | null; at: string };
@@ -65,15 +66,22 @@ export function AlliedPanel({ role }: { role: AlliedRole }) {
         <p className="mt-1 text-sm text-[var(--text-muted)]">Somente pacientes encaminhados a você.</p>
         <input className="input-field mt-3" placeholder="Pesquisar por nome" value={q} onChange={(e) => setQ(e.target.value)} />
         <div className="mt-3 grid gap-2">
-          {filtered.length === 0 && <p className="text-sm text-[var(--text-muted)]">Nenhum paciente encaminhado.</p>}
+          {filtered.length === 0 && (
+            <p className="text-sm text-[var(--text-muted)]">
+              Nenhum paciente encaminhado. Quando o médico enviar alguém, você atende online daqui — mesma sala de vídeo e evolução da consulta.
+            </p>
+          )}
           {filtered.map((p) => (
-            <Link key={p.key} href={`${meta.base}/paciente/${encodeURIComponent(p.key)}`} className="panel flex items-center justify-between transition hover:border-[var(--border-gold)]">
-              <div>
+            <div key={p.key} className="panel flex flex-wrap items-center justify-between gap-3 transition hover:border-[var(--border-gold)]">
+              <Link href={`${meta.base}/paciente/${encodeURIComponent(p.key)}`} className="min-w-0 flex-1">
                 <p className="font-semibold text-[var(--text)]">{p.name}</p>
                 {p.reason && <p className="text-xs text-[var(--text-muted)]">{p.reason}</p>}
+              </Link>
+              <div className="flex flex-wrap items-center gap-2">
+                <StartCareCallButton patientKey={p.key} label="Consulta online" />
+                <Link href={`${meta.base}/paciente/${encodeURIComponent(p.key)}`} className="text-sm font-semibold text-[var(--gold)]">Prontuário →</Link>
               </div>
-              <span className="text-[var(--gold)]">Abrir →</span>
-            </Link>
+            </div>
           ))}
         </div>
       </section>

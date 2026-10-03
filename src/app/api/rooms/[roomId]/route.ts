@@ -4,10 +4,13 @@ import { getPatientEmail } from "@/lib/patient-session";
 import { getBookingByRoomId, getDoctorById } from "@/lib/store";
 import { clinicalKey, findPatientByClinicalKey } from "@/lib/patients-store";
 import type { Booking } from "@/lib/types";
+import { CARE_META, getCareRoomByMeetingId, type CareKind, type CareRoom } from "@/lib/care-rooms-store";
+import { currentCareProfessional } from "@/lib/care-room-access";
 
 export type RoomRole = "doctor" | "patient" | "guest";
+export type RoomKind = "doctor" | CareKind;
 
-async function resolveRoomRole(booking: Booking): Promise<RoomRole> {
+async function resolveDoctorBookingRole(booking: Booking): Promise<RoomRole> {
   const doctorId = await getDoctorSessionId();
   if (doctorId && doctorId === booking.doctorId) return "doctor";
 
@@ -26,38 +29,88 @@ async function resolveRoomRole(booking: Booking): Promise<RoomRole> {
   return "guest";
 }
 
+async function resolveCareRoomRole(room: CareRoom): Promise<RoomRole> {
+  const actor = await currentCareProfessional();
+  if (actor && actor.professionalId === room.professionalId) return "doctor";
+
+  const subject = await getPatientEmail();
+  if (subject) {
+    const keys = new Set<string>([subject.toLowerCase().trim()]);
+    const patient = await findPatientByClinicalKey(subject);
+    if (patient) {
+      keys.add(clinicalKey(patient));
+      keys.add(`pid:${patient.id}`);
+      if (patient.email) keys.add(patient.email.toLowerCase().trim());
+    }
+    const email = (room.patientEmail || "").toLowerCase().trim();
+    if (keys.has(room.patientKey.toLowerCase().trim()) || (email && keys.has(email))) {
+      return "patient";
+    }
+  }
+  return "guest";
+}
+
 export async function GET(
   _req: Request,
   context: { params: Promise<{ roomId: string }> }
 ) {
   const { roomId } = await context.params;
   const booking = await getBookingByRoomId(roomId);
-  if (!booking) {
+  if (booking) {
+    if (!["confirmed", "completed"].includes(booking.status)) {
+      const msg =
+        booking.status === "paid"
+          ? "Pagamento recebido. A sala abre quando o médico confirmar a consulta."
+          : "Consulta liberada somente após o pagamento e a confirmação do médico.";
+      return NextResponse.json({ error: msg }, { status: 403 });
+    }
+    const [doctor, you] = await Promise.all([getDoctorById(booking.doctorId), resolveDoctorBookingRole(booking)]);
+    return NextResponse.json({
+      you: { role: you },
+      kind: "doctor" as RoomKind,
+      hostLabel: "Médico",
+      homePath: "/medicos/agenda",
+      loginPath: "/medicos/login",
+      booking: {
+        id: booking.id,
+        patientName: booking.patientName,
+        patientEmail: you === "doctor" ? booking.patientEmail : undefined,
+        patientKey: you === "doctor" ? booking.patientEmail : undefined,
+        careReason: booking.careReason,
+        slotStart: booking.slotStart,
+        slotEnd: booking.slotEnd,
+        status: booking.status,
+        meetingRoomId: booking.meetingRoomId,
+      },
+      doctor: doctor
+        ? { id: doctor.id, name: doctor.name, crm: doctor.crm }
+        : null,
+    });
+  }
+
+  const care = await getCareRoomByMeetingId(roomId);
+  if (!care || care.status !== "open") {
     return NextResponse.json({ error: "Sala não encontrada" }, { status: 404 });
   }
-  // A sala abre só após o médico CONFIRMAR (pagamento sozinho não libera).
-  if (!["confirmed", "completed"].includes(booking.status)) {
-    const msg =
-      booking.status === "paid"
-        ? "Pagamento recebido. A sala abre quando o médico confirmar a consulta."
-        : "Consulta liberada somente após o pagamento e a confirmação do médico.";
-    return NextResponse.json({ error: msg }, { status: 403 });
-  }
-  const [doctor, you] = await Promise.all([getDoctorById(booking.doctorId), resolveRoomRole(booking)]);
+  const you = await resolveCareRoomRole(care);
+  const meta = CARE_META[care.kind];
   return NextResponse.json({
     you: { role: you },
+    kind: care.kind,
+    hostLabel: meta.label,
+    homePath: meta.path,
+    loginPath: meta.login,
     booking: {
-      id: booking.id,
-      patientName: booking.patientName,
-      patientEmail: you === "doctor" ? booking.patientEmail : undefined,
-      careReason: booking.careReason,
-      slotStart: booking.slotStart,
-      slotEnd: booking.slotEnd,
-      status: booking.status,
-      meetingRoomId: booking.meetingRoomId,
+      id: care.id,
+      patientName: care.patientName,
+      patientEmail: you === "doctor" ? care.patientEmail || care.patientKey : undefined,
+      patientKey: you === "doctor" ? care.patientKey : undefined,
+      careReason: undefined,
+      slotStart: care.createdAt,
+      slotEnd: undefined,
+      status: "confirmed",
+      meetingRoomId: care.meetingRoomId,
     },
-    doctor: doctor
-      ? { id: doctor.id, name: doctor.name, crm: doctor.crm }
-      : null,
+    doctor: { id: care.professionalId, name: care.professionalName, crm: "" },
   });
 }
