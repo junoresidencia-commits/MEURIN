@@ -306,8 +306,8 @@ export default function PacienteInicioPage() {
       <div className="mt-8">
         <p className="text-xs font-bold uppercase tracking-wider text-[var(--gold)]">Medicações que você toma</p>
         <p className="mt-1 text-xs text-[var(--text-muted)]">Seu médico vê esta lista no prontuário.</p>
-        <div className="mt-3">
-          <PatientMedicationsForm />
+        <div className="panel mt-3">
+          <PatientMedicationsForm compact />
         </div>
       </div>
 
