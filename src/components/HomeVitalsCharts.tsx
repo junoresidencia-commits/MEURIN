@@ -55,7 +55,7 @@ function SeriesChart({
   const last = all[all.length - 1];
 
   return (
-    <svg viewBox={`0 0 ${W} ${H}`} className="w-full" role="img" aria-label="Gráfico de sinais em casa">
+    <svg viewBox={`0 0 ${W} ${H}`} className="mt-1 h-40 w-full" role="img" aria-label="Gráfico de sinais em casa">
       <line x1={pad.left} y1={pad.top} x2={pad.left} y2={H - pad.bottom} stroke="var(--border)" strokeWidth="1" />
       <line x1={pad.left} y1={H - pad.bottom} x2={W - pad.right} y2={H - pad.bottom} stroke="var(--border)" strokeWidth="1" />
       <text x={pad.left - 4} y={pad.top + 4} textAnchor="end" fontSize="9" fill="var(--text-muted)">{fmtVal(max)}</text>
@@ -215,6 +215,9 @@ export function HomeVitalsCharts({ records }: { records: HomeVital[] }) {
             unit="kg"
             series={[{ label: "Peso", color: "#7758c6", points: wt.map((r) => ({ x: r.measuredAt, y: Number(r.weightKg) })) }]}
           />
+          {wt.length === 1 && (
+            <p className="mt-1 text-[11px] text-[var(--text-muted)]">Só uma data ainda. O gráfico cresce quando o paciente registrar de novo.</p>
+          )}
         </div>
       )}
     </div>
