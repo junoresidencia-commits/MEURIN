@@ -156,14 +156,20 @@ export function ConsultChartPanel({ patientEmail }: { patientEmail: string }) {
         </ul>
       ) : null}
 
-      {summary && (
+      {summary &&
+        (summary.labs.tfge ||
+          summary.labs.creatinina ||
+          summary.labs.potassio ||
+          summary.labs.hemoglobina ||
+          summary.vitals.pa ||
+          summary.vitals.peso) && (
         <div className="mt-3 grid grid-cols-2 gap-2 text-xs">
-          <p><span className="text-[var(--text-muted)]">TFGe</span><br />{labLine(summary.labs.tfge)}</p>
-          <p><span className="text-[var(--text-muted)]">Creatinina</span><br />{labLine(summary.labs.creatinina)}</p>
-          <p><span className="text-[var(--text-muted)]">Potássio</span><br />{labLine(summary.labs.potassio)}</p>
-          <p><span className="text-[var(--text-muted)]">Hemoglobina</span><br />{labLine(summary.labs.hemoglobina)}</p>
-          <p><span className="text-[var(--text-muted)]">PA</span><br />{summary.vitals.pa ? `${summary.vitals.pa.text} · ${shortDate(summary.vitals.pa.date)}` : "—"}</p>
-          <p><span className="text-[var(--text-muted)]">Peso</span><br />{summary.vitals.peso ? `${summary.vitals.peso.value} kg · ${shortDate(summary.vitals.peso.date)}` : "—"}</p>
+          {summary.labs.tfge && <p><span className="text-[var(--text-muted)]">TFGe</span><br />{labLine(summary.labs.tfge)}</p>}
+          {summary.labs.creatinina && <p><span className="text-[var(--text-muted)]">Creatinina</span><br />{labLine(summary.labs.creatinina)}</p>}
+          {summary.labs.potassio && <p><span className="text-[var(--text-muted)]">Potássio</span><br />{labLine(summary.labs.potassio)}</p>}
+          {summary.labs.hemoglobina && <p><span className="text-[var(--text-muted)]">Hemoglobina</span><br />{labLine(summary.labs.hemoglobina)}</p>}
+          {summary.vitals.pa && <p><span className="text-[var(--text-muted)]">PA</span><br />{summary.vitals.pa.text} · {shortDate(summary.vitals.pa.date)}</p>}
+          {summary.vitals.peso && <p><span className="text-[var(--text-muted)]">Peso</span><br />{summary.vitals.peso.value} kg · {shortDate(summary.vitals.peso.date)}</p>}
         </div>
       )}
 
