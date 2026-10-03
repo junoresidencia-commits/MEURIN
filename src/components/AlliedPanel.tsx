@@ -58,7 +58,10 @@ export function AlliedPanel({ role }: { role: AlliedRole }) {
             Vinculado a {me?.doctors.length || 0} médico(s)
           </p>
         </div>
-        <button type="button" className="btn-ghost" onClick={logout}>Sair</button>
+        <div className="flex gap-2">
+          <Link href={`${meta.base}/configuracoes`} className="btn-ghost">Perfil e recebimentos</Link>
+          <button type="button" className="btn-ghost" onClick={logout}>Sair</button>
+        </div>
       </div>
 
       <section className="mt-8">

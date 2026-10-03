@@ -31,9 +31,14 @@ export async function POST(req: Request, { params }: { params: Promise<{ key: st
   const platformFeeCents = Math.round((priceCents * commission) / 100);
   const nutritionistPayoutCents = priceCents - platformFeeCents;
 
-  // Pix copia-e-cola do recebedor (nutricionista), se configurado.
+  // Pix copia-e-cola do recebedor (nutricionista), com o valor da consulta na chave dela.
   const pix = nut.pixProfile?.key
-    ? buildPixBrCode({ key: nut.pixProfile.key, holderName: nut.pixProfile.holderName, city: nut.pixProfile.city })
+    ? buildPixBrCode({
+        key: nut.pixProfile.key,
+        holderName: nut.pixProfile.holderName || nut.name,
+        city: nut.pixProfile.city,
+        amountCents: priceCents,
+      })
     : null;
 
   const appt = await createAppointment({

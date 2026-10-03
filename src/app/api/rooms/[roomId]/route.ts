@@ -5,7 +5,7 @@ import { getBookingByRoomId, getDoctorById } from "@/lib/store";
 import { clinicalKey, findPatientByClinicalKey } from "@/lib/patients-store";
 import type { Booking } from "@/lib/types";
 import { CARE_META, getCareRoomByMeetingId, type CareKind, type CareRoom } from "@/lib/care-rooms-store";
-import { currentCareProfessional } from "@/lib/care-room-access";
+import { carePixPayload, careRoomNeedsPayment, currentCareProfessional } from "@/lib/care-room-access";
 
 export type RoomRole = "doctor" | "patient" | "guest";
 export type RoomKind = "doctor" | CareKind;
@@ -94,12 +94,37 @@ export async function GET(
   }
   const you = await resolveCareRoomRole(care);
   const meta = CARE_META[care.kind];
+  const unpaid = careRoomNeedsPayment(care);
+  if (you !== "doctor" && unpaid) {
+    const pix = you === "patient" ? await carePixPayload(care) : null;
+    return NextResponse.json(
+      {
+        error:
+          you === "patient"
+            ? "Pague o Pix da consulta para entrar na sala. O valor vai para a chave cadastrada do profissional."
+            : "Entre como paciente para pagar o Pix e acessar a sala.",
+        paymentRequired: true,
+        kind: care.kind,
+        hostLabel: meta.label,
+        homePath: meta.path,
+        loginPath: "/paciente/entrar",
+        professionalName: care.professionalName,
+        pix,
+      },
+      { status: 403 }
+    );
+  }
   return NextResponse.json({
     you: { role: you },
     kind: care.kind,
     hostLabel: meta.label,
     homePath: meta.path,
     loginPath: meta.login,
+    payment: {
+      status: care.paymentStatus,
+      priceCents: care.priceCents ?? 0,
+      holderName: care.pixHolderName || care.professionalName,
+    },
     booking: {
       id: care.id,
       patientName: care.patientName,
@@ -108,7 +133,7 @@ export async function GET(
       careReason: undefined,
       slotStart: care.createdAt,
       slotEnd: undefined,
-      status: "confirmed",
+      status: unpaid ? "pending_payment" : "confirmed",
       meetingRoomId: care.meetingRoomId,
     },
     doctor: { id: care.professionalId, name: care.professionalName, crm: "" },

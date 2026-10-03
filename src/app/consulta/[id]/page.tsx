@@ -6,6 +6,7 @@ import { useParams, useRouter } from "next/navigation";
 import { formatSlotLabel } from "@/lib/scheduling-client";
 import { ConsultChartPanel } from "@/components/ConsultChartPanel";
 import { CareConsultPanel } from "@/components/CareConsultPanel";
+import { PixCheckout } from "@/components/PixCheckout";
 
 type Role = "doctor" | "patient";
 type RoomRole = "doctor" | "patient" | "guest";
@@ -55,6 +56,13 @@ export default function ConsultaPage() {
   const [camOff, setCamOff] = useState(false);
   const [copied, setCopied] = useState(false);
   const [turnReady, setTurnReady] = useState(false);
+  const [paywall, setPaywall] = useState<{
+    brCode: string;
+    qrDataUrl: string;
+    amountCents: number;
+    holderName: string;
+  } | null>(null);
+  const [hostAwaitingPay, setHostAwaitingPay] = useState<{ priceCents: number; holderName: string } | null>(null);
 
   useEffect(() => {
     setShowTestHint(new URLSearchParams(window.location.search).get("teste") === "1");
@@ -64,7 +72,23 @@ export default function ConsultaPage() {
     fetch(`/api/rooms/${roomId}`)
       .then(async (r) => {
         const data = await r.json();
-        if (!r.ok) throw new Error(data.error || "Sala indisponível");
+        if (!r.ok) {
+          if (data.paymentRequired) {
+            setHostLabel(data.hostLabel || "Profissional");
+            setHomePath("/paciente/inicio");
+            setLoginPath(data.loginPath || "/paciente/entrar");
+            if (data.pix?.brCode) {
+              setPaywall({
+                brCode: data.pix.brCode,
+                qrDataUrl: data.pix.qrDataUrl || "",
+                amountCents: data.pix.amountCents,
+                holderName: data.pix.holderName || data.professionalName || "Profissional",
+              });
+              return;
+            }
+          }
+          throw new Error(data.error || "Sala indisponível");
+        }
         const nextRole: Role = data.you?.role === "doctor" ? "doctor" : "patient";
         setRoomRole(data.you?.role || "guest");
         setRole(nextRole);
@@ -81,6 +105,12 @@ export default function ConsultaPage() {
           slotStart: data.booking.slotStart,
           careReason: data.booking.careReason,
         });
+        if (nextRole === "doctor" && data.payment?.status === "unpaid" && data.payment.priceCents > 0) {
+          setHostAwaitingPay({
+            priceCents: data.payment.priceCents,
+            holderName: data.payment.holderName || data.doctor?.name || "você",
+          });
+        }
         setStatus(
           nextRole === "doctor"
             ? "Sala liberada. Entre para atender o paciente."
@@ -316,6 +346,32 @@ export default function ConsultaPage() {
     </button>
   );
 
+  if (paywall) {
+    return (
+      <div className="mx-auto max-w-md px-5 py-16">
+        <p className="text-xs font-bold uppercase tracking-wider text-[var(--gold)]">Consulta da equipe</p>
+        <h1 className="font-display mt-2 text-2xl font-extrabold text-[var(--text)]">Pague o Pix para entrar</h1>
+        <p className="mt-2 text-sm text-[var(--text-muted)]">
+          O valor vai para a chave Pix cadastrada de {paywall.holderName} — não para o médico nem para a plataforma.
+        </p>
+        <div className="mt-6">
+          <PixCheckout
+            pix={paywall}
+            onPaid={async () => {
+              const res = await fetch(`/api/care-rooms/${roomId}/pay`, { method: "POST" });
+              const data = await res.json().catch(() => ({}));
+              if (!res.ok) throw new Error(data.error || "Não foi possível confirmar o Pix.");
+              window.location.reload();
+            }}
+          />
+        </div>
+        <Link href="/paciente/inicio" className="mt-6 inline-block text-sm font-semibold text-[var(--gold)]">
+          ← Voltar
+        </Link>
+      </div>
+    );
+  }
+
   if (error) {
     return (
       <div className="mx-auto max-w-2xl px-5 py-20">
@@ -391,6 +447,11 @@ export default function ConsultaPage() {
         </p>
       )}
       <p className="mt-3 text-sm text-[var(--gold-light)]">{status}</p>
+      {hostAwaitingPay && (
+        <p className="mt-3 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800">
+          Paciente ainda não declarou o Pix de R$ {(hostAwaitingPay.priceCents / 100).toFixed(2).replace(".", ",")} para {hostAwaitingPay.holderName}. Você já pode entrar.
+        </p>
+      )}
 
       <div className="mt-4 flex flex-wrap gap-2">
         {role === "doctor" && (

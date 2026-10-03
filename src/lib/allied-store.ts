@@ -15,6 +15,7 @@ import {
   type AlliedRole,
   type AlliedStatus,
 } from "./allied-types";
+import type { PixProfile } from "./types";
 
 export * from "./allied-types";
 
@@ -60,6 +61,13 @@ function mapPro(r: Record<string, unknown>): AlliedProfessional {
     photoUrl: (r.photo_url as string) ?? (r.photoUrl as string) ?? null,
     passwordHash: (r.password_hash as string) ?? (r.passwordHash as string) ?? null,
     status: (r.status as AlliedStatus) ?? "active",
+    consultationPriceCents:
+      r.consultation_price_cents != null
+        ? Number(r.consultation_price_cents)
+        : r.consultationPriceCents != null
+          ? Number(r.consultationPriceCents)
+          : null,
+    pixProfile: ((r.pix_profile as PixProfile) ?? (r.pixProfile as PixProfile) ?? null) || null,
     createdAt: String(r.created_at ?? r.createdAt ?? new Date().toISOString()),
     lastAccessAt: (r.last_access_at as string) ?? (r.lastAccessAt as string) ?? null,
   };
@@ -152,6 +160,8 @@ export async function createAlliedProfessional(input: {
     bio: input.bio || null, photoUrl: input.photoUrl || null,
     passwordHash: await bcrypt.hash(password, 10),
     status: input.status || "active",
+    consultationPriceCents: null,
+    pixProfile: null,
     createdAt: new Date().toISOString(),
   };
   if (active()) {
@@ -211,6 +221,43 @@ export async function touchAlliedAccess(id: string): Promise<void> {
   const db = await readLocal();
   const p = db.professionals.find((x) => x.id === id);
   if (p) { p.lastAccessAt = now; await writeLocal(db); }
+}
+
+export async function updateAlliedSettings(
+  id: string,
+  patch: { consultationPriceCents?: number | null; pixProfile?: PixProfile | null }
+): Promise<AlliedProfessional | null> {
+  const current = await getAlliedProfessional(id);
+  if (!current) return null;
+  const next: AlliedProfessional = {
+    ...current,
+    consultationPriceCents: patch.consultationPriceCents !== undefined ? patch.consultationPriceCents : current.consultationPriceCents,
+    pixProfile: patch.pixProfile !== undefined ? patch.pixProfile : current.pixProfile,
+  };
+  if (active()) {
+    const s = getSupabaseAdmin()!;
+    const row: Record<string, unknown> = {};
+    if (patch.consultationPriceCents !== undefined) row.consultation_price_cents = patch.consultationPriceCents;
+    if (patch.pixProfile !== undefined) row.pix_profile = patch.pixProfile;
+    if (Object.keys(row).length > 0) {
+      const { error } = await s.from("allied_professionals").update(row).eq("id", id);
+      if (!isMissing(error)) {
+        if (error) throw error;
+        return next;
+      }
+      tableMissing = true;
+    }
+  }
+  const db = await readLocal();
+  const idx = db.professionals.findIndex((p) => p.id === id);
+  if (idx >= 0) {
+    db.professionals[idx] = { ...db.professionals[idx], ...next };
+    await writeLocal(db);
+    return db.professionals[idx];
+  }
+  db.professionals.push(next);
+  await writeLocal(db);
+  return next;
 }
 
 export async function getAlliedLink(professionalId: string, doctorId: string): Promise<AlliedLink | null> {

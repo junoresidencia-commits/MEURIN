@@ -6,6 +6,7 @@ import { getSupabaseAdmin } from "./supabase-admin";
 
 export type CareKind = "psychology" | "nursing" | "nutrition";
 export type CareRoomStatus = "open" | "closed";
+export type CarePaymentStatus = "free" | "unpaid" | "declared" | "confirmed";
 
 export interface CareRoom {
   id: string;
@@ -17,6 +18,10 @@ export interface CareRoom {
   patientName: string;
   patientEmail?: string | null;
   status: CareRoomStatus;
+  priceCents: number;
+  pixCopiaCola?: string | null;
+  pixHolderName?: string | null;
+  paymentStatus: CarePaymentStatus;
   createdAt: string;
   updatedAt: string;
 }
@@ -37,7 +42,8 @@ function isMissing(error: { code?: string; message?: string } | null): boolean {
 
 async function readLocal(): Promise<CareRoom[]> {
   try {
-    return JSON.parse(await fs.readFile(FILE, "utf8")) as CareRoom[];
+    const raw = JSON.parse(await fs.readFile(FILE, "utf8")) as Record<string, unknown>[];
+    return Array.isArray(raw) ? raw.map(mapRow) : [];
   } catch {
     return [];
   }
@@ -47,7 +53,13 @@ async function writeLocal(list: CareRoom[]) {
   await fs.writeFile(FILE, JSON.stringify(list, null, 2), "utf8");
 }
 
+function mapPaymentStatus(value: unknown, priceCents: number): CarePaymentStatus {
+  if (value === "free" || value === "unpaid" || value === "declared" || value === "confirmed") return value;
+  return priceCents > 0 ? "unpaid" : "free";
+}
+
 function mapRow(r: Record<string, unknown>): CareRoom {
+  const priceCents = Number(r.price_cents ?? r.priceCents ?? 0) || 0;
   return {
     id: String(r.id),
     meetingRoomId: String(r.meeting_room_id ?? r.meetingRoomId),
@@ -58,6 +70,10 @@ function mapRow(r: Record<string, unknown>): CareRoom {
     patientName: String(r.patient_name ?? r.patientName ?? "Paciente"),
     patientEmail: (r.patient_email as string) ?? (r.patientEmail as string) ?? null,
     status: (r.status as CareRoomStatus) || "open",
+    priceCents,
+    pixCopiaCola: (r.pix_copia_cola as string) ?? (r.pixCopiaCola as string) ?? null,
+    pixHolderName: (r.pix_holder_name as string) ?? (r.pixHolderName as string) ?? null,
+    paymentStatus: mapPaymentStatus(r.payment_status ?? r.paymentStatus, priceCents),
     createdAt: String(r.created_at ?? r.createdAt ?? new Date().toISOString()),
     updatedAt: String(r.updated_at ?? r.updatedAt ?? new Date().toISOString()),
   };
@@ -74,6 +90,10 @@ function toRow(room: CareRoom): Record<string, unknown> {
     patient_name: room.patientName,
     patient_email: room.patientEmail ?? null,
     status: room.status,
+    price_cents: room.priceCents,
+    pix_copia_cola: room.pixCopiaCola ?? null,
+    pix_holder_name: room.pixHolderName ?? null,
+    payment_status: room.paymentStatus,
     created_at: room.createdAt,
     updated_at: room.updatedAt,
   };
@@ -145,13 +165,23 @@ export async function findReusableRoom(professionalId: string, patientKey: strin
   );
 }
 
-export async function createCareRoom(input: Omit<CareRoom, "id" | "meetingRoomId" | "createdAt" | "updatedAt" | "status">): Promise<CareRoom> {
+export async function createCareRoom(
+  input: Omit<CareRoom, "id" | "meetingRoomId" | "createdAt" | "updatedAt" | "status"> & {
+    paymentStatus?: CarePaymentStatus;
+    priceCents?: number;
+  }
+): Promise<CareRoom> {
   const now = new Date().toISOString();
+  const priceCents = Math.max(0, Math.round(input.priceCents ?? 0));
   const room: CareRoom = {
     ...input,
     id: uuid(),
     meetingRoomId: uuid(),
     status: "open",
+    priceCents,
+    pixCopiaCola: input.pixCopiaCola ?? null,
+    pixHolderName: input.pixHolderName ?? null,
+    paymentStatus: input.paymentStatus ?? (priceCents > 0 ? "unpaid" : "free"),
     createdAt: now,
     updatedAt: now,
   };
@@ -166,6 +196,40 @@ export async function createCareRoom(input: Omit<CareRoom, "id" | "meetingRoomId
   }
   const list = await readLocal();
   list.push(room);
+  await writeLocal(list);
+  return room;
+}
+
+export async function updateCarePayment(
+  id: string,
+  patch: { paymentStatus?: CarePaymentStatus; pixCopiaCola?: string | null; pixHolderName?: string | null; priceCents?: number }
+): Promise<CareRoom | null> {
+  const now = new Date().toISOString();
+  if (active()) {
+    const s = getSupabaseAdmin()!;
+    const { data: cur, error: readErr } = await s.from("care_rooms").select("*").eq("id", id).maybeSingle();
+    if (!isMissing(readErr) && !readErr && cur) {
+      const next = {
+        payment_status: patch.paymentStatus ?? cur.payment_status,
+        pix_copia_cola: patch.pixCopiaCola !== undefined ? patch.pixCopiaCola : cur.pix_copia_cola,
+        pix_holder_name: patch.pixHolderName !== undefined ? patch.pixHolderName : cur.pix_holder_name,
+        price_cents: patch.priceCents !== undefined ? patch.priceCents : cur.price_cents,
+        updated_at: now,
+      };
+      const { error } = await s.from("care_rooms").update(next).eq("id", id);
+      if (!isMissing(error) && !error) return mapRow({ ...cur, ...next });
+      if (error && !isMissing(error)) throw error;
+    }
+    if (isMissing(readErr)) tableMissing = true;
+  }
+  const list = await readLocal();
+  const room = list.find((r) => r.id === id);
+  if (!room) return null;
+  if (patch.paymentStatus !== undefined) room.paymentStatus = patch.paymentStatus;
+  if (patch.pixCopiaCola !== undefined) room.pixCopiaCola = patch.pixCopiaCola;
+  if (patch.pixHolderName !== undefined) room.pixHolderName = patch.pixHolderName;
+  if (patch.priceCents !== undefined) room.priceCents = patch.priceCents;
+  room.updatedAt = now;
   await writeLocal(list);
   return room;
 }

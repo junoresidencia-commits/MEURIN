@@ -84,23 +84,31 @@ export function doctorPixKey(doctor: { name?: string; pixKey?: string; pixProfil
   };
 }
 
-export function buildBookingPix(
-  doctor: { name?: string; pixKey?: string; pixProfile?: { key?: string; holderName?: string; city?: string } | null },
-  booking: { id: string; priceCents: number }
+export function buildProfessionalPix(
+  professional: { name?: string; pixKey?: string; pixProfile?: { key?: string; holderName?: string; city?: string } | null },
+  charge: { id: string; priceCents: number },
+  fallbackHolder = "Profissional"
 ) {
-  const dest = doctorPixKey(doctor);
+  const dest = doctorPixKey(professional);
   if (!dest) return null;
   const brCode = buildPixBrCode({
     key: dest.key,
     holderName: dest.holderName,
     city: dest.city,
-    amountCents: booking.priceCents,
-    txid: booking.id.replace(/-/g, "").slice(0, 25),
+    amountCents: charge.priceCents,
+    txid: charge.id.replace(/-/g, "").slice(0, 25),
   });
   if (!brCode) return null;
   return {
     brCode,
-    amountCents: booking.priceCents,
-    holderName: dest.holderName || "Médico",
+    amountCents: charge.priceCents,
+    holderName: dest.holderName || fallbackHolder,
   };
+}
+
+export function buildBookingPix(
+  doctor: { name?: string; pixKey?: string; pixProfile?: { key?: string; holderName?: string; city?: string } | null },
+  booking: { id: string; priceCents: number }
+) {
+  return buildProfessionalPix(doctor, booking, "Médico");
 }
