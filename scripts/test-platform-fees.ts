@@ -44,6 +44,6 @@ const adminPix = buildPixBrCode({
 });
 assert.ok(adminPix.startsWith("000201"));
 assert.match(adminPix, /junoresidencia@gmail\.com/);
-assert.match(adminPix, /540625.00/);
+assert.match(adminPix, /540525.00/);
 
 console.log("platform-fees + pix admin ok");

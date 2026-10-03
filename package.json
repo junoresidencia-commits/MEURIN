@@ -20,6 +20,7 @@
     "check:signature-links": "npx tsx scripts/test-signature-links.ts",
     "check:pix-brcode": "npx tsx scripts/test-pix-brcode.ts",
     "check:platform-fees": "npx tsx scripts/test-platform-fees.ts",
+    "check:retorno-comissao": "npx tsx scripts/test-retorno-comissao-api.ts",
     "check:whatsapp-payment": "env -u NEXT_PUBLIC_SUPABASE_URL -u SUPABASE_SERVICE_ROLE_KEY NODE_OPTIONS='--require ./scripts/shim-server-only.cjs' npx tsx scripts/test-whatsapp-payment.ts",
     "check:clinic-isolation": "env -u NEXT_PUBLIC_SUPABASE_URL -u SUPABASE_SERVICE_ROLE_KEY NODE_OPTIONS='--require ./scripts/shim-server-only.cjs' npx tsx scripts/test-clinic-isolation.ts",
     "check:readiness": "npx tsx scripts/test-readiness.ts",
