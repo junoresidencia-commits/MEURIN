@@ -13,7 +13,7 @@ export function ClinicalSummaryBar({
 }) {
   const lines = buildClinicalSummary({ age, data, labs });
   const meds = formatMedicationLines(data.medicamentos_em_uso);
-  if (!lines.length) return null;
+  if (!lines.length && !meds.length) return null;
   return (
     <section className="mt-4 rounded-2xl border border-[var(--border-gold)] bg-[var(--gold-soft)]/50 px-4 py-3">
       <p className="text-[11px] font-bold uppercase tracking-wider text-[var(--gold)]">Resumo clínico</p>

@@ -23,7 +23,7 @@ import { CareTeamPatientCard, CareTimeline } from "@/components/CareTeamPatientC
 import { SharePatientWithDoctor } from "@/components/SharePatientWithDoctor";
 import { EncaminharHeaderButton } from "@/components/EncaminharHeaderButton";
 import { ClinicalSummaryBar } from "@/components/ClinicalSummaryBar";
-import { HomeVitalsCharts } from "@/components/HomeVitalsCharts";
+import { DoctorSummaryEvolution } from "@/components/DoctorSummaryEvolution";
 import { LabResultsTable, LabSparkline } from "@/components/LabResultsTable";
 import { PdModule } from "@/components/PdModule";
 import { encodePatientParam, postJson, toFriendlyMessage } from "@/lib/user-errors";
@@ -658,25 +658,7 @@ export default function ProntuarioPage() {
 
       <div className="mt-4">
         {tab === "resumo" && (
-          <div className="panel space-y-4">
-            <p className="text-sm text-[var(--text-soft)]">
-              Informação registrada pelo paciente em casa (com data e horário). Não substitui evolução médica.
-            </p>
-            <HomeVitalsCharts records={records} />
-            {bp == null && glucose == null && (
-              <p className="text-sm text-[var(--text-muted)]">Ainda não há pressão nem glicemia registradas em casa.</p>
-            )}
-            <ul className="space-y-2 text-sm">
-              <li className="flex justify-between border-b border-[var(--border)] pb-2">
-                <span className="text-[var(--text-muted)]">Peso</span>
-                <span className="font-semibold text-[var(--text)]">{weight ? `${String(weight.weightKg).replace(".", ",")} kg · ${fmt(weight.measuredAt)}` : "sem registro"}</span>
-              </li>
-              <li className="flex justify-between">
-                <span className="text-[var(--text-muted)]">Últimos sintomas</span>
-                <span className="max-w-[60%] text-right font-semibold text-[var(--text)]">{sintomas[0]?.symptoms || "sem registro"}</span>
-              </li>
-            </ul>
-          </div>
+          <DoctorSummaryEvolution records={records} labs={labs} notes={notes} profile={profileData} />
         )}
 
         {tab === "riscos" && <PatientRisksPanel emailParam={emailParam} />}

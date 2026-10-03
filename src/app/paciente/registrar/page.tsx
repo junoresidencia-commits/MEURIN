@@ -4,14 +4,16 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { PatientNav } from "@/components/PatientNav";
+import { PatientMedicationsForm } from "@/components/PatientMedicationsForm";
 
-type Kind = "bp" | "glucose" | "weight" | "symptom";
+type Kind = "bp" | "glucose" | "weight" | "symptom" | "meds";
 
 const TABS: { id: Kind; label: string }[] = [
   { id: "bp", label: "Pressão" },
   { id: "glucose", label: "Glicemia" },
   { id: "weight", label: "Peso" },
   { id: "symptom", label: "Sintomas" },
+  { id: "meds", label: "Medicações" },
 ];
 
 export default function RegistrarPage() {
@@ -81,6 +83,11 @@ export default function RegistrarPage() {
         ))}
       </div>
 
+      {kind === "meds" ? (
+        <div className="mt-5">
+          <PatientMedicationsForm />
+        </div>
+      ) : (
       <div className="panel mt-5 space-y-4">
         {kind === "bp" && (
           <>
@@ -158,6 +165,7 @@ export default function RegistrarPage() {
           {loading ? "Salvando…" : "Salvar registro"}
         </button>
       </div>
+      )}
 
       <p className="mt-4 text-center text-xs text-[var(--text-muted)]">
         Em emergência (dor forte, falta de ar intensa, desmaio), procure o

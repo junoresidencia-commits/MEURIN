@@ -9,6 +9,7 @@ import { NotificationBell } from "@/components/NotificationBell";
 import { EnableNotifications } from "@/components/EnableNotifications";
 import { LabChart } from "@/components/LabChart";
 import { PatientHealthTeam } from "@/components/PatientHealthTeam";
+import { PatientMedicationsForm } from "@/components/PatientMedicationsForm";
 import { formatSlotLabel } from "@/lib/scheduling-client";
 
 type HomeRecord = {
@@ -301,6 +302,14 @@ export default function PacienteInicioPage() {
       >
         Registrar dados de hoje
       </Link>
+
+      <div className="mt-8">
+        <p className="text-xs font-bold uppercase tracking-wider text-[var(--gold)]">Medicações que você toma</p>
+        <p className="mt-1 text-xs text-[var(--text-muted)]">Seu médico vê esta lista no prontuário.</p>
+        <div className="panel mt-3">
+          <PatientMedicationsForm compact />
+        </div>
+      </div>
 
       <p className="mt-8 text-xs font-bold uppercase tracking-wider text-[var(--gold)]">
         Próxima consulta

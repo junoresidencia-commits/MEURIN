@@ -21,10 +21,16 @@ function dayLabel(iso: string) {
 function range(values: number[], extras: number[]) {
   const all = [...values, ...extras].filter((n) => Number.isFinite(n));
   if (!all.length) return { min: 0, max: 1 };
-  const min = Math.min(...all);
-  const max = Math.max(...all);
-  const pad = Math.max(8, (max - min) * 0.18) || 10;
-  return { min: min - pad, max: max + pad };
+  const minV = Math.min(...all);
+  const maxV = Math.max(...all);
+  const spread = maxV - minV;
+  const magnitude = Math.max(Math.abs(maxV), Math.abs(minV), 1);
+  const pad = spread > 0 ? Math.max(spread * 0.22, magnitude * 0.06) : Math.max(magnitude * 0.12, 0.4);
+  let min = minV - pad;
+  let max = maxV + pad;
+  if (minV >= 0 && min < 0) min = 0;
+  if (max <= min) max = min + 1;
+  return { min, max };
 }
 
 function SeriesChart({
@@ -55,7 +61,7 @@ function SeriesChart({
   const last = all[all.length - 1];
 
   return (
-    <svg viewBox={`0 0 ${W} ${H}`} className="w-full" role="img" aria-label="Gráfico de sinais em casa">
+    <svg viewBox={`0 0 ${W} ${H}`} className="mt-1 h-40 w-full" role="img" aria-label="Gráfico de sinais em casa">
       <line x1={pad.left} y1={pad.top} x2={pad.left} y2={H - pad.bottom} stroke="var(--border)" strokeWidth="1" />
       <line x1={pad.left} y1={H - pad.bottom} x2={W - pad.right} y2={H - pad.bottom} stroke="var(--border)" strokeWidth="1" />
       <text x={pad.left - 4} y={pad.top + 4} textAnchor="end" fontSize="9" fill="var(--text-muted)">{fmtVal(max)}</text>
@@ -106,8 +112,11 @@ export type HomeVital = {
   systolic?: number | null;
   diastolic?: number | null;
   glucoseMgDl?: number | null;
+  weightKg?: number | null;
   measuredAt: string;
 };
+
+export { SeriesChart };
 
 export function HomeVitalsCharts({ records }: { records: HomeVital[] }) {
   const bp = records
@@ -118,11 +127,16 @@ export function HomeVitalsCharts({ records }: { records: HomeVital[] }) {
     .filter((r) => r.kind === "glucose" && r.glucoseMgDl != null)
     .slice()
     .sort((a, b) => a.measuredAt.localeCompare(b.measuredAt));
+  const wt = records
+    .filter((r) => r.kind === "weight" && r.weightKg != null)
+    .slice()
+    .sort((a, b) => a.measuredAt.localeCompare(b.measuredAt));
 
   const lastBp = bp[bp.length - 1];
   const lastGlu = glu[glu.length - 1];
+  const lastWt = wt[wt.length - 1];
 
-  if (bp.length === 0 && glu.length === 0) return null;
+  if (bp.length === 0 && glu.length === 0 && wt.length === 0) return null;
 
   return (
     <div className="grid gap-3 md:grid-cols-2">
@@ -188,6 +202,30 @@ export function HomeVitalsCharts({ records }: { records: HomeVital[] }) {
         )}
         <p className="mt-1 text-[11px] text-[var(--text-muted)]">Linha pontilhada = 180 mg/dL</p>
       </div>
+
+      {wt.length > 0 && (
+        <div className="rounded-2xl border border-[var(--border)] bg-white p-3 md:col-span-2">
+          <div className="flex items-start justify-between gap-2">
+            <div>
+              <p className="text-[11px] font-bold uppercase tracking-wider text-[var(--gold)]">Peso</p>
+              <p className="text-xs text-[var(--text-muted)]">Medido em casa, ao longo do tempo</p>
+            </div>
+            {lastWt && (
+              <p className="text-right text-sm font-extrabold text-[var(--text)]">
+                {fmtVal(Number(lastWt.weightKg))} <span className="text-xs font-semibold text-[var(--text-muted)]">kg</span>
+                <span className="block text-[11px] font-normal text-[var(--text-muted)]">{shortWhen(lastWt.measuredAt)}</span>
+              </p>
+            )}
+          </div>
+          <SeriesChart
+            unit="kg"
+            series={[{ label: "Peso", color: "#7758c6", points: wt.map((r) => ({ x: r.measuredAt, y: Number(r.weightKg) })) }]}
+          />
+          {wt.length === 1 && (
+            <p className="mt-1 text-[11px] text-[var(--text-muted)]">Só uma data ainda. O gráfico cresce quando o paciente registrar de novo.</p>
+          )}
+        </div>
+      )}
     </div>
   );
 }

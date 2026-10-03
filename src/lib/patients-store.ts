@@ -345,7 +345,7 @@ export async function getPatient(id: string): Promise<Patient | null> {
 export async function updatePatient(
   id: string,
   patch: Partial<
-    Pick<Patient, "name" | "phone" | "email" | "birthdate" | "ageYears" | "ageReportedAt" | "sex" | "address" | "doctorId" | "passwordHash" | "cns" | "motherName" | "photoUrl" | "cpf">
+    Pick<Patient, "name" | "phone" | "email" | "birthdate" | "ageYears" | "ageReportedAt" | "sex" | "address" | "doctorId" | "passwordHash" | "cns" | "motherName" | "photoUrl" | "cpf" | "medications">
   >
 ): Promise<Patient | null> {
   const current = await getPatient(id);
@@ -376,6 +376,7 @@ export async function updatePatient(
     if (patch.photoUrl !== undefined) row.photo_url = updated.photoUrl ?? null;
     if (patch.doctorId !== undefined) row.doctor_id = updated.doctorId;
     if (patch.passwordHash !== undefined) row.password_hash = updated.passwordHash ?? null;
+    if (patch.medications !== undefined) row.medications = updated.medications ?? null;
     // Update tolerante a coluna ausente (ex.: photo_url antes da migração).
     let err: { code?: string; message?: string } | null = null;
     for (let attempt = 0; attempt < 6; attempt++) {
