@@ -384,6 +384,41 @@ export async function addClinicalNote(
   return note;
 }
 
+export async function updateClinicalNote(
+  id: string,
+  patch: Partial<Pick<ClinicalNote, "chiefComplaint" | "history" | "assessment" | "plan" | "sharedWithPatient">>
+): Promise<ClinicalNote | null> {
+  const payload: Record<string, unknown> = {};
+  if (patch.chiefComplaint !== undefined) payload.chief_complaint = patch.chiefComplaint;
+  if (patch.history !== undefined) payload.history = patch.history;
+  if (patch.assessment !== undefined) payload.assessment = patch.assessment;
+  if (patch.plan !== undefined) payload.plan = patch.plan;
+  if (patch.sharedWithPatient !== undefined) payload.shared_with_patient = patch.sharedWithPatient;
+
+  if (supabaseActive("clinical_notes")) {
+    const supabase = getSupabaseAdmin()!;
+    const { data, error } = await supabase
+      .from("clinical_notes")
+      .update(payload)
+      .eq("id", id)
+      .select("*")
+      .maybeSingle();
+    if (error) {
+      if (isMissingTableError(error)) missingTables.add("clinical_notes");
+      else throw error;
+    } else if (data) {
+      return mapNoteRow(data as Record<string, unknown>);
+    }
+  }
+
+  const file = await readFile();
+  const idx = file.notes.findIndex((n) => n.id === id);
+  if (idx < 0) return null;
+  file.notes[idx] = { ...file.notes[idx], ...patch };
+  await writeFile(file);
+  return file.notes[idx];
+}
+
 export async function getClinicalNotes(
   email: string,
   { onlyShared = false }: { onlyShared?: boolean } = {}

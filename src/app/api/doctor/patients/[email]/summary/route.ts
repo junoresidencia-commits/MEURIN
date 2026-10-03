@@ -103,6 +103,7 @@ export async function GET(
     nextConsultation: future[0]?.slotStart || null,
     lastNote: notes[0]
       ? {
+          id: notes[0].id,
           createdAt: notes[0].createdAt,
           doctorName: notes[0].doctorName,
           chiefComplaint: notes[0].chiefComplaint,

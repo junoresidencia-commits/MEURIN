@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { getDoctorSessionId } from "@/lib/auth";
 import { getDoctorById } from "@/lib/store";
-import { addClinicalNote } from "@/lib/patient-store";
+import { addClinicalNote, getClinicalNotes, updateClinicalNote } from "@/lib/patient-store";
 import { resolvePatientAccess } from "@/lib/doctor-access";
 import { writeAudit } from "@/lib/patient-shares-store";
 
@@ -64,6 +64,65 @@ export async function POST(
     console.error("[notes] POST", err);
     return NextResponse.json(
       { error: "Não foi possível salvar a evolução. Tente novamente." },
+      { status: 500 }
+    );
+  }
+}
+
+export async function PATCH(
+  req: Request,
+  { params }: { params: Promise<{ email: string }> }
+) {
+  try {
+    const doctorId = await getDoctorSessionId();
+    const { email: rawParam } = await params;
+    const access = await resolvePatientAccess(rawParam);
+    if (!access) {
+      return NextResponse.json({ error: "Não autenticado." }, { status: 401 });
+    }
+    if (!access.allowed) {
+      return NextResponse.json({ error: "Você não tem acesso a este paciente." }, { status: 403 });
+    }
+    const doctor = doctorId ? await getDoctorById(doctorId) : null;
+    if (!doctor) {
+      return NextResponse.json({ error: "Médico não encontrado." }, { status: 403 });
+    }
+
+    const body = await req.json().catch(() => ({} as Record<string, unknown>));
+    const id = String(body.id || "").trim();
+    if (!id) {
+      return NextResponse.json({ error: "Evolução não encontrada." }, { status: 400 });
+    }
+
+    const notes = await getClinicalNotes(access.key);
+    const existing = notes.find((n) => n.id === id);
+    if (!existing) {
+      return NextResponse.json({ error: "Evolução não encontrada." }, { status: 404 });
+    }
+
+    const chiefComplaint = body.chiefComplaint !== undefined ? String(body.chiefComplaint || "").trim() : existing.chiefComplaint;
+    const history = body.history !== undefined ? String(body.history || "").trim() : existing.history;
+    const assessment = body.assessment !== undefined ? String(body.assessment || "").trim() : existing.assessment;
+    const plan = body.plan !== undefined ? String(body.plan || "").trim() : existing.plan;
+    if (!chiefComplaint && !history && !assessment && !plan) {
+      return NextResponse.json({ error: "Escreva ao menos um campo da evolução." }, { status: 400 });
+    }
+
+    const note = await updateClinicalNote(id, {
+      chiefComplaint: chiefComplaint || null,
+      history: history || null,
+      assessment: assessment || null,
+      plan: plan || null,
+      sharedWithPatient: body.sharedWithPatient !== undefined ? Boolean(body.sharedWithPatient) : existing.sharedWithPatient,
+    });
+    if (!note) {
+      return NextResponse.json({ error: "Evolução não encontrada." }, { status: 404 });
+    }
+    return NextResponse.json({ note });
+  } catch (err) {
+    console.error("[notes] PATCH", err);
+    return NextResponse.json(
+      { error: "Não foi possível atualizar a evolução. Tente novamente." },
       { status: 500 }
     );
   }
