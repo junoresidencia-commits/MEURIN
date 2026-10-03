@@ -1,0 +1,14 @@
+Meu Rim para Mac
+================
+
+Opção 1 (melhor, nativa do Safari)
+  Abra https://meurim.vercel.app no Safari
+  Menu Arquivo → Adicionar ao Dock…
+
+Opção 2 (este ZIP)
+  1. Extraia o ZIP
+  2. Arraste "Meu Rim.app" para a pasta Aplicativos
+  3. Clique com o botão direito → Abrir
+     (o Mac pede isso na primeira vez porque o atalho não vem da App Store)
+
+O atalho abre o Meu Rim em janela de aplicativo.
