@@ -74,6 +74,10 @@ export function careRoomNeedsPayment(room: CareRoom): boolean {
   return (room.priceCents ?? 0) > 0 && (room.paymentStatus === "unpaid" || !room.paymentStatus);
 }
 
+export function careRoomAwaitingHost(room: CareRoom): boolean {
+  return (room.priceCents ?? 0) > 0 && room.paymentStatus === "declared";
+}
+
 export async function carePixPayload(room: CareRoom): Promise<CarePixInfo | null> {
   if (!room.pixCopiaCola || !(room.priceCents > 0)) return null;
   const qrDataUrl = await QRCode.toDataURL(room.pixCopiaCola, {
@@ -180,6 +184,17 @@ export async function declareCareRoomPaid(meetingRoomId: string): Promise<{ room
   return { room: updated ?? { ...room, paymentStatus: "declared" } };
 }
 
+export async function confirmCareRoomPaid(meetingRoomId: string): Promise<{ room: CareRoom } | { error: string; status: number }> {
+  const actor = await currentCareProfessional();
+  if (!actor) return { error: "Entre como profissional para conferir o Pix.", status: 401 };
+  const room = await getCareRoomByMeetingId(meetingRoomId);
+  if (!room || room.status !== "open") return { error: "Sala não encontrada.", status: 404 };
+  if (actor.professionalId !== room.professionalId) return { error: "Só quem recebe o Pix pode confirmar.", status: 403 };
+  if ((room.priceCents ?? 0) <= 0 || room.paymentStatus === "free") return { room };
+  const updated = await updateCarePayment(room.id, { paymentStatus: "confirmed" });
+  return { room: updated ?? { ...room, paymentStatus: "confirmed" } };
+}
+
 export async function listMyCareRooms(): Promise<CareRoom[]> {
   const actor = await currentCareProfessional();
   if (!actor) return [];
@@ -216,5 +231,6 @@ export function carePublic(room: CareRoom) {
     paymentStatus: room.paymentStatus ?? "free",
     pixHolderName: room.pixHolderName || room.professionalName,
     paymentRequired: careRoomNeedsPayment(room),
+    awaitingHost: careRoomAwaitingHost(room),
   };
 }

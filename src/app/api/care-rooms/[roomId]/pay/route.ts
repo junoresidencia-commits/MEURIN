@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { carePixPayload, carePublic, declareCareRoomPaid } from "@/lib/care-room-access";
+import { carePixPayload, carePublic, confirmCareRoomPaid, declareCareRoomPaid } from "@/lib/care-room-access";
 import { getCareRoomByMeetingId } from "@/lib/care-rooms-store";
 import { getPatientEmail } from "@/lib/patient-session";
 
@@ -13,9 +13,10 @@ export async function GET(_req: Request, { params }: { params: Promise<{ roomId:
   return NextResponse.json({ ...carePublic(room), pix });
 }
 
-export async function POST(_req: Request, { params }: { params: Promise<{ roomId: string }> }) {
+export async function POST(req: Request, { params }: { params: Promise<{ roomId: string }> }) {
   const { roomId } = await params;
-  const result = await declareCareRoomPaid(roomId);
+  const body = await req.json().catch(() => ({}));
+  const result = body.confirm ? await confirmCareRoomPaid(roomId) : await declareCareRoomPaid(roomId);
   if ("error" in result) return NextResponse.json({ error: result.error }, { status: result.status });
   return NextResponse.json({ ok: true, ...carePublic(result.room) });
 }

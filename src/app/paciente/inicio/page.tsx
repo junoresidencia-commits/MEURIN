@@ -44,6 +44,8 @@ type CareRoom = {
   href: string;
   priceCents?: number;
   paymentRequired?: boolean;
+  awaitingHost?: boolean;
+  paymentStatus?: string;
   pixHolderName?: string;
 };
 
@@ -383,14 +385,15 @@ export default function PacienteInicioPage() {
                 <p className="text-xs font-semibold uppercase tracking-wider text-[var(--gold)]">{r.area}</p>
                 <p className="mt-1 font-bold text-[var(--text)]">{r.professionalName}</p>
                 <p className="text-sm text-[var(--text-muted)]">{r.hostLabel} · sala aberta</p>
-                {r.paymentRequired && (
+                {(r.paymentRequired || r.awaitingHost) && (
                   <p className="mt-1 text-sm text-[var(--text-soft)]">
                     Pix para {r.pixHolderName || r.professionalName}
                     {r.priceCents ? ` · R$ ${(r.priceCents / 100).toFixed(2).replace(".", ",")}` : ""}
+                    {r.awaitingHost ? " · aguardando o profissional conferir" : ""}
                   </p>
                 )}
                 <Link href={r.href} className="btn-gold mt-4 inline-flex">
-                  {r.paymentRequired ? "Pagar Pix e entrar" : "Entrar na consulta online"}
+                  {r.paymentRequired ? "Pagar Pix e entrar" : r.awaitingHost ? "Aguardando conferência" : "Entrar na consulta online"}
                 </Link>
               </div>
             ))}

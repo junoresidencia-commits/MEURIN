@@ -5,7 +5,7 @@ import { getBookingByRoomId, getDoctorById } from "@/lib/store";
 import { clinicalKey, findPatientByClinicalKey } from "@/lib/patients-store";
 import type { Booking } from "@/lib/types";
 import { CARE_META, getCareRoomByMeetingId, type CareKind, type CareRoom } from "@/lib/care-rooms-store";
-import { carePixPayload, careRoomNeedsPayment, currentCareProfessional } from "@/lib/care-room-access";
+import { carePixPayload, careRoomAwaitingHost, careRoomNeedsPayment, currentCareProfessional } from "@/lib/care-room-access";
 
 export type RoomRole = "doctor" | "patient" | "guest";
 export type RoomKind = "doctor" | CareKind;
@@ -95,6 +95,7 @@ export async function GET(
   const you = await resolveCareRoomRole(care);
   const meta = CARE_META[care.kind];
   const unpaid = careRoomNeedsPayment(care);
+  const awaitingHost = careRoomAwaitingHost(care);
   if (you !== "doctor" && unpaid) {
     const pix = you === "patient" ? await carePixPayload(care) : null;
     return NextResponse.json(
@@ -110,6 +111,19 @@ export async function GET(
         loginPath: "/paciente/entrar",
         professionalName: care.professionalName,
         pix,
+      },
+      { status: 403 }
+    );
+  }
+  if (you !== "doctor" && awaitingHost) {
+    return NextResponse.json(
+      {
+        error: "Pix enviado. O profissional vai conferir na conta e liberar a sala.",
+        awaitingHost: true,
+        kind: care.kind,
+        hostLabel: meta.label,
+        professionalName: care.professionalName,
+        priceCents: care.priceCents ?? 0,
       },
       { status: 403 }
     );
@@ -133,7 +147,7 @@ export async function GET(
       careReason: undefined,
       slotStart: care.createdAt,
       slotEnd: undefined,
-      status: unpaid ? "pending_payment" : "confirmed",
+      status: unpaid || awaitingHost ? "pending_payment" : "confirmed",
       meetingRoomId: care.meetingRoomId,
     },
     doctor: { id: care.professionalId, name: care.professionalName, crm: "" },

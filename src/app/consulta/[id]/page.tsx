@@ -62,7 +62,14 @@ export default function ConsultaPage() {
     amountCents: number;
     holderName: string;
   } | null>(null);
-  const [hostAwaitingPay, setHostAwaitingPay] = useState<{ priceCents: number; holderName: string } | null>(null);
+  const [hostPay, setHostPay] = useState<{
+    status: "unpaid" | "declared" | "confirmed" | "free";
+    priceCents: number;
+    holderName: string;
+  } | null>(null);
+  const [awaitingHost, setAwaitingHost] = useState(false);
+  const [confirmingPix, setConfirmingPix] = useState(false);
+  const [confirmErr, setConfirmErr] = useState("");
 
   useEffect(() => {
     setShowTestHint(new URLSearchParams(window.location.search).get("teste") === "1");
@@ -87,6 +94,11 @@ export default function ConsultaPage() {
               return;
             }
           }
+          if (data.awaitingHost) {
+            setHostLabel(data.hostLabel || "Profissional");
+            setAwaitingHost(true);
+            return;
+          }
           throw new Error(data.error || "Sala indisponível");
         }
         const nextRole: Role = data.you?.role === "doctor" ? "doctor" : "patient";
@@ -105,15 +117,20 @@ export default function ConsultaPage() {
           slotStart: data.booking.slotStart,
           careReason: data.booking.careReason,
         });
-        if (nextRole === "doctor" && data.payment?.status === "unpaid" && data.payment.priceCents > 0) {
-          setHostAwaitingPay({
+        if (nextRole === "doctor" && data.payment?.priceCents > 0) {
+          setHostPay({
+            status: data.payment.status || "unpaid",
             priceCents: data.payment.priceCents,
             holderName: data.payment.holderName || data.doctor?.name || "você",
           });
         }
         setStatus(
           nextRole === "doctor"
-            ? "Sala liberada. Entre para atender o paciente."
+            ? data.payment?.status === "confirmed" || !data.payment?.priceCents
+              ? "Sala liberada. Entre para atender o paciente."
+              : data.payment?.status === "declared"
+                ? "Paciente declarou o Pix. Confira na sua conta e entre."
+                : "Aguardando o Pix do paciente. Você já pode entrar."
             : "Sala liberada. Entre quando estiver pronto."
         );
       })
@@ -346,6 +363,44 @@ export default function ConsultaPage() {
     </button>
   );
 
+  async function confirmPixAndStay() {
+    setConfirmingPix(true);
+    setConfirmErr("");
+    try {
+      const res = await fetch(`/api/care-rooms/${roomId}/pay`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ confirm: true }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error || "Não foi possível confirmar o Pix.");
+      setHostPay((prev) => (prev ? { ...prev, status: "confirmed" } : prev));
+      setStatus("Pix conferido. Entre para atender o paciente.");
+    } catch (e) {
+      setConfirmErr(e instanceof Error ? e.message : "Não foi possível confirmar.");
+    } finally {
+      setConfirmingPix(false);
+    }
+  }
+
+  if (awaitingHost) {
+    return (
+      <div className="mx-auto max-w-md px-5 py-16">
+        <p className="text-xs font-bold uppercase tracking-wider text-[var(--gold)]">Consulta da equipe</p>
+        <h1 className="font-display mt-2 text-2xl font-extrabold text-[var(--text)]">Pix enviado</h1>
+        <p className="mt-2 text-sm text-[var(--text-muted)]">
+          O {hostLabel.toLowerCase()} vai conferir o valor na chave Pix cadastrada e liberar a sala.
+        </p>
+        <button type="button" className="btn-gold mt-6 w-full" onClick={() => window.location.reload()}>
+          Já liberou? Atualizar
+        </button>
+        <Link href="/paciente/inicio" className="mt-4 inline-block text-sm font-semibold text-[var(--gold)]">
+          ← Voltar
+        </Link>
+      </div>
+    );
+  }
+
   if (paywall) {
     return (
       <div className="mx-auto max-w-md px-5 py-16">
@@ -447,10 +502,33 @@ export default function ConsultaPage() {
         </p>
       )}
       <p className="mt-3 text-sm text-[var(--gold-light)]">{status}</p>
-      {hostAwaitingPay && (
-        <p className="mt-3 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800">
-          Paciente ainda não declarou o Pix de R$ {(hostAwaitingPay.priceCents / 100).toFixed(2).replace(".", ",")} para {hostAwaitingPay.holderName}. Você já pode entrar.
-        </p>
+      {isDoctor && hostPay && hostPay.status !== "free" && hostPay.priceCents > 0 && (
+        <div className="mt-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+          {hostPay.status === "confirmed" ? (
+            <p>Pix de R$ {(hostPay.priceCents / 100).toFixed(2).replace(".", ",")} conferido na sua chave. Pode atender.</p>
+          ) : hostPay.status === "declared" ? (
+            <p>
+              Paciente declarou o Pix de R$ {(hostPay.priceCents / 100).toFixed(2).replace(".", ",")} para {hostPay.holderName}.
+              Confira na sua conta e confirme o recebimento.
+            </p>
+          ) : (
+            <p>
+              Aguardando o paciente pagar R$ {(hostPay.priceCents / 100).toFixed(2).replace(".", ",")} na sua chave Pix.
+              Você já pode entrar e esperar.
+            </p>
+          )}
+          {hostPay.status !== "confirmed" && (
+            <button
+              type="button"
+              className="btn-gold mt-3 min-h-11"
+              disabled={confirmingPix}
+              onClick={() => void confirmPixAndStay()}
+            >
+              {confirmingPix ? "Confirmando…" : "Recebi o Pix"}
+            </button>
+          )}
+          {confirmErr && <p className="mt-2 font-semibold text-[var(--danger)]">{confirmErr}</p>}
+        </div>
       )}
 
       <div className="mt-4 flex flex-wrap gap-2">
