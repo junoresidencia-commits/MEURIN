@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { ProfilePhotoUploader } from "@/components/ProfilePhotoUploader";
+import { PlatformFeePayPanel } from "@/components/PlatformFeePayPanel";
 
 const KEY_TYPES = [
   { v: "cpf", l: "CPF" }, { v: "cnpj", l: "CNPJ" }, { v: "email", l: "E-mail" }, { v: "telefone", l: "Telefone" }, { v: "aleatoria", l: "Aleatória" },
@@ -93,8 +94,9 @@ export default function NutriConfigPage() {
         </div>
       )}
       <p className="mt-4 text-xs text-[var(--text-muted)]">
-        Comissão da plataforma: {commission != null ? `${commission}%` : "definida pelo administrador"} · Recebimento: {payout === "active" ? "liberado" : payout === "pending" ? "em análise" : "bloqueado"}.
+        Comissão da plataforma: {commission != null ? `${commission}%` : "definida pelo administrador"} · Recebimento: {payout === "active" ? "liberado" : payout === "pending" ? "em análise" : "bloqueado"}. 0 no retorno = retorno grátis.
       </p>
+      <PlatformFeePayPanel endpoint="/api/nutricionista/platform-fee" />
     </div>
   );
 }

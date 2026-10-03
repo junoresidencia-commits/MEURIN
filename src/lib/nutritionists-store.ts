@@ -5,6 +5,7 @@ import { v4 as uuid } from "uuid";
 import bcrypt from "bcryptjs";
 import { getSupabaseAdmin } from "./supabase-admin";
 import type { PixProfile } from "./types";
+import { feeRuleFrom, normalizeFeeMode, type AppFeeMode } from "./platform-fees";
 
 export const DEFAULT_NUTRITIONIST_PASSWORD = "123456";
 
@@ -32,6 +33,8 @@ export interface Nutritionist {
   returnPriceCents?: number | null;
   pixProfile?: PixProfile | null;
   commissionPercent?: number | null; // % da plataforma (admin)
+  entryFeeCents?: number | null;
+  appFeeMode?: AppFeeMode;
   payoutStatus?: "active" | "pending" | "blocked";
   createdAt: string;
   lastAccessAt?: string | null;
@@ -127,8 +130,10 @@ function mapNut(r: Record<string, unknown>): Nutritionist {
     consultationPriceCents: r.consultation_price_cents != null ? Number(r.consultation_price_cents) : null,
     returnPriceCents: r.return_price_cents != null ? Number(r.return_price_cents) : null,
     pixProfile: (r.pix_profile as PixProfile) ?? null,
-    commissionPercent: r.commission_percent != null ? Number(r.commission_percent) : null,
-    payoutStatus: (r.payout_status as "active" | "pending" | "blocked") ?? "active",
+    commissionPercent: r.commission_percent != null ? Number(r.commission_percent) : (r.commissionPercent != null ? Number(r.commissionPercent) : null),
+    entryFeeCents: r.entry_fee_cents != null ? Number(r.entry_fee_cents) : (r.entryFeeCents != null ? Number(r.entryFeeCents) : 0),
+    appFeeMode: normalizeFeeMode(r.app_fee_mode ?? r.appFeeMode),
+    payoutStatus: (r.payout_status as "active" | "pending" | "blocked") ?? (r.payoutStatus as "active" | "pending" | "blocked") ?? "active",
     createdAt: String(r.created_at ?? new Date().toISOString()),
     lastAccessAt: (r.last_access_at as string) ?? null,
   };
@@ -284,10 +289,16 @@ export async function updateNutritionistSettings(id: string, patch: { consultati
   }
 }
 
-export async function updateNutritionistFinance(id: string, patch: { commissionPercent?: number | null; payoutStatus?: "active" | "pending" | "blocked" }): Promise<void> {
+export function nutritionFeeRule(nut: Nutritionist) {
+  return feeRuleFrom(nut);
+}
+
+export async function updateNutritionistFinance(id: string, patch: { commissionPercent?: number | null; payoutStatus?: "active" | "pending" | "blocked"; entryFeeCents?: number | null; appFeeMode?: AppFeeMode }): Promise<void> {
   const row: Record<string, unknown> = {};
   if (patch.commissionPercent !== undefined) row.commission_percent = patch.commissionPercent;
   if (patch.payoutStatus !== undefined) row.payout_status = patch.payoutStatus;
+  if (patch.entryFeeCents !== undefined) row.entry_fee_cents = patch.entryFeeCents;
+  if (patch.appFeeMode !== undefined) row.app_fee_mode = patch.appFeeMode;
   if (Object.keys(row).length === 0) return;
   const done = await updateNutritionistRow(id, row);
   if (done) return;
@@ -296,6 +307,8 @@ export async function updateNutritionistFinance(id: string, patch: { commissionP
   if (n) {
     if (patch.commissionPercent !== undefined) n.commissionPercent = patch.commissionPercent;
     if (patch.payoutStatus !== undefined) n.payoutStatus = patch.payoutStatus;
+    if (patch.entryFeeCents !== undefined) n.entryFeeCents = patch.entryFeeCents;
+    if (patch.appFeeMode !== undefined) n.appFeeMode = patch.appFeeMode;
     await writeLocal(db);
   }
 }

@@ -22,6 +22,7 @@ export interface CareRoom {
   pixCopiaCola?: string | null;
   pixHolderName?: string | null;
   paymentStatus: CarePaymentStatus;
+  isReturn?: boolean;
   createdAt: string;
   updatedAt: string;
 }
@@ -74,6 +75,7 @@ function mapRow(r: Record<string, unknown>): CareRoom {
     pixCopiaCola: (r.pix_copia_cola as string) ?? (r.pixCopiaCola as string) ?? null,
     pixHolderName: (r.pix_holder_name as string) ?? (r.pixHolderName as string) ?? null,
     paymentStatus: mapPaymentStatus(r.payment_status ?? r.paymentStatus, priceCents),
+    isReturn: r.is_return === true || r.isReturn === true,
     createdAt: String(r.created_at ?? r.createdAt ?? new Date().toISOString()),
     updatedAt: String(r.updated_at ?? r.updatedAt ?? new Date().toISOString()),
   };
@@ -94,6 +96,7 @@ function toRow(room: CareRoom): Record<string, unknown> {
     pix_copia_cola: room.pixCopiaCola ?? null,
     pix_holder_name: room.pixHolderName ?? null,
     payment_status: room.paymentStatus,
+    is_return: room.isReturn === true,
     created_at: room.createdAt,
     updated_at: room.updatedAt,
   };
@@ -154,13 +157,14 @@ function matchesPatient(room: CareRoom, keys: Set<string>) {
   return keys.has(room.patientKey.toLowerCase().trim()) || (email && keys.has(email));
 }
 
-export async function findReusableRoom(professionalId: string, patientKey: string): Promise<CareRoom | null> {
+export async function findReusableRoom(professionalId: string, patientKey: string, isReturn?: boolean): Promise<CareRoom | null> {
   const cutoff = Date.now() - REUSE_MS;
   const open = await listOpenRoomsForProfessional(professionalId);
   return (
     open.find((r) => {
       const same = r.patientKey === patientKey || (r.patientEmail && r.patientEmail.toLowerCase() === patientKey.toLowerCase());
-      return same && new Date(r.updatedAt).getTime() >= cutoff;
+      const sameVisit = (r.isReturn === true) === (isReturn === true);
+      return same && sameVisit && new Date(r.updatedAt).getTime() >= cutoff;
     }) ?? null
   );
 }

@@ -18,6 +18,9 @@ import {
   type CareRoom,
 } from "./care-rooms-store";
 import type { PixProfile } from "./types";
+import { alliedFeeRule } from "./allied-store";
+import { nutritionFeeRule } from "./nutritionists-store";
+import { recordPlatformCharge } from "./platform-charges-store";
 
 export type CarePixInfo = {
   brCode: string;
@@ -46,25 +49,31 @@ export async function currentCareProfessional(): Promise<CareActor> {
   return null;
 }
 
-async function billingForActor(actor: NonNullable<CareActor>): Promise<
-  { priceCents: number; pixProfile: PixProfile | null; name: string } | { error: string; status: number }
-> {
+async function billingForActor(
+  actor: NonNullable<CareActor>,
+  isReturn: boolean
+): Promise<{ priceCents: number; pixProfile: PixProfile | null; name: string } | { error: string; status: number }> {
   if (actor.kind === "nutrition") {
     const nut = await requireNutritionist();
     if (!nut) return { error: "Não autenticado.", status: 401 };
     if (nut.payoutStatus === "blocked") {
       return { error: "Seu recebimento está bloqueado. Fale com o administrador.", status: 403 };
     }
+    const price = isReturn ? (nut.returnPriceCents ?? 0) : (nut.consultationPriceCents ?? 0);
     return {
-      priceCents: Math.max(0, Math.round(nut.consultationPriceCents ?? 0)),
+      priceCents: Math.max(0, Math.round(price)),
       pixProfile: nut.pixProfile ?? null,
       name: nut.name,
     };
   }
   const pro = await requireAllied();
   if (!pro) return { error: "Não autenticado.", status: 401 };
+  if (pro.payoutStatus === "blocked") {
+    return { error: "Seu recebimento está bloqueado. Fale com o administrador.", status: 403 };
+  }
+  const price = isReturn ? (pro.returnPriceCents ?? 0) : (pro.consultationPriceCents ?? 0);
   return {
-    priceCents: Math.max(0, Math.round(pro.consultationPriceCents ?? 0)),
+    priceCents: Math.max(0, Math.round(price)),
     pixProfile: pro.pixProfile ?? null,
     name: pro.name,
   };
@@ -93,7 +102,10 @@ export async function carePixPayload(room: CareRoom): Promise<CarePixInfo | null
   };
 }
 
-export async function openCareRoomForPatient(patientKey: string): Promise<{ room: CareRoom } | { error: string; status: number }> {
+export async function openCareRoomForPatient(
+  patientKey: string,
+  opts: { isReturn?: boolean } = {}
+): Promise<{ room: CareRoom } | { error: string; status: number }> {
   const actor = await currentCareProfessional();
   if (!actor) return { error: "Não autenticado.", status: 401 };
 
@@ -117,13 +129,13 @@ export async function openCareRoomForPatient(patientKey: string): Promise<{ room
   if (patient?.email) email = patient.email.toLowerCase().trim();
   else if (key.includes("@")) email = key.toLowerCase().trim();
 
-  const existing = await findReusableRoom(actor.professionalId, key);
+  const isReturn = opts.isReturn === true;
+  const existing = await findReusableRoom(actor.professionalId, key, isReturn);
   if (existing) {
     await touchCareRoom(existing.id);
     return { room: existing };
   }
-
-  const billing = await billingForActor(actor);
+  const billing = await billingForActor(actor, isReturn);
   if ("error" in billing) return billing;
   if (billing.priceCents > 0 && !billing.pixProfile?.key?.trim()) {
     return {
@@ -143,6 +155,7 @@ export async function openCareRoomForPatient(patientKey: string): Promise<{ room
     pixCopiaCola: null,
     pixHolderName: billing.name,
     paymentStatus: billing.priceCents > 0 ? "unpaid" : "free",
+    isReturn,
   });
 
   if (billing.priceCents > 0) {
@@ -158,6 +171,9 @@ export async function openCareRoomForPatient(patientKey: string): Promise<{ room
       });
       return { room: updated ?? { ...room, pixCopiaCola: charged.brCode, pixHolderName: charged.holderName } };
     }
+  }
+  if (billing.priceCents <= 0) {
+    await recordAttendanceFee(actor, room.id, 0, isReturn ? "retorno" : "consulta");
   }
   return { room };
 }
@@ -190,9 +206,52 @@ export async function confirmCareRoomPaid(meetingRoomId: string): Promise<{ room
   const room = await getCareRoomByMeetingId(meetingRoomId);
   if (!room || room.status !== "open") return { error: "Sala não encontrada.", status: 404 };
   if (actor.professionalId !== room.professionalId) return { error: "Só quem recebe o Pix pode confirmar.", status: 403 };
-  if ((room.priceCents ?? 0) <= 0 || room.paymentStatus === "free") return { room };
+  if ((room.priceCents ?? 0) <= 0 || room.paymentStatus === "free") {
+    await recordAttendanceFee(actor, room.id, room.priceCents ?? 0, room.isReturn ? "retorno" : "consulta");
+    return { room };
+  }
   const updated = await updateCarePayment(room.id, { paymentStatus: "confirmed" });
+  await recordAttendanceFee(actor, room.id, room.priceCents ?? 0, room.isReturn ? "retorno" : "consulta");
   return { room: updated ?? { ...room, paymentStatus: "confirmed" } };
+}
+
+async function recordAttendanceFee(
+  actor: NonNullable<CareActor>,
+  sourceId: string,
+  priceCents: number,
+  note: string
+) {
+  try {
+    if (actor.kind === "nutrition") {
+      const nut = await requireNutritionist();
+      if (!nut) return;
+      await recordPlatformCharge({
+        actorKind: "nutrition",
+        professionalId: nut.id,
+        professionalName: nut.name,
+        kind: "atendimento",
+        sourceId,
+        rule: nutritionFeeRule(nut),
+        priceCents,
+        note,
+      });
+      return;
+    }
+    const pro = await requireAllied();
+    if (!pro) return;
+    await recordPlatformCharge({
+      actorKind: pro.role,
+      professionalId: pro.id,
+      professionalName: pro.name,
+      kind: "atendimento",
+      sourceId,
+      rule: alliedFeeRule(pro),
+      priceCents,
+      note,
+    });
+  } catch {
+    /* cobrança da plataforma não bloqueia a consulta */
+  }
 }
 
 export async function listMyCareRooms(): Promise<CareRoom[]> {
@@ -232,5 +291,6 @@ export function carePublic(room: CareRoom) {
     pixHolderName: room.pixHolderName || room.professionalName,
     paymentRequired: careRoomNeedsPayment(room),
     awaitingHost: careRoomAwaitingHost(room),
+    isReturn: room.isReturn === true,
   };
 }

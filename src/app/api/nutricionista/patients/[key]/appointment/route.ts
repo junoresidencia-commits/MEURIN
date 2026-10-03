@@ -1,8 +1,10 @@
 import { NextResponse } from "next/server";
 import { requireNutritionist, resolveNutritionPatientAccess } from "@/lib/nutrition-context";
-import { getNutritionLink } from "@/lib/nutritionists-store";
+import { getNutritionLink, nutritionFeeRule } from "@/lib/nutritionists-store";
 import { createAppointment } from "@/lib/nutrition-appointments-store";
 import { buildPixBrCode } from "@/lib/pix-brcode";
+import { computePlatformFeeCents } from "@/lib/platform-fees";
+import { recordPlatformCharge } from "@/lib/platform-charges-store";
 
 // Nutricionista agenda uma consulta para o paciente (pagamento por Pix direto).
 export async function POST(req: Request, { params }: { params: Promise<{ key: string }> }) {
@@ -26,10 +28,10 @@ export async function POST(req: Request, { params }: { params: Promise<{ key: st
   const modality = b.modality === "presencial" ? "presencial" : "teleconsulta";
   const slotStart = b.slotStart ? String(b.slotStart) : null;
 
-  // Snapshot imutável do rateio (comissão da plataforma definida pelo admin).
-  const commission = Math.min(100, Math.max(0, Number(nut.commissionPercent ?? 0)));
-  const platformFeeCents = Math.round((priceCents * commission) / 100);
-  const nutritionistPayoutCents = priceCents - platformFeeCents;
+  const rule = nutritionFeeRule(nut);
+  const commission = rule.commissionPercent;
+  const platformFeeCents = computePlatformFeeCents(rule, "atendimento", priceCents);
+  const nutritionistPayoutCents = priceCents;
 
   // Pix copia-e-cola do recebedor (nutricionista), com o valor da consulta na chave dela.
   const pix = nut.pixProfile?.key
@@ -47,7 +49,19 @@ export async function POST(req: Request, { params }: { params: Promise<{ key: st
     status: priceCents > 0 ? "aguardando_pagamento" : "confirmada",
     paymentMethod: "pix_direto", pixCopiaCola: pix, proofUrl: null,
     commissionPercent: commission, platformFeeCents, nutritionistPayoutCents,
-    note: b.note ? String(b.note) : null,
+    note: b.note ? String(b.note) : isReturn ? "retorno" : null,
   });
+  if (appt.status === "confirmada") {
+    await recordPlatformCharge({
+      actorKind: "nutrition",
+      professionalId: nut.id,
+      professionalName: nut.name,
+      kind: "atendimento",
+      sourceId: appt.id,
+      rule,
+      priceCents,
+      note: isReturn ? "retorno" : "consulta nutrição",
+    }).catch(() => null);
+  }
   return NextResponse.json({ ok: true, appointment: appt }, { status: 201 });
 }

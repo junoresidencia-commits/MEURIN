@@ -1,4 +1,5 @@
 import type { PixProfile } from "./types";
+import type { AppFeeMode } from "./platform-fees";
 
 /** Tipos da equipe assistencial (psicologia + enfermagem). Nutrição permanece no módulo próprio. */
 
@@ -27,7 +28,12 @@ export interface AlliedProfessional {
   passwordHash?: string | null;
   status: AlliedStatus;
   consultationPriceCents?: number | null;
+  returnPriceCents?: number | null;
   pixProfile?: PixProfile | null;
+  commissionPercent?: number | null;
+  entryFeeCents?: number | null;
+  appFeeMode?: AppFeeMode;
+  payoutStatus?: "active" | "pending" | "blocked";
   createdAt: string;
   lastAccessAt?: string | null;
 }

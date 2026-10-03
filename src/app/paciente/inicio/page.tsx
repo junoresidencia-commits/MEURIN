@@ -47,6 +47,7 @@ type CareRoom = {
   awaitingHost?: boolean;
   paymentStatus?: string;
   pixHolderName?: string;
+  isReturn?: boolean;
 };
 
 type SharedNote = {
@@ -384,7 +385,7 @@ export default function PacienteInicioPage() {
               <div key={r.meetingRoomId} className="panel">
                 <p className="text-xs font-semibold uppercase tracking-wider text-[var(--gold)]">{r.area}</p>
                 <p className="mt-1 font-bold text-[var(--text)]">{r.professionalName}</p>
-                <p className="text-sm text-[var(--text-muted)]">{r.hostLabel} · sala aberta</p>
+                <p className="text-sm text-[var(--text-muted)]">{r.hostLabel} · {r.isReturn ? "retorno" : "consulta"} · sala aberta</p>
                 {(r.paymentRequired || r.awaitingHost) && (
                   <p className="mt-1 text-sm text-[var(--text-soft)]">
                     Pix para {r.pixHolderName || r.professionalName}

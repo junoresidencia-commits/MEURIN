@@ -110,6 +110,7 @@ export async function GET(
         homePath: meta.path,
         loginPath: "/paciente/entrar",
         professionalName: care.professionalName,
+        isReturn: care.isReturn === true,
         pix,
       },
       { status: 403 }
@@ -138,6 +139,7 @@ export async function GET(
       status: care.paymentStatus,
       priceCents: care.priceCents ?? 0,
       holderName: care.pixHolderName || care.professionalName,
+      isReturn: care.isReturn === true,
     },
     booking: {
       id: care.id,

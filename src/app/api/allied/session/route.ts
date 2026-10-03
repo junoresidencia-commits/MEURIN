@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { ALLIED_COOKIE, ALLIED_MAX_AGE, createAlliedToken } from "@/lib/allied-session";
 import { ALLIED_ROLES, findAlliedByCpfOrEmail, touchAlliedAccess, verifyAlliedPassword, type AlliedRole } from "@/lib/allied-store";
+import { recordLoginFee } from "@/lib/platform-pix";
 
 export async function POST(req: Request) {
   try {
@@ -21,6 +22,7 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: msg }, { status: 403 });
     }
     await touchAlliedAccess(pro.id);
+    await recordLoginFee({ kind: pro.role, pro }).catch(() => null);
     const res = NextResponse.json({ ok: true, name: pro.name, role: pro.role });
     res.cookies.set(ALLIED_COOKIE, createAlliedToken(pro.id), {
       httpOnly: true, sameSite: "lax", secure: process.env.NODE_ENV === "production", path: "/", maxAge: ALLIED_MAX_AGE,

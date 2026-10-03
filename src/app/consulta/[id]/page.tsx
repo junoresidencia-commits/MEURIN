@@ -61,6 +61,7 @@ export default function ConsultaPage() {
     qrDataUrl: string;
     amountCents: number;
     holderName: string;
+    isReturn?: boolean;
   } | null>(null);
   const [hostPay, setHostPay] = useState<{
     status: "unpaid" | "declared" | "confirmed" | "free";
@@ -90,6 +91,7 @@ export default function ConsultaPage() {
                 qrDataUrl: data.pix.qrDataUrl || "",
                 amountCents: data.pix.amountCents,
                 holderName: data.pix.holderName || data.professionalName || "Profissional",
+                isReturn: data.isReturn === true,
               });
               return;
             }
@@ -404,7 +406,7 @@ export default function ConsultaPage() {
   if (paywall) {
     return (
       <div className="mx-auto max-w-md px-5 py-16">
-        <p className="text-xs font-bold uppercase tracking-wider text-[var(--gold)]">Consulta da equipe</p>
+        <p className="text-xs font-bold uppercase tracking-wider text-[var(--gold)]">{paywall.isReturn ? "Retorno da equipe" : "Consulta da equipe"}</p>
         <h1 className="font-display mt-2 text-2xl font-extrabold text-[var(--text)]">Pague o Pix para entrar</h1>
         <p className="mt-2 text-sm text-[var(--text-muted)]">
           O valor vai para a chave Pix cadastrada de {paywall.holderName} — não para o médico nem para a plataforma.

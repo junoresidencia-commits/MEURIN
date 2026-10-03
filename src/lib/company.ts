@@ -34,6 +34,10 @@ export const REQUIRED_COMPANY_FIELDS: { key: string; label: string }[] = [
 
 export const OPTIONAL_COMPANY_FIELDS: { key: string; label: string }[] = [
   { key: "responsibleDoctorRqe", label: "RQE do responsável" },
+  { key: "platformPixKeyType", label: "Tipo da chave Pix da plataforma" },
+  { key: "platformPixKey", label: "Chave Pix da plataforma (repasse para o admin)" },
+  { key: "platformPixHolderName", label: "Titular do Pix da plataforma" },
+  { key: "platformPixCity", label: "Cidade do Pix da plataforma" },
 ];
 
 export type CompanySettings = Record<string, string>;
