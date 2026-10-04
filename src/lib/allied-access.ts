@@ -7,7 +7,9 @@ import {
   type AlliedProfessional,
   type AlliedRole,
 } from "./allied-store";
-import { getPatient, clinicalKey } from "./patients-store";
+import { clinicalKey, findPatientByClinicalKey } from "./patients-store";
+import { patientKeyCandidates, patientKeysMatch } from "./patient-keys";
+import { hasProfessionalPatientAccessAny, listLinksForProfessional } from "./network-referrals-store";
 
 export async function requireAllied(role?: AlliedRole): Promise<AlliedProfessional | null> {
   const id = await getAlliedSessionId();
@@ -21,18 +23,26 @@ export async function requireAllied(role?: AlliedRole): Promise<AlliedProfession
 export async function resolveAlliedPatientAccess(patientKey: string, pro?: AlliedProfessional | null) {
   const professional = pro || await requireAllied();
   if (!professional) return null;
+
+  const patient = await findPatientByClinicalKey(patientKey);
+  const keys = patientKeyCandidates(patientKey, patient);
   const refs = await listReferralsForProfessional(professional.id);
   const doctorIds = await listActiveDoctorIdsForProfessional(professional.id);
-  const ref = refs.find((r) => r.patientKey === patientKey && r.status !== "encerrado" && doctorIds.includes(r.doctorId));
-  if (!ref) return null;
+  const ref = refs.find(
+    (r) => r.status !== "encerrado" && patientKeysMatch(keys, r.patientKey) && (!doctorIds.length || doctorIds.includes(r.doctorId))
+  );
+  const networkOk = await hasProfessionalPatientAccessAny(professional.role, professional.id, keys);
+  if (!ref && !networkOk) return null;
 
-  let patient = null as Awaited<ReturnType<typeof getPatient>>;
-  if (patientKey.startsWith("pid:")) patient = await getPatient(patientKey.slice(4));
+  const linkName = networkOk
+    ? (await listLinksForProfessional(professional.role, professional.id)).find((l) => patientKeysMatch(keys, l.patientKey))?.patientName
+    : null;
+
   return {
     allowed: true as const,
-    key: patient ? clinicalKey(patient) : patientKey,
-    name: patient?.name || ref.patientName || "Paciente",
-    doctorId: patient?.doctorId || ref.doctorId || doctorIds[0] || "",
+    key: patient ? clinicalKey(patient) : (ref?.patientKey || keys[0] || patientKey),
+    name: patient?.name || ref?.patientName || linkName || "Paciente",
+    doctorId: patient?.doctorId || ref?.doctorId || doctorIds[0] || "",
     birthdate: patient?.birthdate || null,
     sex: patient?.sex || null,
     cpf: patient?.cpf || null,

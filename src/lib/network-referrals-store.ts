@@ -432,15 +432,30 @@ export async function listLinksForProfessional(kind: ProfessionalKind, professio
     .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
 }
 
+export async function hasProfessionalPatientAccessAny(
+  kind: ProfessionalKind,
+  professionalId: string,
+  keys: string[]
+): Promise<boolean> {
+  const unique = [...new Set(keys.map((k) => k.toLowerCase().trim()).filter(Boolean))];
+  for (const key of unique) {
+    if (await findProfessionalLink(kind, professionalId, key)) return true;
+  }
+  const lists = await listReferralsForProfessional(kind, professionalId);
+  const set = new Set(unique);
+  return [...lists.incoming, ...lists.outgoing].some(
+    (r) =>
+      set.has(r.patientKey.toLowerCase().trim()) &&
+      ["accepted", "following", "viewed", "pending"].includes(r.status) &&
+      r.consentConfirmed &&
+      !r.consentRevokedAt
+  );
+}
+
 export async function hasProfessionalPatientAccess(
   kind: ProfessionalKind,
   professionalId: string,
   patientKey: string
 ): Promise<boolean> {
-  if (await findProfessionalLink(kind, professionalId, patientKey)) return true;
-  const lists = await listReferralsForProfessional(kind, professionalId);
-  const key = patientKey.toLowerCase().trim();
-  return [...lists.incoming, ...lists.outgoing].some(
-    (r) => r.patientKey === key && ["accepted", "following", "viewed", "pending"].includes(r.status) && r.consentConfirmed && !r.consentRevokedAt
-  );
+  return hasProfessionalPatientAccessAny(kind, professionalId, [patientKey]);
 }
