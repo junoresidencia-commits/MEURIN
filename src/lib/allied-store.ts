@@ -57,6 +57,7 @@ function mapPro(r: Record<string, unknown>): AlliedProfessional {
     phone: (r.phone as string) ?? null,
     registry: (r.registry as string) ?? null,
     uf: (r.uf as string) ?? null,
+    city: (r.city as string) ?? null,
     specialty: (r.specialty as string) ?? null,
     bio: (r.bio as string) ?? null,
     photoUrl: (r.photo_url as string) ?? (r.photoUrl as string) ?? null,
@@ -166,14 +167,14 @@ export async function findAlliedByCpfOrEmail(role: AlliedRole, cpf?: string | nu
 
 export async function createAlliedProfessional(input: {
   role: AlliedRole; name: string; cpf?: string | null; email?: string | null; phone?: string | null;
-  registry?: string | null; uf?: string | null; specialty?: string | null; bio?: string | null;
+  registry?: string | null; uf?: string | null; city?: string | null; specialty?: string | null; bio?: string | null;
   password?: string; status?: AlliedStatus; photoUrl?: string | null;
 }): Promise<AlliedProfessional> {
   const password = input.password || DEFAULT_ALLIED_PASSWORD;
   const row: AlliedProfessional = {
     id: uuid(), role: input.role, name: input.name.trim(),
     cpf: input.cpf || null, email: input.email || null, phone: input.phone || null,
-    registry: input.registry || null, uf: input.uf || null, specialty: input.specialty || null,
+    registry: input.registry || null, uf: input.uf || null, city: input.city || null, specialty: input.specialty || null,
     bio: input.bio || null, photoUrl: input.photoUrl || null,
     passwordHash: await bcrypt.hash(password, 10),
     status: input.status || "active",
@@ -183,13 +184,19 @@ export async function createAlliedProfessional(input: {
   };
   if (active()) {
     const s = getSupabaseAdmin()!;
-    const { error } = await s.from("allied_professionals").insert({
+    const insert: Record<string, unknown> = {
       id: row.id, role: row.role, name: row.name, cpf: row.cpf, cpf_normalized: normalizeCpf(row.cpf) || null,
-      email: row.email, phone: row.phone, registry: row.registry, uf: row.uf, specialty: row.specialty,
+      email: row.email, phone: row.phone, registry: row.registry, uf: row.uf, city: row.city, specialty: row.specialty,
       bio: row.bio, photo_url: row.photoUrl, password_hash: row.passwordHash, status: row.status, created_at: row.createdAt,
-    });
-    if (!isMissing(error)) { if (error) throw error; return row; }
-    tableMissing = true;
+    };
+    for (let attempt = 0; attempt < 8; attempt++) {
+      const { error } = await s.from("allied_professionals").insert(insert);
+      if (!error) return row;
+      if (isMissing(error)) { tableMissing = true; break; }
+      const col = missingColumnName(error);
+      if (!col || !(col in insert)) throw error;
+      delete insert[col];
+    }
   }
   const db = await readLocal();
   db.professionals.push(row);
@@ -240,14 +247,48 @@ export async function touchAlliedAccess(id: string): Promise<void> {
   if (p) { p.lastAccessAt = now; await writeLocal(db); }
 }
 
+function missingColumnName(error: { code?: string; message?: string } | null): string | null {
+  if (!error) return null;
+  if (error.code !== "PGRST204" && error.code !== "42703" && !/column|schema cache/i.test(error.message || "")) return null;
+  const msg = error.message || "";
+  let m = msg.match(/find the '([^']+)' column/i);
+  if (m) return m[1];
+  m = msg.match(/column "?([a-z0-9_]+)"? .*does not exist/i);
+  return m ? m[1] : null;
+}
+
+export type AlliedSettingsPatch = {
+  name?: string;
+  phone?: string | null;
+  email?: string | null;
+  registry?: string | null;
+  uf?: string | null;
+  city?: string | null;
+  specialty?: string | null;
+  bio?: string | null;
+  photoUrl?: string | null;
+  consultationPriceCents?: number | null;
+  returnPriceCents?: number | null;
+  pixProfile?: PixProfile | null;
+};
+
 export async function updateAlliedSettings(
   id: string,
-  patch: { consultationPriceCents?: number | null; returnPriceCents?: number | null; pixProfile?: PixProfile | null }
+  patch: AlliedSettingsPatch
 ): Promise<AlliedProfessional | null> {
   const current = await getAlliedProfessional(id);
   if (!current) return null;
   const next: AlliedProfessional = {
     ...current,
+    name: patch.name !== undefined ? patch.name : current.name,
+    phone: patch.phone !== undefined ? patch.phone : current.phone,
+    email: patch.email !== undefined ? patch.email : current.email,
+    registry: patch.registry !== undefined ? patch.registry : current.registry,
+    uf: patch.uf !== undefined ? patch.uf : current.uf,
+    city: patch.city !== undefined ? patch.city : current.city,
+    specialty: patch.specialty !== undefined ? patch.specialty : current.specialty,
+    bio: patch.bio !== undefined ? patch.bio : current.bio,
+    photoUrl: patch.photoUrl !== undefined ? patch.photoUrl : current.photoUrl,
     consultationPriceCents: patch.consultationPriceCents !== undefined ? patch.consultationPriceCents : current.consultationPriceCents,
     returnPriceCents: patch.returnPriceCents !== undefined ? patch.returnPriceCents : current.returnPriceCents,
     pixProfile: patch.pixProfile !== undefined ? patch.pixProfile : current.pixProfile,
@@ -255,16 +296,31 @@ export async function updateAlliedSettings(
   if (active()) {
     const s = getSupabaseAdmin()!;
     const row: Record<string, unknown> = {};
+    if (patch.name !== undefined) row.name = patch.name;
+    if (patch.phone !== undefined) row.phone = patch.phone;
+    if (patch.email !== undefined) row.email = patch.email;
+    if (patch.registry !== undefined) row.registry = patch.registry;
+    if (patch.uf !== undefined) row.uf = patch.uf;
+    if (patch.city !== undefined) row.city = patch.city;
+    if (patch.specialty !== undefined) row.specialty = patch.specialty;
+    if (patch.bio !== undefined) row.bio = patch.bio;
+    if (patch.photoUrl !== undefined) row.photo_url = patch.photoUrl;
     if (patch.consultationPriceCents !== undefined) row.consultation_price_cents = patch.consultationPriceCents;
     if (patch.returnPriceCents !== undefined) row.return_price_cents = patch.returnPriceCents;
     if (patch.pixProfile !== undefined) row.pix_profile = patch.pixProfile;
-    if (Object.keys(row).length > 0) {
-      const { error } = await s.from("allied_professionals").update(row).eq("id", id);
-      if (!isMissing(error)) {
-        if (error) throw error;
+    const currentRow = { ...row };
+    for (let attempt = 0; attempt < 10 && Object.keys(currentRow).length; attempt++) {
+      const { error } = await s.from("allied_professionals").update(currentRow).eq("id", id);
+      if (!error) {
         return next;
       }
-      tableMissing = true;
+      if (isMissing(error)) {
+        tableMissing = true;
+        break;
+      }
+      const col = missingColumnName(error);
+      if (!col || !(col in currentRow)) throw error;
+      delete currentRow[col];
     }
   }
   const db = await readLocal();

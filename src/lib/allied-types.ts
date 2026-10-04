@@ -22,6 +22,7 @@ export interface AlliedProfessional {
   phone?: string | null;
   registry?: string | null;
   uf?: string | null;
+  city?: string | null;
   specialty?: string | null;
   bio?: string | null;
   photoUrl?: string | null;

@@ -1,4 +1,5 @@
 import "server-only";
+import { v4 as uuid } from "uuid";
 import QRCode from "qrcode";
 import { requireAllied, resolveAlliedPatientAccess } from "./allied-access";
 import { requireNutritionist, resolveNutritionPatientAccess } from "./nutrition-context";
@@ -21,6 +22,10 @@ import type { PixProfile } from "./types";
 import { alliedFeeRule } from "./allied-store";
 import { nutritionFeeRule } from "./nutritionists-store";
 import { recordPlatformCharge } from "./platform-charges-store";
+import { getDoctorSessionId } from "./auth";
+import { getDoctorById, listBookingsForDoctor, updateDb } from "./store";
+import { resolvePatientAccess } from "./doctor-access";
+import { doctorFeeRule, type Booking } from "./types";
 
 export type CarePixInfo = {
   brCode: string;
@@ -47,6 +52,91 @@ export async function currentCareProfessional(): Promise<CareActor> {
     return { kind: "nutrition", professionalId: nut.id, professionalName: nut.name };
   }
   return null;
+}
+
+async function openDoctorInstantRoom(
+  patientKey: string,
+  isReturn: boolean
+): Promise<{ room: { meetingRoomId: string; isReturn: boolean; priceCents: number; paymentStatus: string } } | { error: string; status: number }> {
+  const doctorId = await getDoctorSessionId();
+  if (!doctorId) return { error: "Não autenticado.", status: 401 };
+  const doctor = await getDoctorById(doctorId);
+  const access = await resolvePatientAccess(patientKey);
+  if (!doctor || !access?.allowed) {
+    return { error: "Sem acesso a este paciente.", status: 403 };
+  }
+
+  const now = Date.now();
+  const mine = await listBookingsForDoctor(doctor.id);
+  const reusable = mine.find((b) => {
+    if (!["confirmed", "paid", "completed"].includes(b.status)) return false;
+    const email = (b.patientEmail || "").toLowerCase().trim();
+    const same =
+      email === access.email.toLowerCase().trim() ||
+      email === access.key.toLowerCase().trim() ||
+      access.key.toLowerCase() === email;
+    const sameVisit = isReturn ? b.courtesyKind === "retorno" : !b.courtesyKind;
+    const recent = now - new Date(b.createdAt || b.slotStart).getTime() < 12 * 60 * 60 * 1000;
+    return same && sameVisit && recent && b.meetingRoomId;
+  });
+  if (reusable) {
+    return {
+      room: {
+        meetingRoomId: reusable.meetingRoomId,
+        isReturn,
+        priceCents: reusable.priceCents ?? 0,
+        paymentStatus: reusable.priceCents ? "confirmed" : "free",
+      },
+    };
+  }
+
+  const start = new Date();
+  const booking: Booking = {
+    id: uuid(),
+    doctorId: doctor.id,
+    patientName: access.name || "Paciente",
+    patientEmail: (access.email || access.key).toLowerCase(),
+    patientPhone: access.phone || "",
+    patientCity: access.city || "",
+    careReason: "acompanhamento",
+    slotStart: start.toISOString(),
+    slotEnd: new Date(start.getTime() + 30 * 60000).toISOString(),
+    priceCents: isReturn ? 0 : doctor.consultationPriceCents,
+    paymentMethod: "pix",
+    status: "confirmed",
+    meetingRoomId: uuid(),
+    confirmationEmailSent: false,
+    createdAt: start.toISOString(),
+    courtesyKind: isReturn ? "retorno" : undefined,
+    stage: "confirmada",
+    events: [
+      {
+        at: start.toISOString(),
+        actor: "medico",
+        type: "confirmada",
+        detail: isReturn ? "Retorno online iniciado pelo médico. Sem cobrança." : "Consulta online iniciada pelo médico.",
+      },
+    ],
+  };
+  await updateDb((current) => ({ ...current, bookings: [...current.bookings, booking] }));
+  await recordPlatformCharge({
+    actorKind: "doctor",
+    professionalId: doctor.id,
+    professionalName: doctor.name,
+    kind: "atendimento",
+    sourceId: booking.id,
+    rule: doctorFeeRule(doctor),
+    priceCents: booking.priceCents,
+    note: isReturn ? "retorno" : "consulta médica",
+  }).catch(() => null);
+  return {
+    room: {
+      meetingRoomId: booking.meetingRoomId,
+      isReturn,
+      priceCents: booking.priceCents,
+      paymentStatus: booking.priceCents > 0 ? "confirmed" : "free",
+    },
+  };
 }
 
 async function billingForActor(
@@ -105,9 +195,13 @@ export async function carePixPayload(room: CareRoom): Promise<CarePixInfo | null
 export async function openCareRoomForPatient(
   patientKey: string,
   opts: { isReturn?: boolean } = {}
-): Promise<{ room: CareRoom } | { error: string; status: number }> {
+): Promise<{ room: CareRoom | { meetingRoomId: string; isReturn: boolean; priceCents: number; paymentStatus: string } } | { error: string; status: number }> {
   const actor = await currentCareProfessional();
-  if (!actor) return { error: "Não autenticado.", status: 401 };
+  if (!actor) {
+    const doctorId = await getDoctorSessionId();
+    if (doctorId) return openDoctorInstantRoom(patientKey, opts.isReturn === true);
+    return { error: "Não autenticado.", status: 401 };
+  }
 
   let name = "Paciente";
   let key = patientKey;
@@ -130,7 +224,10 @@ export async function openCareRoomForPatient(
   else if (key.includes("@")) email = key.toLowerCase().trim();
 
   const isReturn = opts.isReturn === true;
-  const existing = await findReusableRoom(actor.professionalId, key, isReturn);
+  const existing =
+    (await findReusableRoom(actor.professionalId, key, isReturn)) ||
+    (email ? await findReusableRoom(actor.professionalId, email, isReturn) : null) ||
+    (await findReusableRoom(actor.professionalId, patientKey, isReturn));
   if (existing) {
     await touchCareRoom(existing.id);
     return { room: existing };
@@ -144,19 +241,25 @@ export async function openCareRoomForPatient(
     };
   }
 
-  const room = await createCareRoom({
-    kind: actor.kind,
-    professionalId: actor.professionalId,
-    professionalName: actor.professionalName,
-    patientKey: key,
-    patientName: name,
-    patientEmail: email,
-    priceCents: billing.priceCents,
-    pixCopiaCola: null,
-    pixHolderName: billing.name,
-    paymentStatus: billing.priceCents > 0 ? "unpaid" : "free",
-    isReturn,
-  });
+  let room: CareRoom;
+  try {
+    room = await createCareRoom({
+      kind: actor.kind,
+      professionalId: actor.professionalId,
+      professionalName: actor.professionalName,
+      patientKey: key,
+      patientName: name,
+      patientEmail: email,
+      priceCents: billing.priceCents,
+      pixCopiaCola: null,
+      pixHolderName: billing.name,
+      paymentStatus: billing.priceCents > 0 ? "unpaid" : "free",
+      isReturn,
+    });
+  } catch (err) {
+    console.error("[care-room] create failed", err);
+    return { error: "Não foi possível abrir a sala. Tente novamente em instantes.", status: 500 };
+  }
 
   if (billing.priceCents > 0) {
     const charged = buildProfessionalPix(

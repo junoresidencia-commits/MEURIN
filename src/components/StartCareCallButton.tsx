@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { toFriendlyMessage } from "@/lib/user-errors";
+import { postJson } from "@/lib/user-errors";
 
 export function StartCareCallButton({
   patientKey,
@@ -20,16 +20,11 @@ export function StartCareCallButton({
     setBusy(true);
     setErr("");
     try {
-      const res = await fetch("/api/care-rooms", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ patientKey, isReturn }),
-      });
-      const data = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(data.error || "Não foi possível abrir a sala.");
+      const data = await postJson<{ meetingRoomId?: string }>("/api/care-rooms", { patientKey, isReturn }, "Não foi possível abrir a sala.");
+      if (!data.meetingRoomId) throw new Error("Não foi possível abrir a sala.");
       window.location.href = `/consulta/${data.meetingRoomId}`;
     } catch (e) {
-      setErr(toFriendlyMessage(e, "Não foi possível abrir a sala."));
+      setErr(e instanceof Error && e.message ? e.message : "Não foi possível abrir a sala.");
       setBusy(false);
     }
   }

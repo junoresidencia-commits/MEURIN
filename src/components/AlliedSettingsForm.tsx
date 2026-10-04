@@ -7,6 +7,7 @@ import type { AlliedRole } from "@/lib/allied-types";
 import { ROLE_META } from "@/lib/allied-types";
 import { PlatformFeePayPanel } from "@/components/PlatformFeePayPanel";
 import { PixQrPanel } from "@/components/PixQrPanel";
+import { ProfilePhotoUploader } from "@/components/ProfilePhotoUploader";
 
 const KEY_TYPES = [
   { v: "cpf", l: "CPF" },
@@ -20,6 +21,16 @@ export function AlliedSettingsForm({ role }: { role: AlliedRole }) {
   const router = useRouter();
   const meta = ROLE_META[role];
   const [loading, setLoading] = useState(true);
+  const [profile, setProfile] = useState({
+    name: "",
+    phone: "",
+    email: "",
+    registry: "",
+    uf: "",
+    city: "",
+    specialty: "",
+    bio: "",
+  });
   const [price, setPrice] = useState("");
   const [returnPrice, setReturnPrice] = useState("");
   const [pix, setPix] = useState({
@@ -41,6 +52,16 @@ export function AlliedSettingsForm({ role }: { role: AlliedRole }) {
         return;
       }
       const d = await r.json();
+      setProfile({
+        name: d.name || "",
+        phone: d.phone || "",
+        email: d.email || "",
+        registry: d.registry || "",
+        uf: d.uf || "",
+        city: d.city || "",
+        specialty: d.specialty || "",
+        bio: d.bio || "",
+      });
       setPrice(d.consultationPriceCents != null ? String(d.consultationPriceCents / 100) : "");
       setReturnPrice(d.returnPriceCents != null ? String(d.returnPriceCents / 100) : "");
       if (d.pixProfile) {
@@ -64,12 +85,17 @@ export function AlliedSettingsForm({ role }: { role: AlliedRole }) {
       const res = await fetch("/api/allied/settings", {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ consultationPrice: price, returnPrice, pixProfile: pix }),
+        body: JSON.stringify({
+          ...profile,
+          consultationPrice: price,
+          returnPrice,
+          pixProfile: pix,
+        }),
       });
       const d = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(d.error || "Erro");
+      if (!res.ok) throw new Error(d.error || "Não foi possível salvar o perfil.");
       setBrcode(d.brcode || null);
-      setMsg("Configurações salvas. Consulta e retorno vão para esta chave Pix.");
+      setMsg("Perfil e recebimentos salvos.");
     } catch (e) {
       setMsg(e instanceof Error ? e.message : "Erro");
     } finally {
@@ -86,11 +112,56 @@ export function AlliedSettingsForm({ role }: { role: AlliedRole }) {
       </Link>
       <h1 className="font-display mt-2 text-2xl font-extrabold text-[var(--text)]">Meu perfil e recebimentos</h1>
       <p className="mt-1 text-sm text-[var(--text-muted)]">
-        O paciente paga na <strong>sua</strong> chave Pix — consulta ou retorno. Sem chave cadastrada,
-        a consulta online só pode ser gratuita. 0 no retorno = retorno grátis.
+        Foto, dados profissionais e a sua chave Pix. A foto aparece na busca da rede, nos encaminhamentos e no seu painel.
       </p>
 
-      <section className="panel mt-5 grid gap-3 sm:grid-cols-2">
+      <div className="mt-5">
+        <ProfilePhotoUploader
+          endpoint="/api/allied/photo"
+          label="Foto de perfil"
+          hint="Toque em Adicionar foto para enviar PNG, JPG ou WEBP. Troque ou remova quando quiser."
+          fallback={profile.name || meta.label}
+        />
+      </div>
+
+      <section className="panel mt-4 grid gap-3 sm:grid-cols-2">
+        <p className="sm:col-span-2 text-sm font-semibold text-[var(--text)]">Dados profissionais</p>
+        <label className="block sm:col-span-2">
+          <span className="mb-1 block text-xs font-semibold text-[var(--text-muted)]">Nome completo</span>
+          <input className="input-field" value={profile.name} onChange={(e) => setProfile({ ...profile, name: e.target.value })} />
+        </label>
+        <label className="block">
+          <span className="mb-1 block text-xs font-semibold text-[var(--text-muted)]">E-mail</span>
+          <input className="input-field" value={profile.email} onChange={(e) => setProfile({ ...profile, email: e.target.value })} />
+        </label>
+        <label className="block">
+          <span className="mb-1 block text-xs font-semibold text-[var(--text-muted)]">Telefone / WhatsApp</span>
+          <input className="input-field" value={profile.phone} onChange={(e) => setProfile({ ...profile, phone: e.target.value })} />
+        </label>
+        <label className="block">
+          <span className="mb-1 block text-xs font-semibold text-[var(--text-muted)]">{meta.registry}</span>
+          <input className="input-field" value={profile.registry} onChange={(e) => setProfile({ ...profile, registry: e.target.value })} />
+        </label>
+        <label className="block">
+          <span className="mb-1 block text-xs font-semibold text-[var(--text-muted)]">UF</span>
+          <input className="input-field" value={profile.uf} onChange={(e) => setProfile({ ...profile, uf: e.target.value })} placeholder="BA" maxLength={2} />
+        </label>
+        <label className="block">
+          <span className="mb-1 block text-xs font-semibold text-[var(--text-muted)]">Cidade</span>
+          <input className="input-field" value={profile.city} onChange={(e) => setProfile({ ...profile, city: e.target.value })} />
+        </label>
+        <label className="block">
+          <span className="mb-1 block text-xs font-semibold text-[var(--text-muted)]">Especialidade</span>
+          <input className="input-field" value={profile.specialty} onChange={(e) => setProfile({ ...profile, specialty: e.target.value })} placeholder={meta.label} />
+        </label>
+        <label className="block sm:col-span-2">
+          <span className="mb-1 block text-xs font-semibold text-[var(--text-muted)]">Bio pública</span>
+          <textarea className="input-field min-h-[88px]" value={profile.bio} onChange={(e) => setProfile({ ...profile, bio: e.target.value })} placeholder="Como você atende, abordagem, público." />
+        </label>
+      </section>
+
+      <section className="panel mt-4 grid gap-3 sm:grid-cols-2">
+        <p className="sm:col-span-2 text-sm font-semibold text-[var(--text)]">Valores</p>
         <label className="block">
           <span className="mb-1 block text-xs font-semibold text-[var(--text-muted)]">Valor da consulta (R$)</span>
           <input className="input-field" inputMode="decimal" value={price} onChange={(e) => setPrice(e.target.value)} placeholder="0 = consulta gratuita" />
@@ -103,14 +174,13 @@ export function AlliedSettingsForm({ role }: { role: AlliedRole }) {
 
       <section className="panel mt-4">
         <p className="text-sm font-semibold text-[var(--text)]">Chave Pix (recebimento direto)</p>
+        <p className="mt-1 text-xs text-[var(--text-muted)]">O paciente paga na sua chave. Sem Pix cadastrado, a consulta online só pode ser gratuita.</p>
         <div className="mt-2 grid gap-3 sm:grid-cols-2">
           <label className="block">
             <span className="mb-1 block text-xs font-semibold text-[var(--text-muted)]">Tipo de chave</span>
             <select className="input-field" value={pix.keyType} onChange={(e) => setPix({ ...pix, keyType: e.target.value })}>
               {KEY_TYPES.map((k) => (
-                <option key={k.v} value={k.v}>
-                  {k.l}
-                </option>
+                <option key={k.v} value={k.v}>{k.l}</option>
               ))}
             </select>
           </label>
@@ -139,7 +209,7 @@ export function AlliedSettingsForm({ role }: { role: AlliedRole }) {
 
       <div className="mt-4 flex items-center gap-3">
         <button type="button" className="btn-gold" onClick={() => void save()} disabled={saving}>
-          {saving ? "Salvando…" : "Salvar"}
+          {saving ? "Salvando…" : "Salvar perfil"}
         </button>
         {msg && <span className="text-sm font-semibold text-[var(--text-soft)]">{msg}</span>}
       </div>

@@ -14,6 +14,7 @@ const KEY_TYPES = [
 export default function NutriConfigPage() {
   const router = useRouter();
   const [loading, setLoading] = useState(true);
+  const [profile, setProfile] = useState({ name: "", phone: "", email: "", crn: "", uf: "", city: "", specialty: "", bio: "" });
   const [price, setPrice] = useState("");
   const [returnPrice, setReturnPrice] = useState("");
   const [pix, setPix] = useState({ keyType: "cpf", key: "", holderName: "", holderDoc: "", bank: "", city: "" });
@@ -27,6 +28,16 @@ export default function NutriConfigPage() {
     fetch("/api/nutricionista/settings").then(async (r) => {
       if (r.status === 401) { router.replace("/nutricionista/login"); return; }
       const d = await r.json();
+      setProfile({
+        name: d.name || "",
+        phone: d.phone || "",
+        email: d.email || "",
+        crn: d.crn || "",
+        uf: d.uf || "",
+        city: d.city || "",
+        specialty: d.specialty || "",
+        bio: d.bio || "",
+      });
       setPrice(d.consultationPriceCents != null ? String(d.consultationPriceCents / 100) : "");
       setReturnPrice(d.returnPriceCents != null ? String(d.returnPriceCents / 100) : "");
       if (d.pixProfile) setPix({ keyType: d.pixProfile.keyType || "cpf", key: d.pixProfile.key || "", holderName: d.pixProfile.holderName || "", holderDoc: d.pixProfile.holderDoc || "", bank: d.pixProfile.bank || "", city: d.pixProfile.city || "" });
@@ -41,7 +52,7 @@ export default function NutriConfigPage() {
     try {
       const res = await fetch("/api/nutricionista/settings", {
         method: "PUT", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ consultationPrice: price, returnPrice, pixProfile: pix }),
+        body: JSON.stringify({ ...profile, consultationPrice: price, returnPrice, pixProfile: pix }),
       });
       const d = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(d.error || "Erro");
@@ -57,11 +68,23 @@ export default function NutriConfigPage() {
     <div className="mx-auto max-w-2xl px-5 py-8">
       <Link href="/nutricionista/painel" className="text-sm font-semibold text-[var(--gold)]">← Painel</Link>
       <h1 className="font-display mt-2 text-2xl font-extrabold text-[var(--text)]">Meu perfil e recebimentos</h1>
-      <p className="mt-1 text-sm text-[var(--text-muted)]">Atualize sua foto de perfil, o valor da consulta/retorno e a sua chave Pix para receber diretamente. O paciente paga e envia o comprovante; você confirma o recebimento.</p>
+      <p className="mt-1 text-sm text-[var(--text-muted)]">Foto, dados profissionais, valor da consulta/retorno e a sua chave Pix. A foto aparece na rede e no seu painel.</p>
 
       <div className="mt-5">
-        <ProfilePhotoUploader endpoint="/api/nutricionista/photo" label="Foto de perfil" hint="Sua foto aparece na sua área e para a equipe." fallback="Nu" />
+        <ProfilePhotoUploader endpoint="/api/nutricionista/photo" label="Foto de perfil" hint="Toque em Adicionar foto para enviar PNG, JPG ou WEBP." fallback={profile.name || "Nu"} />
       </div>
+
+      <section className="panel mt-4 grid gap-3 sm:grid-cols-2">
+        <p className="sm:col-span-2 text-sm font-semibold text-[var(--text)]">Dados profissionais</p>
+        <label className="block sm:col-span-2"><span className="mb-1 block text-xs font-semibold text-[var(--text-muted)]">Nome completo</span><input className="input-field" value={profile.name} onChange={(e) => setProfile({ ...profile, name: e.target.value })} /></label>
+        <label className="block"><span className="mb-1 block text-xs font-semibold text-[var(--text-muted)]">E-mail</span><input className="input-field" value={profile.email} onChange={(e) => setProfile({ ...profile, email: e.target.value })} /></label>
+        <label className="block"><span className="mb-1 block text-xs font-semibold text-[var(--text-muted)]">Telefone</span><input className="input-field" value={profile.phone} onChange={(e) => setProfile({ ...profile, phone: e.target.value })} /></label>
+        <label className="block"><span className="mb-1 block text-xs font-semibold text-[var(--text-muted)]">CRN</span><input className="input-field" value={profile.crn} onChange={(e) => setProfile({ ...profile, crn: e.target.value })} /></label>
+        <label className="block"><span className="mb-1 block text-xs font-semibold text-[var(--text-muted)]">UF</span><input className="input-field" value={profile.uf} onChange={(e) => setProfile({ ...profile, uf: e.target.value })} maxLength={2} /></label>
+        <label className="block"><span className="mb-1 block text-xs font-semibold text-[var(--text-muted)]">Cidade</span><input className="input-field" value={profile.city} onChange={(e) => setProfile({ ...profile, city: e.target.value })} /></label>
+        <label className="block"><span className="mb-1 block text-xs font-semibold text-[var(--text-muted)]">Especialidade</span><input className="input-field" value={profile.specialty} onChange={(e) => setProfile({ ...profile, specialty: e.target.value })} /></label>
+        <label className="block sm:col-span-2"><span className="mb-1 block text-xs font-semibold text-[var(--text-muted)]">Bio pública</span><textarea className="input-field min-h-[88px]" value={profile.bio} onChange={(e) => setProfile({ ...profile, bio: e.target.value })} /></label>
+      </section>
 
       <section className="panel mt-4 grid gap-3 sm:grid-cols-2">
         <label className="block"><span className="mb-1 block text-xs font-semibold text-[var(--text-muted)]">Valor da consulta (R$)</span><input className="input-field" inputMode="decimal" value={price} onChange={(e) => setPrice(e.target.value)} /></label>

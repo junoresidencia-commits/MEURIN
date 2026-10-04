@@ -14,6 +14,8 @@ type Pro = {
   email?: string | null;
   registry?: string | null;
   uf?: string | null;
+  city?: string | null;
+  photoUrl?: string | null;
   status: string;
   createdAt: string;
   consultationPriceCents?: number | null;
@@ -129,11 +131,18 @@ export default function AdminAlliedPage() {
           return (
             <div key={n.id} className="panel">
               <div className="flex flex-wrap items-center justify-between gap-3">
+                <div className="flex items-center gap-3">
+                  {n.photoUrl ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img src={n.photoUrl} alt="" className="h-12 w-12 rounded-full border border-[var(--border)] object-cover" />
+                  ) : (
+                    <span className="grid h-12 w-12 place-items-center rounded-full bg-[var(--gold-soft)] text-sm font-bold text-[var(--gold)]">{n.name.slice(0, 2).toUpperCase()}</span>
+                  )}
                 <div>
                   <p className="font-semibold text-[var(--text)]">
                     {n.name}{" "}
                     <span className="text-sm font-normal text-[var(--text-muted)]">
-                      · {n.role === "nursing" ? "Enfermagem" : "Psicologia"} {n.registry ? `· ${n.registry}` : ""}
+                      · {n.role === "nursing" ? "Enfermagem" : "Psicologia"} {n.registry ? `· ${n.registry}` : ""}{n.city ? ` · ${n.city}` : ""}
                     </span>
                   </p>
                   <p className="text-xs text-[var(--text-muted)]">{[n.cpf, n.email].filter(Boolean).join(" · ")}</p>
@@ -143,6 +152,7 @@ export default function AdminAlliedPage() {
                     Retorno: {n.returnPriceCents != null ? `R$ ${(n.returnPriceCents / 100).toFixed(2)}` : "grátis / não definido"}
                   </p>
                   <span className="mt-1 inline-block rounded-full bg-slate-100 px-2 py-0.5 text-xs font-semibold">{STATUS_LABEL[n.status] || n.status}</span>
+                </div>
                 </div>
                 <div className="flex gap-2">
                   {n.status !== "active" && (

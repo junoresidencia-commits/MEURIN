@@ -6,8 +6,19 @@ import { useRouter } from "next/navigation";
 import type { AlliedRole } from "@/lib/allied-types";
 import { StartCareCallButton } from "@/components/StartCareCallButton";
 import { CreatePatient } from "@/components/CreatePatient";
+import { ProfessionalProfileCard } from "@/components/ProfessionalProfileCard";
 
-type Me = { professional: { name: string; registry?: string | null; uf?: string | null }; doctors: { id: string; name: string }[] };
+type Pro = {
+  name: string;
+  registry?: string | null;
+  uf?: string | null;
+  city?: string | null;
+  specialty?: string | null;
+  bio?: string | null;
+  photoUrl?: string | null;
+  pixProfile?: { key?: string | null } | null;
+};
+type Me = { professional: Pro; doctors: { id: string; name: string }[] };
 type Patient = { key: string; name: string; reason?: string | null; at: string };
 
 const META: Record<AlliedRole, { title: string; registry: string; base: string }> = {
@@ -46,18 +57,41 @@ export function AlliedPanel({ role }: { role: AlliedRole }) {
   }
 
   const filtered = q ? patients.filter((p) => p.name.toLowerCase().includes(q.toLowerCase())) : patients;
+  const missing: string[] = [];
+  if (!me?.professional.photoUrl) missing.push("foto");
+  if (!me?.professional.city) missing.push("cidade");
+  if (!me?.professional.specialty) missing.push("especialidade");
+  if (!me?.professional.bio) missing.push("bio");
+  if (!me?.professional.pixProfile?.key) missing.push("chave Pix");
   if (loading) return <div className="mx-auto max-w-4xl px-5 py-20 text-[var(--text-muted)]">Carregando…</div>;
 
   return (
     <div className="mx-auto max-w-4xl px-5 py-8">
       <div className="flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <p className="text-xs font-bold uppercase tracking-wide text-[var(--gold)]">{meta.title}</p>
-          <h1 className="font-display text-3xl font-extrabold text-[var(--text)]">Olá, {me?.professional.name?.split(" ")[0]}</h1>
-          <p className="mt-1 text-sm text-[var(--text-muted)]">
-            {me?.professional.registry ? `${meta.registry} ${me.professional.registry}${me.professional.uf ? "-" + me.professional.uf : ""} · ` : ""}
-            Vinculado a {me?.doctors.length || 0} médico(s)
-          </p>
+        <div className="flex items-center gap-3">
+          <Link href={`${meta.base}/configuracoes`} className="shrink-0" aria-label="Editar foto e perfil">
+            {me?.professional.photoUrl ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img src={me.professional.photoUrl} alt="Sua foto" className="h-14 w-14 rounded-full border border-[var(--border)] object-cover" />
+            ) : (
+              <span className="grid h-14 w-14 place-items-center rounded-full bg-[var(--gold-soft)] text-lg font-bold text-[var(--gold)]">
+                {(me?.professional.name || meta.title).slice(0, 2).toUpperCase()}
+              </span>
+            )}
+          </Link>
+          <div>
+            <p className="text-xs font-bold uppercase tracking-wide text-[var(--gold)]">{meta.title}</p>
+            <h1 className="font-display text-3xl font-extrabold text-[var(--text)]">Olá, {me?.professional.name?.split(" ")[0]}</h1>
+            <p className="mt-1 text-sm text-[var(--text-muted)]">
+              {me?.professional.registry ? `${meta.registry} ${me.professional.registry}${me.professional.uf ? "-" + me.professional.uf : ""} · ` : ""}
+              {me?.professional.city ? `${me.professional.city} · ` : ""}
+              {me?.professional.specialty ? `${me.professional.specialty} · ` : ""}
+              Vinculado a {me?.doctors.length || 0} médico(s)
+            </p>
+            <Link href={`${meta.base}/configuracoes`} className="mt-1 inline-block text-sm font-semibold text-[var(--gold)]">
+              {me?.professional.photoUrl ? "Editar foto e perfil →" : "Adicionar foto e completar perfil →"}
+            </Link>
+          </div>
         </div>
         <div className="flex flex-wrap gap-2">
           <Link href="/rede" className="btn-ghost">Pesquisar profissional</Link>
@@ -66,6 +100,16 @@ export function AlliedPanel({ role }: { role: AlliedRole }) {
           <button type="button" className="btn-ghost" onClick={logout}>Sair</button>
         </div>
       </div>
+
+      <ProfessionalProfileCard
+        photoEndpoint="/api/allied/photo"
+        settingsHref={`${meta.base}/configuracoes`}
+        name={me?.professional.name || meta.title}
+        missing={missing}
+        onPhotoChange={(url) =>
+          setMe((cur) => (cur ? { ...cur, professional: { ...cur.professional, photoUrl: url } } : cur))
+        }
+      />
 
       <section className="mt-6">
         <CreatePatient onCreated={() => window.location.reload()} />

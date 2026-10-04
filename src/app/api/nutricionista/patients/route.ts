@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { requireNutritionist, linkedDoctorIds } from "@/lib/nutrition-context";
 import { listReferralsForDoctorIds } from "@/lib/nutritionists-store";
 import { getPatient, clinicalKey, findByEmailAny } from "@/lib/patients-store";
+import { listLinksForProfessional } from "@/lib/network-referrals-store";
 
 export async function GET(req: Request) {
   const nut = await requireNutritionist();
@@ -26,6 +27,21 @@ export async function GET(req: Request) {
       name: patient?.name || r.patientName || "Paciente",
       cpf: patient?.cpf ?? null,
       doctorId: r.doctorId,
+    });
+  }
+
+  const links = await listLinksForProfessional("nutrition", nut.id);
+  for (const link of links) {
+    if (seen.has(link.patientKey)) continue;
+    seen.add(link.patientKey);
+    let patient = null as Awaited<ReturnType<typeof getPatient>>;
+    if (link.patientKey.startsWith("pid:")) patient = await getPatient(link.patientKey.slice(4));
+    else if (link.patientKey.includes("@")) patient = await findByEmailAny(link.patientKey);
+    patients.push({
+      key: patient ? clinicalKey(patient) : link.patientKey,
+      name: patient?.name || link.patientName || "Paciente",
+      cpf: patient?.cpf ?? null,
+      doctorId: patient?.doctorId || "",
     });
   }
 

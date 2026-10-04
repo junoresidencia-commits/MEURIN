@@ -11,7 +11,7 @@ export async function GET() {
   return NextResponse.json({
     professionals: list.map((p) => ({
       id: p.id, role: p.role, name: p.name, cpf: p.cpf, email: p.email, phone: p.phone,
-      registry: p.registry, uf: p.uf, specialty: p.specialty, bio: p.bio, photoUrl: p.photoUrl,
+      registry: p.registry, uf: p.uf, city: p.city, specialty: p.specialty, bio: p.bio, photoUrl: p.photoUrl,
       status: p.status, createdAt: p.createdAt, lastAccessAt: p.lastAccessAt,
       consultationPriceCents: p.consultationPriceCents ?? null,
       returnPriceCents: p.returnPriceCents ?? null,

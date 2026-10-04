@@ -22,6 +22,7 @@ import { guessSexFromName } from "@/lib/sex-guess";
 import { CareTeamPatientCard, CareTimeline } from "@/components/CareTeamPatientCard";
 import { SharePatientWithDoctor } from "@/components/SharePatientWithDoctor";
 import { EncaminharHeaderButton } from "@/components/EncaminharHeaderButton";
+import { StartCareCallButton } from "@/components/StartCareCallButton";
 import { ClinicalSummaryBar } from "@/components/ClinicalSummaryBar";
 import { DoctorSummaryEvolution } from "@/components/DoctorSummaryEvolution";
 import { LabResultsTable, LabSparkline } from "@/components/LabResultsTable";
@@ -557,6 +558,7 @@ export default function ProntuarioPage() {
           </div>
           <div className="flex flex-wrap items-center gap-2">
             <AttendanceControl patientKey={emailParam} compact />
+            <StartCareCallButton patientKey={emailParam} className="min-w-[220px]" />
             <EncaminharHeaderButton emailParam={emailParam} patientName={patient?.name} className={HEADER_ACTION} />
             <div className="relative">
               <button

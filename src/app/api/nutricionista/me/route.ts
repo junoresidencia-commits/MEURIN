@@ -13,7 +13,19 @@ export async function GET() {
     if (d) doctors.push({ id: d.id, name: d.name });
   }
   return NextResponse.json({
-    nutritionist: { id: nut.id, name: nut.name, crn: nut.crn, uf: nut.uf, email: nut.email, specialty: nut.specialty, photoUrl: nut.photoUrl ?? null },
+    nutritionist: {
+      id: nut.id,
+      name: nut.name,
+      crn: nut.crn,
+      uf: nut.uf,
+      city: nut.city ?? null,
+      email: nut.email,
+      phone: nut.phone ?? null,
+      specialty: nut.specialty,
+      bio: nut.bio ?? null,
+      photoUrl: nut.photoUrl ?? null,
+      pixReady: Boolean(nut.pixProfile?.key),
+    },
     doctors,
   });
 }

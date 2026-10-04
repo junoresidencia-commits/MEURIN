@@ -6,7 +6,9 @@ import {
   listReferralsForPatient,
   type Nutritionist,
 } from "./nutritionists-store";
-import { getPatient, clinicalKey, findByEmailAny } from "./patients-store";
+import { clinicalKey, findPatientByClinicalKey } from "./patients-store";
+import { patientKeyCandidates, patientKeysMatch } from "./patient-keys";
+import { hasProfessionalPatientAccessAny, listLinksForProfessional } from "./network-referrals-store";
 
 export interface NutritionPatientAccess {
   allowed: boolean;
@@ -33,51 +35,52 @@ export async function linkedDoctorIds(nutritionistId: string): Promise<string[]>
   return links.map((l) => l.doctorId);
 }
 
-function candidateKeys(patientKey: string, patient: Awaited<ReturnType<typeof getPatient>>): string[] {
-  const keys = new Set<string>([patientKey]);
-  if (patient) {
-    keys.add(clinicalKey(patient));
-    if (patient.email) keys.add(patient.email.toLowerCase());
-    keys.add(`pid:${patient.id}`);
-  }
-  return [...keys];
-}
-
 /**
- * Acesso somente a pacientes encaminhados a esta nutricionista (ou encaminhamento
- * legado sem nutricionista específica, de médico vinculado). Histórico de consulta
- * não reabre acesso depois que o encaminhamento é encerrado.
+ * Acesso a pacientes encaminhados (legado) ou vinculados na rede.
+ * Histórico de consulta não reabre acesso depois que o encaminhamento é encerrado.
  */
 export async function resolveNutritionPatientAccess(patientKey: string): Promise<NutritionPatientAccess | null> {
   const nut = await requireNutritionist();
   if (!nut) return null;
   const doctorIds = await linkedDoctorIds(nut.id);
-  if (doctorIds.length === 0) return null;
+  const patient = await findPatientByClinicalKey(patientKey);
+  const keys = patientKeyCandidates(patientKey, patient);
 
-  let patient = null as Awaited<ReturnType<typeof getPatient>>;
-  if (patientKey.startsWith("pid:")) patient = await getPatient(patientKey.slice(4));
-  else if (patientKey.includes("@")) patient = await findByEmailAny(patientKey);
-
-  const keys = candidateKeys(patientKey, patient);
   let refFromLinked = null as Awaited<ReturnType<typeof listReferralsForPatient>>[number] | null;
-  for (const k of keys) {
-    const refs = await listReferralsForPatient(k);
-    refFromLinked = refs.find((r) =>
-      doctorIds.includes(r.doctorId)
-      && r.status !== "encerrado"
-      && (r.nutritionistId === nut.id || !r.nutritionistId)
-    ) || null;
-    if (refFromLinked) break;
+  if (doctorIds.length > 0) {
+    const seen = new Set<string>();
+    for (const k of keys) {
+      const refs = await listReferralsForPatient(k);
+      for (const r of refs) {
+        if (seen.has(r.id)) continue;
+        seen.add(r.id);
+        if (
+          r.status !== "encerrado" &&
+          doctorIds.includes(r.doctorId) &&
+          (r.nutritionistId === nut.id || !r.nutritionistId) &&
+          patientKeysMatch(keys, r.patientKey)
+        ) {
+          refFromLinked = r;
+          break;
+        }
+      }
+      if (refFromLinked) break;
+    }
   }
 
-  if (!refFromLinked) return null;
+  const networkOk = await hasProfessionalPatientAccessAny("nutrition", nut.id, keys);
+  if (!refFromLinked && !networkOk) return null;
 
-  const key = patient ? clinicalKey(patient) : (refFromLinked.patientKey || patientKey);
+  const linkName = networkOk
+    ? (await listLinksForProfessional("nutrition", nut.id)).find((l) => patientKeysMatch(keys, l.patientKey))?.patientName
+    : null;
+
+  const key = patient ? clinicalKey(patient) : (refFromLinked?.patientKey || keys[0] || patientKey);
   return {
     allowed: true,
     key,
-    name: patient?.name || refFromLinked.patientName || "Paciente",
-    doctorId: patient?.doctorId || refFromLinked.doctorId || doctorIds[0],
+    name: patient?.name || refFromLinked?.patientName || linkName || "Paciente",
+    doctorId: patient?.doctorId || refFromLinked?.doctorId || doctorIds[0] || "",
     birthdate: patient?.birthdate || null,
     sex: patient?.sex || null,
     cpf: patient?.cpf || null,

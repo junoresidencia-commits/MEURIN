@@ -21,6 +21,7 @@ export interface Nutritionist {
   phone?: string | null;
   crn?: string | null;
   uf?: string | null;
+  city?: string | null;
   specialty?: string | null;
   bio?: string | null;
   photoUrl?: string | null;
@@ -122,6 +123,7 @@ function mapNut(r: Record<string, unknown>): Nutritionist {
     id: String(r.id), name: String(r.name),
     cpf: (r.cpf as string) ?? null, email: (r.email as string) ?? null,
     phone: (r.phone as string) ?? null, crn: (r.crn as string) ?? null, uf: (r.uf as string) ?? null,
+    city: (r.city as string) ?? null,
     specialty: (r.specialty as string) ?? null, bio: (r.bio as string) ?? null,
     photoUrl: (r.photo_url as string) ?? null,
     documents: Array.isArray(r.documents) ? (r.documents as NutritionistDocument[]) : [],
@@ -202,26 +204,32 @@ export async function findNutritionistByCpfOrEmail(cpf?: string | null, email?: 
   return db.nutritionists.find((a) => (nrm && normalizeCpf(a.cpf) === nrm) || (mail && (a.email || "").toLowerCase() === mail)) ?? null;
 }
 
-export async function createNutritionist(input: { name: string; cpf?: string | null; email?: string | null; phone?: string | null; crn?: string | null; uf?: string | null; specialty?: string | null; bio?: string | null; password?: string; status?: NutritionistStatus; photoUrl?: string | null; documents?: NutritionistDocument[] }): Promise<Nutritionist> {
+export async function createNutritionist(input: { name: string; cpf?: string | null; email?: string | null; phone?: string | null; crn?: string | null; uf?: string | null; city?: string | null; specialty?: string | null; bio?: string | null; password?: string; status?: NutritionistStatus; photoUrl?: string | null; documents?: NutritionistDocument[] }): Promise<Nutritionist> {
   const passwordHash = await bcrypt.hash(input.password || DEFAULT_NUTRITIONIST_PASSWORD, 10);
   const nut: Nutritionist = {
     id: uuid(), name: input.name,
     cpf: input.cpf || null, email: input.email ? input.email.toLowerCase().trim() : null,
-    phone: input.phone || null, crn: input.crn || null, uf: input.uf || null,
+    phone: input.phone || null, crn: input.crn || null, uf: input.uf || null, city: input.city || null,
     specialty: input.specialty || "Nutrição", bio: input.bio || null,
     photoUrl: input.photoUrl || null, documents: input.documents || [],
     passwordHash, signatureUrl: null, status: input.status || "active", createdAt: new Date().toISOString(), lastAccessAt: null,
   };
   if (active()) {
     const s = getSupabaseAdmin()!;
-    const { error } = await s.from("nutritionists").insert({
+    const insert: Record<string, unknown> = {
       id: nut.id, name: nut.name, cpf: nut.cpf, cpf_normalized: normalizeCpf(nut.cpf),
-      email: nut.email, phone: nut.phone, crn: nut.crn, uf: nut.uf, specialty: nut.specialty, bio: nut.bio,
+      email: nut.email, phone: nut.phone, crn: nut.crn, uf: nut.uf, city: nut.city, specialty: nut.specialty, bio: nut.bio,
       photo_url: nut.photoUrl, documents: nut.documents,
       password_hash: nut.passwordHash, status: nut.status, created_at: nut.createdAt,
-    });
-    if (!isMissing(error)) { if (error) throw error; return nut; }
-    tableMissing = true;
+    };
+    for (let attempt = 0; attempt < 8; attempt++) {
+      const { error } = await s.from("nutritionists").insert(insert);
+      if (!error) return nut;
+      if (isMissing(error)) { tableMissing = true; break; }
+      const col = missingCol(error);
+      if (!col || !(col in insert)) throw error;
+      delete insert[col];
+    }
   }
   const db = await readLocal();
   db.nutritionists.push(nut);
@@ -267,8 +275,30 @@ async function updateNutritionistRow(id: string, patch: Record<string, unknown>)
   return true;
 }
 
-export async function updateNutritionistSettings(id: string, patch: { consultationPriceCents?: number | null; returnPriceCents?: number | null; pixProfile?: PixProfile | null; signatureUrl?: string | null; photoUrl?: string | null }): Promise<void> {
+export async function updateNutritionistSettings(id: string, patch: {
+  name?: string;
+  phone?: string | null;
+  email?: string | null;
+  crn?: string | null;
+  uf?: string | null;
+  city?: string | null;
+  specialty?: string | null;
+  bio?: string | null;
+  consultationPriceCents?: number | null;
+  returnPriceCents?: number | null;
+  pixProfile?: PixProfile | null;
+  signatureUrl?: string | null;
+  photoUrl?: string | null;
+}): Promise<void> {
   const row: Record<string, unknown> = {};
+  if (patch.name !== undefined) row.name = patch.name;
+  if (patch.phone !== undefined) row.phone = patch.phone;
+  if (patch.email !== undefined) row.email = patch.email;
+  if (patch.crn !== undefined) row.crn = patch.crn;
+  if (patch.uf !== undefined) row.uf = patch.uf;
+  if (patch.city !== undefined) row.city = patch.city;
+  if (patch.specialty !== undefined) row.specialty = patch.specialty;
+  if (patch.bio !== undefined) row.bio = patch.bio;
   if (patch.consultationPriceCents !== undefined) row.consultation_price_cents = patch.consultationPriceCents;
   if (patch.returnPriceCents !== undefined) row.return_price_cents = patch.returnPriceCents;
   if (patch.pixProfile !== undefined) row.pix_profile = patch.pixProfile;
@@ -276,17 +306,35 @@ export async function updateNutritionistSettings(id: string, patch: { consultati
   if (patch.photoUrl !== undefined) row.photo_url = patch.photoUrl;
   if (Object.keys(row).length === 0) return;
   const done = await updateNutritionistRow(id, row);
-  if (done) return;
+  if (done) {
+    const db = await readLocal();
+    const n = db.nutritionists.find((x) => x.id === id);
+    if (n) applyNutritionistPatch(n, patch);
+    if (n) await writeLocal(db);
+    return;
+  }
   const db = await readLocal();
   const n = db.nutritionists.find((x) => x.id === id);
   if (n) {
-    if (patch.consultationPriceCents !== undefined) n.consultationPriceCents = patch.consultationPriceCents;
-    if (patch.returnPriceCents !== undefined) n.returnPriceCents = patch.returnPriceCents;
-    if (patch.pixProfile !== undefined) n.pixProfile = patch.pixProfile;
-    if (patch.signatureUrl !== undefined) n.signatureUrl = patch.signatureUrl;
-    if (patch.photoUrl !== undefined) n.photoUrl = patch.photoUrl;
+    applyNutritionistPatch(n, patch);
     await writeLocal(db);
   }
+}
+
+function applyNutritionistPatch(n: Nutritionist, patch: Parameters<typeof updateNutritionistSettings>[1]) {
+  if (patch.name !== undefined) n.name = patch.name;
+  if (patch.phone !== undefined) n.phone = patch.phone;
+  if (patch.email !== undefined) n.email = patch.email;
+  if (patch.crn !== undefined) n.crn = patch.crn;
+  if (patch.uf !== undefined) n.uf = patch.uf;
+  if (patch.city !== undefined) n.city = patch.city;
+  if (patch.specialty !== undefined) n.specialty = patch.specialty;
+  if (patch.bio !== undefined) n.bio = patch.bio;
+  if (patch.consultationPriceCents !== undefined) n.consultationPriceCents = patch.consultationPriceCents;
+  if (patch.returnPriceCents !== undefined) n.returnPriceCents = patch.returnPriceCents;
+  if (patch.pixProfile !== undefined) n.pixProfile = patch.pixProfile;
+  if (patch.signatureUrl !== undefined) n.signatureUrl = patch.signatureUrl;
+  if (patch.photoUrl !== undefined) n.photoUrl = patch.photoUrl;
 }
 
 export function nutritionFeeRule(nut: Nutritionist) {

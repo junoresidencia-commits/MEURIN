@@ -2,10 +2,11 @@
 
 import { useState } from "react";
 import Link from "next/link";
+import { fileToDataUrl } from "@/lib/image-data-url";
 
 type Doc = { name: string; url: string };
 
-function fileToDataUrl(f: File): Promise<string> {
+function fileToRawDataUrl(f: File): Promise<string> {
   return new Promise((resolve, reject) => {
     const r = new FileReader();
     r.onload = () => resolve(String(r.result || ""));
@@ -15,7 +16,7 @@ function fileToDataUrl(f: File): Promise<string> {
 }
 
 export default function NutricionistaCadastroPage() {
-  const [form, setForm] = useState({ name: "", cpf: "", email: "", password: "", phone: "", crn: "", uf: "", specialty: "Nutrição", bio: "" });
+  const [form, setForm] = useState({ name: "", cpf: "", email: "", password: "", phone: "", crn: "", uf: "", city: "", specialty: "Nutrição", bio: "" });
   const [photo, setPhoto] = useState<string>("");
   const [docs, setDocs] = useState<Doc[]>([]);
   const [error, setError] = useState("");
@@ -27,15 +28,14 @@ export default function NutricionistaCadastroPage() {
   async function onPhoto(e: React.ChangeEvent<HTMLInputElement>) {
     const f = e.target.files?.[0];
     if (!f) return;
-    if (f.size > 800000) { setError("Foto muito grande (máx. ~800 KB)."); return; }
-    setPhoto(await fileToDataUrl(f));
+    try { setPhoto(await fileToDataUrl(f, 320)); } catch { setError("Não foi possível ler a foto."); }
   }
   async function onDocs(e: React.ChangeEvent<HTMLInputElement>) {
     const files = Array.from(e.target.files || []);
     const out: Doc[] = [];
     for (const f of files.slice(0, 5)) {
       if (f.size > 1400000) { setError(`"${f.name}" é muito grande (máx. ~1,4 MB).`); continue; }
-      out.push({ name: f.name, url: await fileToDataUrl(f) });
+      out.push({ name: f.name, url: await fileToRawDataUrl(f) });
     }
     setDocs((d) => [...d, ...out].slice(0, 5));
   }
@@ -83,6 +83,7 @@ export default function NutricionistaCadastroPage() {
         <label className="block"><span className="mb-1 block text-xs font-semibold text-[var(--text-muted)]">Telefone</span><input className="input-field" value={form.phone} onChange={(e) => set("phone", e.target.value)} inputMode="tel" /></label>
         <label className="block"><span className="mb-1 block text-xs font-semibold text-[var(--text-muted)]">CRN *</span><input className="input-field" value={form.crn} onChange={(e) => set("crn", e.target.value)} /></label>
         <label className="block"><span className="mb-1 block text-xs font-semibold text-[var(--text-muted)]">UF</span><input className="input-field" value={form.uf} onChange={(e) => set("uf", e.target.value)} placeholder="BA" /></label>
+        <label className="block"><span className="mb-1 block text-xs font-semibold text-[var(--text-muted)]">Cidade</span><input className="input-field" value={form.city} onChange={(e) => set("city", e.target.value)} /></label>
         <label className="block sm:col-span-2"><span className="mb-1 block text-xs font-semibold text-[var(--text-muted)]">Especialidade / atuação</span><input className="input-field" value={form.specialty} onChange={(e) => set("specialty", e.target.value)} /></label>
         <label className="block sm:col-span-2"><span className="mb-1 block text-xs font-semibold text-[var(--text-muted)]">Apresentação profissional</span><textarea className="input-field min-h-[70px]" value={form.bio} onChange={(e) => set("bio", e.target.value)} /></label>
 
@@ -95,7 +96,10 @@ export default function NutricionistaCadastroPage() {
             ) : (
               <span className="grid h-16 w-16 place-items-center rounded-full border border-dashed border-[var(--border)] text-[10px] text-[var(--text-muted)]">Foto</span>
             )}
-            <input type="file" accept="image/png,image/jpeg" onChange={onPhoto} className="text-sm" />
+            <label className="btn-ghost cursor-pointer text-sm">
+              {photo ? "Trocar foto" : "Adicionar foto"}
+              <input type="file" accept="image/png,image/jpeg,image/webp" className="hidden" onChange={onPhoto} />
+            </label>
           </div>
         </div>
 

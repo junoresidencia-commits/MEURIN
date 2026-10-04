@@ -41,6 +41,29 @@ function isMissing(error: { code?: string; message?: string } | null): boolean {
   return Boolean(error.message && /relation .* does not exist|could not find the table/i.test(error.message));
 }
 
+function missingColumnName(error: { code?: string; message?: string } | null): string | null {
+  if (!error) return null;
+  if (error.code !== "PGRST204" && error.code !== "42703" && !/column|schema cache/i.test(error.message || "")) return null;
+  const msg = error.message || "";
+  let m = msg.match(/find the '([^']+)' column/i);
+  if (m) return m[1];
+  m = msg.match(/column "?([a-z0-9_]+)"? .*does not exist/i);
+  return m ? m[1] : null;
+}
+
+async function insertCareRoomResilient(row: Record<string, unknown>): Promise<{ error: { code?: string; message?: string } | null }> {
+  const supabase = getSupabaseAdmin()!;
+  const current = { ...row };
+  for (let attempt = 0; attempt < 10; attempt++) {
+    const { error } = await supabase.from("care_rooms").insert(current);
+    if (!error) return { error: null };
+    const col = missingColumnName(error);
+    if (!col || !(col in current)) return { error };
+    delete current[col];
+  }
+  return { error: { message: "Não foi possível gravar a sala." } };
+}
+
 async function readLocal(): Promise<CareRoom[]> {
   try {
     const raw = JSON.parse(await fs.readFile(FILE, "utf8")) as Record<string, unknown>[];
@@ -160,9 +183,12 @@ function matchesPatient(room: CareRoom, keys: Set<string>) {
 export async function findReusableRoom(professionalId: string, patientKey: string, isReturn?: boolean): Promise<CareRoom | null> {
   const cutoff = Date.now() - REUSE_MS;
   const open = await listOpenRoomsForProfessional(professionalId);
+  const needle = patientKey.toLowerCase().trim();
   return (
     open.find((r) => {
-      const same = r.patientKey === patientKey || (r.patientEmail && r.patientEmail.toLowerCase() === patientKey.toLowerCase());
+      const same =
+        r.patientKey.toLowerCase().trim() === needle ||
+        (r.patientEmail && r.patientEmail.toLowerCase().trim() === needle);
       const sameVisit = (r.isReturn === true) === (isReturn === true);
       return same && sameVisit && new Date(r.updatedAt).getTime() >= cutoff;
     }) ?? null
@@ -190,8 +216,7 @@ export async function createCareRoom(
     updatedAt: now,
   };
   if (active()) {
-    const s = getSupabaseAdmin()!;
-    const { error } = await s.from("care_rooms").insert(toRow(room));
+    const { error } = await insertCareRoomResilient(toRow(room));
     if (!isMissing(error)) {
       if (error) throw error;
       return room;

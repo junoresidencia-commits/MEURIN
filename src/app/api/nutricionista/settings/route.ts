@@ -11,6 +11,15 @@ export async function GET() {
   const pix = nut.pixProfile ?? null;
   const brcode = pix?.key ? buildPixBrCode({ key: pix.key, holderName: pix.holderName || nut.name, city: pix.city }) : null;
   return NextResponse.json({
+    name: nut.name,
+    phone: nut.phone ?? "",
+    email: nut.email ?? "",
+    crn: nut.crn ?? "",
+    uf: nut.uf ?? "",
+    city: nut.city ?? "",
+    specialty: nut.specialty ?? "",
+    bio: nut.bio ?? "",
+    photoUrl: nut.photoUrl ?? null,
     consultationPriceCents: nut.consultationPriceCents ?? null,
     returnPriceCents: nut.returnPriceCents ?? null,
     pixProfile: pix,
@@ -46,7 +55,19 @@ export async function PUT(req: Request) {
   }
 
   try {
+    const name = b.name !== undefined ? String(b.name || "").trim() : undefined;
+    if (name !== undefined && !name) {
+      return NextResponse.json({ error: "Informe seu nome completo." }, { status: 400 });
+    }
     await updateNutritionistSettings(nut.id, {
+      name,
+      phone: b.phone !== undefined ? String(b.phone || "").trim() || null : undefined,
+      email: b.email !== undefined ? String(b.email || "").trim() || null : undefined,
+      crn: b.crn !== undefined ? String(b.crn || "").trim() || null : undefined,
+      uf: b.uf !== undefined ? String(b.uf || "").trim().toUpperCase() || null : undefined,
+      city: b.city !== undefined ? String(b.city || "").trim() || null : undefined,
+      specialty: b.specialty !== undefined ? String(b.specialty || "").trim() || null : undefined,
+      bio: b.bio !== undefined ? String(b.bio || "").trim() || null : undefined,
       consultationPriceCents: priceReais !== undefined && Number.isFinite(priceReais) ? Math.max(0, Math.round(priceReais * 100)) : undefined,
       returnPriceCents: returnReais !== undefined && Number.isFinite(returnReais) ? Math.max(0, Math.round(returnReais * 100)) : undefined,
       pixProfile,
