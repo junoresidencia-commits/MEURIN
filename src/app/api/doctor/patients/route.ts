@@ -1,7 +1,8 @@
 import { NextResponse } from "next/server";
 import { getDoctorSessionId } from "@/lib/auth";
 import { listBookingsForDoctor } from "@/lib/store";
-import { createPatient, deletePatient, findByCpf, findByCpfAny, listPatientsByDoctor, updatePatient } from "@/lib/patients-store";
+import { createPatient, deletePatient, findByCpf, findByCpfAny, findDuplicatePatient, listPatientsByDoctor, updatePatient } from "@/lib/patients-store";
+import { upsertProfessionalLink } from "@/lib/network-referrals-store";
 import { parseAgeYears } from "@/lib/patient-age";
 
 export async function GET() {
@@ -116,15 +117,48 @@ export async function POST(req: Request) {
           { status: 200 }
         );
       }
+      await upsertProfessionalLink({
+        patientKey: existingAny.email || `pid:${existingAny.id}`,
+        patientName: existingAny.name,
+        professionalKind: "doctor",
+        professionalId: doctorId,
+        origin: "followup",
+        referralId: null,
+      });
       return NextResponse.json(
         {
-          error: "Já existe um paciente com este CPF.",
-          existingId: existingAny.id,
-          existingIsMine: false,
+          ok: true,
+          id: existingAny.id,
+          linkedExisting: true,
+          matchedBy: "cpf",
         },
-        { status: 409 }
+        { status: 200 }
       );
     }
+  }
+
+  const existingMatch = await findDuplicatePatient({
+    cpf: b.cpf ? String(b.cpf) : null,
+    email: b.email ? String(b.email) : null,
+    phone: b.phone ? String(b.phone) : null,
+    birthdate: b.birthdate ? String(b.birthdate) : null,
+    name,
+  });
+  if (existingMatch && existingMatch.patient.doctorId !== doctorId) {
+    await upsertProfessionalLink({
+      patientKey: existingMatch.patient.email || `pid:${existingMatch.patient.id}`,
+      patientName: existingMatch.patient.name,
+      professionalKind: "doctor",
+      professionalId: doctorId,
+      origin: "followup",
+      referralId: null,
+    });
+    return NextResponse.json({
+      ok: true,
+      id: existingMatch.patient.id,
+      linkedExisting: true,
+      matchedBy: existingMatch.matchedBy,
+    });
   }
 
   // Alerta de possível duplicado por nome parecido (quando não travou por CPF).

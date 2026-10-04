@@ -1,10 +1,14 @@
 import { NextResponse } from "next/server";
 import { getDoctorSessionId } from "@/lib/auth";
-import { getDoctorById, updateDb } from "@/lib/store";
+import { getDoctorById, setDoctorPixProfile } from "@/lib/store";
 import { buildPixBrCode } from "@/lib/pix-brcode";
-import type { PixKeyType, PixProfile } from "@/lib/types";
+import { PIX_ERRORS, parsePixProfileInput } from "@/lib/pix-key";
+import { pixKeyAlreadyTaken } from "@/lib/pix-taken";
 
-const KEY_TYPES: PixKeyType[] = ["cpf", "cnpj", "email", "telefone", "aleatoria"];
+function brCodeFor(doctorName: string, pix: { key?: string; holderName?: string; city?: string } | null) {
+  if (!pix?.key) return "";
+  return buildPixBrCode({ key: pix.key, holderName: pix.holderName || doctorName, city: pix.city });
+}
 
 export async function GET() {
   const doctorId = await getDoctorSessionId();
@@ -12,34 +16,47 @@ export async function GET() {
   const doctor = await getDoctorById(doctorId);
   if (!doctor) return NextResponse.json({ error: "Médico não encontrado." }, { status: 404 });
   const pix = doctor.pixProfile || (doctor.pixKey ? { key: doctor.pixKey } : {});
-  const brCode = pix.key ? buildPixBrCode({ key: pix.key, holderName: pix.holderName || doctor.name, city: pix.city }) : "";
-  return NextResponse.json({ pix, brCode });
+  return NextResponse.json({ pix, brCode: brCodeFor(doctor.name, pix) });
 }
 
 export async function PUT(req: Request) {
   const doctorId = await getDoctorSessionId();
   if (!doctorId) return NextResponse.json({ error: "Não autenticado." }, { status: 401 });
+  const doctor = await getDoctorById(doctorId);
+  if (!doctor) return NextResponse.json({ error: "Médico não encontrado." }, { status: 404 });
+
   const body = await req.json().catch(() => ({}));
-  const p = (body?.pix ?? {}) as Record<string, unknown>;
+  const parsed = parsePixProfileInput((body?.pix ?? body) as Record<string, unknown>);
+  if (!parsed.ok) {
+    console.error("[pix] validação médico", { doctorId, error: parsed.error });
+    return NextResponse.json({ error: parsed.error }, { status: 400 });
+  }
 
-  const profile: PixProfile = {
-    keyType: KEY_TYPES.includes(p.keyType as PixKeyType) ? (p.keyType as PixKeyType) : undefined,
-    key: p.key ? String(p.key).trim() : undefined,
-    holderName: p.holderName ? String(p.holderName).trim() : undefined,
-    holderDoc: p.holderDoc ? String(p.holderDoc).trim() : undefined,
-    bank: p.bank ? String(p.bank).trim() : undefined,
-    city: p.city ? String(p.city).trim() : undefined,
-  };
+  try {
+    if (await pixKeyAlreadyTaken(parsed.profile.key!, { kind: "doctor", id: doctorId })) {
+      return NextResponse.json({ error: PIX_ERRORS.duplicate }, { status: 409 });
+    }
+    await setDoctorPixProfile(doctorId, parsed.profile);
+    return NextResponse.json({
+      ok: true,
+      pix: parsed.profile,
+      brCode: brCodeFor(parsed.profile.holderName || doctor.name, parsed.profile),
+      message: PIX_ERRORS.saved,
+    });
+  } catch (err) {
+    console.error("[pix] falha ao salvar chave do médico", err);
+    return NextResponse.json({ error: PIX_ERRORS.saveFailed }, { status: 500 });
+  }
+}
 
-  await updateDb((current) => ({
-    ...current,
-    doctors: current.doctors.map((d) =>
-      d.id === doctorId
-        ? { ...d, pixProfile: profile, pixKey: profile.key ?? d.pixKey }
-        : d
-    ),
-  }));
-
-  const brCode = profile.key ? buildPixBrCode({ key: profile.key, holderName: profile.holderName, city: profile.city }) : "";
-  return NextResponse.json({ ok: true, pix: profile, brCode });
+export async function DELETE() {
+  const doctorId = await getDoctorSessionId();
+  if (!doctorId) return NextResponse.json({ error: "Não autenticado." }, { status: 401 });
+  try {
+    await setDoctorPixProfile(doctorId, null);
+    return NextResponse.json({ ok: true, pix: {}, brCode: "", message: PIX_ERRORS.deleted });
+  } catch (err) {
+    console.error("[pix] falha ao excluir chave do médico", err);
+    return NextResponse.json({ error: PIX_ERRORS.saveFailed }, { status: 500 });
+  }
 }

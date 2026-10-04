@@ -52,6 +52,7 @@ const EQUIPE: Item[] = [
 const OTHER: Item[] = [
   { href: "/medicos/links", label: "Links", icon: "link" },
   { href: "/medicos/mensagens", label: "Mensagens", icon: "link" },
+  { href: "/medicos/rede", label: "Rede de profissionais", icon: "users" },
   { href: "/medicos/encaminhamentos", label: "Encaminhamentos", icon: "users" },
   { href: "/medicos/prontuario-inteligente", label: "Revisão de prontuário", icon: "file" },
 ];

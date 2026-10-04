@@ -50,7 +50,8 @@ export default function MedicoMaisPage() {
         { href: "/medicos/equipe", label: "Atendentes", desc: "Sua equipe administrativa e permissões." },
         ...clinicAdmin.map((c) => ({ href: `/clinica/${c.clinicId}`, label: `Gestão · ${c.clinicName}`, desc: "Equipe, produção e check-in da clínica — separado do prontuário." })),
         { href: "/medicos/equipe-assistencial", label: "Minha Equipe", desc: "Médicos, nutrição, psicologia e enfermagem." },
-        { href: "/medicos/encaminhamentos", label: "Encaminhamentos", desc: "Pacientes compartilhados com você e os da clínica. O cadastro não muda de médico." },
+        { href: "/medicos/rede", label: "Rede de profissionais", desc: "Pesquise qualquer profissional do Meu Rim e encaminhe um paciente." },
+        { href: "/medicos/encaminhamentos", label: "Encaminhamentos", desc: "Pacientes encaminhados para você. O cadastro do paciente não é duplicado." },
       ],
     },
     {

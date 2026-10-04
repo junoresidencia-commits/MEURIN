@@ -201,7 +201,7 @@ export async function createPatient(input: NewPatient): Promise<Patient> {
   if (active()) {
     const { error } = await insertPatientResilient({
       id: p.id,
-      doctor_id: p.doctorId,
+      doctor_id: p.doctorId || null,
       name: p.name,
       cpf: p.cpf ?? null,
       cpf_normalized: normalizeCpf(p.cpf),
@@ -397,6 +397,95 @@ export async function updatePatient(
   const list = await readFile();
   await writeFile(list.map((p) => (p.id === id ? updated : p)));
   return updated;
+}
+
+function phoneDigits(phone?: string | null): string {
+  return String(phone || "").replace(/\D/g, "");
+}
+
+function namesLikelySame(a: string, b: string): boolean {
+  const norm = (s: string) =>
+    s.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/\s+/g, " ").trim();
+  const left = norm(a);
+  const right = norm(b);
+  if (!left || !right) return false;
+  if (left === right) return true;
+  const lt = left.split(" ");
+  const rt = right.split(" ");
+  return lt.length > 1 && rt.length > 1 && lt[0] === rt[0] && lt[lt.length - 1] === rt[rt.length - 1];
+}
+
+export async function findByPhoneAny(phone: string): Promise<Patient | null> {
+  const digits = phoneDigits(phone);
+  if (digits.length < 10) return null;
+  const tail = digits.slice(-11);
+  if (active()) {
+    const supabase = getSupabaseAdmin()!;
+    const { data, error } = await supabase.from("patients").select("*").ilike("phone", `%${tail.slice(-8)}%`).limit(20);
+    if (error) {
+      if (isMissingTableError(error)) tableMissing = true;
+      else throw error;
+    } else {
+      const hit = (data ?? [])
+        .map((r) => mapRow(r as Record<string, unknown>))
+        .find((p) => {
+          const d = phoneDigits(p.phone);
+          return d && (d.endsWith(tail) || tail.endsWith(d.slice(-8)));
+        });
+      if (hit) return hit;
+    }
+  }
+  const list = await readFile();
+  return list.find((p) => {
+    const d = phoneDigits(p.phone);
+    return d.length >= 8 && (d.endsWith(tail) || tail.endsWith(d.slice(-8)));
+  }) ?? null;
+}
+
+export async function findByBirthdateAndName(birthdate: string, name: string): Promise<Patient | null> {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(birthdate) || !name.trim()) return null;
+  if (active()) {
+    const supabase = getSupabaseAdmin()!;
+    const { data, error } = await supabase.from("patients").select("*").eq("birthdate", birthdate).limit(20);
+    if (error) {
+      if (isMissingTableError(error)) tableMissing = true;
+      else throw error;
+    } else {
+      const hit = (data ?? [])
+        .map((r) => mapRow(r as Record<string, unknown>))
+        .find((p) => namesLikelySame(p.name, name));
+      if (hit) return hit;
+    }
+  }
+  const list = await readFile();
+  return list.find((p) => p.birthdate === birthdate && namesLikelySame(p.name, name)) ?? null;
+}
+
+/** Evita segundo cadastro: CPF, e-mail, telefone ou nascimento+nome. */
+export async function findDuplicatePatient(input: {
+  cpf?: string | null;
+  email?: string | null;
+  phone?: string | null;
+  birthdate?: string | null;
+  name?: string | null;
+}): Promise<{ patient: Patient; matchedBy: "cpf" | "email" | "phone" | "birthdate" } | null> {
+  if (input.cpf && String(input.cpf).replace(/\D/g, "").length >= 11) {
+    const patient = await findByCpfAny(String(input.cpf));
+    if (patient) return { patient, matchedBy: "cpf" };
+  }
+  if (input.email && String(input.email).includes("@")) {
+    const patient = await findByEmailAny(String(input.email));
+    if (patient) return { patient, matchedBy: "email" };
+  }
+  if (input.phone && String(input.phone).replace(/\D/g, "").length >= 10) {
+    const patient = await findByPhoneAny(String(input.phone));
+    if (patient) return { patient, matchedBy: "phone" };
+  }
+  if (input.birthdate && input.name) {
+    const patient = await findByBirthdateAndName(String(input.birthdate), String(input.name));
+    if (patient) return { patient, matchedBy: "birthdate" };
+  }
+  return null;
 }
 
 /** Busca um paciente por CPF (qualquer médico) — usado no login por CPF. */

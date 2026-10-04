@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import type { AlliedRole } from "@/lib/allied-types";
 import { StartCareCallButton } from "@/components/StartCareCallButton";
+import { CreatePatient } from "@/components/CreatePatient";
 
 type Me = { professional: { name: string; registry?: string | null; uf?: string | null }; doctors: { id: string; name: string }[] };
 type Patient = { key: string; name: string; reason?: string | null; at: string };
@@ -58,11 +59,17 @@ export function AlliedPanel({ role }: { role: AlliedRole }) {
             Vinculado a {me?.doctors.length || 0} médico(s)
           </p>
         </div>
-        <div className="flex gap-2">
+        <div className="flex flex-wrap gap-2">
+          <Link href="/rede" className="btn-ghost">Pesquisar profissional</Link>
+          <Link href="/encaminhamentos" className="btn-ghost">Pacientes encaminhados</Link>
           <Link href={`${meta.base}/configuracoes`} className="btn-ghost">Perfil e recebimentos</Link>
           <button type="button" className="btn-ghost" onClick={logout}>Sair</button>
         </div>
       </div>
+
+      <section className="mt-6">
+        <CreatePatient onCreated={() => window.location.reload()} />
+      </section>
 
       <section className="mt-8">
         <h2 className="font-display text-xl text-[var(--text)]">Meus Pacientes</h2>
