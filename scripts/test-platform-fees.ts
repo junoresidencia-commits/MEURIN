@@ -7,6 +7,7 @@ import {
 } from "../src/lib/platform-fees";
 import { buildPixBrCode } from "../src/lib/pix-brcode";
 import { FOUNDER_SUPER_ADMIN_EMAIL } from "../src/lib/platform-types";
+import { doctorFeeRule } from "../src/lib/types";
 
 assert.equal(normalizeFeeMode("gratis"), "gratis");
 assert.equal(normalizeFeeMode("por_atendimento"), "por_atendimento");
@@ -45,5 +46,14 @@ const adminPix = buildPixBrCode({
 assert.ok(adminPix.startsWith("000201"));
 assert.match(adminPix, /junoresidencia@gmail\.com/);
 assert.match(adminPix, /540525.00/);
+
+const doctorGratis = doctorFeeRule({ commissionPercent: 100, appFeeMode: "gratis", entryFeeCents: 0 });
+assert.equal(computePlatformFeeCents(doctorGratis, "atendimento", 35000), 0);
+const doctorCut = doctorFeeRule({ commissionPercent: 80, appFeeMode: "por_atendimento", entryFeeCents: 0 });
+assert.equal(doctorCut.commissionPercent, 20);
+assert.equal(computePlatformFeeCents(doctorCut, "atendimento", 40000), 8000);
+const doctorEntry = doctorFeeRule({ commissionPercent: 100, appFeeMode: "por_entrada", entryFeeCents: 1500 });
+assert.equal(computePlatformFeeCents(doctorEntry, "entrada", 0), 1500);
+assert.equal(computePlatformFeeCents(doctorEntry, "atendimento", 40000), 0);
 
 console.log("platform-fees + pix admin ok");

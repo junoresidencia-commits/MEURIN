@@ -12,6 +12,7 @@ import type {
   SignalingMessage,
   WeeklySlot,
 } from "./types";
+import { normalizeFeeMode } from "./platform-fees";
 
 const DATA_DIR = path.join(process.cwd(), "data");
 const DB_PATH = path.join(DATA_DIR, "db.json");
@@ -320,6 +321,39 @@ export async function setDoctorMpToken(id: string, token: string | null): Promis
   });
 }
 
+/** Cobrança da plataforma por médico (modo + % + valor). Mantém commissionPercent como repasse do médico. */
+export async function setDoctorFinance(
+  id: string,
+  patch: { commissionPercent?: number; appFeeMode?: Doctor["appFeeMode"]; entryFeeCents?: number }
+): Promise<void> {
+  const supabase = getSupabaseAdmin();
+  if (supabase) {
+    const row: Record<string, unknown> = {};
+    if (patch.commissionPercent !== undefined) row.commission_percent = patch.commissionPercent;
+    if (patch.appFeeMode !== undefined) row.app_fee_mode = patch.appFeeMode;
+    if (patch.entryFeeCents !== undefined) row.entry_fee_cents = patch.entryFeeCents;
+    const { error } = await supabase.from("doctors").update(row).eq("id", id);
+    if (!error) return;
+    if (patch.commissionPercent !== undefined) {
+      const fallback = await supabase.from("doctors").update({ commission_percent: patch.commissionPercent }).eq("id", id);
+      if (fallback.error) throw fallback.error;
+    }
+  }
+  await updateDb((db) => {
+    db.doctors = db.doctors.map((d) =>
+      d.id === id
+        ? {
+            ...d,
+            commissionPercent: patch.commissionPercent !== undefined ? patch.commissionPercent : d.commissionPercent,
+            appFeeMode: patch.appFeeMode !== undefined ? patch.appFeeMode : d.appFeeMode,
+            entryFeeCents: patch.entryFeeCents !== undefined ? patch.entryFeeCents : d.entryFeeCents,
+          }
+        : d
+    );
+    return db;
+  });
+}
+
 /** Define o percentual de repasse do médico (SOMENTE administrador), sem reescrever os demais. */
 export async function setDoctorCommission(id: string, percent: number): Promise<void> {
   const clamped = Math.min(100, Math.max(0, Math.round(percent)));
@@ -537,6 +571,14 @@ function mapDoctorRow(row: Record<string, unknown>): Doctor {
       row.commission_percent === null || row.commission_percent === undefined
         ? undefined
         : Number(row.commission_percent),
+    appFeeMode:
+      row.app_fee_mode != null || row.appFeeMode != null
+        ? normalizeFeeMode(row.app_fee_mode ?? row.appFeeMode)
+        : undefined,
+    entryFeeCents:
+      row.entry_fee_cents == null && row.entryFeeCents == null
+        ? undefined
+        : Number(row.entry_fee_cents ?? row.entryFeeCents ?? 0),
     payoutStatus: (row.payout_status ? String(row.payout_status) : "active") as Doctor["payoutStatus"],
   };
 }
@@ -848,6 +890,8 @@ async function writeSupabaseDb(db: Database): Promise<void> {
     photo_url: doctor.photoUrl ?? null,
     mp_access_token: doctor.mpAccessToken ?? null,
     commission_percent: doctor.commissionPercent ?? null,
+    app_fee_mode: doctor.appFeeMode ?? null,
+    entry_fee_cents: doctor.entryFeeCents ?? null,
     payout_status: doctor.payoutStatus ?? "active",
     notify_whatsapp: doctor.notifyWhatsapp ?? null,
     use_whatsapp_notifications: doctor.useWhatsappNotifications ?? false,

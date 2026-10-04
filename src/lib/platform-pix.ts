@@ -7,6 +7,8 @@ import { nutritionFeeRule } from "./nutritionists-store";
 import { recordPlatformCharge } from "./platform-charges-store";
 import type { AlliedProfessional } from "./allied-types";
 import type { Nutritionist } from "./nutritionists-store";
+import type { Doctor } from "./types";
+import { doctorFeeRule } from "./types";
 
 export async function getPlatformPix() {
   const settings = await getCompanySettings();
@@ -37,10 +39,20 @@ export async function buildPlatformPix(amountCents: number, txid: string) {
   return { brCode, amountCents, holderName: dest.holderName, adminEmail: dest.adminEmail };
 }
 
-export async function recordLoginFee(input: { kind: "psychology" | "nursing"; pro: AlliedProfessional } | { kind: "nutrition"; pro: Nutritionist }) {
+export async function recordLoginFee(
+  input:
+    | { kind: "psychology" | "nursing"; pro: AlliedProfessional }
+    | { kind: "nutrition"; pro: Nutritionist }
+    | { kind: "doctor"; pro: Doctor }
+) {
   const day = new Date().toISOString().slice(0, 10);
   const sourceId = `entrada:${input.pro.id}:${day}`;
-  const rule = input.kind === "nutrition" ? nutritionFeeRule(input.pro) : alliedFeeRule(input.pro);
+  const rule =
+    input.kind === "nutrition"
+      ? nutritionFeeRule(input.pro)
+      : input.kind === "doctor"
+        ? doctorFeeRule(input.pro)
+        : alliedFeeRule(input.pro);
   if (rule.appFeeMode !== "por_entrada") return null;
   return recordPlatformCharge({
     actorKind: input.kind,

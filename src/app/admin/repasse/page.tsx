@@ -26,6 +26,7 @@ const KIND_LABEL: Record<string, string> = {
   psychology: "Psicologia",
   nursing: "Enfermagem",
   nutrition: "Nutrição",
+  doctor: "Médico",
 };
 
 const STATUS_LABEL: Record<string, string> = {

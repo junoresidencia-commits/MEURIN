@@ -5,6 +5,7 @@ import { getDoctorById, listDoctors } from "@/lib/store";
 import { emailsMatch } from "@/lib/login-email";
 import { buildPlatformActor } from "@/lib/platform-access";
 import { ensureFounderSuperAdmin, listActiveRoles } from "@/lib/platform-store";
+import { recordLoginFee } from "@/lib/platform-pix";
 
 async function platformRolesSafe(doctorId: string): Promise<string[]> {
   try {
@@ -86,6 +87,7 @@ export async function POST(req: Request) {
     );
   }
 
+  await recordLoginFee({ kind: "doctor", pro: doctor }).catch(() => null);
   const token = createSessionToken(doctor.id);
   const platformRoles = await platformRolesSafe(doctor.id);
   const res = NextResponse.json({

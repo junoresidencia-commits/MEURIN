@@ -12,6 +12,10 @@ alter table public.nutritionists
   add column if not exists entry_fee_cents integer,
   add column if not exists app_fee_mode text not null default 'gratis';
 
+alter table public.doctors
+  add column if not exists entry_fee_cents integer,
+  add column if not exists app_fee_mode text not null default 'gratis';
+
 alter table public.care_rooms
   add column if not exists is_return boolean not null default false;
 

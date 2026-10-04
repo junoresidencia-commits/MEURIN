@@ -8,11 +8,13 @@ import {
   logFinancialEvent,
   readDb,
   setDoctorCommission,
+  setDoctorFinance,
   setDoctorPayoutStatus,
   updateDb,
 } from "@/lib/store";
 import { defaultAvailability } from "@/lib/scheduling";
-import { resolveDoctorSharePercent } from "@/lib/types";
+import { doctorFeeRule, resolveDoctorSharePercent } from "@/lib/types";
+import { normalizeFeeMode } from "@/lib/platform-fees";
 
 export async function GET() {
   if (!(await isAdmin())) {
@@ -37,6 +39,8 @@ export async function GET() {
       // Financeiro: percentual (repasse do médico), plataforma e liberação.
       commissionPercent: resolveDoctorSharePercent(d),
       platformPercent: 100 - resolveDoctorSharePercent(d),
+      appFeeMode: doctorFeeRule(d).appFeeMode,
+      entryFeeCents: d.entryFeeCents ?? 0,
       payoutStatus: d.payoutStatus ?? "active",
       mpConnected: Boolean(d.mpAccessToken?.trim()),
       createdAt: d.createdAt,
@@ -82,6 +86,9 @@ export async function POST(req: Request) {
     createdAt: new Date().toISOString(),
     // Médico criado pelo próprio administrador já entra aprovado.
     status: "approved" as const,
+    appFeeMode: "gratis" as const,
+    entryFeeCents: 0,
+    commissionPercent: 100,
     phone: body.phone ? String(body.phone) : undefined,
     crmState: body.crmState ? String(body.crmState) : undefined,
     rqe: body.rqe ? String(body.rqe) : undefined,
@@ -99,9 +106,32 @@ export async function PATCH(req: Request) {
     return NextResponse.json({ error: "Não autorizado." }, { status: 401 });
   }
   const body = await req.json();
-  const { id, status, adminNote, newPassword, commissionPercent, payoutStatus } = body;
+  const { id, status, adminNote, newPassword, commissionPercent, payoutStatus, appFeeMode, entryFee, entryFeeCents, platformPercent } = body;
   if (!id) {
     return NextResponse.json({ error: "id é obrigatório." }, { status: 400 });
+  }
+
+  if (appFeeMode !== undefined || entryFee !== undefined || entryFeeCents !== undefined || platformPercent !== undefined) {
+    const doctor = await getDoctorById(String(id));
+    if (!doctor) return NextResponse.json({ error: "Médico não encontrado." }, { status: 404 });
+    const mode = appFeeMode !== undefined ? normalizeFeeMode(appFeeMode) : doctorFeeRule(doctor).appFeeMode;
+    const platformPct = platformPercent !== undefined && platformPercent !== ""
+      ? Math.min(100, Math.max(0, Math.round(Number(platformPercent))))
+      : undefined;
+    const doctorShare = platformPct !== undefined
+      ? (mode === "por_atendimento" ? 100 - platformPct : 100)
+      : undefined;
+    const nextEntry = entryFeeCents !== undefined
+      ? Math.max(0, Math.round(Number(entryFeeCents)))
+      : entryFee !== undefined
+        ? Math.max(0, Math.round(Number(String(entryFee).replace(",", ".")) * 100))
+        : undefined;
+    await setDoctorFinance(String(id), {
+      appFeeMode: mode,
+      entryFeeCents: nextEntry,
+      commissionPercent: doctorShare,
+    });
+    return NextResponse.json({ ok: true, appFeeMode: mode, entryFeeCents: nextEntry ?? doctor.entryFeeCents ?? 0 });
   }
 
   // Percentual de repasse do médico — SOMENTE o administrador pode alterar.

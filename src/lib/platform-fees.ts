@@ -11,7 +11,7 @@ export const APP_FEE_LABEL: Record<AppFeeMode, string> = {
 
 export type PlatformChargeKind = "atendimento" | "entrada";
 export type PlatformChargeStatus = "due" | "declared" | "received";
-export type PlatformActorKind = "psychology" | "nursing" | "nutrition";
+export type PlatformActorKind = "psychology" | "nursing" | "nutrition" | "doctor";
 
 export interface ProfessionalFeeRule {
   appFeeMode: AppFeeMode;

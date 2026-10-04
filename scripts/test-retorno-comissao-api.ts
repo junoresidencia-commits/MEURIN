@@ -179,6 +179,36 @@ async function main() {
   assert.ok(liaPix?.brCode);
   assert.match(liaPix!.brCode!, /junoresidencia@gmail\.com/);
 
+  const docs = await req(admin, "/api/admin/doctors");
+  assert.equal(docs.res.status, 200);
+  const carlos = ((docs.json.doctors as Array<Record<string, unknown>>) || []).find(
+    (d) => String(d.email || "").toLowerCase() === "carlos@meurim.com"
+  );
+  assert.ok(carlos, "Carlos demo precisa existir");
+  const carlosFee = await req(admin, "/api/admin/doctors", {
+    method: "PATCH",
+    body: JSON.stringify({
+      id: carlos.id,
+      appFeeMode: "por_atendimento",
+      platformPercent: 15,
+      entryFee: 0,
+    }),
+  });
+  assert.equal(carlosFee.res.status, 200, `carlos fee ${JSON.stringify(carlosFee.json)}`);
+
+  const carlosJar = cookieJar();
+  const carlosLogin = await req(carlosJar, "/api/auth", {
+    method: "POST",
+    body: JSON.stringify({ email: "carlos@meurim.com", password: "medico123" }),
+  });
+  assert.equal(carlosLogin.res.status, 200, `carlos login ${JSON.stringify(carlosLogin.json)}`);
+  const carlosPanel = await req(carlosJar, "/api/doctor/platform-fee");
+  assert.equal(carlosPanel.res.status, 200, `carlos fee panel ${JSON.stringify(carlosPanel.json)}`);
+  const carlosRule = carlosPanel.json.rule as { appFeeMode: string; commissionPercent: number };
+  assert.equal(carlosRule.appFeeMode, "por_atendimento");
+  assert.equal(carlosRule.commissionPercent, 15);
+  assert.match(String(carlosPanel.json.summary), /15%/);
+
   const charges = await req(admin, "/api/admin/platform-charges");
   assert.equal(charges.res.status, 200);
   const list = (charges.json.charges as Array<Record<string, unknown>>) || [];
@@ -199,6 +229,7 @@ async function main() {
   console.log("retorno + comissão API ok", {
     anaDue: totals.dueCents,
     liaDueBeforeMark: liaTotals.dueCents,
+    carlosRule: carlosRule.appFeeMode + " " + carlosRule.commissionPercent + "%",
     dest: dest.key,
     rooms: { return: returnRoom.json.meetingRoomId, consult: consultRoom.json.meetingRoomId },
   });
