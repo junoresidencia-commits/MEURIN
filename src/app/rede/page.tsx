@@ -33,11 +33,18 @@ export default function RedePage() {
     });
   }, []);
 
-  async function search() {
+  async function search(formData?: FormData) {
+    const read = (key: string, fallback: string) => String(formData?.get(key) ?? fallback).trim();
+    const nextQ = read("q", q);
+    const nextSpecialty = read("specialty", specialty);
+    const nextCity = read("city", city);
+    setQ(nextQ);
+    setSpecialty(nextSpecialty);
+    setCity(nextCity);
     const params = new URLSearchParams();
-    if (q.trim()) params.set("q", q.trim());
-    if (specialty.trim()) params.set("specialty", specialty.trim());
-    if (city.trim()) params.set("city", city.trim());
+    if (nextQ) params.set("q", nextQ);
+    if (nextSpecialty) params.set("specialty", nextSpecialty);
+    if (nextCity) params.set("city", nextCity);
     const res = await fetch(`/api/network/professionals?${params.toString()}`);
     const d = await res.json().catch(() => ({}));
     setResults(d.professionals || []);
@@ -64,14 +71,14 @@ export default function RedePage() {
         </button>
       </div>
       {create && <CreatePatient onCreated={() => setCreate(false)} />}
-      <div className="panel mt-5 grid gap-3">
-        <input className="input-field" value={q} onChange={(e) => setQ(e.target.value)} placeholder="Pesquisar profissional" />
+      <form className="panel mt-5 grid gap-3" onSubmit={(e) => { e.preventDefault(); void search(new FormData(e.currentTarget)); }}>
+        <input name="q" className="input-field" value={q} onChange={(e) => setQ(e.target.value)} placeholder="Pesquisar profissional" />
         <div className="grid gap-3 sm:grid-cols-2">
-          <input className="input-field" value={specialty} onChange={(e) => setSpecialty(e.target.value)} placeholder="Especialidade" />
-          <input className="input-field" value={city} onChange={(e) => setCity(e.target.value)} placeholder="Cidade" />
+          <input name="specialty" className="input-field" value={specialty} onChange={(e) => setSpecialty(e.target.value)} placeholder="Especialidade" />
+          <input name="city" className="input-field" value={city} onChange={(e) => setCity(e.target.value)} placeholder="Cidade" />
         </div>
-        <button type="button" className="btn-gold" onClick={search}>Pesquisar profissional</button>
-      </div>
+        <button type="submit" className="btn-gold">Pesquisar profissional</button>
+      </form>
       <div className="mt-4 grid gap-3">
         {results.map((p) => (
           <div key={`${p.kind}-${p.id}`} className="panel flex items-center gap-3">

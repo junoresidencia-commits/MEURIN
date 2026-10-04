@@ -60,14 +60,25 @@ function RedeProfissionaisInner() {
       .then((d) => { if (d.professional) setView(d.professional); });
   }, [search, ready]);
 
-  async function runSearch() {
+  async function runSearch(formData?: FormData) {
+    const read = (key: string, fallback: string) => String(formData?.get(key) ?? fallback).trim();
+    const nextQ = read("q", q);
+    const nextSpecialty = read("specialty", specialty);
+    const nextCity = read("city", city);
+    const nextState = read("state", state);
+    const nextClinic = read("clinic", clinic);
+    setQ(nextQ);
+    setSpecialty(nextSpecialty);
+    setCity(nextCity);
+    setState(nextState);
+    setClinic(nextClinic);
     setSearching(true);
     const params = new URLSearchParams();
-    if (q.trim()) params.set("q", q.trim());
-    if (specialty.trim()) params.set("specialty", specialty.trim());
-    if (city.trim()) params.set("city", city.trim());
-    if (state.trim()) params.set("state", state.trim());
-    if (clinic.trim()) params.set("clinic", clinic.trim());
+    if (nextQ) params.set("q", nextQ);
+    if (nextSpecialty) params.set("specialty", nextSpecialty);
+    if (nextCity) params.set("city", nextCity);
+    if (nextState) params.set("state", nextState);
+    if (nextClinic) params.set("clinic", nextClinic);
     const res = await fetch(`/api/network/professionals?${params.toString()}`);
     const data = await res.json().catch(() => ({}));
     setResults(data.professionals || []);
@@ -87,33 +98,33 @@ function RedeProfissionaisInner() {
             Localize qualquer profissional cadastrado na plataforma — mesmo de outra clínica ou cidade. A busca mostra só informações profissionais.
           </p>
 
-          <div className="panel mt-5 grid gap-3 sm:grid-cols-2">
+          <form className="panel mt-5 grid gap-3 sm:grid-cols-2" onSubmit={(e) => { e.preventDefault(); void runSearch(new FormData(e.currentTarget)); }}>
             <label className="block sm:col-span-2">
               <span className="mb-1 block text-xs font-semibold text-[var(--text-muted)]">Nome, profissão ou especialidade</span>
-              <input className="input-field" value={q} onChange={(e) => setQ(e.target.value)} placeholder="Ex.: cardiologista, nutrição, Maria…" />
+              <input name="q" className="input-field" value={q} onChange={(e) => setQ(e.target.value)} placeholder="Ex.: cardiologista, nutrição, Maria…" />
             </label>
             <label className="block">
               <span className="mb-1 block text-xs font-semibold text-[var(--text-muted)]">Especialidade</span>
-              <input className="input-field" value={specialty} onChange={(e) => setSpecialty(e.target.value)} placeholder="Cardiologia" />
+              <input name="specialty" className="input-field" value={specialty} onChange={(e) => setSpecialty(e.target.value)} placeholder="Cardiologia" />
             </label>
             <label className="block">
               <span className="mb-1 block text-xs font-semibold text-[var(--text-muted)]">Cidade</span>
-              <input className="input-field" value={city} onChange={(e) => setCity(e.target.value)} placeholder="Irecê" />
+              <input name="city" className="input-field" value={city} onChange={(e) => setCity(e.target.value)} placeholder="Irecê" />
             </label>
             <label className="block">
               <span className="mb-1 block text-xs font-semibold text-[var(--text-muted)]">Estado</span>
-              <input className="input-field" value={state} onChange={(e) => setState(e.target.value)} placeholder="BA" />
+              <input name="state" className="input-field" value={state} onChange={(e) => setState(e.target.value)} placeholder="BA" />
             </label>
             <label className="block">
               <span className="mb-1 block text-xs font-semibold text-[var(--text-muted)]">Clínica / local</span>
-              <input className="input-field" value={clinic} onChange={(e) => setClinic(e.target.value)} placeholder="Nome da clínica" />
+              <input name="clinic" className="input-field" value={clinic} onChange={(e) => setClinic(e.target.value)} placeholder="Nome da clínica" />
             </label>
             <div className="sm:col-span-2">
-              <button type="button" className="btn-gold" onClick={runSearch} disabled={searching}>
+              <button type="submit" className="btn-gold" disabled={searching}>
                 {searching ? "Pesquisando…" : "Pesquisar profissional"}
               </button>
             </div>
-          </div>
+          </form>
 
           <div className="mt-5 grid gap-3">
             {results.map((p) => (

@@ -78,13 +78,20 @@ export function EncaminharPacienteForm({
 
   const kindFilter = restrict === "medico" ? "doctor" : restrict === "assistencial" ? "" : "";
 
-  async function search() {
+  async function search(formData?: FormData) {
+    const read = (key: string, fallback: string) => String(formData?.get(key) ?? fallback).trim();
+    const nextQ = read("q", q);
+    const nextSpecialty = read("specialty", specialty);
+    const nextCity = read("city", city);
+    setQ(nextQ);
+    setSpecialty(nextSpecialty);
+    setCity(nextCity);
     setSearching(true);
     setMsg("");
     const params = new URLSearchParams();
-    if (q.trim()) params.set("q", q.trim());
-    if (specialty.trim()) params.set("specialty", specialty.trim());
-    if (city.trim()) params.set("city", city.trim());
+    if (nextQ) params.set("q", nextQ);
+    if (nextSpecialty) params.set("specialty", nextSpecialty);
+    if (nextCity) params.set("city", nextCity);
     if (kindFilter) params.set("kind", kindFilter);
     if (!params.toString()) {
       setResults([]);
@@ -172,23 +179,25 @@ export function EncaminharPacienteForm({
 
       {!selected && (
         <>
-          <div className="grid gap-3 sm:grid-cols-2">
+          <form className="grid gap-3 sm:grid-cols-2" onSubmit={(e) => { e.preventDefault(); void search(new FormData(e.currentTarget)); }}>
             <label className="block sm:col-span-2">
               <span className="mb-1 block text-xs font-semibold text-[var(--text-muted)]">Pesquisar profissional</span>
-              <input className="input-field" value={q} onChange={(e) => setQ(e.target.value)} placeholder="Nome, profissão ou especialidade" />
+              <input name="q" className="input-field" value={q} onChange={(e) => setQ(e.target.value)} placeholder="Nome, profissão ou especialidade" />
             </label>
             <label className="block">
               <span className="mb-1 block text-xs font-semibold text-[var(--text-muted)]">Especialidade</span>
-              <input className="input-field" value={specialty} onChange={(e) => setSpecialty(e.target.value)} placeholder="Ex.: Cardiologia" />
+              <input name="specialty" className="input-field" value={specialty} onChange={(e) => setSpecialty(e.target.value)} placeholder="Ex.: Cardiologia" />
             </label>
             <label className="block">
               <span className="mb-1 block text-xs font-semibold text-[var(--text-muted)]">Cidade</span>
-              <input className="input-field" value={city} onChange={(e) => setCity(e.target.value)} placeholder="Ex.: Irecê" />
+              <input name="city" className="input-field" value={city} onChange={(e) => setCity(e.target.value)} placeholder="Ex.: Irecê" />
             </label>
-          </div>
-          <button type="button" className="btn-gold" onClick={search} disabled={searching}>
-            {searching ? "Pesquisando…" : "Pesquisar profissional"}
-          </button>
+            <div className="sm:col-span-2">
+              <button type="submit" className="btn-gold" disabled={searching}>
+                {searching ? "Pesquisando…" : "Pesquisar profissional"}
+              </button>
+            </div>
+          </form>
           <div className="grid gap-2">
             {results.length === 0 && !searching && (
               <p className="text-sm text-[var(--text-muted)]">
