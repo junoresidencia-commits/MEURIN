@@ -166,6 +166,17 @@ async function seedDoctors(): Promise<Doctor[]> {
   }));
 }
 
+let fileDbLock: Promise<void> = Promise.resolve();
+
+function withFileDbLock<T>(fn: () => Promise<T>): Promise<T> {
+  let release!: () => void;
+  const prev = fileDbLock;
+  fileDbLock = new Promise<void>((ok) => {
+    release = ok;
+  });
+  return prev.then(fn).finally(release);
+}
+
 export async function readDb(): Promise<Database> {
   const supabase = getSupabaseAdmin();
   if (supabase) {
@@ -184,7 +195,17 @@ export async function readDb(): Promise<Database> {
       return next;
     }
     return db;
-  } catch {
+  } catch (err) {
+    let exists = false;
+    try {
+      exists = (await fs.stat(DB_PATH)).size > 0;
+    } catch {
+      exists = false;
+    }
+    if (exists) {
+      console.error("[store] db.json ilegível — não apago médicos/consultas", err);
+      throw err;
+    }
     const doctors = process.env.SEED_DEMO === "1" ? await seedDoctors() : [];
     const db: Database = {
       doctors,
@@ -205,16 +226,26 @@ export async function writeDb(db: Database): Promise<void> {
   }
 
   await fs.mkdir(DATA_DIR, { recursive: true });
-  await fs.writeFile(DB_PATH, JSON.stringify(db, null, 2), "utf8");
+  const tmp = `${DB_PATH}.${process.pid}.tmp`;
+  await fs.writeFile(tmp, JSON.stringify(db, null, 2), "utf8");
+  await fs.rename(tmp, DB_PATH);
 }
 
 export async function updateDb(
   updater: (db: Database) => Database | Promise<Database>
 ): Promise<Database> {
-  const db = await readDb();
-  const next = await updater(db);
-  await writeDb(next);
-  return next;
+  if (getSupabaseAdmin()) {
+    const db = await readDb();
+    const next = await updater(db);
+    await writeDb(next);
+    return next;
+  }
+  return withFileDbLock(async () => {
+    const db = await readDb();
+    const next = await updater(db);
+    await writeDb(next);
+    return next;
+  });
 }
 
 /** Remove um médico de verdade (writeDb usa upsert, então a exclusão precisa ser explícita). */

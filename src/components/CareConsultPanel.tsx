@@ -1,12 +1,12 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { memo, useCallback, useEffect, useRef, useState } from "react";
 import { ClinicalSnapshotCard } from "@/components/ClinicalSnapshotCard";
 import { toFriendlyMessage } from "@/lib/user-errors";
 
 type Kind = "psychology" | "nursing" | "nutrition";
 
-export function CareConsultPanel({ kind, patientKey }: { kind: Kind; patientKey: string }) {
+export const CareConsultPanel = memo(function CareConsultPanel({ kind, patientKey }: { kind: Kind; patientKey: string }) {
   const [snapshot, setSnapshot] = useState<Parameters<typeof ClinicalSnapshotCard>[0]["snapshot"] | null>(null);
   const [error, setError] = useState("");
   const [text, setText] = useState("");
@@ -147,4 +147,4 @@ export function CareConsultPanel({ kind, patientKey }: { kind: Kind; patientKey:
       {snapshot && <ClinicalSnapshotCard snapshot={snapshot} showLabs={kind !== "psychology"} />}
     </div>
   );
-}
+});

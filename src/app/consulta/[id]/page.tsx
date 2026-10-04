@@ -1,12 +1,27 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import { formatSlotLabel } from "@/lib/scheduling-client";
 import { ConsultChartPanel } from "@/components/ConsultChartPanel";
 import { CareConsultPanel } from "@/components/CareConsultPanel";
+import { ConsultVideoStage } from "@/components/ConsultVideoStage";
 import { PixCheckout } from "@/components/PixCheckout";
+import {
+  browserFamily,
+  explainMediaError,
+  mediaConstraints,
+  pollIntervalMs,
+  qualityFromStats,
+  reconnectAction,
+  resolveCallPhase,
+  unwrapSignal,
+  wrapSignal,
+  type CallPhase,
+  type ConsultEventKind,
+  type MediaHelp,
+} from "@/lib/consult-call";
 import {
   forcePatientFromSearch,
   isEmbeddedBrowser,
@@ -29,6 +44,10 @@ const CARE_REASON: Record<string, string> = {
   outro: "Outro",
 };
 
+function newSession() {
+  return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
+}
+
 export default function ConsultaPage() {
   const params = useParams<{ id: string }>();
   const router = useRouter();
@@ -45,11 +64,15 @@ export default function ConsultaPage() {
   const hungUp = useRef(false);
   const joinedRef = useRef(false);
   const iceRef = useRef<IceServer[] | null>(null);
+  const sessionRef = useRef("");
   const offerSentRef = useRef(false);
   const answeredRef = useRef(false);
   const connectedRef = useRef(false);
   const pollingRef = useRef(false);
   const makingOfferRef = useRef(false);
+  const iceStateRef = useRef("");
+  const failCountRef = useRef(0);
+  const lastReconnectRef = useRef(0);
   const [role, setRole] = useState<Role>("patient");
   const [roomRole, setRoomRole] = useState<RoomRole>("guest");
   const [info, setInfo] = useState<{
@@ -74,6 +97,12 @@ export default function ConsultaPage() {
   const [turnReady, setTurnReady] = useState(false);
   const [peerOnPage, setPeerOnPage] = useState(false);
   const [peerInCall, setPeerInCall] = useState(false);
+  const [peerLeft, setPeerLeft] = useState(false);
+  const [reconnecting, setReconnecting] = useState(false);
+  const [hasRemote, setHasRemote] = useState(false);
+  const [quality, setQuality] = useState<"good" | "fair" | "poor" | null>(null);
+  const [mediaHelp, setMediaHelp] = useState<MediaHelp | null>(null);
+  const [iceState, setIceState] = useState("");
   const [paywall, setPaywall] = useState<{
     brCode: string;
     qrDataUrl: string;
@@ -90,17 +119,43 @@ export default function ConsultaPage() {
   const [confirmingPix, setConfirmingPix] = useState(false);
   const [confirmErr, setConfirmErr] = useState("");
 
+  const phase: CallPhase = useMemo(
+    () =>
+      resolveCallPhase({
+        joined,
+        mediaError: Boolean(mediaHelp) && !joined,
+        connected: hasRemote || (joined && connectedRef.current && iceState === "connected"),
+        reconnecting,
+        peerInCall,
+        peerOnPage,
+        peerLeft,
+        ice: iceState,
+      }),
+    [hasRemote, iceState, joined, mediaHelp, peerInCall, peerLeft, peerOnPage, reconnecting]
+  );
+
   useEffect(() => {
     const q = window.location.search;
     setShowTestHint(new URLSearchParams(q).get("teste") === "1");
     setForcePatient(forcePatientFromSearch(q));
-    setEmbeddedBrowser(isEmbeddedBrowser(navigator.userAgent));
-  }, []);
+    const embedded = isEmbeddedBrowser(navigator.userAgent);
+    setEmbeddedBrowser(embedded);
+    if (embedded) {
+      void fetch("/api/consult-events", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          roomId,
+          role: "patient",
+          kind: "embedded",
+          browser: "embedded",
+        }),
+      });
+    }
+  }, [roomId]);
 
   useEffect(() => {
-    const q = typeof window !== "undefined" && forcePatientFromSearch(window.location.search)
-      ? "?como=paciente"
-      : "";
+    const q = forcePatientFromSearch(window.location.search) ? "?como=paciente" : "";
     fetch(`/api/rooms/${roomId}${q}`)
       .then(async (r) => {
         const data = await r.json();
@@ -153,16 +208,31 @@ export default function ConsultaPage() {
         }
         setStatus(
           nextRole === "doctor"
-            ? data.payment?.status === "confirmed" || !data.payment?.priceCents
-              ? "Sala liberada. Entre para atender o paciente."
-              : data.payment?.status === "declared"
-                ? "Paciente declarou o Pix. Confira na sua conta e entre."
-                : "Aguardando o Pix do paciente. Você já pode entrar."
-            : "Sala liberada. Toque em Entrar na consulta para aparecer na chamada."
+            ? "Sala liberada. Entre para atender. O prontuário fica aberto ao lado do vídeo."
+            : "Sala liberada. Toque em Entrar na consulta para o profissional te ver."
         );
       })
       .catch((e) => setError(e.message));
   }, [roomId]);
+
+  const report = useCallback(
+    (kind: ConsultEventKind, extra?: { iceState?: string; phase?: string }) => {
+      void fetch("/api/consult-events", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          roomId,
+          role: roleRef.current,
+          kind,
+          iceState: extra?.iceState,
+          phase: extra?.phase,
+          turn: turnReady,
+          browser: browserFamily(navigator.userAgent),
+        }),
+      }).catch(() => undefined);
+    },
+    [roomId, turnReady]
+  );
 
   const postSignal = useCallback(
     async (type: string, payload: unknown) => {
@@ -194,6 +264,7 @@ export default function ConsultaPage() {
           const fresh = presenceIsFresh(other.lastSeen);
           setPeerOnPage(fresh && other.pageOpen !== false);
           setPeerInCall(fresh && other.inCall === true);
+          if (fresh && other.inCall) setPeerLeft(false);
         }
       } catch {
         /* presença é auxiliar */
@@ -208,6 +279,9 @@ export default function ConsultaPage() {
     el.srcObject = stream;
     void el.play().catch(() => undefined);
     connectedRef.current = true;
+    setHasRemote(true);
+    setReconnecting(false);
+    setPeerLeft(false);
     setStatus("Conectado. Consulta em andamento.");
   }, []);
 
@@ -229,66 +303,89 @@ export default function ConsultaPage() {
     }
   }, []);
 
-  const sendOffer = useCallback(async () => {
-    if (roleRef.current !== "doctor" || makingOfferRef.current || connectedRef.current) return;
+  const sendOffer = useCallback(async (restart = false) => {
+    if (roleRef.current !== "doctor" || makingOfferRef.current) return;
     const pc = pcRef.current;
     if (!pc) return;
     makingOfferRef.current = true;
     try {
-      const offer = await pc.createOffer(answeredRef.current ? { iceRestart: true } : undefined);
+      const offer = await pc.createOffer(restart || answeredRef.current ? { iceRestart: true } : undefined);
       await pc.setLocalDescription(offer);
-      await postSignal("offer", offer);
+      await postSignal("offer", wrapSignal(sessionRef.current, offer));
       offerSentRef.current = true;
-      setStatus(
-        peerInCall || peerOnPage
-          ? "Paciente na sala. Cruzando o vídeo…"
-          : "Aguardando o paciente entrar…"
-      );
+      setStatus(peerInCall ? "Paciente na sala. Cruzando o vídeo…" : "Aguardando o paciente entrar…");
+    } catch {
+      /* próximo ciclo tenta de novo */
     } finally {
       makingOfferRef.current = false;
     }
-  }, [peerInCall, peerOnPage, postSignal]);
+  }, [peerInCall, postSignal]);
+
+  const bindPc = useCallback(
+    (pc: RTCPeerConnection) => {
+      pc.onicecandidate = (ev) => {
+        if (ev.candidate) void postSignal("ice", wrapSignal(sessionRef.current, ev.candidate));
+      };
+      pc.ontrack = (ev) => {
+        const stream = ev.streams[0] || new MediaStream([ev.track]);
+        attachRemote(stream);
+        report("connected", { iceState: pc.iceConnectionState });
+      };
+      pc.oniceconnectionstatechange = () => {
+        const state = pc.iceConnectionState;
+        iceStateRef.current = state;
+        setIceState(state);
+        if (state === "connected" || state === "completed") {
+          connectedRef.current = true;
+          setReconnecting(false);
+          failCountRef.current = 0;
+          setStatus("Conectado. Consulta em andamento.");
+        } else if (state === "checking") {
+          if (!connectedRef.current) setStatus("Cruzando o vídeo…");
+        } else if (state === "disconnected") {
+          connectedRef.current = false;
+          setHasRemote(false);
+          setReconnecting(true);
+          setStatus("Internet oscilou. Religando o vídeo — o prontuário continua aberto.");
+        } else if (state === "failed") {
+          connectedRef.current = false;
+          setHasRemote(false);
+          setReconnecting(true);
+          failCountRef.current += 1;
+          setStatus("A conexão caiu. Tentando de novo automaticamente…");
+          report("ice_failed", { iceState: state });
+        }
+      };
+    },
+    [attachRemote, postSignal, report]
+  );
 
   const ensurePc = useCallback(async () => {
     if (pcRef.current) return pcRef.current;
     const iceServers = await loadIce();
-    const pc = new RTCPeerConnection({ iceServers });
-    pc.onicecandidate = (ev) => {
-      if (ev.candidate) void postSignal("ice", ev.candidate);
-    };
-    pc.ontrack = (ev) => {
-      const stream = ev.streams[0] || new MediaStream([ev.track]);
-      attachRemote(stream);
-    };
-    pc.oniceconnectionstatechange = () => {
-      const state = pc.iceConnectionState;
-      if (state === "connected" || state === "completed") {
-        connectedRef.current = true;
-        setStatus("Conectado. Consulta em andamento.");
-      } else if (state === "checking") {
-        setStatus("Paciente na chamada. Cruzando o vídeo…");
-      } else if (state === "disconnected") {
-        connectedRef.current = false;
-        setStatus("Conexão instável. Tentando religar…");
-      } else if (state === "failed") {
-        connectedRef.current = false;
-        setStatus("A conexão caiu. Tentando de novo…");
-        if (roleRef.current === "doctor") void sendOffer();
-      }
-    };
-    let stream: MediaStream;
-    try {
-      stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
-    } catch {
-      stream = await navigator.mediaDevices.getUserMedia({ video: false, audio: true });
-      setCamOff(true);
-    }
-    streamRef.current = stream;
-    if (localVideo.current) localVideo.current.srcObject = stream;
-    stream.getTracks().forEach((t) => pc.addTrack(t, stream));
+    const pc = new RTCPeerConnection({ iceServers, iceCandidatePoolSize: 4 });
+    bindPc(pc);
+    const stream = streamRef.current;
+    if (stream) stream.getTracks().forEach((t) => pc.addTrack(t, stream));
     pcRef.current = pc;
     return pc;
-  }, [attachRemote, loadIce, postSignal, sendOffer]);
+  }, [bindPc, loadIce]);
+
+  const rebuildPc = useCallback(async () => {
+    const stream = streamRef.current;
+    if (!stream || !joinedRef.current) return;
+    lastReconnectRef.current = Date.now();
+    report("reconnect", { iceState: iceStateRef.current });
+    pcRef.current?.close();
+    pcRef.current = null;
+    offerSentRef.current = false;
+    answeredRef.current = false;
+    connectedRef.current = false;
+    sessionRef.current = newSession();
+    const pc = await ensurePc();
+    if (roleRef.current === "doctor") await sendOffer(true);
+    return pc;
+  }, [ensurePc, report, sendOffer]);
 
   const handleRemote = useCallback(
     async (msg: SignalMsg) => {
@@ -303,53 +400,57 @@ export default function ConsultaPage() {
       if (msg.type === "join") {
         setPeerOnPage(true);
         setPeerInCall(true);
+        setPeerLeft(false);
         if (roleRef.current === "doctor" && joinedRef.current) {
           setStatus("Paciente na sala. Conectando vídeo…");
           await ensurePc();
-          await sendOffer();
+          await sendOffer(false);
         }
         return;
       }
       if (msg.type === "leave") {
         setPeerInCall(false);
-        setStatus("O outro participante saiu da sala.");
+        setHasRemote(false);
+        setPeerLeft(true);
+        setStatus("O outro participante saiu. A sala e o prontuário continuam abertos.");
         if (remoteVideo.current) remoteVideo.current.srcObject = null;
         connectedRef.current = false;
         answeredRef.current = false;
+        report("peer_left");
         return;
       }
       if (!joinedRef.current) return;
+      const { body } = unwrapSignal(msg.payload);
       const pc = await ensurePc();
-      const data = JSON.parse(msg.payload);
-      if (msg.type === "offer") {
-        if (pc.signalingState !== "stable" && pc.signalingState !== "have-remote-offer") {
-          try {
-            await pc.setRemoteDescription(data);
-          } catch {
-            return;
-          }
-        } else {
-          await pc.setRemoteDescription(data);
+      if (msg.type === "offer" && body) {
+        try {
+          await pc.setRemoteDescription(body as RTCSessionDescriptionInit);
+          const answer = await pc.createAnswer();
+          await pc.setLocalDescription(answer);
+          await postSignal("answer", wrapSignal(sessionRef.current, answer));
+          setStatus("Resposta enviada. Aguardando imagem…");
+        } catch {
+          /* offer velho */
         }
-        const answer = await pc.createAnswer();
-        await pc.setLocalDescription(answer);
-        await postSignal("answer", answer);
-        setStatus("Resposta enviada. Aguardando imagem…");
-      } else if (msg.type === "answer") {
+      } else if (msg.type === "answer" && body) {
         answeredRef.current = true;
         if (pc.signalingState === "have-local-offer") {
-          await pc.setRemoteDescription(data);
+          try {
+            await pc.setRemoteDescription(body as RTCSessionDescriptionInit);
+          } catch {
+            /* ignore */
+          }
         }
         setStatus("Paciente na chamada. Cruzando o vídeo…");
-      } else if (msg.type === "ice") {
+      } else if (msg.type === "ice" && body) {
         try {
-          await pc.addIceCandidate(data);
+          await pc.addIceCandidate(body as RTCIceCandidateInit);
         } catch {
           /* ignore */
         }
       }
     },
-    [ensurePc, postSignal, sendOffer]
+    [ensurePc, postSignal, report, sendOffer]
   );
 
   const pullSignals = useCallback(async () => {
@@ -366,7 +467,7 @@ export default function ConsultaPage() {
         await handleRemote(msg);
       }
     } catch {
-      /* próximo ciclo tenta de novo */
+      /* próximo ciclo */
     } finally {
       pollingRef.current = false;
     }
@@ -375,9 +476,7 @@ export default function ConsultaPage() {
   useEffect(() => {
     if (!info) return;
     void postPresence(joinedRef.current);
-    const beat = setInterval(() => {
-      void postPresence(joinedRef.current);
-    }, 6000);
+    const beat = setInterval(() => void postPresence(joinedRef.current), 6000);
     return () => clearInterval(beat);
   }, [info, joined, postPresence]);
 
@@ -385,23 +484,85 @@ export default function ConsultaPage() {
     if (!joined) return;
     lastPoll.current = "";
     void pullSignals();
-    const timer = setInterval(() => {
-      void pullSignals();
-    }, 1200);
+    const ms = pollIntervalMs(phase);
+    const timer = setInterval(() => void pullSignals(), ms);
     return () => clearInterval(timer);
-  }, [joined, pullSignals]);
+  }, [joined, phase, pullSignals]);
 
   useEffect(() => {
     if (!joined || role !== "doctor") return;
     const retry = setInterval(() => {
-      if (!connectedRef.current && (peerInCall || offerSentRef.current === false)) {
-        void sendOffer();
-      }
+      if (!connectedRef.current) void sendOffer(false);
     }, 4000);
     return () => clearInterval(retry);
-  }, [joined, peerInCall, role, sendOffer]);
+  }, [joined, role, sendOffer]);
 
-  function stopCallMedia() {
+  useEffect(() => {
+    if (!joined) return;
+    const timer = setInterval(() => {
+      const action = reconnectAction({
+        ice: iceStateRef.current,
+        failCount: failCountRef.current,
+        lastAttemptAt: lastReconnectRef.current,
+      });
+      if (action === "ice-restart") {
+        lastReconnectRef.current = Date.now();
+        report("reconnect", { iceState: iceStateRef.current });
+        void sendOffer(true);
+      } else if (action === "rebuild") {
+        void rebuildPc();
+      }
+    }, 2000);
+    return () => clearInterval(timer);
+  }, [joined, rebuildPc, report, sendOffer]);
+
+  useEffect(() => {
+    if (!joined) return;
+    const onOffline = () => {
+      setReconnecting(true);
+      setStatus("Sem internet. Quando voltar, o vídeo religa sozinho.");
+      report("offline");
+    };
+    const onOnline = () => {
+      setStatus("Internet voltou. Religando o vídeo…");
+      void rebuildPc();
+    };
+    window.addEventListener("offline", onOffline);
+    window.addEventListener("online", onOnline);
+    return () => {
+      window.removeEventListener("offline", onOffline);
+      window.removeEventListener("online", onOnline);
+    };
+  }, [joined, rebuildPc, report]);
+
+  useEffect(() => {
+    if (!joined) return;
+    const timer = setInterval(async () => {
+      const pc = pcRef.current;
+      if (!pc || pc.iceConnectionState !== "connected") return;
+      try {
+        const stats = await pc.getStats();
+        let rttMs = 0;
+        let lost = 0;
+        let received = 0;
+        stats.forEach((row) => {
+          if (row.type === "candidate-pair" && row.state === "succeeded") {
+            rttMs = Number(row.currentRoundTripTime || 0) * 1000;
+          }
+          if (row.type === "inbound-rtp") {
+            lost += Number(row.packetsLost || 0);
+            received += Number(row.packetsReceived || 0);
+          }
+        });
+        setQuality(qualityFromStats({ rttMs, lossRatio: received ? lost / received : 0 }));
+      } catch {
+        /* ignore */
+      }
+    }, 4000);
+    return () => clearInterval(timer);
+  }, [joined]);
+
+  function stopCallMedia(keepPage = false) {
     streamRef.current?.getTracks().forEach((t) => t.stop());
     streamRef.current = null;
     pcRef.current?.close();
@@ -411,26 +572,46 @@ export default function ConsultaPage() {
     offerSentRef.current = false;
     answeredRef.current = false;
     connectedRef.current = false;
+    setHasRemote(false);
+    setReconnecting(false);
+    setQuality(null);
+    if (keepPage) {
+      setJoined(false);
+      joinedRef.current = false;
+      setStatus("Vídeo encerrado. O prontuário continua aqui. Toque em Entrar para voltar à chamada.");
+    }
   }
 
   function destinationAfterLeave() {
     return roleRef.current === "doctor" ? homePath : "/paciente/inicio";
   }
 
+  async function endVideoStay() {
+    if (!joinedRef.current) return;
+    report("leave", { phase });
+    try {
+      await postSignal("leave", wrapSignal(sessionRef.current, {}));
+      await postPresence(false);
+    } catch {
+      /* ignore */
+    }
+    stopCallMedia(true);
+  }
+
   async function hangUp() {
     if (hungUp.current || leaving) return;
-    if (joinedRef.current && !window.confirm("Encerrar a consulta e sair da sala?")) return;
+    if (!window.confirm("Sair da consulta? O vídeo encerra. A evolução já salva no prontuário permanece.")) return;
     hungUp.current = true;
     setLeaving(true);
     if (joinedRef.current) {
       try {
-        await postSignal("leave", {});
+        await postSignal("leave", wrapSignal(sessionRef.current, {}));
         await postPresence(false);
       } catch {
         /* ignore */
       }
     }
-    stopCallMedia();
+    stopCallMedia(false);
     setJoined(false);
     joinedRef.current = false;
     router.push(destinationAfterLeave());
@@ -451,7 +632,7 @@ export default function ConsultaPage() {
             roomId,
             from: roleRef.current,
             type: "leave",
-            payload: "{}",
+            payload: JSON.stringify(wrapSignal(sessionRef.current, {})),
           }),
           keepalive: true,
         });
@@ -465,19 +646,44 @@ export default function ConsultaPage() {
     };
   }, [roomId]);
 
-  async function joinCall() {
+  async function acquireMedia(withVideo: boolean) {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia(mediaConstraints(withVideo));
+      return stream;
+    } catch (err) {
+      if (withVideo) {
+        try {
+          const audioOnly = await navigator.mediaDevices.getUserMedia(mediaConstraints(false));
+          setCamOff(true);
+          return audioOnly;
+        } catch (audioErr) {
+          throw audioErr;
+        }
+      }
+      throw err;
+    }
+  }
+
+  async function joinCall(withVideo = true) {
     try {
       hungUp.current = false;
+      setMediaHelp(null);
+      setError("");
+      setPeerLeft(false);
+      sessionRef.current = newSession();
+      setStatus("Pedindo câmera e microfone…");
+      const stream = await acquireMedia(withVideo);
+      streamRef.current = stream;
+      if (localVideo.current) localVideo.current.srcObject = stream;
       setJoined(true);
       joinedRef.current = true;
-      setStatus("Pedindo câmera e microfone…");
       await ensurePc();
-      await postSignal("join", { at: Date.now() });
+      await postSignal("join", wrapSignal(sessionRef.current, { at: Date.now() }));
       await postPresence(true);
+      report("join", { phase: "connecting" });
       if (roleRef.current === "doctor") {
-        if (peerInCall) {
-          await sendOffer();
-        } else {
+        if (peerInCall) await sendOffer(false);
+        else {
           setStatus(
             peerOnPage
               ? "Paciente abriu o link. Aguardando ele tocar em Entrar na consulta…"
@@ -487,10 +693,10 @@ export default function ConsultaPage() {
       } else {
         setStatus(`Câmera ligada. Aguardando ${hostLabel.toLowerCase()} conectar…`);
       }
-    } catch {
-      setError(
-        "Não foi possível acessar câmera ou microfone. Permita no navegador e tente de novo (HTTPS ou localhost)."
-      );
+    } catch (err) {
+      const help = explainMediaError(err);
+      setMediaHelp(help);
+      report("media_denied");
       setJoined(false);
       joinedRef.current = false;
     }
@@ -518,6 +724,7 @@ export default function ConsultaPage() {
   }
 
   const isDoctor = role === "doctor";
+  const otherName = isDoctor ? info?.patientName || "o paciente" : hostLabel;
   const sairButton = (
     <button
       type="button"
@@ -607,45 +814,6 @@ export default function ConsultaPage() {
     );
   }
 
-  const videos = (
-    <div className={isDoctor ? "relative" : "grid gap-4 lg:grid-cols-2"}>
-      <div
-        className={`relative overflow-hidden rounded-[24px] border border-[var(--border-gold)] bg-[#0a0a0a] ${
-          isDoctor ? "aspect-video" : "aspect-video border-[var(--border)] bg-black lg:order-2"
-        }`}
-      >
-        <video
-          ref={isDoctor ? remoteVideo : localVideo}
-          autoPlay
-          muted={!isDoctor}
-          playsInline
-          className="h-full w-full object-cover"
-        />
-        <span className="absolute bottom-3 left-3 rounded-full bg-black/60 px-3 py-1 text-xs text-white">
-          {isDoctor ? info?.patientName || "Paciente" : "Você (paciente)"}
-        </span>
-      </div>
-      <div
-        className={
-          isDoctor
-            ? "absolute bottom-3 right-3 z-10 aspect-video w-[38%] max-w-[220px] overflow-hidden rounded-2xl border border-white/30 bg-black shadow-lg"
-            : "relative aspect-video overflow-hidden rounded-[24px] border border-[var(--border-gold)] bg-[#0a0a0a]"
-        }
-      >
-        <video
-          ref={isDoctor ? localVideo : remoteVideo}
-          autoPlay
-          muted={isDoctor}
-          playsInline
-          className="h-full w-full object-cover"
-        />
-        <span className="absolute bottom-2 left-2 rounded-full bg-black/60 px-2 py-0.5 text-[10px] text-white">
-          {isDoctor ? "Você" : hostLabel}
-        </span>
-      </div>
-    </div>
-  );
-
   return (
     <div className={`mx-auto px-5 py-8 ${isDoctor ? "max-w-7xl" : "max-w-5xl"} ${joined ? "pb-28 lg:pb-10" : ""}`}>
       <div className="flex flex-wrap items-start justify-between gap-3">
@@ -684,13 +852,27 @@ export default function ConsultaPage() {
             O navegador do WhatsApp/Instagram costuma bloquear câmera entre as duas pontas. Toque em
             {" "}<b>Abrir no navegador</b> e depois em Entrar na consulta.
           </p>
-          <button
-            type="button"
-            className="btn-gold mt-3 min-h-11"
-            onClick={() => void copyLink()}
-          >
+          <button type="button" className="btn-gold mt-3 min-h-11" onClick={() => void copyLink()}>
             {copied ? "Link copiado" : "Copiar link para abrir no navegador"}
           </button>
+        </div>
+      )}
+      {mediaHelp && (
+        <div className="mt-4 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-950">
+          <p className="font-semibold">{mediaHelp.title}</p>
+          <p className="mt-1">{mediaHelp.body}</p>
+          <div className="mt-3 flex flex-wrap gap-2">
+            {mediaHelp.canRetry && (
+              <button type="button" className="btn-gold min-h-11" onClick={() => void joinCall(true)}>
+                Tentar de novo
+              </button>
+            )}
+            {mediaHelp.allowAudioOnly && (
+              <button type="button" className="btn-ghost min-h-11" onClick={() => void joinCall(false)}>
+                Entrar só com áudio
+              </button>
+            )}
+          </div>
         </div>
       )}
       {isDoctor && hostPay && hostPay.status !== "free" && hostPay.priceCents > 0 && (
@@ -736,6 +918,9 @@ export default function ConsultaPage() {
             <button type="button" className="btn-ghost !min-h-[42px] !text-xs" onClick={toggleCam}>
               {camOff ? "Ligar câmera" : "Desligar câmera"}
             </button>
+            <button type="button" className="btn-ghost !min-h-[42px] !text-xs" onClick={() => void endVideoStay()}>
+              Encerrar vídeo e ficar
+            </button>
           </>
         )}
       </div>
@@ -748,8 +933,11 @@ export default function ConsultaPage() {
             </p>
           )}
           <div className="flex flex-wrap items-center gap-3">
-            <button type="button" className="btn-gold min-h-12 px-8 text-base" onClick={() => void joinCall()}>
+            <button type="button" className="btn-gold min-h-12 px-8 text-base" onClick={() => void joinCall(true)}>
               {isDoctor ? "Entrar para atender" : "Entrar na consulta"}
+            </button>
+            <button type="button" className="btn-ghost min-h-12" onClick={() => void joinCall(false)}>
+              Entrar só com áudio
             </button>
             {roomRole === "guest" && !forcePatient && (
               <Link
@@ -764,7 +952,18 @@ export default function ConsultaPage() {
       )}
 
       <div className={`mt-8 ${isDoctor ? "grid items-start gap-4 xl:grid-cols-[minmax(0,1fr)_minmax(320px,400px)]" : ""}`}>
-        {videos}
+        <ConsultVideoStage
+          isDoctor={isDoctor}
+          phase={phase}
+          hostLabel={hostLabel}
+          otherName={otherName}
+          localName={isDoctor ? "Você" : "Você (paciente)"}
+          remoteName={isDoctor ? info?.patientName || "Paciente" : hostLabel}
+          localVideo={localVideo}
+          remoteVideo={remoteVideo}
+          hasRemote={hasRemote}
+          quality={quality}
+        />
         {isDoctor && roomKind === "doctor" && info?.patientEmail && (
           <ConsultChartPanel patientEmail={info.patientEmail} />
         )}
@@ -773,29 +972,21 @@ export default function ConsultaPage() {
         )}
       </div>
 
-      {showTestHint && (
+      {(showTestHint || (isDoctor && !turnReady && joined)) && (
         <p className="mt-6 text-xs text-[var(--text-muted)]">
-          Modo teste: abra o link em dois aparelhos. {turnReady
-            ? "TURN ativo — ajuda em rede difícil."
-            : "Sem TURN configurado: em NAT difícil a imagem pode não cruzar."}
+          {turnReady
+            ? "TURN ativo — ajuda em rede difícil (4G, Wi‑Fi de condomínio)."
+            : "Sem TURN no servidor: em algumas redes o vídeo pode demorar ou falhar. Os dois devem usar Chrome ou Safari."}
         </p>
       )}
 
       {joined && (
         <div className="fixed inset-x-0 bottom-0 z-30 border-t border-[var(--border)] bg-white/95 px-4 py-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] shadow-[0_-8px_24px_rgba(14,49,68,0.08)] lg:hidden">
           <div className="mx-auto flex max-w-5xl gap-2">
-            <button
-              type="button"
-              className="btn-ghost !min-h-[44px] flex-1 !px-3 !text-xs"
-              onClick={toggleMute}
-            >
+            <button type="button" className="btn-ghost !min-h-[44px] flex-1 !px-3 !text-xs" onClick={toggleMute}>
               {muted ? "Microfone" : "Mutar"}
             </button>
-            <button
-              type="button"
-              className="btn-ghost !min-h-[44px] flex-1 !px-3 !text-xs"
-              onClick={toggleCam}
-            >
+            <button type="button" className="btn-ghost !min-h-[44px] flex-1 !px-3 !text-xs" onClick={toggleCam}>
               {camOff ? "Câmera" : "Câmera off"}
             </button>
             <button

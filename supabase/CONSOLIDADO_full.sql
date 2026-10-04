@@ -95,6 +95,22 @@ create index if not exists room_presence_seen_idx on public.room_presence (last_
 alter table public.room_presence enable row level security;
 comment on table public.room_presence is 'Quem abriu / entrou na sala de teleconsulta (médico e paciente).';
 
+create table if not exists public.consult_call_events (
+  id uuid primary key default gen_random_uuid(),
+  room_id uuid not null,
+  role text not null check (role in ('doctor', 'patient')),
+  kind text not null,
+  ice_state text,
+  browser text,
+  turn boolean,
+  phase text,
+  created_at timestamptz not null default now()
+);
+create index if not exists consult_call_events_room_idx
+  on public.consult_call_events (room_id, created_at desc);
+alter table public.consult_call_events enable row level security;
+comment on table public.consult_call_events is 'Falhas e estados da videochamada. Sem conteúdo clínico.';
+
 -- ===== 20260805190000_patient_home_records.sql =====
 -- Fase 2 — Área do paciente: registro domiciliar + diário alimentar.
 -- Acesso apenas server-side (chave service_role). RLS habilitado sem policies

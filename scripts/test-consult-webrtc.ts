@@ -7,6 +7,20 @@ import {
   presenceIsFresh,
   resolveConsultRole,
 } from "../src/lib/consult-webrtc";
+import {
+  allowConsultEvent,
+} from "../src/lib/consult-events-store";
+import {
+  explainMediaError,
+  looksLikeSensitiveConsultPayload,
+  overlayCopy,
+  qualityFromStats,
+  reconnectAction,
+  resolveCallPhase,
+  sanitizeConsultEvent,
+  unwrapSignal,
+  wrapSignal,
+} from "../src/lib/consult-call";
 import { appendSignalingMessage, listSignalingForRoom } from "../src/lib/store";
 import { listRoomPresence, upsertRoomPresence } from "../src/lib/room-presence";
 
@@ -87,6 +101,72 @@ async function main() {
   });
   const types = (await listSignalingForRoom(sigRoom)).map((m) => m.type);
   assert.ok(types.includes("leave"));
+
+  const denied = explainMediaError({ name: "NotAllowedError" });
+  assert.equal(denied.canRetry, true);
+  assert.match(denied.body, /Ajustes|cadeado/);
+  const overlay = overlayCopy("waiting_peer", "Médico", "Maria");
+  assert.ok(overlay && overlay.title.includes("Maria"));
+  assert.equal(overlayCopy("connected", "Médico", "Maria"), null);
+
+  assert.equal(
+    resolveCallPhase({
+      joined: true,
+      mediaError: false,
+      connected: false,
+      reconnecting: false,
+      peerInCall: false,
+      peerOnPage: true,
+      peerLeft: false,
+    }),
+    "waiting_peer"
+  );
+  assert.equal(
+    resolveCallPhase({
+      joined: true,
+      mediaError: false,
+      connected: false,
+      reconnecting: true,
+      peerInCall: true,
+      peerOnPage: true,
+      peerLeft: false,
+      ice: "disconnected",
+    }),
+    "reconnecting"
+  );
+
+  assert.equal(reconnectAction({ ice: "disconnected", failCount: 0, lastAttemptAt: 0, now: 5000 }), "ice-restart");
+  assert.equal(reconnectAction({ ice: "failed", failCount: 2, lastAttemptAt: 0, now: 5000 }), "rebuild");
+  assert.equal(reconnectAction({ ice: "disconnected", failCount: 0, lastAttemptAt: 4000, now: 5000 }), "none");
+
+  const wrapped = wrapSignal("abc", { type: "offer", sdp: "v=0" });
+  const undone = unwrapSignal(JSON.stringify(wrapped));
+  assert.equal(undone.session, "abc");
+  assert.equal((undone.body as { type: string }).type, "offer");
+
+  assert.equal(looksLikeSensitiveConsultPayload({ sdp: "v=0 raw" }), true);
+  assert.equal(looksLikeSensitiveConsultPayload({ kind: "join", roomId: "x" }), false);
+  assert.equal(
+    sanitizeConsultEvent({
+      roomId: "bb380928-a49d-4d4e-9b23-2f3105ad9935",
+      role: "doctor",
+      kind: "ice_failed",
+      iceState: "failed",
+      browser: "chrome",
+    })?.kind,
+    "ice_failed"
+  );
+  assert.equal(
+    sanitizeConsultEvent({ roomId: "nope", role: "doctor", kind: "join" }),
+    null
+  );
+  assert.equal(qualityFromStats({ rttMs: 80, lossRatio: 0 }), "good");
+  assert.equal(qualityFromStats({ rttMs: 900, lossRatio: 0.2 }), "poor");
+
+  const roomEv = "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb";
+  assert.equal(allowConsultEvent(roomEv, 1_000, 60_000, 2), true);
+  assert.equal(allowConsultEvent(roomEv, 1_001, 60_000, 2), true);
+  assert.equal(allowConsultEvent(roomEv, 1_002, 60_000, 2), false);
 
   console.log("consult-webrtc ok");
 }
