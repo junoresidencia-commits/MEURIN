@@ -5,7 +5,7 @@ import { ProfilePhotoUploader } from "@/components/ProfilePhotoUploader";
 
 type Props = {
   photoEndpoint: string;
-  settingsHref: string;
+  settingsHref?: string;
   name: string;
   missing?: string[];
   onPhotoChange?: (url: string | null) => void;
@@ -25,9 +25,11 @@ export function ProfessionalProfileCard({ photoEndpoint, settingsHref, name, mis
             A foto aparece na rede, nos encaminhamentos e no seu painel. Toque em Adicionar foto — não precisa sair daqui.
           </p>
         </div>
-        <Link href={settingsHref} className="btn-ghost text-sm">
-          Ajustar perfil completo →
-        </Link>
+        {settingsHref && (
+          <Link href={settingsHref} className="btn-ghost text-sm">
+            Ajustar perfil completo →
+          </Link>
+        )}
       </div>
       <div className="mt-4">
         <ProfilePhotoUploader
@@ -40,10 +42,15 @@ export function ProfessionalProfileCard({ photoEndpoint, settingsHref, name, mis
       </div>
       {incomplete && (
         <p className="mt-3 text-sm text-[var(--text-soft)]">
-          Ainda falta: {missing.join(", ")}.{" "}
-          <Link href={settingsHref} className="font-semibold text-[var(--gold)]">
-            Abrir perfil e recebimentos
-          </Link>
+          Ainda falta: {missing.join(", ")}.
+          {settingsHref && (
+            <>
+              {" "}
+              <Link href={settingsHref} className="font-semibold text-[var(--gold)]">
+                Abrir perfil e recebimentos
+              </Link>
+            </>
+          )}
         </p>
       )}
     </section>

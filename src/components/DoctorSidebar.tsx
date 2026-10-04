@@ -113,7 +113,7 @@ export function DoctorSidebar() {
         </Link>
 
         {doctor && (
-          <div className="mb-2 flex items-center gap-3 rounded-2xl border border-[var(--border)] bg-[var(--bg)] p-2">
+          <Link href="/medicos/configuracoes#perfil" className="mb-2 flex items-center gap-3 rounded-2xl border border-[var(--border)] bg-[var(--bg)] p-2 transition hover:border-[var(--border-gold)]" aria-label="Editar foto e perfil">
             {doctor.photoUrl || doctor.logoUrl ? (
               // eslint-disable-next-line @next/next/no-img-element
               <img src={doctor.photoUrl || doctor.logoUrl} alt="Foto" className="h-10 w-10 shrink-0 rounded-full border border-[var(--border)] object-cover" />
@@ -122,9 +122,9 @@ export function DoctorSidebar() {
             )}
             <div className="min-w-0">
               <p className="truncate text-sm font-bold text-[var(--text)]">{doctor.name || "Médico"}</p>
-              <p className="truncate text-[11px] text-[var(--text-muted)]">{[doctor.crm, doctor.specialty].filter(Boolean).join(" · ") || "Perfil"}</p>
+              <p className="truncate text-[11px] text-[var(--text-muted)]">{doctor.photoUrl ? "Editar foto e perfil" : "Adicionar foto e perfil"}</p>
             </div>
-          </div>
+          </Link>
         )}
 
         <nav className="flex min-h-0 flex-1 flex-col">

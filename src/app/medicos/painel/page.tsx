@@ -12,6 +12,7 @@ import { EnableNotifications } from "@/components/EnableNotifications";
 import { GlobalPatientSearch } from "@/components/GlobalPatientSearch";
 import { PatientQuickSheet } from "@/components/PatientQuickSheet";
 import { PlatformFeePayPanel } from "@/components/PlatformFeePayPanel";
+import { ProfessionalProfileCard } from "@/components/ProfessionalProfileCard";
 function consultaStatus(b: Booking): { emoji: string; label: string; color: string } {
   if (b.stage === "proposto_novo_horario") return { emoji: "🟠", label: "Novo horário proposto", color: "#e08a2e" };
   if (b.status === "confirmed") return { emoji: "🟢", label: "Confirmado", color: "#1a9a78" };
@@ -203,11 +204,28 @@ export default function PainelMedicoPage() {
       <div className="min-w-0 flex-1">
         <div className="mx-auto max-w-7xl px-5 pb-28 pt-8 lg:pb-8">
       <div className="flex flex-wrap items-start justify-between gap-4">
-        <div>
+        <div className="flex items-center gap-3">
+          <Link href="/medicos/configuracoes#perfil" className="shrink-0" aria-label="Editar foto e perfil">
+            {doctor.photoUrl || doctor.logoUrl ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img src={doctor.photoUrl || doctor.logoUrl} alt="Sua foto" className="h-14 w-14 rounded-full border border-[var(--border)] object-cover" />
+            ) : (
+              <span className="grid h-14 w-14 place-items-center rounded-full bg-[var(--gold-soft)] text-lg font-bold text-[var(--gold)]">
+                {doctor.name.slice(0, 2).toUpperCase()}
+              </span>
+            )}
+          </Link>
+          <div>
           <h1 className="font-display text-2xl font-extrabold text-[var(--text)] sm:text-3xl">
             Olá, {(() => { const p = doctor.name.trim().split(/\s+/); return /^dr/i.test(p[0]) ? p.slice(0, 2).join(" ") : p[0]; })()} 👋
           </h1>
-          <p className="mt-1 text-sm text-[var(--text-muted)]">Resumo da sua clínica hoje</p>
+          <p className="mt-1 text-sm text-[var(--text-muted)]">
+            {[doctor.specialty, doctor.city || doctor.state, doctor.crm ? `CRM ${doctor.crm}` : ""].filter(Boolean).join(" · ") || "Resumo da sua clínica hoje"}
+          </p>
+          <Link href="/medicos/configuracoes#perfil" className="mt-1 inline-block text-sm font-semibold text-[var(--gold)]">
+            {doctor.photoUrl ? "Editar foto e perfil →" : "Adicionar foto e completar perfil →"}
+          </Link>
+          </div>
         </div>
         <div className="flex flex-wrap items-center gap-2">
           <span className="hidden items-center gap-1.5 rounded-full border border-[var(--border)] bg-white px-3 py-1.5 text-sm text-[var(--text-soft)] sm:inline-flex">
@@ -221,6 +239,20 @@ export default function PainelMedicoPage() {
         <GlobalPatientSearch />
       </div>
       <EnableNotifications />
+
+      <ProfessionalProfileCard
+        photoEndpoint="/api/doctor/photo"
+        settingsHref="/medicos/configuracoes#perfil"
+        name={doctor.name || "Médico"}
+        missing={[
+          ...(!doctor.photoUrl ? ["foto"] : []),
+          ...(!doctor.city ? ["cidade"] : []),
+          ...(!doctor.specialty ? ["especialidade"] : []),
+          ...(!doctor.bio ? ["bio"] : []),
+          ...(!(doctor.pixProfile?.key || doctor.pixKey) ? ["chave Pix"] : []),
+        ]}
+        onPhotoChange={(url) => setDoctor((cur) => (cur ? { ...cur, photoUrl: url || undefined } : cur))}
+      />
 
       {/* Cards de resumo do dia */}
       <div className="mt-6 grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
