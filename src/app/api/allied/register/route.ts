@@ -22,6 +22,7 @@ export async function POST(req: Request) {
       phone: b.phone ? String(b.phone) : null,
       registry: b.registry ? String(b.registry) : null,
       uf: b.uf ? String(b.uf) : null,
+      city: b.city ? String(b.city) : null,
       specialty: b.specialty ? String(b.specialty) : null,
       bio: b.bio ? String(b.bio) : null,
       status: "pending",

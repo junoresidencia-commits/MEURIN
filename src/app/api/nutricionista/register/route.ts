@@ -32,6 +32,7 @@ export async function POST(req: Request) {
       phone: b.phone ? String(b.phone) : null,
       crn: b.crn ? String(b.crn) : null,
       uf: b.uf ? String(b.uf) : null,
+      city: b.city ? String(b.city) : null,
       specialty: b.specialty ? String(b.specialty) : "Nutrição",
       bio: b.bio ? String(b.bio) : null,
       photoUrl, documents,

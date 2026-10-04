@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { AuthShell } from "@/components/AuthShell";
 import type { AlliedRole } from "@/lib/allied-types";
+import { fileToDataUrl } from "@/lib/image-data-url";
 
 const META: Record<AlliedRole, { eyebrow: string; subtitle: string; cadastro: string; painel: string }> = {
   psychology: {
@@ -67,7 +68,8 @@ export function AlliedLoginForm({ role }: { role: AlliedRole }) {
 export function AlliedRegisterForm({ role }: { role: AlliedRole }) {
   const registry = role === "psychology" ? "CRP" : "COREN";
   const login = role === "psychology" ? "/psicologo/login" : "/enfermeiro/login";
-  const [form, setForm] = useState({ name: "", cpf: "", email: "", password: "", phone: "", registry: "", uf: "", specialty: "", bio: "" });
+  const [form, setForm] = useState({ name: "", cpf: "", email: "", password: "", phone: "", registry: "", uf: "", city: "", specialty: "", bio: "" });
+  const [photo, setPhoto] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const [done, setDone] = useState(false);
@@ -79,7 +81,7 @@ export function AlliedRegisterForm({ role }: { role: AlliedRole }) {
     try {
       const res = await fetch("/api/allied/register", {
         method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ role, ...form }),
+        body: JSON.stringify({ role, ...form, photoUrl: photo || undefined }),
       });
       const d = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(d.error || "Falha no cadastro.");
@@ -108,6 +110,38 @@ export function AlliedRegisterForm({ role }: { role: AlliedRole }) {
       <h1 className="font-display mt-2 text-3xl font-extrabold text-[var(--text)]">Criar cadastro</h1>
       <p className="mt-2 text-[var(--text-muted)]">Cadastre-se para atender pacientes encaminhados no Meu Rim.</p>
       <form onSubmit={submit} className="panel mt-6 grid gap-3 sm:grid-cols-2" noValidate>
+        <label className="block sm:col-span-2">
+          <span className="mb-1 block text-xs font-semibold text-[var(--text-muted)]">Foto de perfil</span>
+          <div className="flex items-center gap-3">
+            {photo ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img src={photo} alt="" className="h-14 w-14 rounded-full object-cover" />
+            ) : (
+              <span className="grid h-14 w-14 place-items-center rounded-full bg-[var(--gold-soft)] text-sm font-bold text-[var(--gold)]">Foto</span>
+            )}
+            <div className="flex flex-col gap-1">
+              <label className="btn-ghost cursor-pointer text-sm">
+                {photo ? "Trocar foto" : "Adicionar foto"}
+                <input
+                  type="file"
+                  accept="image/png,image/jpeg,image/webp"
+                  className="hidden"
+                  onChange={async (e) => {
+                    const file = e.target.files?.[0];
+                    e.target.value = "";
+                    if (!file) return;
+                    try { setPhoto(await fileToDataUrl(file, 320)); } catch { setError("Não foi possível ler a foto."); }
+                  }}
+                />
+              </label>
+              {photo && (
+                <button type="button" className="text-left text-xs font-semibold text-[var(--danger)]" onClick={() => setPhoto("")}>
+                  Remover foto
+                </button>
+              )}
+            </div>
+          </div>
+        </label>
         <label className="block sm:col-span-2"><span className="mb-1 block text-xs font-semibold text-[var(--text-muted)]">Nome completo *</span><input className="input-field" value={form.name} onChange={(e) => set("name", e.target.value)} /></label>
         <label className="block"><span className="mb-1 block text-xs font-semibold text-[var(--text-muted)]">CPF *</span><input className="input-field" value={form.cpf} onChange={(e) => set("cpf", e.target.value)} inputMode="numeric" /></label>
         <label className="block"><span className="mb-1 block text-xs font-semibold text-[var(--text-muted)]">E-mail</span><input className="input-field" value={form.email} onChange={(e) => set("email", e.target.value)} /></label>
@@ -115,7 +149,9 @@ export function AlliedRegisterForm({ role }: { role: AlliedRole }) {
         <label className="block"><span className="mb-1 block text-xs font-semibold text-[var(--text-muted)]">Telefone</span><input className="input-field" value={form.phone} onChange={(e) => set("phone", e.target.value)} /></label>
         <label className="block"><span className="mb-1 block text-xs font-semibold text-[var(--text-muted)]">{registry}</span><input className="input-field" value={form.registry} onChange={(e) => set("registry", e.target.value)} /></label>
         <label className="block"><span className="mb-1 block text-xs font-semibold text-[var(--text-muted)]">UF</span><input className="input-field" value={form.uf} onChange={(e) => set("uf", e.target.value)} placeholder="BA" /></label>
+        <label className="block"><span className="mb-1 block text-xs font-semibold text-[var(--text-muted)]">Cidade</span><input className="input-field" value={form.city} onChange={(e) => set("city", e.target.value)} /></label>
         <label className="block sm:col-span-2"><span className="mb-1 block text-xs font-semibold text-[var(--text-muted)]">Especialidade</span><input className="input-field" value={form.specialty} onChange={(e) => set("specialty", e.target.value)} /></label>
+        <label className="block sm:col-span-2"><span className="mb-1 block text-xs font-semibold text-[var(--text-muted)]">Bio</span><textarea className="input-field min-h-[72px]" value={form.bio} onChange={(e) => set("bio", e.target.value)} /></label>
         {error && <p className="sm:col-span-2 text-sm font-semibold text-[var(--danger)]">{error}</p>}
         <div className="sm:col-span-2"><button type="submit" className="btn-gold w-full" disabled={loading}>{loading ? "Enviando…" : "Enviar cadastro"}</button></div>
       </form>
