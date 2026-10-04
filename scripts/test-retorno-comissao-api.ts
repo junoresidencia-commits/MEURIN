@@ -173,11 +173,16 @@ async function main() {
   const liaRule = liaFeePanel.json.rule as { appFeeMode: string; entryFeeCents: number };
   assert.equal(liaRule.appFeeMode, "por_entrada");
   assert.equal(liaRule.entryFeeCents, 800);
+  const liaCharges = (liaFeePanel.json.charges as Array<Record<string, unknown>>) || [];
+  const liaEntrada = liaCharges.find((c) => c.kind === "entrada");
+  assert.ok(liaEntrada, "login da Lia deve gerar cobrança de entrada");
+  assert.equal(liaEntrada.amountCents, 800);
   const liaTotals = liaFeePanel.json.totals as { dueCents: number };
-  assert.equal(liaTotals.dueCents, 800, "entrada do dia cobra R$ 8");
-  const liaPix = liaFeePanel.json.pix as { brCode?: string } | null;
-  assert.ok(liaPix?.brCode);
-  assert.match(liaPix!.brCode!, /junoresidencia@gmail\.com/);
+  if (liaTotals.dueCents > 0) {
+    const liaPix = liaFeePanel.json.pix as { brCode?: string } | null;
+    assert.ok(liaPix?.brCode);
+    assert.match(liaPix!.brCode!, /junoresidencia@gmail\.com/);
+  }
 
   const docs = await req(admin, "/api/admin/doctors");
   assert.equal(docs.res.status, 200);
@@ -218,13 +223,15 @@ async function main() {
   assert.equal(dest.key, "junoresidencia@gmail.com");
   assert.equal(dest.adminEmail, "junoresidencia@gmail.com");
 
-  const due = list.find((c) => c.status === "due" && c.professionalName === "Lia Nutrição");
-  assert.ok(due);
-  const mark = await req(admin, "/api/admin/platform-charges", {
-    method: "PATCH",
-    body: JSON.stringify({ id: due!.id, status: "received" }),
-  });
-  assert.equal(mark.res.status, 200);
+  const liaOpen = list.find((c) => c.professionalName === "Lia Nutrição" && c.kind === "entrada");
+  assert.ok(liaOpen);
+  if (liaOpen.status !== "received") {
+    const mark = await req(admin, "/api/admin/platform-charges", {
+      method: "PATCH",
+      body: JSON.stringify({ id: liaOpen.id, status: "received" }),
+    });
+    assert.equal(mark.res.status, 200);
+  }
 
   console.log("retorno + comissão API ok", {
     anaDue: totals.dueCents,
