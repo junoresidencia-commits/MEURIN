@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { ProfilePhotoUploader } from "@/components/ProfilePhotoUploader";
+import { ProfessionalProfileCard } from "@/components/ProfessionalProfileCard";
 
 type Perms = Record<string, boolean>;
 type DoctorLink = { doctorId: string; doctorName: string; specialty: string; permissions: Perms };
@@ -30,7 +30,6 @@ export default function AtendentePainelPage() {
   const router = useRouter();
   const [name, setName] = useState("");
   const [photoUrl, setPhotoUrl] = useState<string | null>(null);
-  const [showPhoto, setShowPhoto] = useState(false);
   const [doctors, setDoctors] = useState<DoctorLink[]>([]);
   const [clinics, setClinics] = useState<{ clinicId: string; clinicName: string }[]>([]);
   const [doctorId, setDoctorId] = useState("");
@@ -79,14 +78,14 @@ export default function AtendentePainelPage() {
     <div className="mx-auto max-w-3xl px-5 pb-16 pt-8">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="flex items-center gap-3">
-          <button type="button" onClick={() => setShowPhoto((v) => !v)} className="shrink-0 rounded-full" title="Editar foto">
+          <span className="shrink-0 rounded-full" title="Sua foto">
             {photoUrl ? (
               // eslint-disable-next-line @next/next/no-img-element
               <img src={photoUrl} alt="Sua foto" className="h-12 w-12 rounded-full border border-[var(--border)] object-cover" />
             ) : (
               <span className="grid h-12 w-12 place-items-center rounded-full bg-[var(--gold-soft)] text-base font-bold text-[var(--gold)]">{(name || "At").slice(0, 2).toUpperCase()}</span>
             )}
-          </button>
+          </span>
           <div>
             <p className="text-sm font-semibold text-[var(--gold)]">Painel da atendente</p>
             <h1 className="font-display text-2xl font-extrabold text-[var(--text)]">Olá, {name}</h1>
@@ -95,11 +94,12 @@ export default function AtendentePainelPage() {
         <button type="button" className="btn-ghost text-sm" onClick={logout}>Sair</button>
       </div>
 
-      {showPhoto && (
-        <div className="mt-4">
-          <ProfilePhotoUploader endpoint="/api/atendente/photo" label="Minha foto" hint="Aparece no seu painel." fallback={name || "At"} onChange={setPhotoUrl} />
-        </div>
-      )}
+      <ProfessionalProfileCard
+        photoEndpoint="/api/atendente/photo"
+        name={name || "Atendente"}
+        missing={photoUrl ? [] : ["foto"]}
+        onPhotoChange={setPhotoUrl}
+      />
 
       {doctors.length > 1 && (
         <label className="mt-4 block">

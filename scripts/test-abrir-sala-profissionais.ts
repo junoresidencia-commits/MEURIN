@@ -64,6 +64,24 @@ async function openRoom(jar: ReturnType<typeof cookieJar>, patientKey: string, i
   return String(opened.json.meetingRoomId);
 }
 
+async function assertRoomEntry(hostJar: ReturnType<typeof cookieJar>, roomId: string, label: string) {
+  const host = await req(hostJar, `/api/rooms/${roomId}`);
+  assert.equal(host.res.status, 200, `${label} host ${host.res.status} ${JSON.stringify(host.json)}`);
+  assert.equal(host.json.you?.role, "doctor", `${label} profissional deveria entrar como anfitrião`);
+  assert.equal(host.json.booking?.meetingRoomId, roomId);
+
+  const guest = cookieJar();
+  const link = await req(guest, `/api/rooms/${roomId}?como=paciente`);
+  assert.equal(link.res.status, 200, `${label} link ${link.res.status} ${JSON.stringify(link.json)}`);
+  assert.equal(link.json.you?.role, "patient", `${label} link do paciente deveria entrar como paciente`);
+  assert.equal(link.json.booking?.meetingRoomId, roomId);
+
+  const page = await fetch(`${BASE}/consulta/${roomId}?como=paciente`);
+  assert.ok(page.ok, `${label} página /consulta/${roomId} ${page.status}`);
+  const html = await page.text();
+  assert.match(html, /consulta/i, `${label} página da consulta vazia`);
+}
+
 async function main() {
   await waitReady();
   const stamp = Date.now().toString(36);
@@ -93,8 +111,8 @@ async function main() {
 
   const docConsult = await openRoom(doctor, email, false, "médico consulta e-mail");
   const docReturn = await openRoom(doctor, pid, true, "médico retorno pid");
-  assert.ok(docConsult);
-  assert.ok(docReturn);
+  await assertRoomEntry(doctor, docConsult, "médico consulta");
+  await assertRoomEntry(doctor, docReturn, "médico retorno");
 
   process.env.NEXT_PUBLIC_SUPABASE_URL = "";
   process.env.SUPABASE_SERVICE_ROLE_KEY = "";
@@ -174,8 +192,10 @@ async function main() {
     body: JSON.stringify({ role: "psychology", identifier: `ana.sala.${stamp}@meurim.com`, password: "123456" }),
   });
   assert.equal(psychoLogin.res.status, 200, `psico login ${JSON.stringify(psychoLogin.json)}`);
-  await openRoom(psychoJar, email, false, "psico consulta e-mail (referral era pid)");
-  await openRoom(psychoJar, pid, true, "psico retorno pid");
+  const psychoConsult = await openRoom(psychoJar, email, false, "psico consulta e-mail (referral era pid)");
+  const psychoReturn = await openRoom(psychoJar, pid, true, "psico retorno pid");
+  await assertRoomEntry(psychoJar, psychoConsult, "psico consulta");
+  await assertRoomEntry(psychoJar, psychoReturn, "psico retorno");
 
   const nurseJar = cookieJar();
   const nurseLogin = await req(nurseJar, "/api/allied/session", {
@@ -183,8 +203,10 @@ async function main() {
     body: JSON.stringify({ role: "nursing", identifier: `rita.sala.${stamp}@meurim.com`, password: "123456" }),
   });
   assert.equal(nurseLogin.res.status, 200, `enf login ${JSON.stringify(nurseLogin.json)}`);
-  await openRoom(nurseJar, email, false, "enfermagem consulta e-mail");
-  await openRoom(nurseJar, pid, true, "enfermagem retorno pid");
+  const nurseConsult = await openRoom(nurseJar, email, false, "enfermagem consulta e-mail");
+  const nurseReturn = await openRoom(nurseJar, pid, true, "enfermagem retorno pid");
+  await assertRoomEntry(nurseJar, nurseConsult, "enfermagem consulta");
+  await assertRoomEntry(nurseJar, nurseReturn, "enfermagem retorno");
 
   const nutJar = cookieJar();
   const nutLogin = await req(nutJar, "/api/nutricionista/session", {
@@ -192,10 +214,19 @@ async function main() {
     body: JSON.stringify({ identifier: `lia.sala.${stamp}@meurim.com`, password: "123456" }),
   });
   assert.equal(nutLogin.res.status, 200, `nutri login ${JSON.stringify(nutLogin.json)}`);
-  await openRoom(nutJar, email, false, "nutri consulta e-mail");
-  await openRoom(nutJar, pid, true, "nutri retorno pid");
+  const nutConsult = await openRoom(nutJar, email, false, "nutri consulta e-mail");
+  const nutReturn = await openRoom(nutJar, pid, true, "nutri retorno pid");
+  await assertRoomEntry(nutJar, nutConsult, "nutri consulta");
+  await assertRoomEntry(nutJar, nutReturn, "nutri retorno");
 
-  console.log("abrir sala todos os profissionais ok", { email, pid, docConsult, docReturn });
+  console.log("abrir sala + entrada + link ok", {
+    email,
+    pid,
+    docConsult,
+    psychoConsult,
+    nurseConsult,
+    nutConsult,
+  });
 }
 
 main().catch((err) => {
