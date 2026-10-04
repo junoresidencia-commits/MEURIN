@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { memo, useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { ClinicalSummaryBar } from "@/components/ClinicalSummaryBar";
 import { encodePatientParam, toFriendlyMessage } from "@/lib/user-errors";
@@ -54,7 +54,7 @@ const QUICK_LABS = [
   "tfge",
 ];
 
-export function ConsultChartPanel({ patientEmail }: { patientEmail: string }) {
+export const ConsultChartPanel = memo(function ConsultChartPanel({ patientEmail }: { patientEmail: string }) {
   const key = encodePatientParam(patientEmail);
   const [summary, setSummary] = useState<Summary | null>(null);
   const [profile, setProfile] = useState<Record<string, unknown>>({});
@@ -358,4 +358,4 @@ export function ConsultChartPanel({ patientEmail }: { patientEmail: string }) {
       </div>
     </aside>
   );
-}
+});

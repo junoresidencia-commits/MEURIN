@@ -51,10 +51,11 @@ async function resolveCareRoomRole(room: CareRoom): Promise<RoomRole> {
 }
 
 export async function GET(
-  _req: Request,
+  req: Request,
   context: { params: Promise<{ roomId: string }> }
 ) {
   const { roomId } = await context.params;
+  const forcePatient = new URL(req.url).searchParams.get("como") === "paciente";
   const booking = await getBookingByRoomId(roomId);
   if (booking) {
     if (!["confirmed", "completed"].includes(booking.status)) {
@@ -64,7 +65,8 @@ export async function GET(
           : "Consulta liberada somente após o pagamento e a confirmação do médico.";
       return NextResponse.json({ error: msg }, { status: 403 });
     }
-    const [doctor, you] = await Promise.all([getDoctorById(booking.doctorId), resolveDoctorBookingRole(booking)]);
+    const [doctor, resolved] = await Promise.all([getDoctorById(booking.doctorId), resolveDoctorBookingRole(booking)]);
+    const you = forcePatient ? "patient" : resolved;
     return NextResponse.json({
       you: { role: you },
       kind: "doctor" as RoomKind,
@@ -92,7 +94,7 @@ export async function GET(
   if (!care || care.status !== "open") {
     return NextResponse.json({ error: "Sala não encontrada" }, { status: 404 });
   }
-  const you = await resolveCareRoomRole(care);
+  const you = forcePatient ? "patient" : await resolveCareRoomRole(care);
   const meta = CARE_META[care.kind];
   const unpaid = careRoomNeedsPayment(care);
   const awaitingHost = careRoomAwaitingHost(care);

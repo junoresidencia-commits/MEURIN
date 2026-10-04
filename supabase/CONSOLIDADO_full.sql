@@ -62,7 +62,7 @@ create table if not exists public.signaling_messages (
   id uuid primary key default gen_random_uuid(),
   room_id uuid not null,
   from_role text not null check (from_role in ('doctor', 'patient')),
-  type text not null check (type in ('offer', 'answer', 'ice')),
+  type text not null check (type in ('offer', 'answer', 'ice', 'join', 'leave', 'here')),
   payload text not null,
   created_at timestamptz not null default now()
 );
@@ -82,6 +82,34 @@ comment on table public.doctors is 'Meu Rim doctors. Server-side access only for
 comment on table public.bookings is 'Meu Rim bookings. Server-side access only for now.';
 comment on table public.payments is 'Meu Rim payment records. Server-side access only for now.';
 comment on table public.signaling_messages is 'Ephemeral signaling messages for WebRTC setup.';
+
+create table if not exists public.room_presence (
+  room_id uuid not null,
+  role text not null check (role in ('doctor', 'patient')),
+  page_open boolean not null default true,
+  in_call boolean not null default false,
+  last_seen timestamptz not null default now(),
+  primary key (room_id, role)
+);
+create index if not exists room_presence_seen_idx on public.room_presence (last_seen desc);
+alter table public.room_presence enable row level security;
+comment on table public.room_presence is 'Quem abriu / entrou na sala de teleconsulta (médico e paciente).';
+
+create table if not exists public.consult_call_events (
+  id uuid primary key default gen_random_uuid(),
+  room_id uuid not null,
+  role text not null check (role in ('doctor', 'patient')),
+  kind text not null,
+  ice_state text,
+  browser text,
+  turn boolean,
+  phase text,
+  created_at timestamptz not null default now()
+);
+create index if not exists consult_call_events_room_idx
+  on public.consult_call_events (room_id, created_at desc);
+alter table public.consult_call_events enable row level security;
+comment on table public.consult_call_events is 'Falhas e estados da videochamada. Sem conteúdo clínico.';
 
 -- ===== 20260805190000_patient_home_records.sql =====
 -- Fase 2 — Área do paciente: registro domiciliar + diário alimentar.

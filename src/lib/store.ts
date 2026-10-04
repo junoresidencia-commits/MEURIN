@@ -166,6 +166,17 @@ async function seedDoctors(): Promise<Doctor[]> {
   }));
 }
 
+let fileDbLock: Promise<void> = Promise.resolve();
+
+function withFileDbLock<T>(fn: () => Promise<T>): Promise<T> {
+  let release!: () => void;
+  const prev = fileDbLock;
+  fileDbLock = new Promise<void>((ok) => {
+    release = ok;
+  });
+  return prev.then(fn).finally(release);
+}
+
 export async function readDb(): Promise<Database> {
   const supabase = getSupabaseAdmin();
   if (supabase) {
@@ -184,7 +195,17 @@ export async function readDb(): Promise<Database> {
       return next;
     }
     return db;
-  } catch {
+  } catch (err) {
+    let exists = false;
+    try {
+      exists = (await fs.stat(DB_PATH)).size > 0;
+    } catch {
+      exists = false;
+    }
+    if (exists) {
+      console.error("[store] db.json ilegível — não apago médicos/consultas", err);
+      throw err;
+    }
     const doctors = process.env.SEED_DEMO === "1" ? await seedDoctors() : [];
     const db: Database = {
       doctors,
@@ -205,16 +226,26 @@ export async function writeDb(db: Database): Promise<void> {
   }
 
   await fs.mkdir(DATA_DIR, { recursive: true });
-  await fs.writeFile(DB_PATH, JSON.stringify(db, null, 2), "utf8");
+  const tmp = `${DB_PATH}.${process.pid}.tmp`;
+  await fs.writeFile(tmp, JSON.stringify(db, null, 2), "utf8");
+  await fs.rename(tmp, DB_PATH);
 }
 
 export async function updateDb(
   updater: (db: Database) => Database | Promise<Database>
 ): Promise<Database> {
-  const db = await readDb();
-  const next = await updater(db);
-  await writeDb(next);
-  return next;
+  if (getSupabaseAdmin()) {
+    const db = await readDb();
+    const next = await updater(db);
+    await writeDb(next);
+    return next;
+  }
+  return withFileDbLock(async () => {
+    const db = await readDb();
+    const next = await updater(db);
+    await writeDb(next);
+    return next;
+  });
 }
 
 /** Remove um médico de verdade (writeDb usa upsert, então a exclusão precisa ser explícita). */
@@ -744,6 +775,14 @@ export async function appendSignalingMessage(message: SignalingMessage): Promise
     if (!UUID_RE.test(message.roomId)) {
       throw new Error("Sala inválida.");
     }
+    if (message.type === "here" || message.type === "join") {
+      await sb
+        .from("signaling_messages")
+        .delete()
+        .eq("room_id", message.roomId)
+        .eq("from_role", message.from)
+        .eq("type", message.type);
+    }
     const { error } = await sb.from("signaling_messages").insert({
       id: message.id,
       room_id: message.roomId,
@@ -767,13 +806,25 @@ export async function appendSignalingMessage(message: SignalingMessage): Promise
     }
     return;
   }
-  await updateDb((db) => ({
-    ...db,
-    signaling: [
-      ...db.signaling.filter((m) => m.roomId !== message.roomId),
-      ...[...db.signaling.filter((m) => m.roomId === message.roomId), message].slice(-50),
-    ],
-  }));
+  await updateDb((db) => {
+    const others = db.signaling.filter((m) => {
+      if (m.roomId !== message.roomId) return true;
+      if (
+        (message.type === "here" || message.type === "join") &&
+        m.from === message.from &&
+        m.type === message.type
+      ) {
+        return false;
+      }
+      return true;
+    });
+    const sameRoom = others.filter((m) => m.roomId === message.roomId);
+    const otherRooms = others.filter((m) => m.roomId !== message.roomId);
+    return {
+      ...db,
+      signaling: [...otherRooms, ...[...sameRoom, message].slice(-50)],
+    };
+  });
 }
 
 function mapPaymentRow(row: Record<string, unknown>): PaymentRecord {
@@ -799,7 +850,7 @@ function mapSignalRow(row: Record<string, unknown>): SignalingMessage {
     id: String(row.id),
     roomId: String(row.room_id),
     from: String(row.from_role) as "doctor" | "patient",
-    type: String(row.type) as "offer" | "answer" | "ice",
+    type: String(row.type) as SignalingMessage["type"],
     payload: String(row.payload),
     createdAt: new Date(String(row.created_at)).toISOString(),
   };
