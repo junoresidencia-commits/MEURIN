@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { PatientNav } from "@/components/PatientNav";
 import { honorific, type ReferralStatus } from "@/lib/network-types";
@@ -22,15 +22,15 @@ export default function PacienteEncaminhamentosPage() {
   const [list, setList] = useState<Referral[]>([]);
   const [msg, setMsg] = useState("");
 
-  function load() {
+  const load = useCallback(() => {
     fetch("/api/paciente/encaminhamentos").then(async (r) => {
       if (r.status === 401) { router.replace("/paciente/entrar"); return; }
       const d = await r.json();
       setList(d.referrals || []);
     });
-  }
+  }, [router]);
 
-  useEffect(() => { load(); }, [router]);
+  useEffect(() => { load(); }, [load]);
 
   async function answer(id: string, authorize: boolean) {
     setMsg("");

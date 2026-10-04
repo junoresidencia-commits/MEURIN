@@ -54,7 +54,7 @@ function isValidCnpjDigits(digits: string): boolean {
 
 /** Telefone PIX: +55 + DDD + número. Aceita (77) 99999-9999, 77999999999 e +55 77 99999-9999. */
 export function normalizePixPhone(raw: string): string | null {
-  let digits = onlyDigits(raw);
+  const digits = onlyDigits(raw);
   if (!digits) return null;
   if (digits.startsWith("55") && (digits.length === 12 || digits.length === 13)) {
     return `+${digits}`;
