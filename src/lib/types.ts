@@ -315,7 +315,7 @@ export interface SignalingMessage {
   id: string;
   roomId: string;
   from: "doctor" | "patient";
-  type: "offer" | "answer" | "ice";
+  type: "offer" | "answer" | "ice" | "join" | "leave" | "here";
   payload: string;
   createdAt: string;
 }

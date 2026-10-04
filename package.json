@@ -24,7 +24,8 @@
     "check:whatsapp-payment": "env -u NEXT_PUBLIC_SUPABASE_URL -u SUPABASE_SERVICE_ROLE_KEY NODE_OPTIONS='--require ./scripts/shim-server-only.cjs' npx tsx scripts/test-whatsapp-payment.ts",
     "check:clinic-isolation": "env -u NEXT_PUBLIC_SUPABASE_URL -u SUPABASE_SERVICE_ROLE_KEY NODE_OPTIONS='--require ./scripts/shim-server-only.cjs' npx tsx scripts/test-clinic-isolation.ts",
     "check:readiness": "npx tsx scripts/test-readiness.ts",
-    "check:courtesy": "npx tsx scripts/test-courtesy-credits.ts"
+    "check:courtesy": "npx tsx scripts/test-courtesy-credits.ts",
+    "check:consult-webrtc": "env -u NEXT_PUBLIC_SUPABASE_URL -u SUPABASE_SERVICE_ROLE_KEY NODE_OPTIONS='--require ./scripts/shim-server-only.cjs' npx tsx scripts/test-consult-webrtc.ts"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.110.3",

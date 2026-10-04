@@ -744,6 +744,14 @@ export async function appendSignalingMessage(message: SignalingMessage): Promise
     if (!UUID_RE.test(message.roomId)) {
       throw new Error("Sala inválida.");
     }
+    if (message.type === "here" || message.type === "join") {
+      await sb
+        .from("signaling_messages")
+        .delete()
+        .eq("room_id", message.roomId)
+        .eq("from_role", message.from)
+        .eq("type", message.type);
+    }
     const { error } = await sb.from("signaling_messages").insert({
       id: message.id,
       room_id: message.roomId,
@@ -767,13 +775,25 @@ export async function appendSignalingMessage(message: SignalingMessage): Promise
     }
     return;
   }
-  await updateDb((db) => ({
-    ...db,
-    signaling: [
-      ...db.signaling.filter((m) => m.roomId !== message.roomId),
-      ...[...db.signaling.filter((m) => m.roomId === message.roomId), message].slice(-50),
-    ],
-  }));
+  await updateDb((db) => {
+    const others = db.signaling.filter((m) => {
+      if (m.roomId !== message.roomId) return true;
+      if (
+        (message.type === "here" || message.type === "join") &&
+        m.from === message.from &&
+        m.type === message.type
+      ) {
+        return false;
+      }
+      return true;
+    });
+    const sameRoom = others.filter((m) => m.roomId === message.roomId);
+    const otherRooms = others.filter((m) => m.roomId !== message.roomId);
+    return {
+      ...db,
+      signaling: [...otherRooms, ...[...sameRoom, message].slice(-50)],
+    };
+  });
 }
 
 function mapPaymentRow(row: Record<string, unknown>): PaymentRecord {
@@ -799,7 +819,7 @@ function mapSignalRow(row: Record<string, unknown>): SignalingMessage {
     id: String(row.id),
     roomId: String(row.room_id),
     from: String(row.from_role) as "doctor" | "patient",
-    type: String(row.type) as "offer" | "answer" | "ice",
+    type: String(row.type) as SignalingMessage["type"],
     payload: String(row.payload),
     createdAt: new Date(String(row.created_at)).toISOString(),
   };
