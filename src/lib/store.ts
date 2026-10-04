@@ -620,7 +620,8 @@ export async function patchDoctorProfile(id: string, patch: DoctorProfilePatch):
     return;
   }
   await updateDb((db) => {
-    db.doctors = db.doctors.map((d) => (d.id === id ? { ...d, ...patch } : d));
+    const clean = Object.fromEntries(Object.entries(patch).filter(([, v]) => v !== undefined)) as DoctorProfilePatch;
+    db.doctors = db.doctors.map((d) => (d.id === id ? { ...d, ...clean } : d));
     return db;
   });
 }

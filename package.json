@@ -21,6 +21,7 @@
     "check:pix-brcode": "npx tsx scripts/test-pix-brcode.ts",
     "check:pix-key": "npx tsx scripts/test-pix-key.ts",
     "check:network-referrals": "npx tsx scripts/test-network-referrals.ts",
+    "check:network-store": "env -u NEXT_PUBLIC_SUPABASE_URL -u SUPABASE_SERVICE_ROLE_KEY NODE_OPTIONS='--require ./scripts/shim-server-only.cjs' npx tsx scripts/test-network-store.ts",
     "check:platform-fees": "npx tsx scripts/test-platform-fees.ts",
     "check:retorno-comissao": "npx tsx scripts/test-retorno-comissao-api.ts",
     "check:whatsapp-payment": "env -u NEXT_PUBLIC_SUPABASE_URL -u SUPABASE_SERVICE_ROLE_KEY NODE_OPTIONS='--require ./scripts/shim-server-only.cjs' npx tsx scripts/test-whatsapp-payment.ts",
