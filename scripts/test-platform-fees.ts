@@ -6,7 +6,7 @@ import {
   normalizeFeeMode,
 } from "../src/lib/platform-fees";
 import { buildPixBrCode } from "../src/lib/pix-brcode";
-import { FOUNDER_SUPER_ADMIN_EMAIL } from "../src/lib/platform-types";
+import { PLATFORM_PIX_DEFAULT } from "../src/lib/company";
 import { doctorFeeRule } from "../src/lib/types";
 
 assert.equal(normalizeFeeMode("gratis"), "gratis");
@@ -37,14 +37,15 @@ const returnFreeVisit = feeRuleFrom({ appFeeMode: "por_atendimento", commissionP
 assert.equal(computePlatformFeeCents(returnFreeVisit, "atendimento", 0), 200, "retorno grátis ainda pode gerar valor fixo");
 
 const adminPix = buildPixBrCode({
-  key: FOUNDER_SUPER_ADMIN_EMAIL,
-  holderName: "C.J. ATENDIMENTOS MEDICOS LTDA",
+  key: PLATFORM_PIX_DEFAULT.key,
+  holderName: PLATFORM_PIX_DEFAULT.holderName,
   city: "BRASIL",
   amountCents: 2500,
   txid: "pltana123",
 });
 assert.ok(adminPix.startsWith("000201"));
-assert.match(adminPix, /junoresidencia@gmail\.com/);
+assert.match(adminPix, /01695189574/);
+assert.match(adminPix, /JUNO DAMACENA BARBOSA/);
 assert.match(adminPix, /540525.00/);
 
 const doctorGratis = doctorFeeRule({ commissionPercent: 100, appFeeMode: "gratis", entryFeeCents: 0 });

@@ -40,6 +40,13 @@ export const OPTIONAL_COMPANY_FIELDS: { key: string; label: string }[] = [
   { key: "platformPixCity", label: "Cidade do Pix da plataforma" },
 ];
 
+/** Pix padrão do recorte da plataforma (informado pelo admin). */
+export const PLATFORM_PIX_DEFAULT = {
+  keyType: "cpf",
+  key: "01695189574",
+  holderName: "Juno Damacena Barbosa",
+} as const;
+
 export type CompanySettings = Record<string, string>;
 
 export function missingRequiredCompanyFields(settings: CompanySettings): string[] {

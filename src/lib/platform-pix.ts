@@ -2,6 +2,7 @@ import "server-only";
 import { getCompanySettings } from "./settings-store";
 import { buildPixBrCode } from "./pix-brcode";
 import { FOUNDER_SUPER_ADMIN_EMAIL } from "./platform-types";
+import { PLATFORM_PIX_DEFAULT } from "./company";
 import { alliedFeeRule } from "./allied-store";
 import { nutritionFeeRule } from "./nutritionists-store";
 import { recordPlatformCharge } from "./platform-charges-store";
@@ -12,12 +13,12 @@ import { doctorFeeRule } from "./types";
 
 export async function getPlatformPix() {
   const settings = await getCompanySettings();
-  const key = String(settings.platformPixKey || FOUNDER_SUPER_ADMIN_EMAIL).trim();
-  const holderName = String(settings.platformPixHolderName || "C.J. ATENDIMENTOS MEDICOS LTDA").trim();
+  const key = String(settings.platformPixKey || PLATFORM_PIX_DEFAULT.key).trim();
+  const holderName = String(settings.platformPixHolderName || PLATFORM_PIX_DEFAULT.holderName).trim();
   const city = String(settings.platformPixCity || settings.city || "BRASIL").trim();
   return {
     key,
-    keyType: String(settings.platformPixKeyType || "email"),
+    keyType: String(settings.platformPixKeyType || PLATFORM_PIX_DEFAULT.keyType),
     holderName,
     city,
     adminEmail: FOUNDER_SUPER_ADMIN_EMAIL,

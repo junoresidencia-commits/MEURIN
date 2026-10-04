@@ -97,7 +97,7 @@ export default function AdminRepassePage() {
           <span className="text-[var(--text-muted)]">Admin:</span> {pix?.adminEmail || "—"}
         </p>
         <p className="mt-2 text-xs text-[var(--text-soft)]">
-          Sem chave em Dados da empresa, usamos o e-mail do admin. Ajuste em{" "}
+          Sem chave em Dados da empresa, o recorte vai para o Pix padrão (CPF de Juno Damacena Barbosa). Ajuste em{" "}
           <Link href="/admin/empresa" className="font-semibold text-[var(--gold)]">
             Dados da empresa
           </Link>

@@ -160,7 +160,8 @@ async function main() {
   assert.ok(totals.dueCents >= 500, `retorno grátis ainda gera R$ 5 fixos, due=${totals.dueCents}`);
   const pix = fee.json.pix as { brCode?: string; amountCents?: number } | null;
   assert.ok(pix?.brCode, "QR/Pix da plataforma precisa existir quando há valor em aberto");
-  assert.match(pix!.brCode!, /junoresidencia@gmail\.com/);
+  assert.match(pix!.brCode!, /01695189574/);
+  assert.match(pix!.brCode!, /JUNO DAMACENA BARBOSA/);
 
   const liaJar = cookieJar();
   const liaLogin = await req(liaJar, "/api/nutricionista/session", {
@@ -181,7 +182,8 @@ async function main() {
   if (liaTotals.dueCents > 0) {
     const liaPix = liaFeePanel.json.pix as { brCode?: string } | null;
     assert.ok(liaPix?.brCode);
-    assert.match(liaPix!.brCode!, /junoresidencia@gmail\.com/);
+    assert.match(liaPix!.brCode!, /01695189574/);
+    assert.match(liaPix!.brCode!, /JUNO DAMACENA BARBOSA/);
   }
 
   const docs = await req(admin, "/api/admin/doctors");
@@ -220,7 +222,8 @@ async function main() {
   assert.ok(list.some((c) => c.professionalName === "Ana Psicologia" && c.kind === "atendimento"));
   assert.ok(list.some((c) => c.professionalName === "Lia Nutrição" && c.kind === "entrada"));
   const dest = charges.json.pix as { key?: string; adminEmail?: string };
-  assert.equal(dest.key, "junoresidencia@gmail.com");
+  assert.equal(dest.key, "01695189574");
+  assert.match(String(dest.holderName || ""), /Juno Damacena Barbosa/i);
   assert.equal(dest.adminEmail, "junoresidencia@gmail.com");
 
   const liaOpen = list.find((c) => c.professionalName === "Lia Nutrição" && c.kind === "entrada");
