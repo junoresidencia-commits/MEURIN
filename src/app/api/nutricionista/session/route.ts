@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { NUTRITIONIST_COOKIE, NUTRITIONIST_MAX_AGE, createNutritionistToken } from "@/lib/nutrition-session";
 import { findNutritionistByCpfOrEmail, touchNutritionistAccess, verifyNutritionistPassword } from "@/lib/nutritionists-store";
+import { recordLoginFee } from "@/lib/platform-pix";
 
 export async function POST(req: Request) {
   try {
@@ -24,6 +25,7 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: msg }, { status: 403 });
     }
     await touchNutritionistAccess(nut.id);
+    await recordLoginFee({ kind: "nutrition", pro: nut }).catch(() => null);
 
     const res = NextResponse.json({ ok: true, name: nut.name });
     res.cookies.set(NUTRITIONIST_COOKIE, createNutritionistToken(nut.id), {

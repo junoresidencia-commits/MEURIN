@@ -16,6 +16,7 @@ import {
   type AlliedStatus,
 } from "./allied-types";
 import type { PixProfile } from "./types";
+import { feeRuleFrom, normalizeFeeMode, type AppFeeMode } from "./platform-fees";
 
 export * from "./allied-types";
 
@@ -68,6 +69,22 @@ function mapPro(r: Record<string, unknown>): AlliedProfessional {
           ? Number(r.consultationPriceCents)
           : null,
     pixProfile: ((r.pix_profile as PixProfile) ?? (r.pixProfile as PixProfile) ?? null) || null,
+    returnPriceCents:
+      r.return_price_cents != null
+        ? Number(r.return_price_cents)
+        : r.returnPriceCents != null
+          ? Number(r.returnPriceCents)
+          : null,
+    commissionPercent:
+      r.commission_percent != null
+        ? Number(r.commission_percent)
+        : r.commissionPercent != null
+          ? Number(r.commissionPercent)
+          : 0,
+    entryFeeCents:
+      r.entry_fee_cents != null ? Number(r.entry_fee_cents) : r.entryFeeCents != null ? Number(r.entryFeeCents) : 0,
+    appFeeMode: normalizeFeeMode(r.app_fee_mode ?? r.appFeeMode),
+    payoutStatus: ((r.payout_status as AlliedProfessional["payoutStatus"]) ?? (r.payoutStatus as AlliedProfessional["payoutStatus"]) ?? "active"),
     createdAt: String(r.created_at ?? r.createdAt ?? new Date().toISOString()),
     lastAccessAt: (r.last_access_at as string) ?? (r.lastAccessAt as string) ?? null,
   };
@@ -225,19 +242,21 @@ export async function touchAlliedAccess(id: string): Promise<void> {
 
 export async function updateAlliedSettings(
   id: string,
-  patch: { consultationPriceCents?: number | null; pixProfile?: PixProfile | null }
+  patch: { consultationPriceCents?: number | null; returnPriceCents?: number | null; pixProfile?: PixProfile | null }
 ): Promise<AlliedProfessional | null> {
   const current = await getAlliedProfessional(id);
   if (!current) return null;
   const next: AlliedProfessional = {
     ...current,
     consultationPriceCents: patch.consultationPriceCents !== undefined ? patch.consultationPriceCents : current.consultationPriceCents,
+    returnPriceCents: patch.returnPriceCents !== undefined ? patch.returnPriceCents : current.returnPriceCents,
     pixProfile: patch.pixProfile !== undefined ? patch.pixProfile : current.pixProfile,
   };
   if (active()) {
     const s = getSupabaseAdmin()!;
     const row: Record<string, unknown> = {};
     if (patch.consultationPriceCents !== undefined) row.consultation_price_cents = patch.consultationPriceCents;
+    if (patch.returnPriceCents !== undefined) row.return_price_cents = patch.returnPriceCents;
     if (patch.pixProfile !== undefined) row.pix_profile = patch.pixProfile;
     if (Object.keys(row).length > 0) {
       const { error } = await s.from("allied_professionals").update(row).eq("id", id);
@@ -258,6 +277,49 @@ export async function updateAlliedSettings(
   db.professionals.push(next);
   await writeLocal(db);
   return next;
+}
+
+export async function updateAlliedFinance(
+  id: string,
+  patch: { commissionPercent?: number | null; entryFeeCents?: number | null; appFeeMode?: AppFeeMode; payoutStatus?: "active" | "pending" | "blocked" }
+): Promise<AlliedProfessional | null> {
+  const current = await getAlliedProfessional(id);
+  if (!current) return null;
+  const next: AlliedProfessional = {
+    ...current,
+    commissionPercent: patch.commissionPercent !== undefined ? patch.commissionPercent : current.commissionPercent,
+    entryFeeCents: patch.entryFeeCents !== undefined ? patch.entryFeeCents : current.entryFeeCents,
+    appFeeMode: patch.appFeeMode !== undefined ? patch.appFeeMode : current.appFeeMode,
+    payoutStatus: patch.payoutStatus !== undefined ? patch.payoutStatus : current.payoutStatus,
+  };
+  if (active()) {
+    const s = getSupabaseAdmin()!;
+    const row: Record<string, unknown> = {};
+    if (patch.commissionPercent !== undefined) row.commission_percent = patch.commissionPercent;
+    if (patch.entryFeeCents !== undefined) row.entry_fee_cents = patch.entryFeeCents;
+    if (patch.appFeeMode !== undefined) row.app_fee_mode = patch.appFeeMode;
+    if (patch.payoutStatus !== undefined) row.payout_status = patch.payoutStatus;
+    if (Object.keys(row).length > 0) {
+      const { error } = await s.from("allied_professionals").update(row).eq("id", id);
+      if (!isMissing(error)) {
+        if (error) throw error;
+        return next;
+      }
+      tableMissing = true;
+    }
+  }
+  const db = await readLocal();
+  const idx = db.professionals.findIndex((p) => p.id === id);
+  if (idx >= 0) {
+    db.professionals[idx] = { ...db.professionals[idx], ...next };
+    await writeLocal(db);
+    return db.professionals[idx];
+  }
+  return next;
+}
+
+export function alliedFeeRule(pro: AlliedProfessional) {
+  return feeRuleFrom(pro);
 }
 
 export async function getAlliedLink(professionalId: string, doctorId: string): Promise<AlliedLink | null> {

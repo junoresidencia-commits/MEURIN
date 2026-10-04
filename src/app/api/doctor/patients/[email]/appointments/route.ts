@@ -6,6 +6,8 @@ import { resolvePatientAccess } from "@/lib/doctor-access";
 import type { Booking } from "@/lib/types";
 import { consumeCourtesyCredit } from "@/lib/courtesy-credits-store";
 import { courtesyLabel, isCourtesyKind } from "@/lib/courtesy";
+import { doctorFeeRule } from "@/lib/types";
+import { recordPlatformCharge } from "@/lib/platform-charges-store";
 
 const REASONS = new Set(["pressa", "acompanhamento", "segunda_opiniao", "outro"]);
 
@@ -64,6 +66,16 @@ export async function POST(
   };
 
   await updateDb((current) => ({ ...current, bookings: [...current.bookings, booking] }));
+  await recordPlatformCharge({
+    actorKind: "doctor",
+    professionalId: doctor.id,
+    professionalName: doctor.name,
+    kind: "atendimento",
+    sourceId: booking.id,
+    rule: doctorFeeRule(doctor),
+    priceCents: booking.priceCents,
+    note: courtesyKind === "retorno" ? "retorno" : courtesyKind === "gratis" ? "consulta grátis" : "consulta médica",
+  }).catch(() => null);
   if (courtesyKind) {
     const used =
       (await consumeCourtesyCredit(doctor.id, access.key, booking.id)) ||

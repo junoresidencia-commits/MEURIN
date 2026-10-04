@@ -3,6 +3,8 @@
 import { useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { formatBRL } from "@/lib/scheduling-client";
+import { AdminFeeFields } from "@/components/AdminFeeFields";
+import type { AppFeeMode } from "@/lib/platform-fees";
 
 type Doctor = {
   id: string;
@@ -20,6 +22,8 @@ type Doctor = {
   adminNote?: string | null;
   commissionPercent: number;
   platformPercent: number;
+  appFeeMode?: AppFeeMode;
+  entryFeeCents?: number;
   payoutStatus: "active" | "pending" | "blocked";
   mpConnected: boolean;
   createdAt: string;
@@ -81,6 +85,8 @@ export default function AdminPage() {
   const [loading, setLoading] = useState(true);
   const [showCreate, setShowCreate] = useState(false);
   const [funnel, setFunnel] = useState<FunnelSummary | null>(null);
+  const [feeDrafts, setFeeDrafts] = useState<Record<string, { mode: AppFeeMode; percent: string; fixed: string }>>({});
+  const [feeMsg, setFeeMsg] = useState("");
 
   const load = useCallback(async () => {
     const res = await fetch("/api/admin/doctors");
@@ -134,6 +140,27 @@ export default function AdminPage() {
       const data = await res.json().catch(() => ({}));
       window.alert(data.error || "Não foi possível alterar o percentual.");
     }
+    await load();
+  }
+
+  async function saveDoctorFee(id: string, draft: { mode: AppFeeMode; percent: string; fixed: string }) {
+    setFeeMsg("");
+    const res = await fetch("/api/admin/doctors", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        id,
+        appFeeMode: draft.mode,
+        platformPercent: Number(draft.percent || 0),
+        entryFee: Number(String(draft.fixed).replace(",", ".") || 0),
+      }),
+    });
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}));
+      window.alert(data.error || "Não foi possível salvar a cobrança.");
+      return;
+    }
+    setFeeMsg("Cobrança deste médico salva. O valor entra no Pix do admin.");
     await load();
   }
 
@@ -192,6 +219,7 @@ export default function AdminPage() {
           <a href="/admin/protocolos" className="btn-ghost">Protocolos CEAF</a>
           <a href="/admin/nutricionistas" className="btn-ghost">Nutricionistas</a>
           <a href="/admin/equipe" className="btn-ghost">Psico / Enfermagem</a>
+          <a href="/admin/repasse" className="btn-ghost">Repasse da plataforma</a>
           <a href="/admin/integracoes/whatsapp" className="btn-ghost">Integração WhatsApp</a>
           <button type="button" className="btn-ghost" onClick={logout}>Sair</button>
         </div>
@@ -301,7 +329,7 @@ export default function AdminPage() {
                 </div>
                 <div className="mt-3 flex flex-wrap gap-2">
                   <button type="button" className="btn-ghost" onClick={() => setCommission(d.id, d.commissionPercent)}>
-                    Alterar percentual
+                    Alterar percentual (legado)
                   </button>
                   {d.payoutStatus !== "active" && (
                     <button type="button" className="btn-ghost" onClick={() => setPayout(d.id, "active")}>
@@ -319,6 +347,25 @@ export default function AdminPage() {
                     </button>
                   )}
                 </div>
+                {(() => {
+                  const draft = feeDrafts[d.id] || {
+                    mode: d.appFeeMode || (d.platformPercent > 0 ? "por_atendimento" : "gratis"),
+                    percent: String(d.platformPercent ?? 0),
+                    fixed: d.entryFeeCents ? String(d.entryFeeCents / 100) : "",
+                  };
+                  return (
+                    <AdminFeeFields
+                      mode={draft.mode}
+                      percent={draft.percent}
+                      fixedReais={draft.fixed}
+                      onMode={(v) => setFeeDrafts((prev) => ({ ...prev, [d.id]: { ...draft, mode: v } }))}
+                      onPercent={(v) => setFeeDrafts((prev) => ({ ...prev, [d.id]: { ...draft, percent: v } }))}
+                      onFixed={(v) => setFeeDrafts((prev) => ({ ...prev, [d.id]: { ...draft, fixed: v } }))}
+                      onSave={() => void saveDoctorFee(d.id, draft)}
+                    />
+                  );
+                })()}
+                {feeMsg && <p className="mt-2 text-xs font-semibold text-[var(--green)]">{feeMsg}</p>}
               </div>
 
               <div className="mt-4 flex flex-wrap gap-2">

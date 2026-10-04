@@ -5,8 +5,9 @@ import { updateDb } from "./store";
 import { sendEmail } from "./email";
 import { sendNotification, patientKey, links, fmtDateTime, firstName } from "./notify";
 import { notifyDoctorOnPayment } from "./whatsapp-payment";
-import { computeSplit, resolveDoctorSharePercent } from "./types";
+import { computeSplit, doctorFeeRule, resolveDoctorSharePercent } from "./types";
 import type { Booking, Doctor } from "./types";
+import { recordPlatformCharge } from "./platform-charges-store";
 
 const MP_API = "https://api.mercadopago.com";
 
@@ -300,6 +301,19 @@ export async function confirmBookingPaid(
 
   const booking = result.bookings.find((b) => b.id === bookingId);
   if (!booking) return null;
+  const paidDoctor = result.doctors.find((d) => d.id === booking.doctorId);
+  if (paidDoctor) {
+    await recordPlatformCharge({
+      actorKind: "doctor",
+      professionalId: paidDoctor.id,
+      professionalName: paidDoctor.name,
+      kind: "atendimento",
+      sourceId: booking.id,
+      rule: doctorFeeRule(paidDoctor),
+      priceCents: booking.priceCents,
+      note: booking.courtesyKind === "retorno" ? "retorno" : "consulta médica",
+    }).catch(() => null);
+  }
 
   for (const email of emailsToSend) {
     await sendEmail(email);

@@ -1,3 +1,5 @@
+import { feeRuleFrom, normalizeFeeMode, type AppFeeMode } from "./platform-fees";
+
 export type PaymentMethod = "card" | "pix" | "boleto";
 
 export type BookingStatus =
@@ -129,6 +131,10 @@ export interface Doctor {
   // Percentual de repasse do médico (0–100). Definido SOMENTE pelo administrador.
   // Ex.: 80 => médico recebe 80%, plataforma 20%. Ausente => 100% (repasse total).
   commissionPercent?: number;
+  /** Como a plataforma cobra este médico: grátis, por atendimento ou por entrada. */
+  appFeeMode?: AppFeeMode;
+  /** Valor fixo (centavos) por atendimento ou por entrada, conforme appFeeMode. */
+  entryFeeCents?: number;
   // Liberação financeira do recebimento (definida pelo administrador).
   payoutStatus?: PayoutStatus;
   // Notificações no celular (push) + lembretes + calendário + fuso.
@@ -193,6 +199,26 @@ export function resolveDoctorSharePercent(doctor?: { commissionPercent?: number 
   const raw = doctor?.commissionPercent;
   if (typeof raw !== "number" || Number.isNaN(raw)) return DEFAULT_DOCTOR_SHARE_PERCENT;
   return Math.min(100, Math.max(0, Math.round(raw)));
+}
+
+/** Regra de cobrança da plataforma para o médico (o % aqui é o que o admin quer ficar). */
+export function doctorFeeRule(doctor?: {
+  commissionPercent?: number;
+  appFeeMode?: AppFeeMode;
+  entryFeeCents?: number | null;
+} | null) {
+  const share = resolveDoctorSharePercent(doctor);
+  const platformPct = 100 - share;
+  const mode = doctor?.appFeeMode
+    ? normalizeFeeMode(doctor.appFeeMode)
+    : platformPct > 0
+      ? "por_atendimento"
+      : "gratis";
+  return feeRuleFrom({
+    appFeeMode: mode,
+    commissionPercent: platformPct,
+    entryFeeCents: doctor?.entryFeeCents ?? 0,
+  });
 }
 
 /** Divide o valor bruto entre médico e plataforma conforme o percentual de repasse. */

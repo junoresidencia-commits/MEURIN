@@ -14,7 +14,7 @@ export async function POST(req: Request) {
   const body = await req.json().catch(() => ({}));
   const patientKey = String(body.patientKey || "").trim();
   if (!patientKey) return NextResponse.json({ error: "Paciente obrigatório." }, { status: 400 });
-  const result = await openCareRoomForPatient(patientKey);
+  const result = await openCareRoomForPatient(patientKey, { isReturn: body.isReturn === true });
   if ("error" in result) return NextResponse.json({ error: result.error }, { status: result.status });
   return NextResponse.json({ ok: true, ...carePublic(result.room) });
 }

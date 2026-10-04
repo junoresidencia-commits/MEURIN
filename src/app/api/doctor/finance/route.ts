@@ -1,7 +1,8 @@
 import { NextResponse } from "next/server";
 import { getDoctorSessionId } from "@/lib/auth";
 import { getDoctorById } from "@/lib/store";
-import { resolveDoctorSharePercent } from "@/lib/types";
+import { doctorFeeRule, resolveDoctorSharePercent } from "@/lib/types";
+import { feeSummary } from "@/lib/platform-fees";
 
 /**
  * Visão financeira do próprio médico. O percentual é SOMENTE leitura aqui —
@@ -13,10 +14,14 @@ export async function GET() {
   const doctor = await getDoctorById(doctorId);
   if (!doctor) return NextResponse.json({ error: "Médico não encontrado." }, { status: 404 });
   const commissionPercent = resolveDoctorSharePercent(doctor);
+  const rule = doctorFeeRule(doctor);
   return NextResponse.json({
     consultationPriceCents: doctor.consultationPriceCents,
     commissionPercent,
     platformPercent: 100 - commissionPercent,
+    appFeeMode: rule.appFeeMode,
+    entryFeeCents: rule.entryFeeCents,
+    feeSummary: feeSummary(rule),
     payoutStatus: doctor.payoutStatus ?? "active",
     mpConnected: Boolean(doctor.mpAccessToken?.trim()),
   });

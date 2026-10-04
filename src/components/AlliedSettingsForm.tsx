@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import type { AlliedRole } from "@/lib/allied-types";
 import { ROLE_META } from "@/lib/allied-types";
+import { PlatformFeePayPanel } from "@/components/PlatformFeePayPanel";
 
 const KEY_TYPES = [
   { v: "cpf", l: "CPF" },
@@ -19,6 +20,7 @@ export function AlliedSettingsForm({ role }: { role: AlliedRole }) {
   const meta = ROLE_META[role];
   const [loading, setLoading] = useState(true);
   const [price, setPrice] = useState("");
+  const [returnPrice, setReturnPrice] = useState("");
   const [pix, setPix] = useState({
     keyType: "cpf",
     key: "",
@@ -39,6 +41,7 @@ export function AlliedSettingsForm({ role }: { role: AlliedRole }) {
       }
       const d = await r.json();
       setPrice(d.consultationPriceCents != null ? String(d.consultationPriceCents / 100) : "");
+      setReturnPrice(d.returnPriceCents != null ? String(d.returnPriceCents / 100) : "");
       if (d.pixProfile) {
         setPix({
           keyType: d.pixProfile.keyType || "cpf",
@@ -60,12 +63,12 @@ export function AlliedSettingsForm({ role }: { role: AlliedRole }) {
       const res = await fetch("/api/allied/settings", {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ consultationPrice: price, pixProfile: pix }),
+        body: JSON.stringify({ consultationPrice: price, returnPrice, pixProfile: pix }),
       });
       const d = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(d.error || "Erro");
       setBrcode(d.brcode || null);
-      setMsg("Configurações salvas. O Pix da consulta vai para esta chave.");
+      setMsg("Configurações salvas. Consulta e retorno vão para esta chave Pix.");
     } catch (e) {
       setMsg(e instanceof Error ? e.message : "Erro");
     } finally {
@@ -82,14 +85,18 @@ export function AlliedSettingsForm({ role }: { role: AlliedRole }) {
       </Link>
       <h1 className="font-display mt-2 text-2xl font-extrabold text-[var(--text)]">Meu perfil e recebimentos</h1>
       <p className="mt-1 text-sm text-[var(--text-muted)]">
-        O paciente paga na <strong>sua</strong> chave Pix — não na do médico nem da plataforma. Sem chave cadastrada,
-        a consulta online só pode ser gratuita.
+        O paciente paga na <strong>sua</strong> chave Pix — consulta ou retorno. Sem chave cadastrada,
+        a consulta online só pode ser gratuita. 0 no retorno = retorno grátis.
       </p>
 
-      <section className="panel mt-5">
+      <section className="panel mt-5 grid gap-3 sm:grid-cols-2">
         <label className="block">
           <span className="mb-1 block text-xs font-semibold text-[var(--text-muted)]">Valor da consulta (R$)</span>
           <input className="input-field" inputMode="decimal" value={price} onChange={(e) => setPrice(e.target.value)} placeholder="0 = consulta gratuita" />
+        </label>
+        <label className="block">
+          <span className="mb-1 block text-xs font-semibold text-[var(--text-muted)]">Valor do retorno (R$)</span>
+          <input className="input-field" inputMode="decimal" value={returnPrice} onChange={(e) => setReturnPrice(e.target.value)} placeholder="0 = retorno grátis" />
         </label>
       </section>
 
@@ -141,6 +148,8 @@ export function AlliedSettingsForm({ role }: { role: AlliedRole }) {
           <p className="mt-1 break-all rounded-lg bg-[var(--bg)] p-2 text-xs text-[var(--text-soft)]">{brcode}</p>
         </div>
       )}
+
+      <PlatformFeePayPanel endpoint="/api/allied/platform-fee" />
     </div>
   );
 }

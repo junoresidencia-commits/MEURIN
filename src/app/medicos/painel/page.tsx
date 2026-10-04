@@ -11,6 +11,7 @@ import { NotificationBell } from "@/components/NotificationBell";
 import { EnableNotifications } from "@/components/EnableNotifications";
 import { GlobalPatientSearch } from "@/components/GlobalPatientSearch";
 import { PatientQuickSheet } from "@/components/PatientQuickSheet";
+import { PlatformFeePayPanel } from "@/components/PlatformFeePayPanel";
 function consultaStatus(b: Booking): { emoji: string; label: string; color: string } {
   if (b.stage === "proposto_novo_horario") return { emoji: "🟠", label: "Novo horário proposto", color: "#e08a2e" };
   if (b.status === "confirmed") return { emoji: "🟢", label: "Confirmado", color: "#1a9a78" };
@@ -466,9 +467,10 @@ export default function PainelMedicoPage() {
       <section id="financeiro" className="mt-8 scroll-mt-4">
         <h2 className="font-display text-2xl text-[var(--text)]">Financeiro</h2>
         <p className="mt-1 text-sm text-[var(--text-muted)]">
-          Você define o valor da sua consulta. O percentual de repasse é definido pela administração.
+          Você define o valor da sua consulta. A administração define se o app é grátis ou quanto entra na conta da plataforma.
         </p>
         <FinanceCard />
+        <PlatformFeePayPanel endpoint="/api/doctor/platform-fee" />
         <p className="mt-4 text-sm text-[var(--text-muted)]">
           Recebimentos (Mercado Pago e Pix) ficam em{" "}
           <Link href="/medicos/configuracoes#recebimentos" className="font-semibold text-[var(--gold)]">Configurações › Recebimentos</Link>.
