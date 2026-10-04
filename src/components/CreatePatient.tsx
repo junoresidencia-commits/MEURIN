@@ -51,7 +51,7 @@ export function CreatePatient({ onCreated }: { onCreated: () => void }) {
     const { age: _age, ...rest } = form;
     void _age;
     try {
-      const res = await fetch("/api/doctor/patients", {
+      const res = await fetch("/api/network/patients", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({

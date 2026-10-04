@@ -6,6 +6,7 @@ import { useParams, useRouter } from "next/navigation";
 import { ClinicalSnapshotCard } from "@/components/ClinicalSnapshotCard";
 import { PdModule } from "@/components/PdModule";
 import { StartCareCallButton } from "@/components/StartCareCallButton";
+import { EncaminharHeaderButton } from "@/components/EncaminharHeaderButton";
 import { NURSE_ASSESSMENT, PSY_ANAMNESIS, payloadToBody } from "@/lib/allied-forms";
 import type { AlliedRole } from "@/lib/allied-types";
 
@@ -116,8 +117,9 @@ export function AlliedPatientWorkspace({ role }: { role: AlliedRole }) {
       <Link href={`${base}/painel`} className="text-sm font-semibold text-[var(--gold)]">← Meus Pacientes</Link>
       <h1 className="font-display mt-2 text-3xl font-extrabold text-[var(--text)]">{patient.name}</h1>
       <p className="text-sm text-[var(--text-muted)]">Dados clínicos já existentes no Meu Rim — sem preencher de novo.</p>
-      <div className="mt-4">
+      <div className="mt-4 flex flex-wrap gap-2">
         <StartCareCallButton patientKey={patient.key} />
+        <EncaminharHeaderButton emailParam={patient.key} patientName={patient.name} />
         <p className="mt-2 text-xs text-[var(--text-muted)]">Abre a mesma sala de vídeo da consulta médica: o paciente entra pelo link e você escreve a evolução na chamada.</p>
       </div>
 

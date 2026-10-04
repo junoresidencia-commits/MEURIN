@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import type { AlliedRole } from "@/lib/allied-types";
 import { ROLE_META } from "@/lib/allied-types";
 import { PlatformFeePayPanel } from "@/components/PlatformFeePayPanel";
+import { PixQrPanel } from "@/components/PixQrPanel";
 
 const KEY_TYPES = [
   { v: "cpf", l: "CPF" },
@@ -144,8 +145,7 @@ export function AlliedSettingsForm({ role }: { role: AlliedRole }) {
       </div>
       {brcode && (
         <div className="panel mt-4">
-          <p className="text-xs font-semibold text-[var(--text-muted)]">Pix copia-e-cola (teste da sua chave)</p>
-          <p className="mt-1 break-all rounded-lg bg-[var(--bg)] p-2 text-xs text-[var(--text-soft)]">{brcode}</p>
+          <PixQrPanel brCode={brcode} pixKey={pix.key} />
         </div>
       )}
 

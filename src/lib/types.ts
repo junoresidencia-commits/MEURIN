@@ -114,6 +114,12 @@ export interface Doctor {
   logoUrl?: string;
   // Foto de perfil do médico (data URL). Aparece na sidebar/área do médico.
   photoUrl?: string;
+  /** Nome profissional exibido na rede (pode diferir do nome civil). */
+  professionalName?: string;
+  /** Profissão (ex.: Médico, Nutricionista). */
+  profession?: string;
+  city?: string;
+  state?: string;
   // WhatsApp e comunicação (privacidade):
   // - notifyWhatsapp: número INTERNO do médico p/ receber avisos (NUNCA exposto ao paciente).
   // - patientContactWhatsapp: número para o paciente falar (pode ser secretária/clínica).

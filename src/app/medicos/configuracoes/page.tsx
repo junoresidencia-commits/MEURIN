@@ -58,6 +58,12 @@ export default function ConfiguracoesMedicoPage() {
   const [weekly, setWeekly] = useState<WeeklySlot[]>([]);
   const [price, setPrice] = useState("350");
   const [bio, setBio] = useState("");
+  const [professionalName, setProfessionalName] = useState("");
+  const [profession, setProfession] = useState("Médico(a)");
+  const [phone, setPhone] = useState("");
+  const [city, setCity] = useState("");
+  const [stateUf, setStateUf] = useState("");
+  const [clinic, setClinic] = useState("");
   const [notifyWa, setNotifyWa] = useState("");
   const [patientWa, setPatientWa] = useState("");
   const [allowPatientWa, setAllowPatientWa] = useState(false);
@@ -88,6 +94,12 @@ export default function ConfiguracoesMedicoPage() {
       setWeekly(d.weeklyAvailability || []);
       setPrice(String((d.consultationPriceCents ?? 35000) / 100));
       setBio(d.bio || "");
+      setProfessionalName(d.professionalName || d.name || "");
+      setProfession(d.profession || "Médico(a)");
+      setPhone(d.phone || "");
+      setCity(d.city || "");
+      setStateUf(d.state || d.crmState || "");
+      setClinic(d.clinic || "");
       setNotifyWa(d.notifyWhatsapp || "");
       setPatientWa(d.patientContactWhatsapp || "");
       setAllowPatientWa(Boolean(d.allowPatientContact));
@@ -131,7 +143,24 @@ export default function ConfiguracoesMedicoPage() {
         allowPatientContact: allowPatientWa,
       }),
     });
-    setMsg(res.ok ? "Preferências salvas." : "Não foi possível salvar agora.");
+    const profileRes = await fetch("/api/doctor/profile", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        name,
+        professionalName,
+        profession,
+        specialty,
+        rqe,
+        phone,
+        whatsapp: patientWa,
+        city,
+        state: stateUf,
+        clinic,
+        bio,
+      }),
+    });
+    setMsg(res.ok && profileRes.ok ? "Preferências salvas." : "Não foi possível salvar agora.");
   }
 
   async function ativarPush() {
@@ -169,7 +198,7 @@ export default function ConfiguracoesMedicoPage() {
 
           <section id="perfil" className="panel mt-6 scroll-mt-4">
             <h2 className="font-display text-xl text-[var(--text)]">Meu perfil</h2>
-            <p className="mt-1 text-sm text-[var(--text-muted)]">Sua foto de perfil aparece na sua área do médico. Não é usada nos documentos (para isso, use a logo mais abaixo).</p>
+            <p className="mt-1 text-sm text-[var(--text-muted)]">Sua foto aparece no perfil, na agenda, na busca de profissionais, nos encaminhamentos e na equipe. Adicione, troque ou remova quando quiser.</p>
             <div className="mt-3">
               <ProfilePhotoUploader
                 endpoint="/api/doctor/photo"
@@ -237,8 +266,32 @@ export default function ConfiguracoesMedicoPage() {
                 <input className="input-field" value={name} onChange={(e) => setName(e.target.value)} placeholder="Ex.: Juno Damacena Barbosa" />
               </label>
               <label className="block">
+                <span className="mb-1 block text-xs font-semibold text-[var(--text-muted)]">Nome profissional</span>
+                <input className="input-field" value={professionalName} onChange={(e) => setProfessionalName(e.target.value)} placeholder="Como aparece na rede e nos encaminhamentos" />
+              </label>
+              <label className="block">
+                <span className="mb-1 block text-xs font-semibold text-[var(--text-muted)]">Profissão</span>
+                <input className="input-field" value={profession} onChange={(e) => setProfession(e.target.value)} placeholder="Médico(a)" />
+              </label>
+              <label className="block">
                 <span className="mb-1 block text-xs font-semibold text-[var(--text-muted)]">Especialidade</span>
                 <input className="input-field" value={specialty} onChange={(e) => setSpecialty(e.target.value)} placeholder="Ex.: Nefrologista" />
+              </label>
+              <label className="block">
+                <span className="mb-1 block text-xs font-semibold text-[var(--text-muted)]">Telefone</span>
+                <input className="input-field" value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="(77) 99999-9999" />
+              </label>
+              <label className="block">
+                <span className="mb-1 block text-xs font-semibold text-[var(--text-muted)]">Cidade</span>
+                <input className="input-field" value={city} onChange={(e) => setCity(e.target.value)} placeholder="Irecê" />
+              </label>
+              <label className="block">
+                <span className="mb-1 block text-xs font-semibold text-[var(--text-muted)]">Estado</span>
+                <input className="input-field" value={stateUf} onChange={(e) => setStateUf(e.target.value)} placeholder="BA" />
+              </label>
+              <label className="block sm:col-span-2">
+                <span className="mb-1 block text-xs font-semibold text-[var(--text-muted)]">Clínicas / local de atendimento</span>
+                <input className="input-field" value={clinic} onChange={(e) => setClinic(e.target.value)} placeholder="Nome da clínica ou consultório" />
               </label>
               <label className="block">
                 <span className="mb-1 block text-xs font-semibold text-[var(--text-muted)]">RQE (opcional)</span>

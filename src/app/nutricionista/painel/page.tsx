@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { StartCareCallButton } from "@/components/StartCareCallButton";
+import { CreatePatient } from "@/components/CreatePatient";
 
 type Me = { nutritionist: { name: string; crn?: string | null; uf?: string | null; specialty?: string | null; photoUrl?: string | null }; doctors: { id: string; name: string }[] };
 type Patient = { key: string; name: string; cpf: string | null; doctorId: string };
@@ -62,11 +63,17 @@ export default function NutricionistaPainelPage() {
           </p>
           </div>
         </div>
-        <div className="flex gap-2">
+        <div className="flex flex-wrap gap-2">
+          <Link href="/rede" className="btn-ghost">Pesquisar profissional</Link>
+          <Link href="/encaminhamentos" className="btn-ghost">Pacientes encaminhados</Link>
           <Link href="/nutricionista/configuracoes" className="btn-ghost">Perfil e recebimentos</Link>
           <button type="button" className="btn-ghost" onClick={logout}>Sair</button>
         </div>
       </div>
+
+      <section className="mt-6">
+        <CreatePatient onCreated={() => load()} />
+      </section>
 
       <NutriAppointments />
 

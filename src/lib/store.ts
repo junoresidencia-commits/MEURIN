@@ -274,16 +274,24 @@ export type DoctorPublicCard = {
   crm: string;
   crmState: string | null;
   rqe: string | null;
+  photoUrl?: string | null;
+  profession?: string | null;
+  city?: string | null;
+  clinic?: string | null;
 };
 
 export function toDoctorPublicCard(d: Doctor): DoctorPublicCard {
   return {
     id: d.id,
-    name: d.name,
+    name: d.professionalName || d.name,
     specialty: d.specialty || "",
     crm: d.crm || "",
     crmState: d.crmState || null,
     rqe: d.rqe || null,
+    photoUrl: d.photoUrl || null,
+    profession: d.profession || "Médico(a)",
+    city: d.city || d.locations?.find((l) => l.active && l.city)?.city || null,
+    clinic: d.clinic || d.locations?.find((l) => l.active)?.name || null,
   };
 }
 
@@ -519,6 +527,105 @@ export async function setDoctorPhoto(id: string, photoUrl: string | null): Promi
   });
 }
 
+function isMissingDoctorColumn(error: { code?: string; message?: string } | null): boolean {
+  if (!error) return false;
+  return error.code === "PGRST204" || error.code === "42703" || /column|schema cache/i.test(error.message || "");
+}
+
+/** Atualiza só o PIX do médico — sem reescrever a tabela inteira. */
+export async function setDoctorPixProfile(id: string, profile: Doctor["pixProfile"] | null): Promise<void> {
+  const pixKey = profile?.key || null;
+  const supabase = getSupabaseAdmin();
+  if (supabase) {
+    const row: Record<string, unknown> = {
+      pix_profile: profile,
+      pix_key: pixKey,
+      stripe_connect_ready: Boolean(pixKey),
+    };
+    for (let attempt = 0; attempt < 4; attempt++) {
+      const { error } = await supabase.from("doctors").update(row).eq("id", id);
+      if (!error) return;
+      if (!isMissingDoctorColumn(error)) throw error;
+      const msg = error.message || "";
+      if (/pix_profile/.test(msg)) delete row.pix_profile;
+      else if (/pix_key/.test(msg)) delete row.pix_key;
+      else if (/stripe_connect_ready/.test(msg)) delete row.stripe_connect_ready;
+      else throw error;
+    }
+    return;
+  }
+  await updateDb((db) => {
+    db.doctors = db.doctors.map((d) =>
+      d.id === id
+        ? { ...d, pixProfile: profile ?? undefined, pixKey: pixKey ?? undefined, stripeConnectReady: Boolean(pixKey) }
+        : d
+    );
+    return db;
+  });
+}
+
+export type DoctorProfilePatch = Partial<
+  Pick<
+    Doctor,
+    | "name"
+    | "professionalName"
+    | "profession"
+    | "specialty"
+    | "rqe"
+    | "phone"
+    | "patientContactWhatsapp"
+    | "notifyWhatsapp"
+    | "email"
+    | "city"
+    | "state"
+    | "clinic"
+    | "bio"
+    | "crm"
+    | "crmState"
+  >
+>;
+
+/** Atualiza dados públicos do perfil sem reescrever todos os médicos. */
+export async function patchDoctorProfile(id: string, patch: DoctorProfilePatch): Promise<void> {
+  const supabase = getSupabaseAdmin();
+  if (supabase) {
+    const row: Record<string, unknown> = {};
+    if (patch.name !== undefined) row.name = patch.name;
+    if (patch.professionalName !== undefined) row.professional_name = patch.professionalName;
+    if (patch.profession !== undefined) row.profession = patch.profession;
+    if (patch.specialty !== undefined) row.specialty = patch.specialty;
+    if (patch.rqe !== undefined) row.rqe = patch.rqe;
+    if (patch.phone !== undefined) row.phone = patch.phone;
+    if (patch.patientContactWhatsapp !== undefined) row.patient_contact_whatsapp = patch.patientContactWhatsapp;
+    if (patch.notifyWhatsapp !== undefined) row.notify_whatsapp = patch.notifyWhatsapp;
+    if (patch.city !== undefined) row.city = patch.city;
+    if (patch.state !== undefined) row.state = patch.state;
+    if (patch.clinic !== undefined) row.clinic = patch.clinic;
+    if (patch.bio !== undefined) row.bio = patch.bio;
+    if (patch.crm !== undefined) row.crm = patch.crm;
+    if (patch.crmState !== undefined) row.crm_state = patch.crmState;
+    for (let attempt = 0; attempt < 8; attempt++) {
+      if (Object.keys(row).length === 0) return;
+      const { error } = await supabase.from("doctors").update(row).eq("id", id);
+      if (!error) return;
+      if (!isMissingDoctorColumn(error)) throw error;
+      const msg = error.message || "";
+      const col = msg.match(/'([^']+)' column/i)?.[1] || msg.match(/column "?([a-z0-9_]+)"?/i)?.[1];
+      if (col && col in row) {
+        delete row[col];
+        continue;
+      }
+      return;
+    }
+    return;
+  }
+  await updateDb((db) => {
+    const clean = Object.fromEntries(Object.entries(patch).filter(([, v]) => v !== undefined)) as DoctorProfilePatch;
+    db.doctors = db.doctors.map((d) => (d.id === id ? { ...d, ...clean } : d));
+    return db;
+  });
+}
+
 /** Atualiza campos de uma consulta (confirmação, proposta, remarcação, timeline). */
 export async function updateBooking(id: string, patch: Partial<Booking>): Promise<Booking | null> {
   const result = await updateDb((db) => {
@@ -585,6 +692,10 @@ function mapDoctorRow(row: Record<string, unknown>): Doctor {
     adminNote: row.admin_note ? String(row.admin_note) : undefined,
     logoUrl: row.logo_url ? String(row.logo_url) : undefined,
     photoUrl: row.photo_url ? String(row.photo_url) : undefined,
+    professionalName: row.professional_name ? String(row.professional_name) : undefined,
+    profession: row.profession ? String(row.profession) : undefined,
+    city: row.city ? String(row.city) : undefined,
+    state: row.state ? String(row.state) : undefined,
     mpAccessToken: row.mp_access_token ? String(row.mp_access_token) : undefined,
     notifyWhatsapp: row.notify_whatsapp ? String(row.notify_whatsapp) : undefined,
     useWhatsappNotifications: Boolean(row.use_whatsapp_notifications),
@@ -939,6 +1050,10 @@ async function writeSupabaseDb(db: Database): Promise<void> {
     admin_note: doctor.adminNote ?? null,
     logo_url: doctor.logoUrl ?? null,
     photo_url: doctor.photoUrl ?? null,
+    professional_name: doctor.professionalName ?? null,
+    profession: doctor.profession ?? null,
+    city: doctor.city ?? null,
+    state: doctor.state ?? null,
     mp_access_token: doctor.mpAccessToken ?? null,
     commission_percent: doctor.commissionPercent ?? null,
     app_fee_mode: doctor.appFeeMode ?? null,

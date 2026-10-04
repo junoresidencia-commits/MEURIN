@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { ProfilePhotoUploader } from "@/components/ProfilePhotoUploader";
 import { PlatformFeePayPanel } from "@/components/PlatformFeePayPanel";
+import { PixQrPanel } from "@/components/PixQrPanel";
 
 const KEY_TYPES = [
   { v: "cpf", l: "CPF" }, { v: "cnpj", l: "CNPJ" }, { v: "email", l: "E-mail" }, { v: "telefone", l: "Telefone" }, { v: "aleatoria", l: "Aleatória" },
@@ -89,8 +90,7 @@ export default function NutriConfigPage() {
       </div>
       {brcode && (
         <div className="panel mt-4">
-          <p className="text-xs font-semibold text-[var(--text-muted)]">Pix copia-e-cola (teste)</p>
-          <p className="mt-1 break-all rounded-lg bg-[var(--bg)] p-2 text-xs text-[var(--text-soft)]">{brcode}</p>
+          <PixQrPanel brCode={brcode} pixKey={pix.key} />
         </div>
       )}
       <p className="mt-4 text-xs text-[var(--text-muted)]">

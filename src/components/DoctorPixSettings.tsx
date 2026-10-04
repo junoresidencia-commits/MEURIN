@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { PixQrPanel } from "@/components/PixQrPanel";
 
 type PixState = {
   keyType?: string;
@@ -19,14 +20,21 @@ const KEY_TYPES: { value: string; label: string }[] = [
   { value: "aleatoria", label: "Chave aleatória" },
 ];
 
-/** Perfil Pix do médico (recebimento direto) + copia e cola (BR Code) para o paciente. */
+const PLACEHOLDERS: Record<string, string> = {
+  cpf: "000.000.000-00 ou 00000000000",
+  cnpj: "00.000.000/0000-00",
+  email: "email@dominio.com",
+  telefone: "(77) 99999-9999 ou +55 77 99999-9999",
+  aleatoria: "xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx",
+};
+
 export function DoctorPixSettings() {
   const [pix, setPix] = useState<PixState>({});
   const [brCode, setBrCode] = useState("");
   const [loaded, setLoaded] = useState(false);
   const [saving, setSaving] = useState(false);
   const [msg, setMsg] = useState("");
-  const [copied, setCopied] = useState(false);
+  const [err, setErr] = useState("");
 
   useEffect(() => {
     fetch("/api/doctor/pix")
@@ -41,52 +49,85 @@ export function DoctorPixSettings() {
 
   function set<K extends keyof PixState>(k: K, v: string) {
     setPix((p) => ({ ...p, [k]: v }));
+    setErr("");
+    setMsg("");
   }
 
   async function save() {
     setSaving(true);
     setMsg("");
-    const res = await fetch("/api/doctor/pix", {
-      method: "PUT",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ pix }),
-    });
-    const data = await res.json().catch(() => ({}));
-    setSaving(false);
-    if (res.ok) {
+    setErr("");
+    try {
+      const res = await fetch("/api/doctor/pix", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ pix }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        setErr(data.error || "Não foi possível salvar sua chave PIX. Verifique os dados informados.");
+        return;
+      }
+      setPix(data.pix || pix);
       setBrCode(data.brCode || "");
-      setMsg("Chave Pix salva.");
-    } else {
-      setMsg(data.error || "Não foi possível salvar.");
+      setMsg(data.message || "Chave PIX salva com sucesso.");
+    } catch (e) {
+      console.error("[pix] ui médico", e);
+      setErr("Não foi possível salvar sua chave PIX. Verifique os dados informados.");
+    } finally {
+      setSaving(false);
     }
   }
 
-  function copy() {
-    if (!brCode) return;
-    navigator.clipboard?.writeText(brCode);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 1500);
+  async function remove() {
+    if (!pix.key && !brCode) return;
+    setSaving(true);
+    setMsg("");
+    setErr("");
+    try {
+      const res = await fetch("/api/doctor/pix", { method: "DELETE" });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        setErr(data.error || "Não foi possível excluir a chave PIX.");
+        return;
+      }
+      setPix({});
+      setBrCode("");
+      setMsg(data.message || "Chave PIX removida.");
+    } catch (e) {
+      console.error("[pix] ui excluir", e);
+      setErr("Não foi possível excluir a chave PIX.");
+    } finally {
+      setSaving(false);
+    }
   }
 
   return (
     <div className="panel mt-4 space-y-3">
       <p className="text-sm text-[var(--text-soft)]">
-        Cadastre a sua chave Pix para receber consultas diretamente. O valor cai
-        100% nessa chave, na conta de quem cadastrou. A porcentagem da plataforma
-        (se houver) é definida no admin e entra no relatório — o Pix em si não é
-        dividido automaticamente.
+        Cadastre a sua chave PIX para receber consultas, procedimentos e cobranças diretamente.
+        O valor cai 100% nessa chave. A porcentagem da plataforma (se houver) entra no relatório — o PIX em si não é dividido automaticamente.
+        Quando o pagamento for do profissional, o sistema usa esta chave, nunca o PIX da clínica.
       </p>
       <div className="grid gap-3 sm:grid-cols-2">
         <label className="block">
-          <span className="mb-1 block text-xs font-semibold text-[var(--text-muted)]">Tipo de chave</span>
+          <span className="mb-1 block text-xs font-semibold text-[var(--text-muted)]">Tipo de chave PIX</span>
           <select className="input-field" value={pix.keyType || ""} onChange={(e) => set("keyType", e.target.value)} disabled={!loaded}>
             <option value="">Selecione</option>
-            {KEY_TYPES.map((t) => <option key={t.value} value={t.value}>{t.label}</option>)}
+            {KEY_TYPES.map((t) => (
+              <option key={t.value} value={t.value}>{t.label}</option>
+            ))}
           </select>
         </label>
         <label className="block">
-          <span className="mb-1 block text-xs font-semibold text-[var(--text-muted)]">Chave Pix</span>
-          <input className="input-field" value={pix.key || ""} onChange={(e) => set("key", e.target.value)} placeholder="chave (CPF/CNPJ/e-mail/telefone/aleatória)" disabled={!loaded} />
+          <span className="mb-1 block text-xs font-semibold text-[var(--text-muted)]">Chave PIX</span>
+          <input
+            className="input-field"
+            value={pix.key || ""}
+            onChange={(e) => set("key", e.target.value)}
+            placeholder={PLACEHOLDERS[pix.keyType || ""] || "Informe a chave"}
+            disabled={!loaded}
+          />
         </label>
         <label className="block">
           <span className="mb-1 block text-xs font-semibold text-[var(--text-muted)]">Nome do titular</span>
@@ -102,19 +143,22 @@ export function DoctorPixSettings() {
         </label>
         <label className="block">
           <span className="mb-1 block text-xs font-semibold text-[var(--text-muted)]">Cidade do recebedor</span>
-          <input className="input-field" value={pix.city || ""} onChange={(e) => set("city", e.target.value)} placeholder="Cidade (para o código Pix)" disabled={!loaded} />
+          <input className="input-field" value={pix.city || ""} onChange={(e) => set("city", e.target.value)} placeholder="Cidade (para o código PIX)" disabled={!loaded} />
         </label>
       </div>
-      <button type="button" className="btn-gold" onClick={save} disabled={saving || !loaded}>{saving ? "Salvando…" : "Salvar chave Pix"}</button>
-      {msg && <p className="text-sm font-semibold text-[var(--gold)]">{msg}</p>}
-
-      {brCode && (
-        <div className="rounded-xl border border-[var(--border)] bg-[var(--gold-soft)]/40 p-3">
-          <p className="text-xs font-bold uppercase tracking-wider text-[var(--gold)]">Pix copia e cola (BR Code)</p>
-          <p className="mt-1 break-all font-mono text-[12px] text-[var(--text-soft)]">{brCode}</p>
-          <button type="button" className="btn-ghost mt-2 text-sm" onClick={copy}>{copied ? "Copiado!" : "Copiar código Pix"}</button>
-        </div>
-      )}
+      <div className="flex flex-wrap gap-2">
+        <button type="button" className="btn-gold" onClick={save} disabled={saving || !loaded}>
+          {saving ? "Salvando…" : pix.key ? "Salvar / substituir chave PIX" : "Salvar chave PIX"}
+        </button>
+        {(pix.key || brCode) && (
+          <button type="button" className="btn-ghost text-sm" onClick={remove} disabled={saving}>
+            Excluir chave
+          </button>
+        )}
+      </div>
+      {msg && <p className="text-sm font-semibold text-[var(--green,#0d9488)]">{msg}</p>}
+      {err && <p className="text-sm font-semibold text-[var(--danger,#b91c1c)]">{err}</p>}
+      <PixQrPanel brCode={brCode} pixKey={pix.key} />
     </div>
   );
 }
