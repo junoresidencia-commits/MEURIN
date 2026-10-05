@@ -46,6 +46,47 @@ async function writeLocal(db: LocalDb) {
   await fs.writeFile(FILE, JSON.stringify(db, null, 2), "utf8");
 }
 
+const FALLBACK_ROW = "return_requests";
+
+function asLocalDb(raw: unknown): LocalDb {
+  const d = (raw && typeof raw === "object" ? raw : {}) as LocalDb;
+  return {
+    requests: Array.isArray(d.requests) ? d.requests : [],
+    messages: Array.isArray(d.messages) ? d.messages : [],
+    events: Array.isArray(d.events) ? d.events : [],
+  };
+}
+
+/**
+ * Produção ainda pode não ter as tabelas return_requests*. O filesystem da Vercel
+ * é efêmero, então gravamos no platform_settings (já persistente) até a migration
+ * SQL ser aplicada. Quando as tabelas existirem, elas prevalecem.
+ */
+async function readFallback(): Promise<LocalDb> {
+  const supabase = getSupabaseAdmin();
+  if (supabase) {
+    const { data, error } = await supabase.from("platform_settings").select("data").eq("id", FALLBACK_ROW).maybeSingle();
+    if (!error) return asLocalDb(data?.data);
+  }
+  return readLocal();
+}
+
+async function writeFallback(db: LocalDb): Promise<void> {
+  const supabase = getSupabaseAdmin();
+  if (supabase) {
+    const { error } = await supabase.from("platform_settings").upsert(
+      { id: FALLBACK_ROW, data: db, updated_at: new Date().toISOString() },
+      { onConflict: "id" }
+    );
+    if (!error) return;
+  }
+  try {
+    await writeLocal(db);
+  } catch {
+    throw new Error("Não foi possível gravar a solicitação de retorno.");
+  }
+}
+
 function mapRequest(r: Record<string, unknown>): ReturnRequest {
   return {
     id: String(r.id),
@@ -179,9 +220,9 @@ export async function createReturnRequest(
     }
     missing.add("return_requests");
   }
-  const db = await readLocal();
+  const db = await readFallback();
   db.requests.unshift(req);
-  await writeLocal(db);
+  await writeFallback(db);
   await addReturnEvent(req.id, "paciente", "solicitada", "Paciente solicitou retorno. Horário ainda não reservado.");
   return req;
 }
@@ -193,7 +234,7 @@ export async function getReturnRequest(id: string): Promise<ReturnRequest | null
     if (!isMissing(error) && !error) return data ? mapRequest(data as Record<string, unknown>) : null;
     if (isMissing(error)) missing.add("return_requests");
   }
-  return (await readLocal()).requests.find((r) => r.id === id) || null;
+  return (await readFallback()).requests.find((r) => r.id === id) || null;
 }
 
 export async function listReturnRequestsForPatient(patientKey: string): Promise<ReturnRequest[]> {
@@ -208,7 +249,7 @@ export async function listReturnRequestsForPatient(patientKey: string): Promise<
     if (!isMissing(error) && !error) return (data || []).map((r) => mapRequest(r as Record<string, unknown>));
     if (isMissing(error)) missing.add("return_requests");
   }
-  return (await readLocal()).requests
+  return (await readFallback()).requests
     .filter((r) => r.patientKey.toLowerCase() === key)
     .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
 }
@@ -228,7 +269,7 @@ export async function listReturnRequestsForProfessional(
     if (!isMissing(error) && !error) return (data || []).map((r) => mapRequest(r as Record<string, unknown>));
     if (isMissing(error)) missing.add("return_requests");
   }
-  return (await readLocal()).requests
+  return (await readFallback()).requests
     .filter((r) => r.professionalKind === kind && r.professionalId === professionalId)
     .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
 }
@@ -247,7 +288,7 @@ export async function listReturnRequestsForDoctors(doctorIds: string[]): Promise
     if (!isMissing(error) && !error) return (data || []).map((r) => mapRequest(r as Record<string, unknown>));
     if (isMissing(error)) missing.add("return_requests");
   }
-  return (await readLocal()).requests
+  return (await readFallback()).requests
     .filter((r) => r.professionalKind === "doctor" && ids.has(r.professionalId))
     .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
 }
@@ -265,9 +306,9 @@ export async function updateReturnRequest(id: string, patch: Partial<ReturnReque
     }
     missing.add("return_requests");
   }
-  const db = await readLocal();
+  const db = await readFallback();
   db.requests = db.requests.map((r) => (r.id === id ? next : r));
-  await writeLocal(db);
+  await writeFallback(db);
   return next;
 }
 
@@ -281,9 +322,9 @@ export async function addReturnEvent(requestId: string, actor: string, type: str
     if (!isMissing(error) && !error) return ev;
     if (isMissing(error)) missing.add("return_request_events");
   }
-  const db = await readLocal();
+  const db = await readFallback();
   db.events.push(ev);
-  await writeLocal(db);
+  await writeFallback(db);
   return ev;
 }
 
@@ -298,7 +339,7 @@ export async function listReturnEvents(requestId: string): Promise<ReturnEvent[]
     if (!isMissing(error) && !error) return (data || []).map((r) => mapEvent(r as Record<string, unknown>));
     if (isMissing(error)) missing.add("return_request_events");
   }
-  return (await readLocal()).events.filter((e) => e.requestId === requestId).sort((a, b) => a.at.localeCompare(b.at));
+  return (await readFallback()).events.filter((e) => e.requestId === requestId).sort((a, b) => a.at.localeCompare(b.at));
 }
 
 export async function addReturnMessage(input: Omit<ReturnMessage, "id" | "createdAt">): Promise<ReturnMessage> {
@@ -320,9 +361,9 @@ export async function addReturnMessage(input: Omit<ReturnMessage, "id" | "create
     if (!isMissing(error) && !error) return msg;
     if (isMissing(error)) missing.add("return_request_messages");
   }
-  const db = await readLocal();
+  const db = await readFallback();
   db.messages.push(msg);
-  await writeLocal(db);
+  await writeFallback(db);
   return msg;
 }
 
@@ -337,5 +378,5 @@ export async function listReturnMessages(requestId: string): Promise<ReturnMessa
     if (!isMissing(error) && !error) return (data || []).map((r) => mapMessage(r as Record<string, unknown>));
     if (isMissing(error)) missing.add("return_request_messages");
   }
-  return (await readLocal()).messages.filter((m) => m.requestId === requestId).sort((a, b) => a.createdAt.localeCompare(b.createdAt));
+  return (await readFallback()).messages.filter((m) => m.requestId === requestId).sort((a, b) => a.createdAt.localeCompare(b.createdAt));
 }
