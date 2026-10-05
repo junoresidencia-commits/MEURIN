@@ -93,4 +93,9 @@ assert.equal(stillWorks.potassio?.value, 5.8);
 assert.equal(stillWorks.tfge?.value, 19);
 assert.equal(stillWorks.plaquetas?.value, 375000);
 
+const ocrLabs = byKey("Hemoglob1na 10,2\nCreat1nina 8,4\nPotass1o 5,1");
+assert.equal(ocrLabs.hemoglobina?.value, 10.2);
+assert.equal(ocrLabs.creatinina?.value, 8.4);
+assert.equal(ocrLabs.potassio?.value, 5.1);
+
 console.log("lab-urinary fixtures ok", Object.keys(four).length, "distinct urinary fields");

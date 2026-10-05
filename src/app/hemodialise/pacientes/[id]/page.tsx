@@ -200,7 +200,7 @@ function HdPatientExamImport({
 
   async function send(intent: string, file?: File, text?: string) {
     setBusy(true);
-    setMsg("");
+    setMsg(file ? "Lendo a imagem e identificando os exames…" : "Identificando exames…");
     const fd = new FormData();
     fd.set("intent", intent);
     fd.set("year", String(year));
@@ -208,13 +208,26 @@ function HdPatientExamImport({
     fd.set("patientId", patientId);
     if (file) fd.set("file", file);
     if (text) fd.set("text", text);
-    const r = await fetch("/api/hemodialise/arquivo", { method: "POST", body: fd });
-    const d = await r.json();
-    setBusy(false);
-    setMsg(d.error || d.note || `Lancei ${d.created ?? 0} exame(s).`);
-    if (!d.error) {
-      setPaste("");
-      onDone();
+    const ctrl = new AbortController();
+    const timer = window.setTimeout(() => ctrl.abort(), 40000);
+    try {
+      const r = await fetch("/api/hemodialise/arquivo", { method: "POST", body: fd, signal: ctrl.signal });
+      const d = await r.json();
+      setMsg(d.error || d.note || `Lancei ${d.created ?? 0} exame(s).`);
+      if (!d.error) {
+        setPaste("");
+        onDone();
+      }
+    } catch (err) {
+      const aborted = err instanceof DOMException && err.name === "AbortError";
+      setMsg(
+        aborted
+          ? "A leitura travou e foi interrompida. Tente outra foto ou cole o texto do laudo."
+          : "Não deu para ler agora. Tente de novo ou cole o texto."
+      );
+    } finally {
+      window.clearTimeout(timer);
+      setBusy(false);
     }
   }
 

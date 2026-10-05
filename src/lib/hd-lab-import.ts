@@ -2,6 +2,7 @@ import { HD_EXAM_LABEL, HD_EXAM_UNIT } from "./hd-labels";
 import { parseLabGroups } from "./lab-parser";
 import { LAB_NUMBER_RE, parsePtBrLabNumber } from "./lab-number";
 import { matchExamCode, normName } from "./hd-store-names";
+import { extractLabeledPatientName, softenOcrText } from "./ocr-text";
 import type { HdExamCode } from "./hd-types";
 
 export type HdParsedLabItem = {
@@ -58,23 +59,54 @@ function addItem(
   });
 }
 
+function tokensOf(s: string): string[] {
+  return normName(s)
+    .split(/[^A-Z]+/)
+    .filter((t) => t.length > 2);
+}
+
+function tokenClose(a: string, b: string): boolean {
+  if (a === b) return true;
+  if (a.length >= 4 && b.length >= 4 && (a.includes(b) || b.includes(a))) return true;
+  if (Math.abs(a.length - b.length) > 1) return false;
+  let miss = 0;
+  const max = Math.max(a.length, b.length);
+  const min = Math.min(a.length, b.length);
+  for (let i = 0; i < min; i++) if (a[i] !== b[i]) miss += 1;
+  miss += max - min;
+  return miss <= 1;
+}
+
+function nameMatchesText(name: string, folded: string, tokens: string[]): boolean {
+  const n = normName(name);
+  if (!n || n.length < 4) return false;
+  if (folded.includes(n)) return true;
+  const parts = n.split(" ").filter((x) => x.length > 2);
+  if (parts.length < 2) return tokens.some((t) => tokenClose(t, n));
+  const first = parts[0];
+  const last = parts[parts.length - 1];
+  const firstHit = folded.includes(first) || tokens.some((t) => tokenClose(t, first));
+  const lastHit = folded.includes(last) || tokens.some((t) => tokenClose(t, last));
+  return firstHit && lastHit;
+}
+
 /** Pacientes cujo nome aparece no laudo. Não inventa cadastro. */
 export function matchPatientsInText<T extends { id: string; name: string }>(
   text: string,
   patients: T[]
 ): T[] {
-  const folded = normName(text);
+  const softened = softenOcrText(text);
+  const folded = normName(softened);
   if (!folded) return [];
+  const tokens = tokensOf(softened);
+  const labeled = extractLabeledPatientName(softened);
   const hits: T[] = [];
   for (const p of patients) {
-    const n = normName(p.name);
-    if (!n || n.length < 4) continue;
-    if (folded.includes(n)) {
+    if (nameMatchesText(p.name, folded, tokens)) {
       hits.push(p);
       continue;
     }
-    const parts = n.split(" ").filter((x) => x.length > 2);
-    if (parts.length >= 2 && folded.includes(parts[0]) && folded.includes(parts[parts.length - 1])) {
+    if (labeled && nameMatchesText(p.name, normName(labeled), tokensOf(labeled))) {
       hits.push(p);
     }
   }
@@ -95,7 +127,7 @@ export function parseHdLabsFromText(
   matched: Array<{ id: string; name: string }>;
   date?: string;
 } {
-  const raw = String(text || "").trim();
+  const raw = softenOcrText(String(text || "")).trim();
   if (!raw) return { items: [], needsPatient: !forcedPatientId, matched: [] };
 
   const forced = forcedPatientId
