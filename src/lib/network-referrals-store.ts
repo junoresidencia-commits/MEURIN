@@ -46,6 +46,43 @@ async function writeLocal(db: LocalDb) {
   await fs.writeFile(FILE, JSON.stringify(db, null, 2), "utf8");
 }
 
+const FALLBACK_ROW = "network_referrals";
+
+function asLocalDb(raw: unknown): LocalDb {
+  const d = (raw && typeof raw === "object" ? raw : {}) as LocalDb;
+  return {
+    referrals: Array.isArray(d.referrals) ? d.referrals : [],
+    events: Array.isArray(d.events) ? d.events : [],
+    links: Array.isArray(d.links) ? d.links : [],
+  };
+}
+
+/** Tabelas da rede podem não existir em produção; Vercel não grava JSON local. */
+async function readFallback(): Promise<LocalDb> {
+  const supabase = getSupabaseAdmin();
+  if (supabase) {
+    const { data, error } = await supabase.from("platform_settings").select("data").eq("id", FALLBACK_ROW).maybeSingle();
+    if (!error) return asLocalDb(data?.data);
+  }
+  return readLocal();
+}
+
+async function writeFallback(db: LocalDb): Promise<void> {
+  const supabase = getSupabaseAdmin();
+  if (supabase) {
+    const { error } = await supabase.from("platform_settings").upsert(
+      { id: FALLBACK_ROW, data: db, updated_at: new Date().toISOString() },
+      { onConflict: "id" }
+    );
+    if (!error) return;
+  }
+  try {
+    await writeLocal(db);
+  } catch {
+    throw new Error("Não foi possível gravar o cadastro agora. Tente novamente.");
+  }
+}
+
 function slicesOf(value: unknown): ShareSlice[] {
   if (!Array.isArray(value)) return [...DEFAULT_SHARE_SLICES];
   const next = value.filter(isShareSlice);
@@ -190,9 +227,9 @@ export async function recordReferralEvent(input: {
     }
     tableMissing = true;
   }
-  const db = await readLocal();
+  const db = await readFallback();
   db.events.push(row);
-  await writeLocal(db);
+  await writeFallback(db);
 }
 
 export async function listReferralEvents(referralId: string): Promise<PatientNetworkReferralEvent[]> {
@@ -206,7 +243,7 @@ export async function listReferralEvents(referralId: string): Promise<PatientNet
     if (!isMissing(error) && !error) return (data ?? []).map((r) => mapEvent(r as Record<string, unknown>));
     if (isMissing(error)) tableMissing = true;
   }
-  const db = await readLocal();
+  const db = await readFallback();
   return db.events.filter((e) => e.referralId === referralId).sort((a, b) => a.createdAt.localeCompare(b.createdAt));
 }
 
@@ -217,7 +254,7 @@ export async function getNetworkReferral(id: string): Promise<PatientNetworkRefe
     if (!isMissing(error) && !error) return data ? mapReferral(data as Record<string, unknown>) : null;
     if (isMissing(error)) tableMissing = true;
   }
-  const db = await readLocal();
+  const db = await readFallback();
   return db.referrals.find((r) => r.id === id) ?? null;
 }
 
@@ -263,9 +300,9 @@ export async function createNetworkReferral(
     }
     tableMissing = true;
   }
-  const db = await readLocal();
+  const db = await readFallback();
   db.referrals.push(row);
-  await writeLocal(db);
+  await writeFallback(db);
   await recordReferralEvent({
     referralId: row.id,
     action: "created",
@@ -303,9 +340,9 @@ export async function updateNetworkReferral(
     }
     tableMissing = true;
   }
-  const db = await readLocal();
+  const db = await readFallback();
   db.referrals = db.referrals.map((r) => (r.id === id ? next : r));
-  await writeLocal(db);
+  await writeFallback(db);
   if (event) await recordReferralEvent({ referralId: id, ...event });
   return next;
 }
@@ -330,7 +367,7 @@ export async function listReferralsForProfessional(
     }
     if (isMissing(error)) tableMissing = true;
   }
-  const db = await readLocal();
+  const db = await readFallback();
   const all = db.referrals
     .filter((r) => (r.toKind === kind && r.toId === id) || (r.fromKind === kind && r.fromId === id))
     .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
@@ -354,7 +391,7 @@ export async function listPendingConsentForPatient(patientKey: string): Promise<
     }
     if (isMissing(error)) tableMissing = true;
   }
-  const db = await readLocal();
+  const db = await readFallback();
   return db.referrals.filter((r) => r.patientKey === key).sort((a, b) => b.createdAt.localeCompare(a.createdAt));
 }
 
@@ -386,9 +423,9 @@ export async function upsertProfessionalLink(input: Omit<PatientProfessionalLink
     }
     tableMissing = true;
   }
-  const db = await readLocal();
+  const db = await readFallback();
   db.links.push(row);
-  await writeLocal(db);
+  await writeFallback(db);
   return row;
 }
 
@@ -410,7 +447,7 @@ export async function findProfessionalLink(
     if (!isMissing(error) && !error) return data ? mapLink(data as Record<string, unknown>) : null;
     if (isMissing(error)) tableMissing = true;
   }
-  const db = await readLocal();
+  const db = await readFallback();
   return db.links.find((l) => l.professionalKind === kind && l.professionalId === professionalId && l.patientKey === key) ?? null;
 }
 
@@ -426,7 +463,7 @@ export async function listLinksForProfessional(kind: ProfessionalKind, professio
     if (!isMissing(error) && !error) return (data ?? []).map((r) => mapLink(r as Record<string, unknown>));
     if (isMissing(error)) tableMissing = true;
   }
-  const db = await readLocal();
+  const db = await readFallback();
   return db.links
     .filter((l) => l.professionalKind === kind && l.professionalId === professionalId)
     .sort((a, b) => b.createdAt.localeCompare(a.createdAt));

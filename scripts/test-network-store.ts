@@ -13,6 +13,7 @@ await rm(path.join(DATA, "network-referrals.json"), { force: true });
 
 const { createNetworkReferral, updateNetworkReferral, listReferralsForProfessional, upsertProfessionalLink, findProfessionalLink } = await import("../src/lib/network-referrals-store");
 const { findDuplicatePatient, createPatient } = await import("../src/lib/patients-store");
+const { registerOrLinkPatient } = await import("../src/lib/network-patients");
 const { normalizePixKey } = await import("../src/lib/pix-key");
 
 const a = await createPatient({
@@ -88,6 +89,15 @@ await upsertProfessionalLink({
 });
 const link = await findProfessionalLink("doctor", "doc-b", a.email!);
 assert.ok(link);
+
+const novo = await registerOrLinkPatient(
+  { kind: "doctor", id: "doc-a", name: "Dra. Ana", professionalName: "Dra. Ana", profession: "Médico(a)", specialty: "Nefrologia", photoUrl: null, notifyRole: "medico" },
+  { name: "Bruno Lima Teste", cpf: "529.982.247-25", birthdate: "1990-01-15", sex: "masculino", address: "Irecê", phone: "77999001122" }
+);
+assert.equal(novo.linkedExisting, false);
+assert.equal(novo.patient.doctorId, "doc-a");
+const novoLink = await findProfessionalLink("doctor", "doc-a", novo.patient.email || `pid:${novo.patient.id}`);
+assert.ok(novoLink);
 
 const pix = normalizePixKey("cpf", "390.533.447-05");
 assert.equal(pix.ok, true);
