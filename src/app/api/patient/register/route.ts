@@ -54,6 +54,7 @@ export async function POST(req: Request) {
       );
     }
 
+    const usedDefault = !password || password === "123456";
     const passwordHash = await bcrypt.hash(password || "123456", 10);
     const patient = await createPatient({
       doctorId: "",
@@ -62,6 +63,7 @@ export async function POST(req: Request) {
       email: email || null,
       phone: phone || null,
       passwordHash,
+      mustChangePassword: usedDefault,
     });
 
     const res = NextResponse.json({ ok: true, name: patient.name });

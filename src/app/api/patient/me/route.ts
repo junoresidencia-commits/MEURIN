@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { getPatientEmail } from "@/lib/patient-session";
-import { getPatient, findByEmailAny, updatePatient } from "@/lib/patients-store";
+import { getPatient, findByEmailAny, patientNeedsPasswordSetup, updatePatient } from "@/lib/patients-store";
 
 async function resolveSelf(subject: string) {
   return subject.startsWith("pid:") ? getPatient(subject.slice(4)) : findByEmailAny(subject);
@@ -13,7 +13,7 @@ export async function GET() {
   if (!p) return NextResponse.json({ found: false });
   return NextResponse.json({
     found: true,
-    mustChangePassword: p.mustChangePassword === true,
+    mustChangePassword: await patientNeedsPasswordSetup(p),
     patient: { name: p.name, cpf: p.cpf ?? "", phone: p.phone ?? "", email: p.email ?? "", birthdate: p.birthdate ?? "", sex: p.sex ?? "", photoUrl: p.photoUrl ?? "" },
   });
 }

@@ -570,6 +570,29 @@ export async function verifyPatientPassword(patient: Patient, password: string):
   return password === DEFAULT_PATIENT_PASSWORD;
 }
 
+/** True se o cadastro ainda usa a senha provisória 123456 (ou não tem hash). */
+export async function isDefaultPatientPassword(patient: Patient): Promise<boolean> {
+  return verifyPatientPassword(patient, DEFAULT_PATIENT_PASSWORD);
+}
+
+/**
+ * Precisa criar senha pessoal: flag de 1º acesso OU ainda está no 123456
+ * (cobre produção sem a coluna must_change_password).
+ */
+export async function patientNeedsPasswordSetup(patient: Patient): Promise<boolean> {
+  if (patient.mustChangePassword) return true;
+  return isDefaultPatientPassword(patient);
+}
+
+/**
+ * No 1º acesso a sessão já autentica — não pede senha atual.
+ * Também libera se a senha ainda é a provisória 123456.
+ */
+export async function canSkipCurrentPassword(patient: Patient, firstAccess?: boolean): Promise<boolean> {
+  if (firstAccess || patient.mustChangePassword) return true;
+  return isDefaultPatientPassword(patient);
+}
+
 /** Atualiza a senha do paciente e limpa a exigência de troca (1º acesso concluído). */
 export async function setPatientPassword(id: string, newPassword: string): Promise<void> {
   const hash = await bcrypt.hash(newPassword, 10);

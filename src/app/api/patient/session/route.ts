@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { createPatientToken, PATIENT_COOKIE } from "@/lib/patient-session";
-import { clinicalKey, findByCpfAny, normalizeCpf, verifyPatientPassword } from "@/lib/patients-store";
+import { clinicalKey, findByCpfAny, normalizeCpf, patientNeedsPasswordSetup, verifyPatientPassword } from "@/lib/patients-store";
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const SESSION_MAX_AGE = 60 * 60 * 24 * 365;
@@ -35,7 +35,10 @@ export async function POST(req: Request) {
       if (!ok) {
         return NextResponse.json({ error: "Senha incorreta." }, { status: 401 });
       }
-      return setSession(clinicalKey(patient), { name: patient.name, mustChangePassword: patient.mustChangePassword === true });
+      return setSession(clinicalKey(patient), {
+        name: patient.name,
+        mustChangePassword: await patientNeedsPasswordSetup(patient),
+      });
     }
 
     // Login por e-mail (pacientes vindos de agendamento)
