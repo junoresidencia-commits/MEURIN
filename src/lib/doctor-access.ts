@@ -110,24 +110,25 @@ export async function resolvePatientAccess(param: string): Promise<PatientAccess
       const latest = mine
         .filter((b) => b.patientEmail.toLowerCase() === email)
         .sort((a, b) => b.slotStart.localeCompare(a.slotStart))[0];
-      // Se o médico também tem o CADASTRO desse e-mail, enriquece com os dados do prontuário.
-      const owned = await findByEmailAny(email);
-      const ownedPatient = owned && owned.doctorId === doctorId ? owned : null;
+      const cadastro = await findByEmailAny(email);
+      if (cadastro) {
+        return { ...fromPatient(cadastro, bks), bookings: bks };
+      }
       return {
         allowed: true,
         key: email,
-        name: ownedPatient?.name || latest.patientName,
-        city: ownedPatient?.address || latest.patientCity,
-        phone: ownedPatient?.phone || latest.patientPhone,
+        name: latest.patientName,
+        city: latest.patientCity,
+        phone: latest.patientPhone,
         email,
-        birthdate: ownedPatient?.birthdate || null,
-        ageYears: ownedPatient?.ageYears ?? null,
-        ageReportedAt: ownedPatient?.ageReportedAt || null,
-        sex: ownedPatient?.sex || null,
-        cpf: ownedPatient?.cpf || null,
-        cns: ownedPatient?.cns || null,
-        motherName: ownedPatient?.motherName || null,
-        isCreated: Boolean(ownedPatient),
+        birthdate: null,
+        ageYears: null,
+        ageReportedAt: null,
+        sex: null,
+        cpf: null,
+        cns: null,
+        motherName: null,
+        isCreated: false,
         bookings: bks,
       };
     }
@@ -171,6 +172,9 @@ export async function resolvePatientAccess(param: string): Promise<PatientAccess
   }
   if (patient) {
     const key = clinicalKey(patient);
+    const bks = bookingsForEmail(key).concat(patient.email ? bookingsForEmail(patient.email) : []);
+    const unique = [...new Map(bks.map((b) => [b.id, b])).values()];
+    if (unique.length > 0) return fromPatient(patient, unique);
     if (await allowedViaShare(doctorId, decoded, key, patient.id, `pid:${patient.id}`, patient.email || "")) {
       return fromPatient(patient, bookingsForEmail(key));
     }

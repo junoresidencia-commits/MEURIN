@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { getDoctorSessionId } from "@/lib/auth";
 import { listBookingsForDoctor } from "@/lib/store";
-import { clinicalKey, findPatientByClinicalKey, listPatientsByDoctor } from "@/lib/patients-store";
+import { clinicalKey, findPatientByClinicalKey, findByEmailAny, listPatientsByDoctor } from "@/lib/patients-store";
 import { getProfile, getProfilesByDoctor } from "@/lib/clinical-profile-store";
 import { listSharesForDoctor } from "@/lib/patient-shares-store";
 import { getLatestLabsByEmails } from "@/lib/patient-store";
@@ -50,14 +50,35 @@ export async function GET() {
   }
   const byEmail = new Map<string, Base & { lastSlot: string }>();
   for (const b of mine) {
-    const email = b.patientEmail.toLowerCase();
-    if (createdEmails.has(email)) continue;
+    const email = (b.patientEmail || "").toLowerCase().trim();
+    if (!email || createdEmails.has(email)) continue;
     const cur = byEmail.get(email);
     if (!cur || b.slotStart > cur.lastSlot) {
       byEmail.set(email, { key: email, clinicalKey: email, name: b.patientName, photoUrl: null, city: b.patientCity, birthdate: null, ageYears: null, ageReportedAt: null, sex: null, isCreated: false, lastSlot: b.slotStart });
     }
   }
-  for (const v of byEmail.values()) bases.push(v);
+  for (const v of byEmail.values()) {
+    const cadastro = await findByEmailAny(v.clinicalKey);
+    if (cadastro) {
+      const ck = clinicalKey(cadastro).toLowerCase();
+      if (bases.some((b) => b.clinicalKey.toLowerCase() === ck || b.key === cadastro.id)) continue;
+      bases.push({
+        key: cadastro.id,
+        clinicalKey: clinicalKey(cadastro),
+        name: cadastro.name,
+        photoUrl: cadastro.photoUrl ?? null,
+        city: cadastro.address || v.city,
+        birthdate: cadastro.birthdate || null,
+        ageYears: cadastro.ageYears ?? null,
+        ageReportedAt: cadastro.ageReportedAt || null,
+        sex: cadastro.sex || null,
+        isCreated: true,
+        lastSlot: v.lastSlot,
+      });
+    } else {
+      bases.push(v);
+    }
+  }
 
   const seenKeys = new Set(bases.map((b) => b.clinicalKey.toLowerCase()));
   const { incoming } = await listSharesForDoctor(doctorId);

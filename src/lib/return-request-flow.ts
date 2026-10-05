@@ -26,6 +26,7 @@ import {
   updateReturnRequest,
 } from "./return-request-store";
 import type { Booking, Modality } from "./types";
+import { attachPatientToProfessional } from "./network-patients";
 
 export type PublicProfessional = {
   kind: ReturnProfessionalKind;
@@ -170,6 +171,14 @@ async function createConfirmedBooking(req: ReturnRequest, opts: { priceCents: nu
     ],
   };
   await updateDb((current) => ({ ...current, bookings: [...current.bookings, booking] }));
+  await attachPatientToProfessional({
+    kind: req.professionalKind,
+    professionalId: req.professionalId,
+    patientKey: req.patientKey,
+    email: req.patientEmail,
+    name: req.patientName,
+    origin: "return_request",
+  }).catch((err) => console.error("[retorno] vínculo na confirmação", err));
   return booking.id;
 }
 
