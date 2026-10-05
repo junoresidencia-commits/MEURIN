@@ -1,9 +1,9 @@
 import { NextResponse } from "next/server";
 import { getPatientEmail } from "@/lib/patient-session";
+import { EXAM_PROXY_MAX_BYTES, inspectExamFile } from "@/lib/patient-exam-file";
 import { addUpload, listUploads, storageAvailable, uploadExamFile } from "@/lib/uploads-store";
 
-const MAX_BYTES = 15 * 1024 * 1024;
-const ALLOWED = ["image/jpeg", "image/png", "image/webp", "application/pdf"];
+export const maxDuration = 60;
 
 export async function GET() {
   const email = await getPatientEmail();
@@ -14,6 +14,7 @@ export async function GET() {
   return NextResponse.json({ uploads });
 }
 
+/** Reserva: arquivos pequenos (dev/local). O envio principal vai direto ao Storage via /sign. */
 export async function POST(req: Request) {
   const email = await getPatientEmail();
   if (!email) {
@@ -28,11 +29,15 @@ export async function POST(req: Request) {
   if (!(file instanceof File)) {
     return NextResponse.json({ error: "Selecione um arquivo." }, { status: 400 });
   }
-  if (!ALLOWED.includes(file.type)) {
-    return NextResponse.json({ error: "Formato não permitido (use JPG, PNG, WEBP ou PDF)." }, { status: 400 });
+  const inspected = inspectExamFile({ name: file.name, type: file.type, size: file.size });
+  if (!inspected.ok) {
+    return NextResponse.json({ error: inspected.error }, { status: 400 });
   }
-  if (file.size > MAX_BYTES) {
-    return NextResponse.json({ error: "Arquivo muito grande (máx. 15 MB)." }, { status: 400 });
+  if (file.size > EXAM_PROXY_MAX_BYTES) {
+    return NextResponse.json(
+      { error: "Este arquivo é grande demais para este caminho. Recarregue a página e envie de novo." },
+      { status: 400 }
+    );
   }
 
   const buffer = Buffer.from(await file.arrayBuffer());
@@ -40,14 +45,14 @@ export async function POST(req: Request) {
   const examDate = form.get("examDate") ? String(form.get("examDate")) : null;
 
   try {
-    const filePath = await uploadExamFile(email, { name: file.name, type: file.type, buffer });
+    const filePath = await uploadExamFile(email, { name: file.name, type: inspected.mime, buffer });
     const upload = await addUpload({
       patientEmail: email,
       uploader: "patient",
       name: file.name,
       category,
       filePath,
-      mime: file.type,
+      mime: inspected.mime,
       sizeBytes: file.size,
       examDate,
     });
