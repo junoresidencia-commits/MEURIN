@@ -8,6 +8,33 @@ import { getSupabaseAdmin } from "./supabase-admin";
 /** Senha inicial padrão do paciente (login por CPF). Trocável depois. */
 export const DEFAULT_PATIENT_PASSWORD = "123456";
 
+/**
+ * Produção ainda exige patients.doctor_id NOT NULL (a migration que solta a coluna
+ * não foi aplicada). Cadastro feito pelo próprio paciente usa este UUID sentinela,
+ * que não é um médico real. mapRow devolve string vazia para o restante do app.
+ */
+export const UNASSIGNED_DOCTOR_ID = "00000000-0000-4000-8000-000000000001";
+
+export function isUnassignedDoctorId(id?: string | null): boolean {
+  const v = String(id || "").trim();
+  return !v || v === UNASSIGNED_DOCTOR_ID || v === "null";
+}
+
+function doctorIdToRow(id?: string | null): string | null {
+  return isUnassignedDoctorId(id) ? null : String(id).trim();
+}
+
+function doctorIdFromRow(raw: unknown): string {
+  if (raw == null) return "";
+  return isUnassignedDoctorId(String(raw)) ? "" : String(raw).trim();
+}
+
+function isDoctorIdRequired(error: { code?: string; message?: string } | null): boolean {
+  if (!error) return false;
+  if (error.code === "23502" && /doctor_id/i.test(error.message || "")) return true;
+  return /null value in column ["']?doctor_id["']?/i.test(error.message || "");
+}
+
 export interface Patient {
   id: string;
   doctorId: string;
@@ -111,7 +138,7 @@ async function writeFile(list: Patient[]) {
 function mapRow(r: Record<string, unknown>): Patient {
   return {
     id: String(r.id),
-    doctorId: String(r.doctor_id),
+    doctorId: doctorIdFromRow(r.doctor_id),
     name: String(r.name),
     cpf: (r.cpf as string | null) ?? null,
     cns: (r.cns as string | null) ?? null,
@@ -199,9 +226,9 @@ export async function createPatient(input: NewPatient): Promise<Patient> {
     mustChangePassword,
   };
   if (active()) {
-    const { error } = await insertPatientResilient({
+    const row: Record<string, unknown> = {
       id: p.id,
-      doctor_id: p.doctorId || null,
+      doctor_id: doctorIdToRow(p.doctorId),
       name: p.name,
       cpf: p.cpf ?? null,
       cpf_normalized: normalizeCpf(p.cpf),
@@ -226,12 +253,17 @@ export async function createPatient(input: NewPatient): Promise<Patient> {
       password_hash: p.passwordHash ?? null,
       status: p.status,
       created_at: p.createdAt,
-    });
+    };
+    let { error } = await insertPatientResilient(row);
+    if (isDoctorIdRequired(error)) {
+      row.doctor_id = UNASSIGNED_DOCTOR_ID;
+      ({ error } = await insertPatientResilient(row));
+    }
     if (error) {
       if (isMissingTableError(error)) tableMissing = true;
       else throw error;
     } else {
-      return p;
+      return { ...p, doctorId: doctorIdFromRow(row.doctor_id) };
     }
   }
   const list = await readFile();
@@ -374,7 +406,7 @@ export async function updatePatient(
       row.cpf_normalized = normalizeCpf(updated.cpf);
     }
     if (patch.photoUrl !== undefined) row.photo_url = updated.photoUrl ?? null;
-    if (patch.doctorId !== undefined) row.doctor_id = updated.doctorId;
+    if (patch.doctorId !== undefined) row.doctor_id = doctorIdToRow(updated.doctorId);
     if (patch.passwordHash !== undefined) row.password_hash = updated.passwordHash ?? null;
     if (patch.medications !== undefined) row.medications = updated.medications ?? null;
     // Update tolerante a coluna ausente (ex.: photo_url antes da migração).
@@ -383,6 +415,10 @@ export async function updatePatient(
       const { error } = await supabase.from("patients").update(row).eq("id", id);
       err = error;
       if (!error) break;
+      if (isDoctorIdRequired(error) && !row.doctor_id) {
+        row.doctor_id = UNASSIGNED_DOCTOR_ID;
+        continue;
+      }
       const col = missingColumnName(error);
       if (col && col in row) { delete row[col]; continue; }
       break;

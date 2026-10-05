@@ -3,7 +3,7 @@
 import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { toFriendlyMessage } from "@/lib/user-errors";
+import { FriendlyError, toFriendlyMessage } from "@/lib/user-errors";
 import { AuthShell } from "@/components/AuthShell";
 
 type ClaimHint = {
@@ -50,7 +50,7 @@ export default function CriarContaPacientePage() {
           }),
         });
         const data = await res.json().catch(() => ({}));
-        if (!res.ok) throw new Error(data.error || "Não foi possível conectar ao cadastro.");
+        if (!res.ok) throw new FriendlyError(data.error || "Não foi possível conectar ao cadastro.");
         router.push("/paciente/inicio");
         return;
       }
@@ -76,7 +76,7 @@ export default function CriarContaPacientePage() {
         setError("");
         return;
       }
-      if (!res.ok) throw new Error(data.error || "Não foi possível criar sua conta.");
+      if (!res.ok) throw new FriendlyError(data.error || "Não foi possível criar sua conta.");
       router.push("/paciente/inicio");
     } catch (err) {
       setError(toFriendlyMessage(err, "Não foi possível criar sua conta. Confira os dados e tente novamente."));
