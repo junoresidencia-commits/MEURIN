@@ -527,7 +527,7 @@ function NewAppointment({ onCreated, prefill }: { onCreated: () => void; prefill
   useEffect(() => {
     if (!doctorId) return;
     if (modality === "presencial" && !locationId) { setSlots([]); return; }
-    const qs = new URLSearchParams({ doctorId, modality });
+    const qs = new URLSearchParams({ doctorId, modality, visit: "all" });
     if (modality === "presencial") qs.set("locationId", locationId);
     fetch(`/api/availability?${qs.toString()}`).then((r) => r.json()).then((d) => setSlots(d.slots || []));
   }, [doctorId, modality, locationId]);

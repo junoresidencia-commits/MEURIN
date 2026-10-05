@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
+import Link from "next/link";
 import type { Booking, Modality, PaymentMethod, PublicDoctor } from "@/lib/types";
 import { formatBRL } from "@/lib/scheduling-client";
 import { trackEvent } from "@/lib/analytics-client";
@@ -91,6 +92,7 @@ export default function AgendarClient() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const wantsFast = searchParams.get("rapido") === "1";
+  const medicoParam = searchParams.get("medico") || "";
   const motivoParam = searchParams.get("motivo");
   const initialReason: Booking["careReason"] =
     motivoParam === "segunda_opiniao" || motivoParam === "pressa" || motivoParam === "acompanhamento" || motivoParam === "outro"
@@ -143,6 +145,14 @@ export default function AgendarClient() {
       .catch(() => setError("Não foi possível carregar os médicos."))
       .finally(() => setLoadingDoctors(false));
   }, []);
+
+  useEffect(() => {
+    if (!medicoParam || doctors.length === 0) return;
+    const found = doctors.find((d) => d.id === medicoParam);
+    if (!found) return;
+    setDoctorId(found.id);
+    setStep(1);
+  }, [medicoParam, doctors]);
 
   // Carrega locais/modalidades disponíveis do médico ao escolhê-lo.
   useEffect(() => {
@@ -391,16 +401,8 @@ export default function AgendarClient() {
             <p className="text-[var(--text-muted)]">Carregando nefrologistas…</p>
           )}
           {doctors.map((d) => (
-            <button
+            <div
               key={d.id}
-              type="button"
-              onClick={() => {
-                setDoctorId(d.id);
-                setSlot(null);
-                trackEvent("doctor_profile_open", { doctorId: d.id });
-                trackEvent("schedule_click", { doctorId: d.id });
-                setStep(1);
-              }}
               className="panel text-left transition hover:-translate-y-0.5 hover:border-[var(--border-gold)]"
             >
               <div className="flex items-start justify-between gap-4">
@@ -439,6 +441,27 @@ export default function AgendarClient() {
                         </span>
                       ) : null}
                     </div>
+                    <div className="mt-4 flex flex-wrap gap-2">
+                      <Link
+                        href={`/profissional/doctor/${d.id}`}
+                        className="btn-gold text-sm"
+                        onClick={() => trackEvent("doctor_profile_open", { doctorId: d.id })}
+                      >
+                        Ver perfil e escolher tipo
+                      </Link>
+                      <button
+                        type="button"
+                        className="btn-ghost text-sm"
+                        onClick={() => {
+                          setDoctorId(d.id);
+                          setSlot(null);
+                          trackEvent("schedule_click", { doctorId: d.id });
+                          setStep(1);
+                        }}
+                      >
+                        Nova consulta
+                      </button>
+                    </div>
                   </div>
                 </div>
                 <div className="shrink-0 text-right">
@@ -446,7 +469,7 @@ export default function AgendarClient() {
                   <p className="font-bold text-[var(--gold)]">{formatBRL(d.consultationPriceCents)}</p>
                 </div>
               </div>
-            </button>
+            </div>
           ))}
           {!loadingDoctors && doctors.length === 0 && (
             <p className="text-[var(--text-muted)]">

@@ -4,7 +4,7 @@ import { resolvePatientAccess } from "@/lib/doctor-access";
 import { createReturn } from "@/lib/care-store";
 
 // Define o próximo retorno do paciente contado a partir de HOJE (data do atendimento).
-const INTERVAL_DAYS: Record<string, number> = { "15d": 15, "30d": 30, "3m": 90, "6m": 182, "1a": 365 };
+const INTERVAL_DAYS: Record<string, number> = { "7d": 7, "15d": 15, "30d": 30, "3m": 90, "6m": 182, "1a": 365 };
 
 export async function POST(req: Request, { params }: { params: Promise<{ email: string }> }) {
   const { email: rawParam } = await params;
@@ -16,6 +16,13 @@ export async function POST(req: Request, { params }: { params: Promise<{ email: 
 
   const body = await req.json().catch(() => ({}));
   const interval = String(body.interval || "");
+  if (interval === "none") {
+    return NextResponse.json({
+      ok: true,
+      return: null,
+      message: "Sem retorno programado. Uma futura solicitação do paciente ainda precisará da sua validação.",
+    });
+  }
   let dueAt: string | null = null;
   let intervalLabel: string | null = null;
 

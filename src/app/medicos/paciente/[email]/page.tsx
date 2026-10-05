@@ -16,6 +16,7 @@ import { labCollisionDay, persistLabDate, todayCivilBahia } from "@/lib/lab-date
 import { TemplatePicker } from "@/components/TemplatePicker";
 import { AttendanceControl } from "@/components/AttendanceControl";
 import { ReturnPicker } from "@/components/ReturnPicker";
+import { ReturnHistoryOnChart } from "@/components/ReturnHistoryOnChart";
 import { PatientLmeField } from "@/components/PatientCnsField";
 import { PatientEditForm } from "@/components/PatientEditForm";
 import { guessSexFromName } from "@/lib/sex-guess";
@@ -732,6 +733,7 @@ export default function ProntuarioPage() {
               </button>
 
               <ReturnPicker patientKey={emailParam} />
+              <ReturnHistoryOnChart patientKey={emailParam} />
             </div>
 
             <div className="space-y-3 lg:max-h-[calc(100vh-8rem)] lg:overflow-y-auto lg:pr-1">

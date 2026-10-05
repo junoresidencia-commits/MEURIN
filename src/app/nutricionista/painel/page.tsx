@@ -86,6 +86,7 @@ export default function NutricionistaPainelPage() {
         <div className="flex flex-wrap gap-2">
           <Link href="/rede" className="btn-ghost">Pesquisar profissional</Link>
           <Link href="/encaminhamentos" className="btn-ghost">Pacientes encaminhados</Link>
+          <Link href="/nutricionista/solicitacoes" className="btn-ghost">Solicitações de retorno</Link>
           <Link href="/nutricionista/configuracoes" className="btn-ghost">Perfil e recebimentos</Link>
           <button type="button" className="btn-ghost" onClick={logout}>Sair</button>
         </div>
