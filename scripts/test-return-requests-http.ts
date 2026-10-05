@@ -94,8 +94,17 @@ async function main() {
   const loginD = await req(doctor, "/api/auth", { method: "POST", body: JSON.stringify({ email: "carlos@meurim.com", password: "medico123" }) });
   assert.equal(loginD.res.status, 200, JSON.stringify(loginD.json));
 
-  const inbox = await req(doctor, "/api/return-requests");
+  const inbox = await req(doctor, "/api/return-requests?as=professional");
   assert.ok((inbox.json.requests as { id: string }[]).some((r) => r.id === reqId), "inbox do médico deve listar a solicitação");
+
+  const afterCreate = await req(doctor, `/api/return-requests/${reqId}`);
+  assert.equal(afterCreate.json.you, "professional", JSON.stringify(afterCreate.json));
+  const createMsgs = afterCreate.json.messages as { body: string; authorRole: string }[];
+  assert.ok(createMsgs.some((m) => m.authorRole === "patient" && /exames solicitados/.test(m.body)), "nota do paciente deve aparecer no chat do profissional");
+
+  const pingCreate = await req(doctor, "/api/notifications");
+  const notesCreate = (pingCreate.json.notifications || []) as { type?: string; title?: string; targetUrl?: string }[];
+  assert.ok(notesCreate.some((n) => n.type === "solicitacao_retorno" && String(n.targetUrl || "").includes(reqId)), "médico deve ser notificado da solicitação");
 
   const ask = await req(doctor, `/api/return-requests/${reqId}/decide`, {
     method: "POST",
@@ -109,6 +118,13 @@ async function main() {
     body: JSON.stringify({ body: "Foi no mês passado na Clínica Salute." }),
   });
   assert.equal(reply.res.status, 201, JSON.stringify(reply.json));
+
+  const chat = await req(doctor, `/api/return-requests/${reqId}/messages`);
+  assert.ok((chat.json.messages as { body: string }[]).some((m) => /Clínica Salute/.test(m.body)), "resposta do paciente deve chegar no chat do profissional");
+
+  const pingChat = await req(doctor, "/api/notifications");
+  const notesChat = (pingChat.json.notifications || []) as { type?: string; title?: string }[];
+  assert.ok(notesChat.some((n) => n.type === "retorno_chat"), "médico deve ser notificado da mensagem do chat");
 
   const confirmed = await req(doctor, `/api/return-requests/${reqId}/decide`, {
     method: "POST",

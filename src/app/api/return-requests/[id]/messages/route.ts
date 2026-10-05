@@ -7,6 +7,8 @@ import { getAttendantId } from "@/lib/attendant-session";
 import { getReturnRequest, addReturnMessage, listReturnMessages, updateReturnRequest } from "@/lib/return-request-store";
 import { addReturnEvent } from "@/lib/return-request-store";
 import { uploadExamFile, storageAvailable } from "@/lib/uploads-store";
+import { sendNotification, patientKey } from "@/lib/notify";
+import { returnRequestPatientPath, returnRequestProfessionalPath } from "@/lib/return-request-types";
 
 const MAX_ATTACH_BYTES = 15 * 1024 * 1024;
 const ALLOWED_MIME = ["image/jpeg", "image/png", "image/webp", "image/heic", "image/heif", "application/pdf"];
@@ -97,6 +99,31 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
   if (actor.role === "patient" && row.status === "awaiting_patient") {
     await updateReturnRequest(id, { status: "pending_review" });
     await addReturnEvent(id, "paciente", "respondeu", "Paciente respondeu no chat. Aguardando decisão do profissional.");
+  }
+  if (actor.role === "patient") {
+    await sendNotification({
+      userId: row.professionalId,
+      role: "medico",
+      type: "retorno_chat",
+      title: "Nova mensagem no retorno",
+      body: `${row.patientName} enviou uma mensagem na solicitação de retorno.`,
+      targetUrl: returnRequestProfessionalPath(row.professionalKind, id),
+      tag: `return-chat-${id}`,
+      relatedType: "return_request",
+      relatedId: id,
+    });
+  } else if (actor.role === "professional" || actor.role === "attendant") {
+    await sendNotification({
+      userId: patientKey(row.patientEmail || row.patientKey),
+      role: "paciente",
+      type: "retorno_chat",
+      title: "Nova mensagem no retorno",
+      body: "O profissional respondeu na conversa da solicitação de retorno.",
+      targetUrl: returnRequestPatientPath(id),
+      tag: `return-chat-${id}`,
+      relatedType: "return_request",
+      relatedId: id,
+    });
   }
   return NextResponse.json({ ok: true, message: msg }, { status: 201 });
 }

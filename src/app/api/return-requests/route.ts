@@ -11,6 +11,7 @@ import {
   isReturnProfessionalKind,
   daysBetween,
   habitualWindow,
+  returnRequestProfessionalPath,
   type LastVisitApprox,
 } from "@/lib/return-request-types";
 import { createReturnRequest, listReturnRequestsForPatient, listReturnRequestsForProfessional, listReturnRequestsForDoctors } from "@/lib/return-request-store";
@@ -137,7 +138,7 @@ export async function POST(req: Request) {
     type: "solicitacao_retorno",
     title: "Solicitação de retorno",
     body: `${me.name} solicitou um retorno. Confirme se este atendimento deve ser realizado como retorno.`,
-    targetUrl: pro.kind === "doctor" ? `/medicos/solicitacoes/${created.id}` : `/${pro.kind === "nutrition" ? "nutricionista" : pro.kind === "psychology" ? "psicologo" : "enfermeiro"}/solicitacoes/${created.id}`,
+    targetUrl: returnRequestProfessionalPath(pro.kind, created.id),
     tag: `return-${created.id}`,
     relatedType: "return_request",
     relatedId: created.id,

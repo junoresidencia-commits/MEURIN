@@ -92,6 +92,17 @@ export function newConsultHref(kind: ReturnProfessionalKind, professionalId: str
   return `/paciente/agendar/${kind}/${professionalId}?tipo=consulta`;
 }
 
+export function returnRequestPatientPath(requestId: string): string {
+  return `/paciente/retorno/${requestId}`;
+}
+
+export function returnRequestProfessionalPath(kind: ReturnProfessionalKind, requestId: string): string {
+  if (kind === "doctor") return `/medicos/solicitacoes/${requestId}`;
+  if (kind === "nutrition") return `/nutricionista/solicitacoes/${requestId}`;
+  if (kind === "psychology") return `/psicologo/solicitacoes/${requestId}`;
+  return `/enfermeiro/solicitacoes/${requestId}`;
+}
+
 export const KIND_LABEL: Record<ReturnProfessionalKind, string> = {
   doctor: "Médico(a)",
   nutrition: "Nutricionista",

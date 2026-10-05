@@ -2,6 +2,7 @@
 
 import { DoctorSidebar } from "@/components/DoctorSidebar";
 import { DoctorMobileNav } from "@/components/DoctorMobileNav";
+import { NotificationBell } from "@/components/NotificationBell";
 import { ReturnInbox } from "@/components/ReturnInbox";
 
 export default function MedicoSolicitacoesPage() {
@@ -9,6 +10,9 @@ export default function MedicoSolicitacoesPage() {
     <div className="flex min-h-screen bg-[var(--bg)]">
       <DoctorSidebar />
       <div className="min-w-0 flex-1">
+        <div className="flex justify-end px-5 pt-6">
+          <NotificationBell />
+        </div>
         <ReturnInbox
           detailBase="/medicos/solicitacoes"
           loginHref="/medicos/login"
