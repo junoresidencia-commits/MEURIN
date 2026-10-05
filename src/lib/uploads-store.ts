@@ -1,8 +1,41 @@
 import "server-only";
 import { v4 as uuid } from "uuid";
+import { EXAM_MAX_BYTES } from "./patient-exam-file";
 import { getSupabaseAdmin } from "./supabase-admin";
 
 export const EXAMES_BUCKET = "exames";
+
+let bucketReady = false;
+async function ensureExamBucket() {
+  const supabase = getSupabaseAdmin();
+  if (!supabase || bucketReady) return;
+  try {
+    const { data } = await supabase.storage.getBucket(EXAMES_BUCKET);
+    if (!data) {
+      await supabase.storage.createBucket(EXAMES_BUCKET, {
+        public: false,
+        fileSizeLimit: EXAM_MAX_BYTES,
+      });
+    } else if (!data.file_size_limit || data.file_size_limit < EXAM_MAX_BYTES) {
+      await supabase.storage.updateBucket(EXAMES_BUCKET, { fileSizeLimit: EXAM_MAX_BYTES });
+    }
+  } catch {
+    try {
+      await supabase.storage.createBucket(EXAMES_BUCKET, {
+        public: false,
+        fileSizeLimit: EXAM_MAX_BYTES,
+      });
+    } catch {
+      /* já existe */
+    }
+  }
+  bucketReady = true;
+}
+
+function examObjectPath(email: string, name: string): string {
+  const safe = name.replace(/[^a-zA-Z0-9._-]/g, "_").slice(-60) || "arquivo";
+  return `${email.toLowerCase().trim()}/${uuid()}-${safe}`;
+}
 
 export interface PatientUpload {
   id: string;
@@ -44,14 +77,37 @@ export async function uploadExamFile(
 ): Promise<string> {
   const supabase = getSupabaseAdmin();
   if (!supabase) throw new Error("Armazenamento indisponível (Supabase não configurado).");
-  const safe = file.name.replace(/[^a-zA-Z0-9._-]/g, "_").slice(-60) || "arquivo";
-  const path = `${email.toLowerCase().trim()}/${uuid()}-${safe}`;
+  await ensureExamBucket();
+  const path = examObjectPath(email, file.name);
   const { error } = await supabase.storage.from(EXAMES_BUCKET).upload(path, file.buffer, {
     contentType: file.type || "application/octet-stream",
     upsert: false,
   });
   if (error) throw error;
   return path;
+}
+
+/** URL assinada para o celular/navegador enviar o PDF direto ao Storage (até 50 MB). */
+export async function createSignedExamUpload(
+  email: string,
+  file: { name: string; mime: string }
+): Promise<{ path: string; signedUrl: string; token: string }> {
+  const supabase = getSupabaseAdmin();
+  if (!supabase) throw new Error("Armazenamento indisponível (Supabase não configurado).");
+  await ensureExamBucket();
+  const path = examObjectPath(email, file.name);
+  const { data, error } = await supabase.storage.from(EXAMES_BUCKET).createSignedUploadUrl(path);
+  if (error || !data?.signedUrl) {
+    throw new Error(error?.message || "Não foi possível preparar o envio.");
+  }
+  return { path: data.path || path, signedUrl: data.signedUrl, token: data.token };
+}
+
+export async function examObjectExists(filePath: string): Promise<boolean> {
+  const supabase = getSupabaseAdmin();
+  if (!supabase) return false;
+  const { error } = await supabase.storage.from(EXAMES_BUCKET).createSignedUrl(filePath, 15);
+  return !error;
 }
 
 export async function addUpload(
