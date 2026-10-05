@@ -48,10 +48,11 @@ async function professionalActor() {
   return null;
 }
 
-export async function GET() {
-  const email = await getPatientEmail();
-  const actor = email ? null : await professionalActor();
-  if (email) {
+export async function GET(req: Request) {
+  const asPro = new URL(req.url).searchParams.get("as") === "professional";
+  const actor = await professionalActor();
+  const email = asPro ? null : await getPatientEmail();
+  if (email && !asPro) {
     const me = await patientProfile(email);
     const requests = await listReturnRequestsForPatient(me.key);
     const also = me.email && me.email !== me.key ? await listReturnRequestsForPatient(me.email) : [];

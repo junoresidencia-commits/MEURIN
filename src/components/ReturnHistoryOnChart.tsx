@@ -8,7 +8,7 @@ import type { ReturnRequest } from "@/lib/return-request-types";
 export function ReturnHistoryOnChart({ patientKey }: { patientKey: string }) {
   const [rows, setRows] = useState<ReturnRequest[]>([]);
   useEffect(() => {
-    fetch("/api/return-requests")
+    fetch("/api/return-requests?as=professional")
       .then((r) => r.json())
       .then((d) => {
         const key = patientKey.toLowerCase();

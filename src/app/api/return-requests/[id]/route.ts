@@ -13,6 +13,12 @@ import { STATUS_LABEL } from "@/lib/return-request-types";
 
 async function canSee(req: Awaited<ReturnType<typeof getReturnRequest>>) {
   if (!req) return { ok: false as const, who: "" };
+  const doctorId = await getDoctorSessionId();
+  if (doctorId && req.professionalKind === "doctor" && req.professionalId === doctorId) return { ok: true as const, who: "professional" };
+  const alliedId = await getAlliedSessionId();
+  if (alliedId && req.professionalId === alliedId) return { ok: true as const, who: "professional" };
+  const nutId = await getNutritionistId();
+  if (nutId && req.professionalId === nutId) return { ok: true as const, who: "professional" };
   const email = await getPatientEmail();
   if (email) {
     const p = email.startsWith("pid:") ? await getPatient(email.slice(4)) : await findByEmailAny(email);
@@ -27,12 +33,6 @@ async function canSee(req: Awaited<ReturnType<typeof getReturnRequest>>) {
       return { ok: true as const, who: "patient" };
     }
   }
-  const doctorId = await getDoctorSessionId();
-  if (doctorId && req.professionalKind === "doctor" && req.professionalId === doctorId) return { ok: true as const, who: "professional" };
-  const alliedId = await getAlliedSessionId();
-  if (alliedId && req.professionalId === alliedId) return { ok: true as const, who: "professional" };
-  const nutId = await getNutritionistId();
-  if (nutId && req.professionalId === nutId) return { ok: true as const, who: "professional" };
   const attId = await getAttendantId();
   if (attId && req.professionalKind === "doctor") {
     const links = await listLinksForAttendant(attId);

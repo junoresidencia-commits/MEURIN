@@ -32,7 +32,8 @@
     "check:patient-keys": "npx tsx scripts/test-patient-keys.ts",
     "check:abrir-sala": "env -u NEXT_PUBLIC_SUPABASE_URL -u SUPABASE_SERVICE_ROLE_KEY NODE_OPTIONS='--require ./scripts/shim-server-only.cjs' npx tsx scripts/test-abrir-sala-profissionais.ts",
     "check:professional-profile": "env -u NEXT_PUBLIC_SUPABASE_URL -u SUPABASE_SERVICE_ROLE_KEY NODE_OPTIONS='--require ./scripts/shim-server-only.cjs' npx tsx scripts/test-professional-profile.ts",
-    "check:return-requests": "env -u NEXT_PUBLIC_SUPABASE_URL -u SUPABASE_SERVICE_ROLE_KEY NODE_OPTIONS='--require ./scripts/shim-server-only.cjs' npx tsx scripts/test-return-requests.ts"
+    "check:return-requests": "env -u NEXT_PUBLIC_SUPABASE_URL -u SUPABASE_SERVICE_ROLE_KEY NODE_OPTIONS='--require ./scripts/shim-server-only.cjs' npx tsx scripts/test-return-requests.ts",
+    "check:return-requests-http": "env -u NEXT_PUBLIC_SUPABASE_URL -u SUPABASE_SERVICE_ROLE_KEY NODE_OPTIONS='--require ./scripts/shim-server-only.cjs' npx tsx scripts/test-return-requests-http.ts"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.110.3",

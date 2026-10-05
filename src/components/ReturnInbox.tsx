@@ -29,7 +29,7 @@ export function ReturnInbox({
   const [error, setError] = useState("");
 
   useEffect(() => {
-    fetch("/api/return-requests")
+    fetch("/api/return-requests?as=professional")
       .then((r) => {
         if (r.status === 401) {
           router.replace(loginHref);

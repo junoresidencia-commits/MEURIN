@@ -28,16 +28,16 @@ function inspectAttachment(file: File): { ok: true; mime: string } | { ok: false
 }
 
 async function who(req: NonNullable<Awaited<ReturnType<typeof getReturnRequest>>>) {
-  const email = await getPatientEmail();
-  if (email && (req.patientKey.toLowerCase() === email.toLowerCase() || (req.patientEmail || "").toLowerCase() === email.toLowerCase())) {
-    return { role: "patient" as const, id: req.patientKey, name: req.patientName };
-  }
   const doctorId = await getDoctorSessionId();
   if (doctorId && req.professionalId === doctorId) return { role: "professional" as const, id: doctorId, name: req.professionalName };
   const alliedId = await getAlliedSessionId();
   if (alliedId && req.professionalId === alliedId) return { role: "professional" as const, id: alliedId, name: req.professionalName };
   const nutId = await getNutritionistId();
   if (nutId && req.professionalId === nutId) return { role: "professional" as const, id: nutId, name: req.professionalName };
+  const email = await getPatientEmail();
+  if (email && (req.patientKey.toLowerCase() === email.toLowerCase() || (req.patientEmail || "").toLowerCase() === email.toLowerCase())) {
+    return { role: "patient" as const, id: req.patientKey, name: req.patientName };
+  }
   const attId = await getAttendantId();
   if (attId && req.attendantInvited) return { role: "attendant" as const, id: attId, name: "Atendente" };
   return null;
