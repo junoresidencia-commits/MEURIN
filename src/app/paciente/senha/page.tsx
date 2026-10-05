@@ -64,7 +64,7 @@ function TrocarSenhaInner() {
           type="button"
           onClick={sair}
           disabled={leaving}
-          className="text-sm font-semibold text-[var(--text-muted)] underline-offset-4 hover:text-[var(--danger)] hover:underline disabled:opacity-60"
+          className="rounded-full border border-[var(--border)] bg-white px-3.5 py-1.5 text-sm font-semibold text-[var(--text-soft)] hover:border-[var(--danger)]/40 hover:text-[var(--danger)] disabled:opacity-60"
         >
           {leaving ? "Saindo…" : "Sair"}
         </button>
