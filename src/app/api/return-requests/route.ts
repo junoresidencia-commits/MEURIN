@@ -134,7 +134,7 @@ export async function POST(req: Request) {
   }
   await sendNotification({
     userId: pro.id,
-    role: pro.kind === "doctor" ? "medico" : "paciente",
+    role: "medico",
     type: "solicitacao_retorno",
     title: "Solicitação de retorno",
     body: `${me.name} solicitou um retorno. Confirme se este atendimento deve ser realizado como retorno.`,
