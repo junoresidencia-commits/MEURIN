@@ -20,6 +20,7 @@ import { listLinksForAttendant } from "@/lib/attendants-store";
 import { addReturnMessage } from "@/lib/return-request-store";
 import { findLastVisit, loadPublicProfessional, parseApproxDate } from "@/lib/return-request-flow";
 import { sendNotification } from "@/lib/notify";
+import { attachPatientToProfessional } from "@/lib/network-patients";
 
 async function patientProfile(subject: string) {
   const p = subject.startsWith("pid:") ? await getPatient(subject.slice(4)) : await findByEmailAny(subject);
@@ -143,6 +144,15 @@ export async function POST(req: Request) {
     relatedType: "return_request",
     relatedId: created.id,
   });
+  await attachPatientToProfessional({
+    kind: pro.kind,
+    professionalId: pro.id,
+    sessionSubject: subject,
+    patientKey: me.key,
+    email: me.email,
+    name: me.name,
+    origin: "return_request",
+  }).catch((err) => console.error("[retorno] vínculo paciente", err));
 
   return NextResponse.json({
     ok: true,

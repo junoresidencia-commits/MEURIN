@@ -9,6 +9,8 @@ import { activeHoldStarts, releaseHold } from "@/lib/holds-store";
 import { processReminders } from "@/lib/reminders";
 import { sendNotification, patientKey, links, fmtDateTime } from "@/lib/notify";
 import { trackFunnelEvent } from "@/lib/analytics-store";
+import { getPatientEmail } from "@/lib/patient-session";
+import { attachPatientToProfessional } from "@/lib/network-patients";
 import type { Booking, ConsultationEvent, Modality, PaymentMethod } from "@/lib/types";
 import { consumeCourtesyCredit, findOpenCourtesy } from "@/lib/courtesy-credits-store";
 import { courtesyLabel } from "@/lib/courtesy";
@@ -142,6 +144,16 @@ export async function POST(req: Request) {
     ...current,
     bookings: [...current.bookings, booking],
   }));
+
+  await attachPatientToProfessional({
+    kind: "doctor",
+    professionalId: String(doctorId),
+    sessionSubject: await getPatientEmail(),
+    email,
+    phone: booking.patientPhone,
+    name: booking.patientName,
+    origin: "booking",
+  }).catch((err) => console.error("[bookings] vínculo paciente", err));
 
   if (courtesy) {
     await consumeCourtesyCredit(String(doctorId), email, booking.id);

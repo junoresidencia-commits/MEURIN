@@ -13,7 +13,7 @@ await rm(path.join(DATA, "network-referrals.json"), { force: true });
 
 const { createNetworkReferral, updateNetworkReferral, listReferralsForProfessional, upsertProfessionalLink, findProfessionalLink } = await import("../src/lib/network-referrals-store");
 const { findDuplicatePatient, createPatient } = await import("../src/lib/patients-store");
-const { registerOrLinkPatient } = await import("../src/lib/network-patients");
+const { registerOrLinkPatient, attachPatientToProfessional } = await import("../src/lib/network-patients");
 const { normalizePixKey } = await import("../src/lib/pix-key");
 
 const a = await createPatient({
@@ -98,6 +98,39 @@ assert.equal(novo.linkedExisting, false);
 assert.equal(novo.patient.doctorId, "doc-a");
 const novoLink = await findProfessionalLink("doctor", "doc-a", novo.patient.email || `pid:${novo.patient.id}`);
 assert.ok(novoLink);
+
+const self = await createPatient({
+  doctorId: "",
+  name: "Paciente Agenda",
+  email: "agenda.self@example.com",
+  cpf: "11144477735",
+});
+assert.equal(self.doctorId, "");
+const attached = await attachPatientToProfessional({
+  kind: "doctor",
+  professionalId: "doc-a",
+  email: "agenda.self@example.com",
+  origin: "booking",
+});
+assert.equal(attached?.doctorId, "doc-a");
+const stillSame = await attachPatientToProfessional({
+  kind: "doctor",
+  professionalId: "doc-c",
+  email: "agenda.self@example.com",
+  origin: "return_request",
+});
+assert.equal(stillSame?.doctorId, "doc-a");
+assert.ok(await findProfessionalLink("doctor", "doc-c", "agenda.self@example.com"));
+
+const nutriSelf = await createPatient({ doctorId: "", name: "Lia Nutri", email: "lia.nutri@example.com" });
+const nutriAttached = await attachPatientToProfessional({
+  kind: "nutrition",
+  professionalId: "nut-1",
+  email: "lia.nutri@example.com",
+  origin: "return_request",
+});
+assert.equal(nutriAttached?.doctorId, "");
+assert.ok(await findProfessionalLink("nutrition", "nut-1", "lia.nutri@example.com"));
 
 const pix = normalizePixKey("cpf", "390.533.447-05");
 assert.equal(pix.ok, true);
