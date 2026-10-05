@@ -126,6 +126,40 @@ async function apiTests() {
   if (oldWouldFail.res.status === 200) {
     assert.ok(oldWouldFail.json.signedUrl, "sign deveria devolver signedUrl");
     assert.ok(oldWouldFail.json.path);
+
+    const sixMb = 6 * 1024 * 1024;
+    const signBig = await req(jar, "/api/patient/exams/sign", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name: "laudo-6mb.pdf", type: "application/octet-stream", size: sixMb }),
+    });
+    assert.equal(signBig.res.status, 200, JSON.stringify(signBig.json));
+    const pdf = Buffer.concat([
+      Buffer.from("%PDF-1.1\n1 0 obj<<>>endobj\ntrailer<<>>\n%%EOF\n"),
+      Buffer.alloc(sixMb - 64, 0x20),
+    ]).subarray(0, sixMb);
+    const putHeaders: Record<string, string> = { "Content-Type": "application/pdf" };
+    if (typeof signBig.json.token === "string" && signBig.json.token) {
+      putHeaders.Authorization = `Bearer ${signBig.json.token}`;
+    }
+    const put = await fetch(String(signBig.json.signedUrl), { method: "PUT", headers: putHeaders, body: pdf });
+    assert.ok(put.ok, `PUT storage ${put.status} ${await put.text().catch(() => "")}`);
+    const done = await req(jar, "/api/patient/exams/complete", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        path: signBig.json.path,
+        name: "laudo-6mb.pdf",
+        mime: "application/pdf",
+        size: sixMb,
+        category: "Laudo",
+      }),
+    });
+    assert.equal(done.res.status, 201, JSON.stringify(done.json));
+    const listed = await req(jar, "/api/patient/exams");
+    const uploads = (listed.json.uploads as Array<{ name?: string; sizeBytes?: number }>) || [];
+    assert.ok(uploads.some((u) => u.name === "laudo-6mb.pdf" && u.sizeBytes === sixMb), "lista deveria trazer o PDF de 6 MB");
+    console.log("api: PDF 6 MB enviado direto ao Storage");
   }
 
   const page = await fetch(`${BASE}/paciente/exames`, { headers: { cookie: jar.header() } });
