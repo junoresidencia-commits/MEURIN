@@ -12,6 +12,7 @@ export interface AvailableSlot {
   locationId?: string;
   locationName?: string;
   priceCents: number;
+  visitKind?: "consulta" | "retorno" | "ambos";
 }
 
 /** Converte a agenda simples (weeklyAvailability) em períodos de teleconsulta 30/0. */
@@ -82,6 +83,7 @@ export function generateAvailableSlots(
             locationId: p.modality === "presencial" ? p.locationId : undefined,
             locationName: p.modality === "presencial" ? locName(p.locationId) : undefined,
             priceCents: p.priceCents ?? doctor.consultationPriceCents,
+            visitKind: p.visitKind || "ambos",
           });
         }
         cursor = addMinutes(cursor, step);

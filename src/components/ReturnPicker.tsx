@@ -3,8 +3,10 @@
 import { useState } from "react";
 
 const OPTIONS: { id: string; label: string }[] = [
-  { id: "15d", label: "15 dias" },
-  { id: "30d", label: "30 dias" },
+  { id: "none", label: "Sem retorno" },
+  { id: "7d", label: "Até 7 dias" },
+  { id: "15d", label: "Até 15 dias" },
+  { id: "30d", label: "Até 30 dias" },
   { id: "3m", label: "3 meses" },
   { id: "6m", label: "6 meses" },
   { id: "1a", label: "1 ano" },
@@ -26,15 +28,20 @@ export function ReturnPicker({ patientKey }: { patientKey: string }) {
     setBusy(false);
     if (!res.ok) { const d = await res.json().catch(() => ({})); setMsg(d.error || "Não foi possível salvar o retorno."); return; }
     const d = await res.json();
+    if (!d.return) {
+      setMsg(d.message || "Sem retorno programado. Uma futura solicitação ainda precisará da sua validação.");
+      setShowDate(false);
+      return;
+    }
     const due = d.return?.dueAt ? new Date(d.return.dueAt).toLocaleDateString("pt-BR") : "";
-    setMsg(`Retorno salvo — previsão: ${due}. O sistema vai alertar quando chegar a data.`);
+    setMsg(`Retorno salvo — previsão: ${due}. O sistema vai alertar quando chegar a data. A solicitação do paciente ainda passa pela sua validação.`);
     setShowDate(false);
   }
 
   return (
     <div className="rounded-2xl border border-[var(--border-gold)] bg-[var(--gold-soft)]/50 p-3">
       <p className="text-xs font-bold uppercase tracking-wider text-[var(--gold)]">Próximo retorno</p>
-      <p className="mt-0.5 text-xs text-[var(--text-muted)]">Contado a partir de hoje (data do atendimento). Aparece na Central de retornos e alerta quando chegar a data.</p>
+      <p className="mt-0.5 text-xs text-[var(--text-muted)]">Janela de orientação a partir de hoje. Aparece na Central de retornos, mas não dispensa a validação do profissional quando o paciente solicitar um retorno.</p>
       <div className="mt-2 flex flex-wrap gap-2">
         {OPTIONS.map((o) => (
           <button key={o.id} type="button" disabled={busy} onClick={() => set(o.id)}

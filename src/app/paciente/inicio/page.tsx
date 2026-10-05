@@ -10,6 +10,7 @@ import { EnableNotifications } from "@/components/EnableNotifications";
 import { LabChart } from "@/components/LabChart";
 import { PatientHealthTeam } from "@/components/PatientHealthTeam";
 import { PatientMedicationsForm } from "@/components/PatientMedicationsForm";
+import { PatientReturnPreview } from "@/components/PatientReturnPreview";
 import { formatSlotLabel } from "@/lib/scheduling-client";
 
 type HomeRecord = {
@@ -259,12 +260,15 @@ export default function PacienteInicioPage() {
         {/* Atalhos secundários — linha rolável no celular */}
         <nav className="relative mt-3 flex gap-2 overflow-x-auto pb-0.5 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
           <Link href="/paciente/documentos" className="shrink-0 whitespace-nowrap rounded-full border border-[var(--border)] bg-white/80 px-3.5 py-1.5 text-xs font-semibold text-[var(--text-soft)] backdrop-blur transition hover:border-[var(--border-gold)]">Documentos</Link>
+          <Link href="/paciente/atendimentos" className="shrink-0 whitespace-nowrap rounded-full border border-[var(--border)] bg-white/80 px-3.5 py-1.5 text-xs font-semibold text-[var(--text-soft)] backdrop-blur transition hover:border-[var(--border-gold)]">Meus atendimentos</Link>
           <Link href="/paciente/dados" className="shrink-0 whitespace-nowrap rounded-full border border-[var(--border)] bg-white/80 px-3.5 py-1.5 text-xs font-semibold text-[var(--text-soft)] backdrop-blur transition hover:border-[var(--border-gold)]">Meus dados</Link>
           <Link href="/paciente/senha" className="shrink-0 whitespace-nowrap rounded-full border border-[var(--border)] bg-white/80 px-3.5 py-1.5 text-xs font-semibold text-[var(--text-soft)] backdrop-blur transition hover:border-[var(--border-gold)]">Trocar senha</Link>
         </nav>
       </header>
 
       <PatientHealthTeam />
+
+      <PatientReturnPreview />
 
       <KidneyNumbers labs={labs} />
 
@@ -714,6 +718,7 @@ function EvolutionCharts({ labs, records }: { labs: Lab[]; records: HomeRecord[]
 function AcessosRapidos() {
   const items: { href: string; label: string; icon: string }[] = [
     { href: "/paciente/exames", label: "Exames", icon: "🧪" },
+    { href: "/paciente/atendimentos", label: "Atendimentos", icon: "🗓️" },
     { href: "/paciente/documentos", label: "Documentos", icon: "📄" },
     { href: "/paciente/nutricao", label: "Nutrição", icon: "🥗" },
     { href: "/paciente/entender", label: "Entender", icon: "📖" },

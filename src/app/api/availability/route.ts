@@ -25,7 +25,14 @@ export async function GET(req: Request) {
   const held = await activeHoldStarts(doctorId);
   const excludeStarts = new Set<string>([...bookedStarts, ...held]);
 
-  const slots = generateAvailableSlots(doctor, { modality, locationId, excludeStarts });
+  const visit = searchParams.get("visit");
+  const allSlots = generateAvailableSlots(doctor, { modality, locationId, excludeStarts });
+  const slots =
+    visit === "retorno"
+      ? allSlots.filter((s) => !s.visitKind || s.visitKind === "retorno" || s.visitKind === "ambos")
+      : visit === "all"
+        ? allSlots
+        : allSlots.filter((s) => !s.visitKind || s.visitKind === "consulta" || s.visitKind === "ambos");
   const locations = (doctor.locations || []).filter((l) => l.active);
 
   // Primeira disponibilidade (mais próxima) por modalidade/local.
@@ -104,6 +111,7 @@ export async function PUT(req: Request) {
             p.priceCents === undefined || p.priceCents === null || p.priceCents === ""
               ? undefined
               : Math.max(0, Math.round(Number(p.priceCents))),
+          visitKind: p.visitKind === "consulta" || p.visitKind === "retorno" || p.visitKind === "ambos" ? p.visitKind : "ambos",
         };
       })
       .filter((p): p is AvailabilityPeriod => p !== null);

@@ -68,6 +68,7 @@ export default function AgendaMedicoPage() {
         durationMin: 30,
         intervalMin: 10,
         priceCents: undefined,
+        visitKind: "ambos",
       },
     ]);
   }
@@ -105,7 +106,7 @@ export default function AgendaMedicoPage() {
           <a href="/medicos/agenda" className="text-sm font-semibold text-[var(--gold)]">← Agenda</a>
           <h1 className="font-display text-3xl font-extrabold text-[var(--text)]">Configurar agenda</h1>
           <p className="mt-1 text-[var(--text-muted)]">
-            Configure onde e quando você atende. O paciente só verá os horários realmente disponíveis.
+            Configure onde e quando você atende. Separe horários de primeira consulta e de retorno, se quiser. O paciente só verá os horários realmente disponíveis para o tipo escolhido.
           </p>
 
           <LocationsCard locations={locations} onChange={setLocations} show={showLocForm} setShow={setShowLocForm} />
@@ -194,6 +195,18 @@ export default function AgendaMedicoPage() {
                                 onChange={(e) => updatePeriod(p.id, { priceCents: e.target.value === "" ? undefined : Math.round(Number(e.target.value) * 100) })}
                                 placeholder="usa padrão"
                               />
+                            </label>
+                            <label className="block">
+                              <span className="mb-1 block text-xs font-semibold text-[var(--text-muted)]">Tipo de horário</span>
+                              <select
+                                className="input-field w-44"
+                                value={p.visitKind || "ambos"}
+                                onChange={(e) => updatePeriod(p.id, { visitKind: e.target.value as Period["visitKind"] })}
+                              >
+                                <option value="ambos">Consulta e retorno</option>
+                                <option value="consulta">Só primeira/nova consulta</option>
+                                <option value="retorno">Só retorno</option>
+                              </select>
                             </label>
                             <button type="button" className="btn-ghost text-sm text-[var(--danger)]" onClick={() => removePeriod(p.id)}>Remover</button>
                           </div>

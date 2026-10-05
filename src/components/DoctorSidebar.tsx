@@ -31,6 +31,7 @@ const PRIMARY: Item[] = [
   { href: "/medicos/pacientes", label: "Pacientes", icon: "users" },
   { href: "/medicos/agenda", label: "Agenda", icon: "cal" },
   { href: "/medicos/atendimentos", label: "Atendimentos", icon: "file" },
+  { href: "/medicos/solicitacoes", label: "Solicitações", icon: "file" },
   { href: "/medicos/retornos", label: "Retornos", icon: "file" },
 ];
 const AGENDA_EXTRA: Item[] = [

@@ -40,6 +40,8 @@ export interface AvailabilityPeriod {
   durationMin: number; // ex.: 30
   intervalMin: number; // ex.: 10
   priceCents?: number; // valor específico do período/local (senão usa consultationPriceCents)
+  /** Horários só para consulta, só para retorno, ou ambos (padrão). */
+  visitKind?: "consulta" | "retorno" | "ambos";
 }
 
 /** Reserva temporária de horário (anti dupla marcação), com expiração. */

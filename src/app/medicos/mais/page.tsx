@@ -45,6 +45,7 @@ export default function MedicoMaisPage() {
     {
       title: "Clínica e equipe",
       items: [
+        { href: "/medicos/solicitacoes", label: "Solicitações de retorno", desc: "O paciente solicita; você confirma, converte ou recusa — o horário só reserva depois." },
         { href: "/medicos/agenda/configurar", label: "Clínicas e horários", desc: "Locais de atendimento e períodos da agenda." },
         { href: "/medicos/prontuario-inteligente", label: "Revisão de prontuário", desc: "Escolher o que sugerir e reler evoluções — nada entra no perfil sozinho." },
         { href: "/medicos/equipe", label: "Atendentes", desc: "Sua equipe administrativa e permissões." },

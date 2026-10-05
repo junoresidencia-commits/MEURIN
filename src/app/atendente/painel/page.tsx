@@ -112,6 +112,7 @@ export default function AtendentePainelPage() {
 
       <div className="mt-4 flex flex-wrap gap-2">
         <Link href={`/atendente/agendar?doctorId=${doctorId}`} className="btn-gold">+ Novo agendamento</Link>
+        <Link href="/atendente/solicitacoes" className="btn-ghost">Solicitações encaminhadas</Link>
         {clinics.map((c) => (
           <Link key={c.clinicId} href={`/clinica/${c.clinicId}/caixa`} className="btn-ghost">Check-in · {c.clinicName}</Link>
         ))}
