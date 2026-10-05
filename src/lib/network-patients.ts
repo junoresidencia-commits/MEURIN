@@ -82,14 +82,19 @@ export async function registerOrLinkPatient(
     notes: body.notes ? String(body.notes) : null,
   });
 
-  await upsertProfessionalLink({
-    patientKey: patientKeyOf(patient),
-    patientName: patient.name,
-    professionalKind: actor.kind,
-    professionalId: actor.id,
-    origin: "registered",
-    referralId: null,
-  });
+  try {
+    await upsertProfessionalLink({
+      patientKey: patientKeyOf(patient),
+      patientName: patient.name,
+      professionalKind: actor.kind,
+      professionalId: actor.id,
+      origin: "registered",
+      referralId: null,
+    });
+  } catch (err) {
+    console.error("[network] vínculo após cadastro", err);
+    if (actor.kind !== "doctor") throw err;
+  }
 
   return { patient, linkedExisting: false };
 }

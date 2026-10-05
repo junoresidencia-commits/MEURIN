@@ -45,8 +45,10 @@ export async function POST(req: Request) {
   } catch (err) {
     const status = (err as { status?: number }).status || 500;
     console.error("[network] cadastro de paciente", err);
+    const raw = err instanceof Error ? err.message : "";
+    const technical = /erofs|eacces|pgrst|postgres|uuid|null value|schema cache|could not find the table/i.test(raw);
     return NextResponse.json(
-      { error: err instanceof Error ? err.message : "Não foi possível cadastrar o paciente." },
+      { error: !raw || technical ? "Não foi possível cadastrar o paciente. Tente novamente em instantes." : raw },
       { status }
     );
   }
