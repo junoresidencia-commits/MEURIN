@@ -93,8 +93,9 @@ export function resolveCallPhase(input: {
 }): CallPhase {
   if (input.mediaError) return "denied";
   if (!input.joined) return "lobby";
-  if (input.connected) return "connected";
+  // Oscilação de ICE não encerra a consulta: religa por cima do vídeo congelado.
   if (input.reconnecting || input.ice === "disconnected" || input.ice === "failed") return "reconnecting";
+  if (input.connected) return "connected";
   if (input.peerLeft) return "peer_left";
   if (input.ice === "checking" || input.ice === "connected") return "connecting";
   if (input.peerInCall) return "connecting";
@@ -113,11 +114,17 @@ export function overlayCopy(phase: CallPhase, hostLabel: string, otherName: stri
     case "connecting":
       return { title: "Conectando o vídeo…", detail: `${otherName} já entrou. Cruzando áudio e imagem.` };
     case "reconnecting":
-      return { title: "Religando…", detail: "A internet oscilou. Tentamos de novo automaticamente. O prontuário continua aberto." };
+      return {
+        title: "Conexão interrompida. Tentando reconectar…",
+        detail: "A sala, o profissional e o paciente continuam os mesmos. Não atualize a página nem gere outro link.",
+      };
     case "peer_left":
       return { title: `${otherName} saiu`, detail: "A sala continua aberta. Quando a pessoa voltar, o vídeo religa." };
     case "failed":
-      return { title: "Não deu para cruzar o vídeo", detail: "Peça para os dois tocarem em Entrar de novo, de preferência no Chrome ou Safari." };
+      return {
+        title: "Não deu para cruzar o vídeo",
+        detail: "A consulta não foi encerrada. Os dois podem tocar em Entrar de novo, de preferência no Chrome ou Safari.",
+      };
     case "denied":
       return { title: "Sem câmera ou microfone", detail: "Libere a permissão e tente de novo." };
     case "connected":
@@ -127,17 +134,40 @@ export function overlayCopy(phase: CallPhase, hostLabel: string, otherName: stri
   }
 }
 
+export const ICE_DISCONNECT_GRACE_MS = 8_000;
+export const RECONNECT_GAP_MS = 4_000;
+
+export function iceLooksDown(ice?: string, connection?: string): boolean {
+  return ice === "failed" || ice === "disconnected" || connection === "failed" || connection === "disconnected";
+}
+
+export function pastDisconnectGrace(
+  disconnectedSince: number | null | undefined,
+  now = Date.now(),
+  graceMs = ICE_DISCONNECT_GRACE_MS
+): boolean {
+  if (!disconnectedSince) return false;
+  return now - disconnectedSince >= graceMs;
+}
+
 export function reconnectAction(input: {
   ice?: string;
+  connectionState?: string;
   failCount: number;
   lastAttemptAt: number;
+  disconnectedSince?: number | null;
   now?: number;
 }): "none" | "ice-restart" | "rebuild" {
   const now = input.now ?? Date.now();
-  if (now - input.lastAttemptAt < 2500) return "none";
-  if (input.ice === "failed" || input.failCount >= 2) return "rebuild";
-  if (input.ice === "disconnected") return "ice-restart";
-  return "none";
+  if (now - input.lastAttemptAt < RECONNECT_GAP_MS) return "none";
+  const down = iceLooksDown(input.ice, input.connectionState);
+  if (!down) return "none";
+  const failed = input.ice === "failed" || input.connectionState === "failed";
+  if (failed && input.failCount >= 2) return "rebuild";
+  if (failed) return "ice-restart";
+  if (!pastDisconnectGrace(input.disconnectedSince, now)) return "none";
+  if (input.failCount >= 3) return "rebuild";
+  return "ice-restart";
 }
 
 export function pollIntervalMs(phase: CallPhase): number {
@@ -219,19 +249,109 @@ export function browserFamily(ua: string): string {
   return "other";
 }
 
-export function qualityFromStats(input: { rttMs?: number; lossRatio?: number }): "good" | "fair" | "poor" {
+export type NetQuality = "good" | "fair" | "poor";
+
+export function qualityFromStats(input: {
+  rttMs?: number;
+  lossRatio?: number;
+  jitterMs?: number;
+  availableBitrate?: number;
+}): NetQuality {
   const rtt = input.rttMs ?? 0;
   const loss = input.lossRatio ?? 0;
-  if (loss > 0.08 || rtt > 600) return "poor";
-  if (loss > 0.03 || rtt > 250) return "fair";
+  const jitter = input.jitterMs ?? 0;
+  const avail = input.availableBitrate ?? Number.POSITIVE_INFINITY;
+  if (loss > 0.08 || rtt > 600 || jitter > 80 || avail < 120_000) return "poor";
+  if (loss > 0.03 || rtt > 250 || jitter > 40 || avail < 400_000) return "fair";
   return "good";
 }
 
-export function mediaConstraints(video: boolean): MediaStreamConstraints {
+export type RtpCounters = { lost: number; received: number; jitterMs: number };
+
+export function recentLossRatio(prev: RtpCounters | null | undefined, next: RtpCounters): number {
+  if (!next.received && !next.lost) return 0;
+  if (!prev) return next.received + next.lost ? next.lost / (next.received + next.lost) : 0;
+  const dLost = Math.max(0, next.lost - prev.lost);
+  const dRecv = Math.max(0, next.received - prev.received);
+  const total = dLost + dRecv;
+  return total ? dLost / total : 0;
+}
+
+export const VIDEO_LADDER = [
+  { id: 0, height: 720, maxBitrate: 1_000_000 },
+  { id: 1, height: 480, maxBitrate: 600_000 },
+  { id: 2, height: 360, maxBitrate: 350_000 },
+  { id: 3, height: 180, maxBitrate: 150_000 },
+  { id: 4, height: 0, maxBitrate: 0 },
+] as const;
+
+export const DEFAULT_VIDEO_TIER = 1;
+
+export function nextVideoTier(current: number, quality: NetQuality, poorTicks: number, goodTicks: number): number {
+  const cur = Math.min(4, Math.max(0, current));
+  if (quality === "poor" && poorTicks >= 2) return Math.min(4, cur + 1);
+  if (quality === "fair" && poorTicks >= 3 && cur < 4) return cur + 1;
+  if (quality === "good" && goodTicks >= 3 && cur > 0) return cur - 1;
+  return cur;
+}
+
+export function mediaConstraints(video: boolean, height = VIDEO_LADDER[DEFAULT_VIDEO_TIER].height): MediaStreamConstraints {
   return {
     audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true },
     video: video
-      ? { facingMode: "user", width: { ideal: 1280 }, height: { ideal: 720 } }
+      ? {
+          facingMode: "user",
+          width: { ideal: Math.round((height * 16) / 9), max: 1280 },
+          height: { ideal: height, max: 720 },
+          frameRate: { ideal: height >= 480 ? 24 : 15, max: 30 },
+        }
       : false,
   };
+}
+
+export const NET_COPY = {
+  localUnstable:
+    "Sua conexão com a internet está instável. A qualidade da chamada poderá ser reduzida para manter a consulta conectada.",
+  patientUnstable: "A conexão do paciente está instável.",
+  professionalUnstable: "A conexão do profissional está instável.",
+  reconnecting: "Conexão interrompida. Tentando reconectar…",
+  audioPriority: "Sua conexão está limitada. O vídeo foi temporariamente reduzido para manter o áudio da consulta.",
+} as const;
+
+export function qualityIndicator(q: NetQuality | null | undefined): { emoji: string; label: string } | null {
+  if (q === "good") return { emoji: "🟢", label: "Conexão boa" };
+  if (q === "fair") return { emoji: "🟡", label: "Conexão instável" };
+  if (q === "poor") return { emoji: "🔴", label: "Conexão ruim" };
+  return null;
+}
+
+export function networkNotice(input: {
+  reconnecting: boolean;
+  quality: NetQuality | null | undefined;
+  peerQuality?: NetQuality | null;
+  audioOnly: boolean;
+  localRole: "doctor" | "patient";
+}): { tone: "info" | "warn"; text: string } | null {
+  if (input.reconnecting) return { tone: "warn", text: NET_COPY.reconnecting };
+  if (input.audioOnly) return { tone: "warn", text: NET_COPY.audioPriority };
+  const localBad = input.quality === "fair" || input.quality === "poor";
+  const peerBad = input.peerQuality === "fair" || input.peerQuality === "poor";
+  if (localBad) return { tone: "warn", text: NET_COPY.localUnstable };
+  if (peerBad) {
+    return {
+      tone: "warn",
+      text: input.localRole === "doctor" ? NET_COPY.patientUnstable : NET_COPY.professionalUnstable,
+    };
+  }
+  return null;
+}
+
+export function parsePeerNetHint(body: unknown): NetQuality | null {
+  if (!body || typeof body !== "object") return null;
+  const q = (body as { quality?: unknown }).quality;
+  return q === "good" || q === "fair" || q === "poor" ? q : null;
+}
+
+export function isGenericCallError(text: string): boolean {
+  return /erro na chamada/i.test(text);
 }

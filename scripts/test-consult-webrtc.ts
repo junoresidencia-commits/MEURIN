@@ -15,11 +15,19 @@ import {
   looksLikeSensitiveConsultPayload,
   overlayCopy,
   qualityFromStats,
+  qualityIndicator,
+  networkNotice,
+  nextVideoTier,
+  recentLossRatio,
   reconnectAction,
   resolveCallPhase,
   sanitizeConsultEvent,
   unwrapSignal,
   wrapSignal,
+  NET_COPY,
+  isGenericCallError,
+  parsePeerNetHint,
+  pastDisconnectGrace,
 } from "../src/lib/consult-call";
 import { appendSignalingMessage, listSignalingForRoom } from "../src/lib/store";
 import { listRoomPresence, upsertRoomPresence } from "../src/lib/room-presence";
@@ -135,9 +143,40 @@ async function main() {
     "reconnecting"
   );
 
-  assert.equal(reconnectAction({ ice: "disconnected", failCount: 0, lastAttemptAt: 0, now: 5000 }), "ice-restart");
+  assert.equal(
+    resolveCallPhase({
+      joined: true,
+      mediaError: false,
+      connected: true,
+      reconnecting: true,
+      peerInCall: true,
+      peerOnPage: true,
+      peerLeft: false,
+      ice: "disconnected",
+    }),
+    "reconnecting",
+    "internet ruim não vira consulta encerrada"
+  );
+
+  const reconnectingUi = overlayCopy("reconnecting", "Médico", "Maria");
+  assert.equal(reconnectingUi?.title, NET_COPY.reconnecting);
+  assert.equal(isGenericCallError(reconnectingUi?.title || ""), false);
+  assert.equal(isGenericCallError(NET_COPY.localUnstable), false);
+
+  assert.equal(
+    reconnectAction({ ice: "disconnected", failCount: 0, lastAttemptAt: 0, disconnectedSince: 4000, now: 5000 }),
+    "none",
+    "aguarda alguns segundos antes de religar"
+  );
+  assert.equal(
+    reconnectAction({ ice: "disconnected", failCount: 0, lastAttemptAt: 0, disconnectedSince: 1000, now: 10000 }),
+    "ice-restart"
+  );
+  assert.equal(reconnectAction({ ice: "failed", failCount: 0, lastAttemptAt: 0, now: 5000 }), "ice-restart");
   assert.equal(reconnectAction({ ice: "failed", failCount: 2, lastAttemptAt: 0, now: 5000 }), "rebuild");
   assert.equal(reconnectAction({ ice: "disconnected", failCount: 0, lastAttemptAt: 4000, now: 5000 }), "none");
+  assert.equal(pastDisconnectGrace(1000, 4000, 8000), false);
+  assert.equal(pastDisconnectGrace(1000, 10000, 8000), true);
 
   const wrapped = wrapSignal("abc", { type: "offer", sdp: "v=0" });
   const undone = unwrapSignal(JSON.stringify(wrapped));
@@ -162,6 +201,37 @@ async function main() {
   );
   assert.equal(qualityFromStats({ rttMs: 80, lossRatio: 0 }), "good");
   assert.equal(qualityFromStats({ rttMs: 900, lossRatio: 0.2 }), "poor");
+  assert.equal(qualityFromStats({ rttMs: 80, lossRatio: 0, jitterMs: 90 }), "poor");
+  assert.equal(qualityFromStats({ rttMs: 80, lossRatio: 0, availableBitrate: 80_000 }), "poor");
+  assert.equal(recentLossRatio({ lost: 10, received: 90, jitterMs: 0 }, { lost: 20, received: 180, jitterMs: 0 }), 0.1);
+  assert.equal(nextVideoTier(1, "poor", 2, 0), 2);
+  assert.equal(nextVideoTier(3, "poor", 2, 0), 4, "vídeo cai até só áudio");
+  assert.equal(nextVideoTier(4, "good", 0, 3), 3, "vídeo volta quando a rede melhora");
+  assert.equal(qualityIndicator("good")?.label, "Conexão boa");
+  assert.equal(qualityIndicator("fair")?.emoji, "🟡");
+  assert.equal(qualityIndicator("poor")?.emoji, "🔴");
+  assert.equal(
+    networkNotice({ reconnecting: true, quality: "poor", audioOnly: false, localRole: "doctor" })?.text,
+    NET_COPY.reconnecting
+  );
+  assert.equal(
+    networkNotice({ reconnecting: false, quality: "fair", audioOnly: false, localRole: "patient" })?.text,
+    NET_COPY.localUnstable
+  );
+  assert.equal(
+    networkNotice({ reconnecting: false, quality: "good", peerQuality: "poor", audioOnly: false, localRole: "doctor" })?.text,
+    NET_COPY.patientUnstable
+  );
+  assert.equal(
+    networkNotice({ reconnecting: false, quality: "good", peerQuality: "poor", audioOnly: false, localRole: "patient" })?.text,
+    NET_COPY.professionalUnstable
+  );
+  assert.equal(
+    networkNotice({ reconnecting: false, quality: "good", audioOnly: true, localRole: "doctor" })?.text,
+    NET_COPY.audioPriority
+  );
+  assert.equal(parsePeerNetHint({ quality: "fair" }), "fair");
+  assert.equal(parsePeerNetHint({ quality: "nope" }), null);
 
   const roomEv = "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb";
   assert.equal(allowConsultEvent(roomEv, 1_000, 60_000, 2), true);
