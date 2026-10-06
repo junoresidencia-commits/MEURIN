@@ -385,7 +385,9 @@ export default function ConsultaPage() {
       await pc.setLocalDescription(offer);
       await postSignal("offer", wrapSignal(sessionRef.current, offer));
       offerSentRef.current = true;
-      setStatus(peerInCall ? "Paciente na sala. Cruzando o vídeo…" : "Aguardando o paciente entrar…");
+      if (!connectedRef.current && !disconnectedSinceRef.current) {
+        setStatus(peerInCall ? "Paciente na sala. Cruzando o vídeo…" : "Aguardando o paciente entrar…");
+      }
     } catch {
       /* próximo ciclo tenta de novo */
     } finally {
@@ -498,7 +500,7 @@ export default function ConsultaPage() {
         setPeerOnPage(true);
         setPeerInCall(true);
         setPeerLeft(false);
-        if (roleRef.current === "doctor" && joinedRef.current) {
+        if (roleRef.current === "doctor" && joinedRef.current && !connectedRef.current) {
           setStatus("Paciente na sala. Conectando vídeo…");
           await ensurePc();
           await sendOffer(false);
@@ -538,7 +540,7 @@ export default function ConsultaPage() {
             /* ignore */
           }
         }
-        setStatus("Paciente na chamada. Cruzando o vídeo…");
+        if (!connectedRef.current) setStatus("Paciente na chamada. Cruzando o vídeo…");
       } else if (msg.type === "ice" && body) {
         if (!pc.remoteDescription) return;
         try {

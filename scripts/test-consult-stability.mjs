@@ -63,6 +63,8 @@ async function main() {
   const patient = await browser.newPage();
   doctor.setDefaultTimeout(45000);
   patient.setDefaultTimeout(45000);
+  await doctor.setViewport({ width: 1280, height: 800 });
+  await patient.setViewport({ width: 1280, height: 800 });
 
   await doctor.goto(`${BASE}/medicos/login`, { waitUntil: "domcontentloaded" });
   const login = await doctor.evaluate(async (base) => {
@@ -92,11 +94,12 @@ async function main() {
   assert.equal(/erro na chamada/i.test(beforeOffline), false);
 
   await emulate(patient, { offline: true, type: "none" });
-  await new Promise((r) => setTimeout(r, 2500));
+  await new Promise((r) => setTimeout(r, 12000));
   await doctor.screenshot({ path: `${ART}/consult_stability_queda.png`, fullPage: true });
   const during = `${await bodyText(doctor)}\n${await bodyText(patient)}`;
   assert.equal(/erro na chamada/i.test(during), false);
   assert.equal(/sair da consulta/i.test(during), true, "consulta permanece aberta");
+  assert.ok(/Conexão interrompida|Tentando reconectar|Conexão boa|Conexão instável|Conexão ruim|Cruzando|Conectado|Consulta online/i.test(during));
 
   await emulate(patient, { offline: false, latency: 80, download: 1_500_000, upload: 750_000, type: "wifi" });
   await new Promise((r) => setTimeout(r, 4000));
