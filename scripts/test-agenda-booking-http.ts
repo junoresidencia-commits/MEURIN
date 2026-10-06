@@ -37,26 +37,39 @@ async function main() {
   const loginD = await req(doctor, "/api/auth", { method: "POST", body: JSON.stringify({ email: "carlos@meurim.com", password: "medico123" }) });
   assert.equal(loginD.res.status, 200, JSON.stringify(loginD.json));
 
-  const periods = [1, 2, 3, 4, 5].map((dayOfWeek) => ({
-    id: `retorno-${dayOfWeek}`,
-    dayOfWeek,
-    start: "11:00",
-    end: "13:00",
-    modality: "teleconsulta",
-    durationMin: 40,
-    intervalMin: 0,
-    visitKind: "retorno",
-  }));
+  const mae = await req(doctor, "/api/doctor/locations", {
+    method: "POST",
+    body: JSON.stringify({ name: "Clínica mãe", city: "Irecê", type: "clinica" }),
+  });
+  assert.equal(mae.res.status, 201, JSON.stringify(mae.json));
+  const salute = await req(doctor, "/api/doctor/locations", {
+    method: "POST",
+    body: JSON.stringify({ name: "Clínica Salute", city: "Irecê", type: "clinica" }),
+  });
+  assert.equal(salute.res.status, 201, JSON.stringify(salute.json));
+  const maeId = String(mae.json.location.id);
+  const saluteId = String(salute.json.location.id);
+
+  const periods = [1, 2, 3, 4, 5].flatMap((dayOfWeek) => [
+    { id: `mae-${dayOfWeek}`, dayOfWeek, start: "09:00", end: "12:00", modality: "presencial", locationId: maeId, durationMin: 30, intervalMin: 10, priceCents: 45000, visitKind: "ambos" },
+    { id: `salute-${dayOfWeek}`, dayOfWeek, start: "14:30", end: "16:00", modality: "presencial", locationId: saluteId, durationMin: 30, intervalMin: 10, priceCents: 45000, visitKind: "ambos" },
+    { id: `tele-${dayOfWeek}`, dayOfWeek, start: "16:30", end: "22:00", modality: "teleconsulta", durationMin: 30, intervalMin: 10, visitKind: "ambos" },
+  ]);
   const saved = await req(doctor, "/api/availability", {
     method: "PUT",
-    body: JSON.stringify({ availabilityPeriods: periods }),
+    body: JSON.stringify({ availabilityPeriods: periods, tz: "America/Bahia" }),
   });
   assert.equal(saved.res.status, 200, JSON.stringify(saved.json));
 
-  const consultSlots = await fetch(`${BASE}/api/availability?doctorId=${carlos.id}&modality=teleconsulta`).then((r) => r.json());
-  assert.ok((consultSlots.slots || []).length > 0, "agenda só de retorno ainda aparece em /agendar");
+  const allSlots = await fetch(`${BASE}/api/availability?doctorId=${carlos.id}`).then((r) => r.json());
+  const slots = (allSlots.slots || []) as { modality?: string; locationName?: string; locationCity?: string }[];
+  assert.ok(slots.length > 0, "agenda publicada aparece para o paciente");
+  assert.ok(slots.some((s) => s.modality === "presencial" && String(s.locationName).includes("Clínica mãe")), "presencial Clínica mãe");
+  assert.ok(slots.some((s) => s.modality === "presencial" && String(s.locationName).includes("Clínica Salute")), "presencial Clínica Salute");
+  assert.ok(slots.some((s) => s.modality === "teleconsulta"), "teleconsulta");
 
-  const returnSlots = await fetch(`${BASE}/api/availability?doctorId=${carlos.id}&modality=teleconsulta&visit=retorno`).then((r) => r.json());
+  const consultSlots = allSlots;
+  const returnSlots = await fetch(`${BASE}/api/availability?doctorId=${carlos.id}&visit=retorno`).then((r) => r.json());
   assert.ok((returnSlots.slots || []).length > 0, "horários de retorno publicados");
 
   const proRetorno = await fetch(`${BASE}/api/professionals/doctor/${carlos.id}?visit=retorno`).then((r) => r.json());
@@ -95,6 +108,8 @@ async function main() {
     doctor: carlos.id,
     consultSlots: consultSlots.slots.length,
     returnSlots: returnSlots.slots.length,
+    presencial: slots.filter((s) => s.modality === "presencial").length,
+    teleconsulta: slots.filter((s) => s.modality === "teleconsulta").length,
     requestId: created.json.request.id,
   });
 }

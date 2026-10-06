@@ -1,19 +1,14 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
+import { slotPlaceLabel, fmtSlotDay, fmtSlotHour, slotDisplayTz, type PatientSlot } from "@/lib/scheduling-client";
+import { PatientAgendaSlots } from "@/components/PatientAgendaSlots";
 
-type Slot = { start: string; end: string; label: string; visitKind?: string };
+type Slot = PatientSlot;
 type Pro = { kind: string; id: string; displayName: string; specialty: string; consultationPriceCents: number; returnPriceCents: number };
 type Last = { at: string; days: number; within: boolean; label: string } | null;
-
-function fmtDay(iso: string) {
-  return new Date(iso).toLocaleDateString("pt-BR", { weekday: "long", day: "numeric", month: "long" });
-}
-function fmtHour(iso: string) {
-  return new Date(iso).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
-}
 
 export default function AgendarTipoPage() {
   const params = useParams<{ kind: string; id: string }>();
@@ -45,15 +40,6 @@ export default function AgendarTipoPage() {
       });
   }, [params.kind, params.id]);
 
-  const grouped = useMemo(() => {
-    const map = new Map<string, Slot[]>();
-    for (const s of slots) {
-      const key = fmtDay(s.start);
-      map.set(key, [...(map.get(key) || []), s]);
-    }
-    return [...map.entries()];
-  }, [slots]);
-
   function goConsult() {
     router.push(params.kind === "doctor" ? `/agendar?medico=${params.id}` : `/profissional/${params.kind}/${params.id}`);
   }
@@ -61,6 +47,7 @@ export default function AgendarTipoPage() {
   async function send() {
     if (!slot) return;
     setBusy(true); setError("");
+    const place = slotPlaceLabel(slot);
     try {
       const res = await fetch("/api/return-requests", {
         method: "POST",
@@ -74,7 +61,7 @@ export default function AgendarTipoPage() {
           lastVisitApprox: last ? "date" : approx,
           lastVisitWhen: last ? last.at : when,
           lastVisitLocation: where,
-          note,
+          note: [place ? `Local solicitado: ${place}` : "", note].filter(Boolean).join("\n"),
         }),
       });
       const data = await res.json();
@@ -139,30 +126,23 @@ export default function AgendarTipoPage() {
           )}
           <div className="panel">
             <p className="font-semibold text-[var(--text)]">Horários disponíveis</p>
-            <p className="mt-1 text-sm text-[var(--text-muted)]">Escolha o horário. O profissional confirma se o atendimento será um retorno.</p>
-            {slots.length === 0 && <p className="mt-2 text-sm text-[var(--text-muted)]">Não há horários publicados nos próximos dias. Você pode indicar um horário preferido abaixo.</p>}
+            <p className="mt-1 text-sm text-[var(--text-muted)]">Teleconsulta e presencial, com o local, como o profissional publicou. O profissional confirma se o atendimento será um retorno.</p>
             {slots.length === 0 && (
               <label className="mt-3 block text-sm">
                 Horário preferido
                 <input type="datetime-local" className="input-field mt-1" onChange={(e) => {
                   const start = new Date(e.target.value);
                   if (Number.isNaN(start.getTime())) return;
-                  setSlot({ start: start.toISOString(), end: new Date(start.getTime() + 30 * 60 * 1000).toISOString(), label: start.toLocaleString("pt-BR") });
+                  setSlot({ start: start.toISOString(), end: new Date(start.getTime() + 30 * 60 * 1000).toISOString(), label: start.toLocaleString("pt-BR"), modality: "teleconsulta" });
                 }} />
               </label>
             )}
-            {grouped.map(([day, list]) => (
-              <div key={day} className="mt-3">
-                <p className="text-sm font-semibold capitalize text-[var(--text)]">{day}</p>
-                <div className="mt-2 flex flex-wrap gap-2">
-                  {list.map((s) => (
-                    <button key={s.start} type="button" onClick={() => setSlot(s)} className={`rounded-full border px-3 py-1.5 text-sm font-semibold ${slot?.start === s.start ? "border-[var(--gold)] bg-[var(--gold-soft)] text-[var(--gold)]" : "border-[var(--border)]"}`}>
-                      {fmtHour(s.start)}
-                    </button>
-                  ))}
-                </div>
-              </div>
-            ))}
+            <PatientAgendaSlots
+              slots={slots}
+              selectedStart={slot?.start}
+              selectedLocationId={slot?.locationId}
+              onSelect={setSlot}
+            />
             <button type="button" className="btn-gold mt-4 w-full" disabled={!slot} onClick={() => setStep("confirma")}>Continuar</button>
           </div>
         </div>
@@ -173,8 +153,9 @@ export default function AgendarTipoPage() {
           <p className="font-semibold text-[var(--text)]">Confirmar solicitação</p>
           <p><span className="text-[var(--text-muted)]">Profissional</span><br /><b>{pro.displayName}</b></p>
           <p><span className="text-[var(--text-muted)]">Tipo solicitado</span><br /><b>Retorno</b></p>
-          <p><span className="text-[var(--text-muted)]">Data solicitada</span><br /><b>{new Date(slot.start).toLocaleDateString("pt-BR")}</b></p>
-          <p><span className="text-[var(--text-muted)]">Horário solicitado</span><br /><b>{fmtHour(slot.start)}</b></p>
+          <p><span className="text-[var(--text-muted)]">Local</span><br /><b>{slotPlaceLabel(slot)}</b></p>
+          <p><span className="text-[var(--text-muted)]">Data solicitada</span><br /><b>{fmtSlotDay(slot.start, slotDisplayTz(slot))}</b></p>
+          <p><span className="text-[var(--text-muted)]">Horário solicitado</span><br /><b>{fmtSlotHour(slot.start, slotDisplayTz(slot))}</b></p>
           {last ? (
             <p className="text-sm text-[var(--text-muted)]">Última consulta: {new Date(last.at).toLocaleDateString("pt-BR")}</p>
           ) : (
@@ -213,7 +194,8 @@ export default function AgendarTipoPage() {
           <p className="text-sm text-[var(--text-muted)]">Seu retorno ainda precisa ser confirmado pelo profissional. O horário somente estará definitivamente reservado após essa confirmação.</p>
           <p className="font-semibold">{pro.displayName}</p>
           <p>Retorno solicitado</p>
-          {slot && <p>📅 {new Date(slot.start).toLocaleDateString("pt-BR")} · 🕐 {fmtHour(slot.start)}</p>}
+          {slot && <p>📅 {fmtSlotDay(slot.start, slotDisplayTz(slot))} · 🕐 {fmtSlotHour(slot.start, slotDisplayTz(slot))}</p>}
+          {slot && <p>{slotPlaceLabel(slot)}</p>}
           <p>🟡 Aguardando confirmação do profissional</p>
           <div className="flex flex-wrap gap-2">
             <Link className="btn-gold" href={`/paciente/retorno/${createdId}`}>Abrir conversa</Link>

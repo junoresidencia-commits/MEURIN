@@ -3,8 +3,9 @@
  * para o paciente marcar. Identidade do paciente casa e-mail e pid.
  */
 import assert from "node:assert/strict";
-import { generateAvailableSlots, slotsForVisit, slotMatchesVisit } from "../src/lib/scheduling";
+import { generateAvailableSlots, slotsForVisit, slotMatchesVisit, zonedDateTimeToUtc } from "../src/lib/scheduling";
 import { patientKeyCandidates, patientKeysMatch } from "../src/lib/patient-keys";
+import { groupSlotsByDayAndPlace, slotPlaceLabel } from "../src/lib/scheduling-client";
 import type { Doctor } from "../src/lib/types";
 
 const consulta = { visitKind: "consulta" as const };
@@ -64,4 +65,63 @@ assert.ok(generated.every((s) => s.visitKind === "retorno"));
 assert.equal(slotsForVisit(generated, "consulta").length, generated.length, "consulta vê agenda só de retorno");
 assert.equal(slotsForVisit(generated, "retorno").length, generated.length);
 
-console.log("agenda-visit-slots ok", { slots: generated.length });
+const nineBahia = zonedDateTimeToUtc("2026-10-12", "09:00", "America/Bahia");
+assert.equal(nineBahia.toISOString(), "2026-10-12T12:00:00.000Z");
+
+const mae = { id: "loc-mae", name: "Clínica mãe", city: "Irecê", type: "clinica" as const, active: true };
+const salute = { id: "loc-salute", name: "Clínica Salute", city: "Irecê", type: "clinica" as const, active: true };
+const published = {
+  id: "doc-irece",
+  tz: "America/Bahia",
+  consultationPriceCents: 45000,
+  weeklyAvailability: [],
+  blockedSlots: [],
+  locations: [mae, salute],
+  availabilityPeriods: [
+    { id: "manha", dayOfWeek: 1, start: "09:00", end: "12:00", modality: "presencial", locationId: mae.id, durationMin: 30, intervalMin: 10, priceCents: 45000, visitKind: "ambos" },
+    { id: "tarde", dayOfWeek: 1, start: "14:30", end: "16:00", modality: "presencial", locationId: salute.id, durationMin: 30, intervalMin: 10, priceCents: 45000, visitKind: "ambos" },
+    { id: "online", dayOfWeek: 1, start: "16:30", end: "22:00", modality: "teleconsulta", durationMin: 30, intervalMin: 10, visitKind: "ambos" },
+  ],
+} as unknown as Doctor;
+
+const week = generateAvailableSlots(published, { daysAhead: 14 });
+assert.ok(week.some((s) => s.modality === "presencial" && String(s.locationName).includes("Clínica mãe")));
+assert.ok(week.some((s) => s.modality === "presencial" && String(s.locationName).includes("Clínica Salute")));
+assert.ok(week.some((s) => s.modality === "teleconsulta"));
+const maeHours = week
+  .filter((s) => s.locationId === mae.id)
+  .map((s) => new Date(s.start).toLocaleTimeString("en-GB", { timeZone: "America/Bahia", hour: "2-digit", minute: "2-digit" }));
+assert.ok(maeHours.includes("09:00"), `mãe deve ter 09:00, veio ${maeHours.slice(0, 5).join(",")}`);
+assert.ok(maeHours.includes("11:00"));
+const saluteHours = week
+  .filter((s) => s.locationId === salute.id)
+  .map((s) => new Date(s.start).toLocaleTimeString("en-GB", { timeZone: "America/Bahia", hour: "2-digit", minute: "2-digit" }));
+assert.ok(saluteHours.includes("14:30"));
+const teleHours = week
+  .filter((s) => s.modality === "teleconsulta")
+  .map((s) => new Date(s.start).toLocaleTimeString("en-GB", { timeZone: "America/Bahia", hour: "2-digit", minute: "2-digit" }));
+assert.ok(teleHours.includes("16:30"));
+
+const grouped = groupSlotsByDayAndPlace(week);
+assert.ok(grouped.some((d) => d.places.some((p) => /Clínica mãe/.test(p.label)) && d.places.some((p) => /Teleconsulta/.test(p.label))));
+assert.match(slotPlaceLabel({ modality: "presencial", locationName: "Clínica mãe — Irecê", locationCity: "Irecê" }), /Presencial · Clínica mãe/);
+assert.equal(slotPlaceLabel({ modality: "teleconsulta" }), "Teleconsulta (online)");
+
+const monday = grouped.find((d) => /segunda/i.test(d.day));
+assert.ok(monday, "segunda-feira agrupada no fuso da Bahia");
+assert.ok(monday.places.some((p) => /Clínica mãe/.test(p.label)));
+assert.ok(monday.places.some((p) => /Clínica Salute/.test(p.label)));
+assert.ok(monday.places.some((p) => /Teleconsulta/.test(p.label)));
+const lateHour = "21:10";
+const lateTele = week.find((s) => s.modality === "teleconsulta" && new Date(s.start).toLocaleTimeString("en-GB", { timeZone: "America/Bahia", hour: "2-digit", minute: "2-digit" }) === lateHour);
+assert.ok(lateTele, `teleconsulta ${lateHour} Bahia existe`);
+assert.ok(
+  monday.places.some((p) => p.slots.some((s) => s.start === lateTele!.start)),
+  `${lateHour} Bahia não vira terça em UTC`
+);
+
+const semLocal = generateAvailableSlots({ ...published, locations: [] } as unknown as Doctor, { daysAhead: 14 });
+assert.ok(semLocal.length > 0);
+assert.ok(semLocal.every((s) => s.modality === "teleconsulta"), "presencial sem local cadastrado não aparece");
+
+console.log("agenda-visit-slots ok", { slots: generated.length, week: week.length, days: grouped.length });
