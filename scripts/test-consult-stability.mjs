@@ -25,7 +25,7 @@ async function bodyText(page) {
   return page.evaluate(() => document.body.innerText);
 }
 
-async function waitText(page, needle, ms = 25000) {
+async function waitText(page, needle, ms = 18000) {
   const started = Date.now();
   const re = new RegExp(needle, "i");
   while (Date.now() - started < ms) {
@@ -51,6 +51,8 @@ async function main() {
   const browser = await puppeteer.launch({
     executablePath: CHROME,
     headless: "new",
+    timeout: 20000,
+    protocolTimeout: 30000,
     args: [
       "--use-fake-ui-for-media-stream",
       "--use-fake-device-for-media-stream",
