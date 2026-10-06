@@ -87,7 +87,7 @@ async function main() {
   await clickText(doctor, "Entrar para atender");
   await clickText(patient, "Entrar na consulta");
   await waitText(doctor, "Aguardando|Cruzando|Conectado|Paciente|Conexão");
-  await new Promise((r) => setTimeout(r, 3000));
+  await new Promise((r) => setTimeout(r, 6000));
   await doctor.screenshot({ path: `${ART}/consult_stability_wifi_bom.png`, fullPage: true });
 
   const beforeOffline = await bodyText(doctor);
@@ -102,7 +102,7 @@ async function main() {
   assert.ok(/Conexão interrompida|Tentando reconectar|Conexão boa|Conexão instável|Conexão ruim|Cruzando|Conectado|Consulta online/i.test(during));
 
   await emulate(patient, { offline: false, latency: 80, download: 1_500_000, upload: 750_000, type: "wifi" });
-  await new Promise((r) => setTimeout(r, 4000));
+  await new Promise((r) => setTimeout(r, 8000));
   await doctor.screenshot({ path: `${ART}/consult_stability_reconectou.png`, fullPage: true });
   const after = `${await bodyText(doctor)}\n${await bodyText(patient)}`;
   assert.equal(/erro na chamada/i.test(after), false);

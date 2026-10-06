@@ -112,6 +112,7 @@ export default function ConsultaPage() {
   const [turnReady, setTurnReady] = useState(false);
   const [peerOnPage, setPeerOnPage] = useState(false);
   const [peerInCall, setPeerInCall] = useState(false);
+  const peerInCallRef = useRef(false);
   const [peerLeft, setPeerLeft] = useState(false);
   const [reconnecting, setReconnecting] = useState(false);
   const [hasRemote, setHasRemote] = useState(false);
@@ -294,7 +295,8 @@ export default function ConsultaPage() {
         if (other) {
           const fresh = presenceIsFresh(other.lastSeen);
           setPeerOnPage(fresh && other.pageOpen !== false);
-          setPeerInCall(fresh && other.inCall === true);
+          peerInCallRef.current = fresh && other.inCall === true;
+          setPeerInCall(peerInCallRef.current);
           if (fresh && other.inCall) setPeerLeft(false);
         }
       } catch {
@@ -498,6 +500,7 @@ export default function ConsultaPage() {
       }
       if (msg.type === "join") {
         setPeerOnPage(true);
+        peerInCallRef.current = true;
         setPeerInCall(true);
         setPeerLeft(false);
         if (roleRef.current === "doctor" && joinedRef.current && !connectedRef.current) {
@@ -508,6 +511,7 @@ export default function ConsultaPage() {
         return;
       }
       if (msg.type === "leave") {
+        peerInCallRef.current = false;
         setPeerInCall(false);
         setHasRemote(false);
         setPeerLeft(true);
@@ -590,10 +594,10 @@ export default function ConsultaPage() {
   }, [joined, phase, pullSignals]);
 
   useEffect(() => {
-    if (!joined || role !== "doctor") return;
+    if (!joined || role !== "doctor" || !peerInCall) return;
+    if (!connectedRef.current) void sendOffer(false);
     const retry = setInterval(() => {
       if (connectedRef.current) return;
-      if (!peerInCall) return;
       void sendOffer(Boolean(answeredRef.current || iceStateRef.current === "failed" || iceStateRef.current === "disconnected"));
     }, 8000);
     return () => clearInterval(retry);
@@ -666,6 +670,13 @@ export default function ConsultaPage() {
       const pc = pcRef.current;
       if (!pc) return;
       try {
+        const ice = pc.iceConnectionState;
+        const cs = pc.connectionState;
+        if (ice === "disconnected" || ice === "failed" || cs === "disconnected" || cs === "failed") {
+          setQuality("poor");
+          return;
+        }
+        if (ice !== "connected" && ice !== "completed" && cs !== "connected") return;
         const stats = await pc.getStats();
         let rttMs = 0;
         let lost = 0;
@@ -847,7 +858,7 @@ export default function ConsultaPage() {
       await postPresence(true);
       report("join", { phase: "connecting" });
       if (roleRef.current === "doctor") {
-        if (peerInCall) await sendOffer(false);
+        if (peerInCallRef.current) await sendOffer(false);
         else {
           setStatus(
             peerOnPage
