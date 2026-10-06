@@ -580,9 +580,14 @@ export default function AgendarClient() {
           )}
 
           {!loadingSlots && slots.length === 0 && modality && (modality !== "presencial" || locationId) && (
-            <p className="mt-4 text-[var(--text-muted)]">
-              Sem horários nos próximos dias para esta opção. Tente outra modalidade/clínica ou outro médico.
-            </p>
+            <div className="mt-4 space-y-2">
+              <p className="text-[var(--text-muted)]">
+                Sem horários nos próximos dias para esta opção. Tente outra modalidade/clínica ou outro médico.
+              </p>
+              <Link href={`/paciente/agendar/doctor/${doctor.id}?tipo=retorno`} className="btn-ghost inline-flex">
+                Ver horários de retorno
+              </Link>
+            </div>
           )}
           <button type="button" className="btn-ghost mt-6" onClick={() => setStep(0)}>
             Trocar médico

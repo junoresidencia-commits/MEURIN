@@ -15,6 +15,30 @@ export interface AvailableSlot {
   visitKind?: "consulta" | "retorno" | "ambos";
 }
 
+export type VisitKindFilter = "consulta" | "retorno" | "all";
+
+export function slotMatchesVisit(
+  slot: { visitKind?: "consulta" | "retorno" | "ambos" },
+  visit: Exclude<VisitKindFilter, "all">
+): boolean {
+  const kind = slot.visitKind || "ambos";
+  return kind === "ambos" || kind === visit;
+}
+
+/**
+ * Filtra horários pelo tipo pedido. Se o médico publicou só o outro tipo
+ * (agenda “certa” de consulta ou de retorno), devolve esses horários mesmo assim
+ * para o paciente conseguir marcar.
+ */
+export function slotsForVisit<T extends { visitKind?: "consulta" | "retorno" | "ambos" }>(
+  slots: T[],
+  visit: VisitKindFilter
+): T[] {
+  if (visit === "all") return slots;
+  const matched = slots.filter((s) => slotMatchesVisit(s, visit));
+  return matched.length > 0 ? matched : slots;
+}
+
 /** Converte a agenda simples (weeklyAvailability) em períodos de teleconsulta 30/0. */
 function fallbackPeriods(doctor: Doctor): AvailabilityPeriod[] {
   return (doctor.weeklyAvailability || []).map((w, i) => ({
