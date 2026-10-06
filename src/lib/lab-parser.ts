@@ -1,6 +1,7 @@
 import { NEPHRO_LABS, labUnit } from "./labs";
 import { LAB_NUMBER_RE, foldLabText, parsePtBrLabNumber } from "./lab-number";
 import { extractUrinaryLabs } from "./lab-urinary";
+import { softenOcrText } from "./ocr-text";
 
 export type ParsedLab = {
   testKey: string;
@@ -216,10 +217,11 @@ function extractLabs(text: string): ParsedLab[] {
  * Mantém apenas a primeira ocorrência de cada exame. (Compatível com o fluxo antigo.)
  */
 export function parseLabsFromText(text: string): ParseResult {
-  if (!text || !text.trim()) return { labs: [] };
-  const dateMatch = text.match(DATE_RE);
+  const raw = softenOcrText(text);
+  if (!raw || !raw.trim()) return { labs: [] };
+  const dateMatch = raw.match(DATE_RE);
   const date = dateMatch ? toIsoDate(dateMatch) : undefined;
-  return { labs: extractLabs(text), date };
+  return { labs: extractLabs(raw), date };
 }
 
 /**
@@ -231,6 +233,7 @@ export function parseLabsFromText(text: string): ParseResult {
  * (o médico confirma no modal). Blocos com a MESMA data são unidos.
  */
 export function parseLabGroups(text: string): ParsedLabGroup[] {
+  text = softenOcrText(text);
   if (!text || !text.trim()) return [];
 
   const marks: { index: number; iso?: string }[] = [];

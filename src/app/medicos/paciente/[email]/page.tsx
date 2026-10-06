@@ -475,6 +475,21 @@ export default function ProntuarioPage() {
     else window.alert("Não foi possível excluir o documento.");
   }
 
+  async function applyImportedGroups(groups: ParsedLabGroup[], source: string) {
+    const auto = await tryAutoSaveLabs(groups, source);
+    if (!auto.ok) {
+      setReview({ groups, source });
+      return;
+    }
+    const identified = groups.reduce((n, g) => n + g.labs.length, 0);
+    setImportMsg(examSaveSummary(auto.count, auto.duplicate, identified));
+    try {
+      await load();
+    } catch (reloadErr) {
+      console.error("[exames] recarregar após importação", reloadErr);
+    }
+  }
+
   async function importFromText() {
     setImportErr("");
     setImportMsg("");
@@ -485,21 +500,53 @@ export default function ProntuarioPage() {
     }
     setImportSaving(true);
     try {
-      const auto = await tryAutoSaveLabs(groups, "importação (texto)");
-      if (!auto.ok) {
-        setReview({ groups, source: "importação (texto)" });
-        setImportText("");
+      await applyImportedGroups(groups, "importação (texto)");
+      setImportText("");
+    } finally {
+      setImportSaving(false);
+    }
+  }
+
+  async function importFromFile(file: File) {
+    setImportErr("");
+    setImportMsg("Lendo a imagem e identificando nome e exames…");
+    setImportSaving(true);
+    const fd = new FormData();
+    fd.set("file", file);
+    const ctrl = new AbortController();
+    const timer = window.setTimeout(() => ctrl.abort(), 40000);
+    try {
+      const res = await fetch(`/api/doctor/patients/${encodePatientParam(emailParam)}/labs/from-file`, {
+        method: "POST",
+        body: fd,
+        signal: ctrl.signal,
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        setImportMsg("");
+        setImportErr(data.error || "Não deu para ler a imagem.");
         return;
       }
-      const identified = groups.reduce((n, g) => n + g.labs.length, 0);
-      setImportMsg(examSaveSummary(auto.count, auto.duplicate, identified));
-      setImportText("");
-      try {
-        await load();
-      } catch (reloadErr) {
-        console.error("[exames] recarregar após importação", reloadErr);
+      const groups = Array.isArray(data.groups) ? data.groups : [];
+      if (groups.length === 0) {
+        setImportMsg("");
+        setImportErr(data.note || "Nenhum exame reconhecido na imagem.");
+        return;
       }
+      if (data.nameOnReport && data.nameMatches === false) {
+        setImportMsg(`Laudo em nome de ${data.nameOnReport}. Conferir se é este paciente.`);
+      }
+      await applyImportedGroups(groups, "importação (imagem)");
+    } catch (err) {
+      const aborted = err instanceof DOMException && err.name === "AbortError";
+      setImportMsg("");
+      setImportErr(
+        aborted
+          ? "A leitura travou e foi interrompida. Tente outra foto ou cole o texto."
+          : "Não deu para ler a imagem agora."
+      );
     } finally {
+      window.clearTimeout(timer);
       setImportSaving(false);
     }
   }
@@ -782,12 +829,26 @@ export default function ProntuarioPage() {
 
             <div className="panel space-y-3">
               <p className="text-xs font-bold uppercase tracking-wider text-[var(--gold)]">
-                Importar exames de texto (várias datas)
+                Lançar foto, PDF ou texto
               </p>
               <p className="text-sm text-[var(--text-soft)]">
-                Cole um laudo com a <b>data em cima</b> e os exames embaixo (pode ter várias datas). Proteinúria 24h,
-                RAC, albumina urinária (mg/L) e albuminúria 24h entram em campos separados.
+                Mande a <b>foto/print</b> ou o PDF do laudo: o sistema identifica o nome e os exames.
+                Ou cole o texto com a <b>data em cima</b> e os valores embaixo.
               </p>
+              <label className="block text-sm">
+                <span className="mb-1 block text-xs font-semibold text-[var(--text-muted)]">Foto ou PDF do laudo</span>
+                <input
+                  className="block w-full text-sm"
+                  type="file"
+                  accept=".pdf,image/*"
+                  disabled={importSaving}
+                  onChange={(e) => {
+                    const f = e.target.files?.[0];
+                    if (f) void importFromFile(f);
+                    e.target.value = "";
+                  }}
+                />
+              </label>
               <textarea
                 className="input-field min-h-[120px] font-mono text-[13px]"
                 value={importText}

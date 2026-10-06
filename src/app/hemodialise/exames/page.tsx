@@ -71,7 +71,7 @@ export default function HdExamesPage() {
 
   async function upload(intent: string, file?: File, text?: string, assignPatient?: string) {
     setBusy(intent);
-    setMsg("");
+    setMsg(file ? "Lendo a imagem/PDF e identificando nome e exames…" : "Identificando exames…");
     const fd = new FormData();
     fd.set("intent", intent);
     fd.set("year", String(year));
@@ -79,21 +79,34 @@ export default function HdExamesPage() {
     if (file) fd.set("file", file);
     if (text) fd.set("text", text);
     if (assignPatient) fd.set("patientId", assignPatient);
-    const r = await fetch("/api/hemodialise/arquivo", { method: "POST", body: fd });
-    const d = await r.json();
-    setBusy("");
-    if (d.error) {
-      setMsg(d.error);
-      return;
+    const ctrl = new AbortController();
+    const timer = window.setTimeout(() => ctrl.abort(), 40000);
+    try {
+      const r = await fetch("/api/hemodialise/arquivo", { method: "POST", body: fd, signal: ctrl.signal });
+      const d = await r.json();
+      if (d.error) {
+        setMsg(d.error);
+        return;
+      }
+      setMsg(d.note || `Importados ${d.created ?? 0} resultados.`);
+      if (d.needsPatient && Array.isArray(d.items) && d.items.length) {
+        setHold({ items: d.items, fileId: d.file?.id, source: intent === "upload_exam" ? "pdf" : "ocr" });
+      } else {
+        setHold(null);
+        setPaste("");
+      }
+      await load();
+    } catch (err) {
+      const aborted = err instanceof DOMException && err.name === "AbortError";
+      setMsg(
+        aborted
+          ? "A leitura travou e foi interrompida. Tente uma foto mais nítida ou cole o texto do laudo."
+          : "Não deu para ler agora. Tente de novo ou cole o texto."
+      );
+    } finally {
+      window.clearTimeout(timer);
+      setBusy("");
     }
-    setMsg(d.note || `Importados ${d.created ?? 0} resultados.`);
-    if (d.needsPatient && Array.isArray(d.items) && d.items.length) {
-      setHold({ items: d.items, fileId: d.file?.id, source: intent === "upload_exam" ? "pdf" : "ocr" });
-    } else {
-      setHold(null);
-      setPaste("");
-    }
-    await load();
   }
 
   async function assignHeld() {

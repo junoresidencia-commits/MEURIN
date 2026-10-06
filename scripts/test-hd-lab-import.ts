@@ -5,6 +5,7 @@ import { PDFDocument, StandardFonts } from "pdf-lib";
 import { readDb } from "../src/lib/store";
 import { parseHdLabsFromText } from "../src/lib/hd-lab-import";
 import { extractLabFileText } from "../src/lib/hd-lab-file-text";
+import { extractLabeledPatientName } from "../src/lib/ocr-text";
 import { ensureHdSession, hdAddPatient, hdImportLabDocument, requireHd } from "../src/lib/hd-store";
 import type { HdActor } from "../src/lib/hd-types";
 
@@ -30,6 +31,9 @@ async function main() {
     process.exit(1);
   }
 
+  assert.equal(extractLabeledPatientName(LAUDO), "MARIA TESTE HD");
+  assert.equal(extractLabeledPatientName("Paciente: MAR1A TESTE HD\nCreatinina 2"), "MARIA TESTE HD");
+
   const parsed = parseHdLabsFromText(LAUDO, [{ id: "p1", name: "MARIA TESTE HD" }]);
   assert.equal(parsed.date, "2026-09-15");
   assert.equal(parsed.needsPatient, false);
@@ -51,6 +55,27 @@ async function main() {
 
   const empty = parseHdLabsFromText("receituário sem números de exame", [{ id: "p1", name: "MARIA TESTE HD" }]);
   assert.equal(empty.items.length, 0);
+
+  const ocrLike = `
+Paciente: MAR1A TESTE HD
+Coleta: 15/09/2026
+Hemoglob1na 10,2 g/dL
+Creat1nina 8,4 mg/dL
+Potass1o 5,1
+`;
+  const ocrParsed = parseHdLabsFromText(ocrLike, [{ id: "p1", name: "MARIA TESTE HD" }]);
+  assert.equal(ocrParsed.needsPatient, false, "nome com 1 no lugar de I deve casar");
+  assert.ok(ocrParsed.items.some((i) => i.examCode === "hb"), "hemoglobina com 1");
+  assert.ok(ocrParsed.items.some((i) => i.examCode === "creat"), "creatinina com 1");
+  assert.ok(ocrParsed.items.some((i) => i.examCode === "k"), "potassio com 1");
+
+  const fromTxt = await extractLabFileText({
+    name: "laudo.txt",
+    type: "text/plain",
+    buffer: Buffer.from(ocrLike),
+  });
+  assert.match(fromTxt.text, /MARIA TESTE HD/);
+  assert.match(fromTxt.text, /Hemoglobina/i);
 
   const doc = await PDFDocument.create();
   const font = await doc.embedFont(StandardFonts.Helvetica);
