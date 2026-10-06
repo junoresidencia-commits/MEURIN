@@ -1,8 +1,8 @@
 import { NextResponse } from "next/server";
 import { getPatientEmail } from "@/lib/patient-session";
 import {
-  findByEmailAny,
-  getPatient,
+  canSkipCurrentPassword,
+  findPatientByClinicalKey,
   setPatientPassword,
   verifyPatientPassword,
 } from "@/lib/patients-store";
@@ -16,6 +16,7 @@ export async function POST(req: Request) {
   const body = await req.json().catch(() => ({}));
   const current = String(body.currentPassword || "");
   const next = String(body.newPassword || "");
+  const firstAccess = body.firstAccess === true;
 
   // Regras de segurança da nova senha.
   if (next.length < 8) {
@@ -25,22 +26,18 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "Escolha uma senha diferente de 123456." }, { status: 400 });
   }
 
-  // Descobre o cadastro do paciente a partir do "subject" da sessão
-  // (pode ser "pid:<id>" ou o e-mail do paciente criado pelo médico).
-  const patient = subject.startsWith("pid:")
-    ? await getPatient(subject.slice(4))
-    : await findByEmailAny(subject);
+  const patient = await findPatientByClinicalKey(subject);
 
   if (!patient) {
     return NextResponse.json(
-      { error: "Troca de senha disponível apenas para pacientes cadastrados pelo médico." },
+      { error: "Não encontramos seu cadastro para salvar a senha. Saia e entre de novo." },
       { status: 400 }
     );
   }
 
-  // No 1º acesso obrigatório, a sessão já autentica o paciente — não pede a senha atual.
-  // Fora disso, exige a senha atual para confirmar a identidade.
-  if (!patient.mustChangePassword) {
+  // 1º acesso: a sessão já autentica. Também aceita se a senha ainda é 123456
+  // (flag de troca pode não ter sido gravado). Troca normal pede a senha atual.
+  if (!(await canSkipCurrentPassword(patient, firstAccess))) {
     const ok = await verifyPatientPassword(patient, current);
     if (!ok) {
       return NextResponse.json({ error: "Senha atual incorreta." }, { status: 401 });

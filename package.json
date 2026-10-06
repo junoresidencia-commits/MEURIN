@@ -34,7 +34,9 @@
     "check:professional-profile": "env -u NEXT_PUBLIC_SUPABASE_URL -u SUPABASE_SERVICE_ROLE_KEY NODE_OPTIONS='--require ./scripts/shim-server-only.cjs' npx tsx scripts/test-professional-profile.ts",
     "check:return-requests": "env -u NEXT_PUBLIC_SUPABASE_URL -u SUPABASE_SERVICE_ROLE_KEY NODE_OPTIONS='--require ./scripts/shim-server-only.cjs' npx tsx scripts/test-return-requests.ts",
     "check:return-requests-http": "env -u NEXT_PUBLIC_SUPABASE_URL -u SUPABASE_SERVICE_ROLE_KEY NODE_OPTIONS='--require ./scripts/shim-server-only.cjs' npx tsx scripts/test-return-requests-http.ts",
-    "check:patient-register": "env -u NEXT_PUBLIC_SUPABASE_URL -u SUPABASE_SERVICE_ROLE_KEY NODE_OPTIONS='--require ./scripts/shim-server-only.cjs' npx tsx scripts/test-patient-register.ts"
+    "check:patient-register": "env -u NEXT_PUBLIC_SUPABASE_URL -u SUPABASE_SERVICE_ROLE_KEY NODE_OPTIONS='--require ./scripts/shim-server-only.cjs' npx tsx scripts/test-patient-register.ts",
+    "check:patient-password": "env -u NEXT_PUBLIC_SUPABASE_URL -u SUPABASE_SERVICE_ROLE_KEY NODE_OPTIONS='--require ./scripts/shim-server-only.cjs' npx tsx scripts/test-patient-password.ts",
+    "check:patient-password-http": "env -u NEXT_PUBLIC_SUPABASE_URL -u SUPABASE_SERVICE_ROLE_KEY NODE_OPTIONS='--require ./scripts/shim-server-only.cjs' npx tsx scripts/test-patient-password-http.ts"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.110.3",

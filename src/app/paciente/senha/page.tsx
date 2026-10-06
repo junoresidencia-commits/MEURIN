@@ -15,8 +15,20 @@ function TrocarSenhaInner() {
   const [pass, setPass] = useState("");
   const [confirm, setConfirm] = useState("");
   const [loading, setLoading] = useState(false);
+  const [leaving, setLeaving] = useState(false);
   const [error, setError] = useState("");
   const [done, setDone] = useState(false);
+
+  async function sair() {
+    if (leaving) return;
+    setLeaving(true);
+    try {
+      await fetch("/api/patient/session", { method: "DELETE" });
+    } catch {
+      /* sai mesmo se a API falhar */
+    }
+    router.replace("/paciente/entrar");
+  }
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
@@ -26,7 +38,11 @@ function TrocarSenhaInner() {
     if (pass !== confirm) { setError("A confirmação não confere com a nova senha."); return; }
     setLoading(true);
     try {
-      await postJson("/api/patient/password", { currentPassword: current, newPassword: pass }, "Não foi possível salvar a senha.");
+      await postJson(
+        "/api/patient/password",
+        { currentPassword: current, newPassword: pass, firstAccess: primeiro },
+        "Não foi possível salvar a senha."
+      );
       setDone(true);
       setTimeout(() => router.push(next), 1000);
     } catch (err) {
@@ -38,7 +54,21 @@ function TrocarSenhaInner() {
 
   return (
     <div className="mx-auto max-w-md px-5 py-12">
-      {!primeiro && <Link href="/paciente/inicio" className="text-sm font-semibold text-[var(--gold)]">← Voltar</Link>}
+      <div className="flex items-center justify-between gap-3">
+        {!primeiro ? (
+          <Link href="/paciente/inicio" className="text-sm font-semibold text-[var(--gold)]">← Voltar</Link>
+        ) : (
+          <span />
+        )}
+        <button
+          type="button"
+          onClick={sair}
+          disabled={leaving}
+          className="rounded-full border border-[var(--border)] bg-white px-3.5 py-1.5 text-sm font-semibold text-[var(--text-soft)] hover:border-[var(--danger)]/40 hover:text-[var(--danger)] disabled:opacity-60"
+        >
+          {leaving ? "Saindo…" : "Sair"}
+        </button>
+      </div>
       <h1 className="font-display mt-3 text-3xl font-extrabold text-[var(--text)]">
         {primeiro ? "Crie sua senha de acesso" : "Trocar senha"}
       </h1>
