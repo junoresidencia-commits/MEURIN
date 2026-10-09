@@ -180,6 +180,11 @@ export function wrapSignal(session: string, body: unknown): { __s: string; body:
   return { __s: session, body };
 }
 
+export function joinClearsHandshake(payload: string): boolean {
+  const { body } = unwrapSignal(payload);
+  return Boolean(body && typeof body === "object" && (body as { reset?: unknown }).reset === true);
+}
+
 export function unwrapSignal(raw: string): { session: string | null; body: unknown } {
   try {
     const parsed = JSON.parse(raw) as { __s?: unknown; body?: unknown };
@@ -189,6 +194,104 @@ export function unwrapSignal(raw: string): { session: string | null; body: unkno
     return { session: null, body: parsed };
   } catch {
     return { session: null, body: null };
+  }
+}
+
+export type PlainSdp = { type: "offer" | "answer" | "pranswer" | "rollback"; sdp: string };
+export type PlainIce = {
+  candidate: string;
+  sdpMid?: string | null;
+  sdpMLineIndex?: number | null;
+  usernameFragment?: string | null;
+};
+
+export function serializeSdp(desc: { type?: string; sdp?: string } | null | undefined): PlainSdp | null {
+  const type = desc?.type;
+  if (type !== "offer" && type !== "answer" && type !== "pranswer" && type !== "rollback") return null;
+  if (typeof desc?.sdp !== "string" || !desc.sdp) return null;
+  return { type, sdp: desc.sdp };
+}
+
+export function serializeIce(candidate: {
+  candidate?: string;
+  sdpMid?: string | null;
+  sdpMLineIndex?: number | null;
+  usernameFragment?: string | null;
+} | null | undefined): PlainIce | null {
+  if (!candidate || typeof candidate.candidate !== "string" || !candidate.candidate) return null;
+  return {
+    candidate: candidate.candidate,
+    sdpMid: candidate.sdpMid ?? null,
+    sdpMLineIndex: typeof candidate.sdpMLineIndex === "number" ? candidate.sdpMLineIndex : null,
+    usernameFragment: candidate.usernameFragment ?? undefined,
+  };
+}
+
+/** ICE trickle que chegou antes do SDP remoto precisa esperar o setRemoteDescription. */
+export function shouldQueueRemoteIce(hasRemoteDescription: boolean): boolean {
+  return !hasRemoteDescription;
+}
+
+/**
+ * No lote de sinalização, ICE do mesmo convite pode ter sido gravado um instante
+ * antes do offer. Mantém esses candidatos se a sessão coincidir.
+ */
+export function keepPlaybackIce(input: {
+  iceIndex: number;
+  lastOfferIndex: number;
+  iceSession: string | null;
+  offerSession: string | null;
+}): boolean {
+  if (input.lastOfferIndex < 0) return true;
+  if (input.iceIndex > input.lastOfferIndex) return true;
+  return Boolean(input.offerSession && input.iceSession && input.iceSession === input.offerSession);
+}
+
+export type TrackBucket = { id: string; kind: string };
+export type StreamBucket<T extends TrackBucket> = {
+  getTracks(): T[];
+  addTrack(track: T): void;
+  removeTrack(track: T): void;
+};
+
+/** Junta áudio e vídeo no mesmo MediaStream; troca a faixa antiga do mesmo tipo. */
+export function mergeRemoteTrack<T extends TrackBucket>(stream: StreamBucket<T>, track: T): StreamBucket<T> {
+  if (stream.getTracks().some((t) => t.id === track.id)) return stream;
+  for (const old of [...stream.getTracks()]) {
+    if (old.kind === track.kind && old.id !== track.id) stream.removeTrack(old);
+  }
+  stream.addTrack(track);
+  return stream;
+}
+
+export type PlayableMedia = { play(): Promise<void>; muted: boolean };
+
+/**
+ * Autoplay com áudio ligado costuma falhar depois de ontrack assíncrono.
+ * Tenta sem mute; se o navegador bloquear, deixa o vídeo mudo e pede um toque.
+ */
+export async function tryPlayMedia(el: PlayableMedia, wantUnmuted: boolean): Promise<"playing" | "blocked"> {
+  if (!wantUnmuted) {
+    el.muted = true;
+    try {
+      await el.play();
+      return "playing";
+    } catch {
+      return "blocked";
+    }
+  }
+  el.muted = false;
+  try {
+    await el.play();
+    return "playing";
+  } catch {
+    el.muted = true;
+    try {
+      await el.play();
+    } catch {
+      /* ainda bloqueado */
+    }
+    return "blocked";
   }
 }
 

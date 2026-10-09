@@ -36,18 +36,32 @@ export function isEmbeddedBrowser(ua: string): boolean {
   return /WhatsApp|FBAN|FBAV|Instagram|Line\/|; wv\)|WebView|GSA\//i.test(ua);
 }
 
+function signalSession(payload: string): string | null {
+  try {
+    const parsed = JSON.parse(payload) as { __s?: unknown };
+    return parsed && typeof parsed.__s === "string" ? parsed.__s : null;
+  } catch {
+    return null;
+  }
+}
+
 /**
- * Num lote de sinalização, usa só o último offer e os ICE depois dele.
- * Evita responder a um convite velho quando o médico reentrou.
+ * Num lote de sinalização, usa só o último offer.
+ * ICE depois dele entra; ICE um instante antes também, se for da mesma sessão
+ * (trickle disparou durante setLocalDescription, antes do POST do SDP).
  */
 export function playbackSignals<T extends SignalMsg>(messages: T[]): T[] {
   let lastOffer = -1;
   for (let i = 0; i < messages.length; i += 1) {
     if (messages[i].type === "offer") lastOffer = i;
   }
+  const offerSession = lastOffer >= 0 ? signalSession(messages[lastOffer].payload) : null;
   return messages.filter((m, i) => {
     if (m.type === "offer") return i === lastOffer;
-    if (m.type === "ice") return lastOffer < 0 || i > lastOffer;
+    if (m.type === "ice") {
+      if (lastOffer < 0 || i > lastOffer) return true;
+      return Boolean(offerSession && signalSession(m.payload) === offerSession);
+    }
     return true;
   });
 }
