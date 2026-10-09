@@ -13,6 +13,7 @@ import type {
   WeeklySlot,
 } from "./types";
 import { normalizeFeeMode } from "./platform-fees";
+import { joinClearsHandshake } from "./consult-call";
 
 const DATA_DIR = path.join(process.cwd(), "data");
 const DB_PATH = path.join(DATA_DIR, "db.json");
@@ -894,6 +895,13 @@ export async function appendSignalingMessage(message: SignalingMessage): Promise
         .eq("from_role", message.from)
         .eq("type", message.type);
     }
+    if (message.type === "join" && joinClearsHandshake(message.payload)) {
+      await sb
+        .from("signaling_messages")
+        .delete()
+        .eq("room_id", message.roomId)
+        .in("type", ["offer", "answer", "ice"]);
+    }
     const { error } = await sb.from("signaling_messages").insert({
       id: message.id,
       room_id: message.roomId,
@@ -920,6 +928,13 @@ export async function appendSignalingMessage(message: SignalingMessage): Promise
   await updateDb((db) => {
     const others = db.signaling.filter((m) => {
       if (m.roomId !== message.roomId) return true;
+      if (
+        message.type === "join" &&
+        joinClearsHandshake(message.payload) &&
+        (m.type === "offer" || m.type === "answer" || m.type === "ice")
+      ) {
+        return false;
+      }
       if (
         (message.type === "here" || message.type === "join") &&
         m.from === message.from &&

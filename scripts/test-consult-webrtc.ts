@@ -24,6 +24,7 @@ import {
   sanitizeConsultEvent,
   unwrapSignal,
   wrapSignal,
+  joinClearsHandshake,
   serializeIce,
   serializeSdp,
   shouldQueueRemoteIce,
@@ -129,6 +130,47 @@ async function main() {
   });
   const types = (await listSignalingForRoom(sigRoom)).map((m) => m.type);
   assert.ok(types.includes("leave"));
+
+  const handshakeRoom = "room-sig-handshake";
+  await appendSignalingMessage({
+    id: "offer-old",
+    roomId: handshakeRoom,
+    from: "doctor",
+    type: "offer",
+    payload: "{\"sdp\":\"old\"}",
+    createdAt: new Date().toISOString(),
+  });
+  await appendSignalingMessage({
+    id: "ice-old",
+    roomId: handshakeRoom,
+    from: "doctor",
+    type: "ice",
+    payload: "{\"candidate\":\"old\"}",
+    createdAt: new Date(Date.now() + 1).toISOString(),
+  });
+  await appendSignalingMessage({
+    id: "join-keep",
+    roomId: handshakeRoom,
+    from: "patient",
+    type: "join",
+    payload: JSON.stringify(wrapSignal("s-keep", { at: 1 })),
+    createdAt: new Date(Date.now() + 2).toISOString(),
+  });
+  assert.equal(joinClearsHandshake(JSON.stringify(wrapSignal("s-keep", { at: 1 }))), false);
+  assert.ok((await listSignalingForRoom(handshakeRoom)).some((m) => m.type === "offer"), "join de reconexão mantém o offer");
+  await appendSignalingMessage({
+    id: "join-fresh",
+    roomId: handshakeRoom,
+    from: "patient",
+    type: "join",
+    payload: JSON.stringify(wrapSignal("s-reset", { at: 2, reset: true })),
+    createdAt: new Date(Date.now() + 3).toISOString(),
+  });
+  assert.equal(joinClearsHandshake(JSON.stringify(wrapSignal("s-reset", { at: 2, reset: true }))), true);
+  const handshake = (await listSignalingForRoom(handshakeRoom)).map((m) => m.type);
+  assert.equal(handshake.includes("offer"), false, "entrar de novo descarta offer velho");
+  assert.equal(handshake.includes("ice"), false, "entrar de novo descarta ICE velho");
+  assert.ok(handshake.includes("join"));
 
   const denied = explainMediaError({ name: "NotAllowedError" });
   assert.equal(denied.canRetry, true);

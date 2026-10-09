@@ -180,6 +180,11 @@ export function wrapSignal(session: string, body: unknown): { __s: string; body:
   return { __s: session, body };
 }
 
+export function joinClearsHandshake(payload: string): boolean {
+  const { body } = unwrapSignal(payload);
+  return Boolean(body && typeof body === "object" && (body as { reset?: unknown }).reset === true);
+}
+
 export function unwrapSignal(raw: string): { session: string | null; body: unknown } {
   try {
     const parsed = JSON.parse(raw) as { __s?: unknown; body?: unknown };

@@ -325,7 +325,8 @@ export default function ConsultaPage() {
     setHasRemote(true);
     setPeerLeft(false);
     const ice = iceStateRef.current;
-    if (ice !== "disconnected" && ice !== "failed") {
+    const live = stream.getTracks().some((t) => !t.muted && t.readyState === "live");
+    if (ice === "connected" || ice === "completed" || live) {
       connectedRef.current = true;
       disconnectedSinceRef.current = 0;
       setReconnecting(false);
@@ -333,11 +334,11 @@ export default function ConsultaPage() {
     }
     const token = ++playTokenRef.current;
     void (async () => {
-      for (const wait of [0, 250, 800, 2000]) {
+      for (const wait of [0, 250, 800]) {
         if (wait) await new Promise((r) => setTimeout(r, wait));
         if (token !== playTokenRef.current) return;
         const video = remoteVideo.current;
-        if (!video || video.srcObject !== stream) return;
+        if (!video) return;
         const result = await tryPlayMedia(video, true);
         if (result === "playing" && !video.muted) {
           setNeedsUnmute(false);
@@ -413,22 +414,25 @@ export default function ConsultaPage() {
     }
     const pc = pcRef.current;
     if (!pc) return;
+    if (!pc.localDescription) return;
     const videoSender = pc.getSenders().find((s) => s.track?.kind === "video");
     if (videoSender?.getParameters) {
       const params = videoSender.getParameters();
-      if (!params.encodings?.length) params.encodings = [{}];
-      params.degradationPreference = "maintain-framerate";
-      params.encodings[0].maxBitrate = spec.maxBitrate || 64_000;
-      params.encodings[0].active = !audioOnly && !userCamOffRef.current;
-      await videoSender.setParameters(params).catch(() => undefined);
+      if (params.encodings?.length) {
+        params.degradationPreference = "maintain-framerate";
+        params.encodings[0].maxBitrate = spec.maxBitrate || 64_000;
+        params.encodings[0].active = !audioOnly && !userCamOffRef.current;
+        await videoSender.setParameters(params).catch(() => undefined);
+      }
     }
     const audioSender = pc.getSenders().find((s) => s.track?.kind === "audio");
     if (audioSender?.getParameters) {
       const params = audioSender.getParameters();
-      if (!params.encodings?.length) params.encodings = [{}];
-      params.encodings[0].maxBitrate = 48_000;
-      (params.encodings[0] as RTCRtpEncodingParameters & { priority?: string }).priority = "high";
-      await audioSender.setParameters(params).catch(() => undefined);
+      if (params.encodings?.length) {
+        params.encodings[0].maxBitrate = 48_000;
+        (params.encodings[0] as RTCRtpEncodingParameters & { priority?: string }).priority = "high";
+        await audioSender.setParameters(params).catch(() => undefined);
+      }
     }
     if (audioOnly) setStatus(NET_COPY.audioPriority);
   }, []);
@@ -446,6 +450,7 @@ export default function ConsultaPage() {
       if (!plain) return;
       await postSignal("offer", wrapSignal(sessionRef.current, plain));
       await flushLocalIce();
+      void applyMediaTier(videoTierRef.current);
       offerSentRef.current = true;
       if (!connectedRef.current && !disconnectedSinceRef.current) {
         setStatus(peerInCall ? "Paciente na sala. Cruzando o vídeo…" : "Aguardando o paciente entrar…");
@@ -455,7 +460,7 @@ export default function ConsultaPage() {
     } finally {
       makingOfferRef.current = false;
     }
-  }, [flushLocalIce, peerInCall, postSignal]);
+  }, [applyMediaTier, flushLocalIce, peerInCall, postSignal]);
 
   const bindPc = useCallback(
     (pc: RTCPeerConnection) => {
@@ -472,6 +477,9 @@ export default function ConsultaPage() {
         if (!remoteStreamRef.current) remoteStreamRef.current = new MediaStream();
         mergeRemoteTrack(remoteStreamRef.current, ev.track);
         attachRemote(remoteStreamRef.current);
+        ev.track.addEventListener("unmute", () => {
+          if (remoteStreamRef.current) attachRemote(remoteStreamRef.current);
+        });
         report("connected", { iceState: pc.iceConnectionState });
       };
       pc.oniceconnectionstatechange = () => {
@@ -524,7 +532,6 @@ export default function ConsultaPage() {
     const iceServers = await loadIce();
     const pc = new RTCPeerConnection({
       iceServers,
-      iceCandidatePoolSize: 4,
       bundlePolicy: "max-bundle",
       rtcpMuxPolicy: "require",
     });
@@ -610,6 +617,7 @@ export default function ConsultaPage() {
           if (!plain) return;
           await postSignal("answer", wrapSignal(sessionRef.current, plain));
           await flushLocalIce();
+          void applyMediaTier(videoTierRef.current);
           setStatus("Resposta enviada. Aguardando imagem…");
         } catch {
           /* offer velho */
@@ -642,7 +650,7 @@ export default function ConsultaPage() {
         }
       }
     },
-    [ensurePc, flushLocalIce, flushRemoteIce, postSignal, report, sendOffer]
+    [applyMediaTier, ensurePc, flushLocalIce, flushRemoteIce, postSignal, report, sendOffer]
   );
 
   const pullSignals = useCallback(async () => {
@@ -769,8 +777,13 @@ export default function ConsultaPage() {
         .filter((t): t is MediaStreamTrack => Boolean(t) && t.readyState !== "ended");
       if (!tracks.length) return;
       if (!remoteStreamRef.current) remoteStreamRef.current = new MediaStream();
-      for (const track of tracks) mergeRemoteTrack(remoteStreamRef.current, track);
-      attachRemote(remoteStreamRef.current);
+      let added = false;
+      for (const track of tracks) {
+        const before = remoteStreamRef.current.getTracks().length;
+        mergeRemoteTrack(remoteStreamRef.current, track);
+        if (remoteStreamRef.current.getTracks().length !== before) added = true;
+      }
+      if (added || !remoteVideo.current?.srcObject) attachRemote(remoteStreamRef.current);
     }, 2000);
     return () => clearInterval(timer);
   }, [attachRemote, joined]);
@@ -973,7 +986,7 @@ export default function ConsultaPage() {
       videoTierRef.current = withVideo ? DEFAULT_VIDEO_TIER : 4;
       setNetAudioOnly(!withVideo);
       void applyMediaTier(videoTierRef.current);
-      await postSignal("join", wrapSignal(sessionRef.current, { at: Date.now() }));
+      await postSignal("join", wrapSignal(sessionRef.current, { at: Date.now(), reset: true }));
       await postPresence(true);
       report("join", { phase: "connecting" });
       if (roleRef.current === "doctor") {

@@ -6,6 +6,8 @@ import assert from "node:assert/strict";
 import { mkdir, writeFile } from "node:fs/promises";
 import puppeteer from "puppeteer-core";
 
+const step = (msg) => console.log(new Date().toISOString(), msg);
+
 const BASE = process.env.DEMO_URL || process.env.CONSULT_BASE || "http://127.0.0.1:3020";
 const ROOM = process.env.CONSULT_ROOM || "b1771d07-4ce8-4ee6-b659-0f82c5548f72";
 const CHROME = process.env.CHROME_PATH || "/usr/bin/google-chrome";
@@ -48,19 +50,31 @@ async function emulate(page, opts) {
 
 async function main() {
   await mkdir(ART, { recursive: true });
+  const profile = `/tmp/consult-stability-${Date.now()}`;
+  step(`launch chrome profile=${profile}`);
   const browser = await puppeteer.launch({
     executablePath: CHROME,
     headless: "new",
     timeout: 20000,
-    protocolTimeout: 30000,
+    protocolTimeout: 60000,
     args: [
+      `--user-data-dir=${profile}`,
+      "--remote-debugging-port=0",
       "--use-fake-ui-for-media-stream",
       "--use-fake-device-for-media-stream",
       "--autoplay-policy=no-user-gesture-required",
       "--disable-dev-shm-usage",
+      "--disable-gpu",
       "--no-sandbox",
     ],
   });
+  let closed = false;
+  const close = async () => {
+    if (closed) return;
+    closed = true;
+    await browser.close().catch(() => undefined);
+  };
+  try {
   const doctor = await browser.newPage();
   const patient = await browser.newPage();
   doctor.setDefaultTimeout(45000);
@@ -68,17 +82,25 @@ async function main() {
   await doctor.setViewport({ width: 1280, height: 800 });
   await patient.setViewport({ width: 1280, height: 800 });
 
-  await doctor.goto(`${BASE}/medicos/login`, { waitUntil: "domcontentloaded" });
-  const login = await doctor.evaluate(async (base) => {
-    const res = await fetch(`${base}/api/auth`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ email: "carlos@meurim.com", password: "medico123" }),
-    });
-    return res.ok;
-  }, BASE);
-  assert.ok(login, "login do médico");
+  step("login médico");
+  const loginRes = await fetch(`${BASE}/api/auth`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ email: "carlos@meurim.com", password: "medico123" }),
+  });
+  assert.ok(loginRes.ok, "login do médico");
+  const rawCookie = loginRes.headers.get("set-cookie") || "";
+  const cookieName = rawCookie.split("=")[0];
+  const cookieValue = rawCookie.split(";")[0].slice(cookieName.length + 1);
+  await doctor.setCookie({
+    name: cookieName,
+    value: cookieValue,
+    url: BASE,
+    httpOnly: true,
+    sameSite: "Lax",
+  });
 
+  step("abrir salas");
   await Promise.all([
     doctor.goto(`${BASE}/consulta/${ROOM}`, { waitUntil: "domcontentloaded" }),
     patient.goto(`${BASE}/consulta/${ROOM}?como=paciente`, { waitUntil: "domcontentloaded" }),
@@ -86,21 +108,29 @@ async function main() {
 
   await waitText(doctor, "Entrar para atender");
   await waitText(patient, "Você é o paciente|Entrar na consulta");
+  step("entrar na chamada");
   await clickText(doctor, "Entrar para atender");
   await clickText(patient, "Entrar na consulta");
   await waitText(doctor, "Aguardando|Cruzando|Conectado|Paciente|Conexão");
+  step("esperar cruzar mídia");
   await new Promise((r) => setTimeout(r, 8000));
+  step("screenshot wifi");
+  await doctor.screenshot({ path: `${ART}/consult_stability_wifi_bom.png`, fullPage: true });
+  step("ler faixas de vídeo");
   const media = await doctor.evaluate(() =>
     [...document.querySelectorAll("video")].map((v) => ({
       paused: v.paused,
       muted: v.muted,
       width: v.videoWidth,
       kinds: v.srcObject instanceof MediaStream ? v.srcObject.getTracks().map((t) => t.kind).sort() : [],
+      trackMuted: v.srcObject instanceof MediaStream ? v.srcObject.getTracks().map((t) => `${t.kind}:${t.muted}`) : [],
     }))
   );
   const remote = media[0];
-  assert.ok(remote && remote.kinds.length > 0, `vídeo remoto sem faixa: ${JSON.stringify(media)}`);
-  await doctor.screenshot({ path: `${ART}/consult_stability_wifi_bom.png`, fullPage: true });
+  assert.ok(remote && remote.kinds.includes("audio") && remote.kinds.includes("video"), `vídeo remoto sem faixa: ${JSON.stringify(media)}`);
+  if (remote.width === 0) {
+    step(`aviso: faixa de vídeo cruzou mas o quadro ainda não pintou ${JSON.stringify(media)}`);
+  }
 
   const beforeOffline = await bodyText(doctor);
   assert.equal(/erro na chamada/i.test(beforeOffline), false);
@@ -140,8 +170,12 @@ async function main() {
       2
     )
   );
-  await browser.close();
-  console.log("consult-stability ok", { room: ROOM });
+  await close();
+  console.log("consult-stability ok", { room: ROOM, remoteKinds: remote.kinds });
+  } catch (err) {
+    await close();
+    throw err;
+  }
 }
 
 main().catch(async (err) => {
