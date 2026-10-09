@@ -89,7 +89,17 @@ async function main() {
   await clickText(doctor, "Entrar para atender");
   await clickText(patient, "Entrar na consulta");
   await waitText(doctor, "Aguardando|Cruzando|Conectado|Paciente|Conexão");
-  await new Promise((r) => setTimeout(r, 6000));
+  await new Promise((r) => setTimeout(r, 8000));
+  const media = await doctor.evaluate(() =>
+    [...document.querySelectorAll("video")].map((v) => ({
+      paused: v.paused,
+      muted: v.muted,
+      width: v.videoWidth,
+      kinds: v.srcObject instanceof MediaStream ? v.srcObject.getTracks().map((t) => t.kind).sort() : [],
+    }))
+  );
+  const remote = media[0];
+  assert.ok(remote && remote.kinds.length > 0, `vídeo remoto sem faixa: ${JSON.stringify(media)}`);
   await doctor.screenshot({ path: `${ART}/consult_stability_wifi_bom.png`, fullPage: true });
 
   const beforeOffline = await bodyText(doctor);
@@ -124,6 +134,7 @@ async function main() {
         room: ROOM,
         noGenericError: true,
         stayedInRoom: true,
+        remoteKinds: remote.kinds,
       },
       null,
       2

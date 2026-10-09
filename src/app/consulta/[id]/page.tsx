@@ -25,7 +25,13 @@ import {
   resolveCallPhase,
   unwrapSignal,
   wrapSignal,
+  mergeRemoteTrack,
+  serializeIce,
+  serializeSdp,
+  shouldQueueRemoteIce,
+  tryPlayMedia,
   type CallPhase,
+  type PlainIce,
   type ConsultEventKind,
   type MediaHelp,
   type NetQuality,
@@ -88,6 +94,11 @@ export default function ConsultaPage() {
   const goodTicksRef = useRef(0);
   const prevRtpRef = useRef<RtpCounters | null>(null);
   const userCamOffRef = useRef(false);
+  const playTokenRef = useRef(0);
+  const remoteStreamRef = useRef<MediaStream | null>(null);
+  const pendingLocalIceRef = useRef<PlainIce[]>([]);
+  const pendingRemoteIceRef = useRef<PlainIce[]>([]);
+  const sdpPostedRef = useRef(false);
   const [role, setRole] = useState<Role>("patient");
   const [roomRole, setRoomRole] = useState<RoomRole>("guest");
   const [info, setInfo] = useState<{
@@ -120,6 +131,7 @@ export default function ConsultaPage() {
   const [peerQuality, setPeerQuality] = useState<NetQuality | null>(null);
   const [netAudioOnly, setNetAudioOnly] = useState(false);
   const [mediaHelp, setMediaHelp] = useState<MediaHelp | null>(null);
+  const [needsUnmute, setNeedsUnmute] = useState(false);
   const [iceState, setIceState] = useState("");
   const [paywall, setPaywall] = useState<{
     brCode: string;
@@ -309,14 +321,58 @@ export default function ConsultaPage() {
   const attachRemote = useCallback((stream: MediaStream) => {
     const el = remoteVideo.current;
     if (!el) return;
-    el.srcObject = stream;
-    void el.play().catch(() => undefined);
-    connectedRef.current = true;
-    disconnectedSinceRef.current = 0;
+    if (el.srcObject !== stream) el.srcObject = stream;
     setHasRemote(true);
-    setReconnecting(false);
     setPeerLeft(false);
-    setStatus("Conectado. Consulta em andamento.");
+    const ice = iceStateRef.current;
+    if (ice !== "disconnected" && ice !== "failed") {
+      connectedRef.current = true;
+      disconnectedSinceRef.current = 0;
+      setReconnecting(false);
+      setStatus("Conectado. Consulta em andamento.");
+    }
+    const token = ++playTokenRef.current;
+    void (async () => {
+      for (const wait of [0, 250, 800, 2000]) {
+        if (wait) await new Promise((r) => setTimeout(r, wait));
+        if (token !== playTokenRef.current) return;
+        const video = remoteVideo.current;
+        if (!video || video.srcObject !== stream) return;
+        const result = await tryPlayMedia(video, true);
+        if (result === "playing" && !video.muted) {
+          setNeedsUnmute(false);
+          return;
+        }
+        setNeedsUnmute(true);
+      }
+    })();
+  }, []);
+
+  const unmuteRemote = useCallback(() => {
+    const el = remoteVideo.current;
+    if (!el) return;
+    el.muted = false;
+    void el.play().then(() => setNeedsUnmute(false)).catch(() => undefined);
+  }, []);
+
+  const flushLocalIce = useCallback(async () => {
+    sdpPostedRef.current = true;
+    const pending = pendingLocalIceRef.current.splice(0);
+    for (const candidate of pending) {
+      await postSignal("ice", wrapSignal(sessionRef.current, candidate));
+    }
+  }, [postSignal]);
+
+  const flushRemoteIce = useCallback(async (pc: RTCPeerConnection) => {
+    if (!pc.remoteDescription) return;
+    const pending = pendingRemoteIceRef.current.splice(0);
+    for (const candidate of pending) {
+      try {
+        await pc.addIceCandidate(candidate);
+      } catch {
+        /* candidato velho */
+      }
+    }
   }, []);
 
   const loadIce = useCallback(async () => {
@@ -383,9 +439,13 @@ export default function ConsultaPage() {
     if (!pc) return;
     makingOfferRef.current = true;
     try {
+      sdpPostedRef.current = false;
       const offer = await pc.createOffer(restart || answeredRef.current ? { iceRestart: true } : undefined);
       await pc.setLocalDescription(offer);
-      await postSignal("offer", wrapSignal(sessionRef.current, offer));
+      const plain = serializeSdp(pc.localDescription || offer);
+      if (!plain) return;
+      await postSignal("offer", wrapSignal(sessionRef.current, plain));
+      await flushLocalIce();
       offerSentRef.current = true;
       if (!connectedRef.current && !disconnectedSinceRef.current) {
         setStatus(peerInCall ? "Paciente na sala. Cruzando o vídeo…" : "Aguardando o paciente entrar…");
@@ -395,16 +455,23 @@ export default function ConsultaPage() {
     } finally {
       makingOfferRef.current = false;
     }
-  }, [peerInCall, postSignal]);
+  }, [flushLocalIce, peerInCall, postSignal]);
 
   const bindPc = useCallback(
     (pc: RTCPeerConnection) => {
       pc.onicecandidate = (ev) => {
-        if (ev.candidate) void postSignal("ice", wrapSignal(sessionRef.current, ev.candidate));
+        const plain = serializeIce(ev.candidate);
+        if (!plain) return;
+        if (!sdpPostedRef.current) {
+          pendingLocalIceRef.current.push(plain);
+          return;
+        }
+        void postSignal("ice", wrapSignal(sessionRef.current, plain));
       };
       pc.ontrack = (ev) => {
-        const stream = ev.streams[0] || new MediaStream([ev.track]);
-        attachRemote(stream);
+        if (!remoteStreamRef.current) remoteStreamRef.current = new MediaStream();
+        mergeRemoteTrack(remoteStreamRef.current, ev.track);
+        attachRemote(remoteStreamRef.current);
         report("connected", { iceState: pc.iceConnectionState });
       };
       pc.oniceconnectionstatechange = () => {
@@ -478,6 +545,9 @@ export default function ConsultaPage() {
     offerSentRef.current = false;
     answeredRef.current = false;
     connectedRef.current = false;
+    sdpPostedRef.current = false;
+    pendingLocalIceRef.current = [];
+    pendingRemoteIceRef.current = [];
     sessionRef.current = newSession();
     const pc = await ensurePc();
     void applyMediaTier(videoTierRef.current);
@@ -517,6 +587,8 @@ export default function ConsultaPage() {
         setPeerLeft(true);
         setStatus("O outro participante saiu. A sala e o prontuário continuam abertos.");
         if (remoteVideo.current) remoteVideo.current.srcObject = null;
+        remoteStreamRef.current = null;
+        setNeedsUnmute(false);
         connectedRef.current = false;
         answeredRef.current = false;
         report("peer_left");
@@ -527,10 +599,17 @@ export default function ConsultaPage() {
       const pc = await ensurePc();
       if (msg.type === "offer" && body) {
         try {
-          await pc.setRemoteDescription(body as RTCSessionDescriptionInit);
+          const remote = serializeSdp(body as { type?: string; sdp?: string });
+          if (!remote) return;
+          sdpPostedRef.current = false;
+          await pc.setRemoteDescription(remote);
+          await flushRemoteIce(pc);
           const answer = await pc.createAnswer();
           await pc.setLocalDescription(answer);
-          await postSignal("answer", wrapSignal(sessionRef.current, answer));
+          const plain = serializeSdp(pc.localDescription || answer);
+          if (!plain) return;
+          await postSignal("answer", wrapSignal(sessionRef.current, plain));
+          await flushLocalIce();
           setStatus("Resposta enviada. Aguardando imagem…");
         } catch {
           /* offer velho */
@@ -539,22 +618,31 @@ export default function ConsultaPage() {
         answeredRef.current = true;
         if (pc.signalingState === "have-local-offer") {
           try {
-            await pc.setRemoteDescription(body as RTCSessionDescriptionInit);
+            const remote = serializeSdp(body as { type?: string; sdp?: string });
+            if (remote) {
+              await pc.setRemoteDescription(remote);
+              await flushRemoteIce(pc);
+            }
           } catch {
             /* ignore */
           }
         }
         if (!connectedRef.current) setStatus("Paciente na chamada. Cruzando o vídeo…");
       } else if (msg.type === "ice" && body) {
-        if (!pc.remoteDescription) return;
+        const candidate = serializeIce(body as PlainIce);
+        if (!candidate) return;
+        if (shouldQueueRemoteIce(Boolean(pc.remoteDescription))) {
+          pendingRemoteIceRef.current.push(candidate);
+          return;
+        }
         try {
-          await pc.addIceCandidate(body as RTCIceCandidateInit);
+          await pc.addIceCandidate(candidate);
         } catch {
           /* ignore */
         }
       }
     },
-    [ensurePc, postSignal, report, sendOffer]
+    [ensurePc, flushLocalIce, flushRemoteIce, postSignal, report, sendOffer]
   );
 
   const pullSignals = useCallback(async () => {
@@ -651,6 +739,10 @@ export default function ConsultaPage() {
     if (!joined) return;
     const onVis = () => {
       if (document.visibilityState !== "visible") return;
+      const remote = remoteVideo.current;
+      if (remote?.srcObject) {
+        void tryPlayMedia(remote, true).then((result) => setNeedsUnmute(result === "blocked"));
+      }
       const ice = iceStateRef.current;
       if (ice === "disconnected" || ice === "failed" || ice === "closed") {
         setStatus(NET_COPY.reconnecting);
@@ -663,6 +755,25 @@ export default function ConsultaPage() {
     document.addEventListener("visibilitychange", onVis);
     return () => document.removeEventListener("visibilitychange", onVis);
   }, [joined, postSignal, rebuildPc, sendOffer]);
+
+  useEffect(() => {
+    if (!joined) return;
+    const timer = setInterval(() => {
+      const pc = pcRef.current;
+      if (!pc) return;
+      const ice = pc.iceConnectionState;
+      if (ice === "disconnected" || ice === "failed" || ice === "closed") return;
+      const tracks = pc
+        .getReceivers()
+        .map((r) => r.track)
+        .filter((t): t is MediaStreamTrack => Boolean(t) && t.readyState !== "ended");
+      if (!tracks.length) return;
+      if (!remoteStreamRef.current) remoteStreamRef.current = new MediaStream();
+      for (const track of tracks) mergeRemoteTrack(remoteStreamRef.current, track);
+      attachRemote(remoteStreamRef.current);
+    }, 2000);
+    return () => clearInterval(timer);
+  }, [attachRemote, joined]);
 
   useEffect(() => {
     if (!joined) return;
@@ -734,10 +845,15 @@ export default function ConsultaPage() {
     pcRef.current = null;
     if (localVideo.current) localVideo.current.srcObject = null;
     if (remoteVideo.current) remoteVideo.current.srcObject = null;
+    remoteStreamRef.current = null;
     offerSentRef.current = false;
     answeredRef.current = false;
     connectedRef.current = false;
+    sdpPostedRef.current = false;
+    pendingLocalIceRef.current = [];
+    pendingRemoteIceRef.current = [];
     setHasRemote(false);
+    setNeedsUnmute(false);
     setReconnecting(false);
     setQuality(null);
     setPeerQuality(null);
@@ -847,7 +963,10 @@ export default function ConsultaPage() {
         }
       });
       streamRef.current = stream;
-      if (localVideo.current) localVideo.current.srcObject = stream;
+      if (localVideo.current) {
+        localVideo.current.srcObject = stream;
+        void tryPlayMedia(localVideo.current, false);
+      }
       setJoined(true);
       joinedRef.current = true;
       await ensurePc();
@@ -1143,6 +1262,8 @@ export default function ConsultaPage() {
           quality={quality}
           notice={notice}
           audioOnly={netAudioOnly}
+          needsUnmute={needsUnmute}
+          onUnmute={unmuteRemote}
         />
         {isDoctor && roomKind === "doctor" && info?.patientEmail && (
           <ConsultChartPanel patientEmail={info.patientEmail} />

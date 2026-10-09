@@ -17,6 +17,8 @@ type Props = {
   quality: NetQuality | null;
   notice?: { tone: "info" | "warn"; text: string } | null;
   audioOnly?: boolean;
+  needsUnmute?: boolean;
+  onUnmute?: () => void;
 };
 
 export function ConsultVideoStage({
@@ -32,9 +34,22 @@ export function ConsultVideoStage({
   quality,
   notice,
   audioOnly = false,
+  needsUnmute = false,
+  onUnmute,
 }: Props) {
   const overlay = hasRemote && phase === "connected" ? null : overlayCopy(phase, hostLabel, otherName);
   const badge = qualityIndicator(quality);
+  const unmuteButton = needsUnmute ? (
+    <button
+      type="button"
+      className="absolute inset-0 z-20 flex items-center justify-center bg-black/45 px-6 text-center"
+      onClick={onUnmute}
+    >
+      <span className="rounded-full bg-white px-5 py-3 text-sm font-extrabold text-black shadow-lg">
+        Toque para ouvir
+      </span>
+    </button>
+  ) : null;
 
   return (
     <div className={isDoctor ? "relative" : "grid gap-4 lg:grid-cols-2"}>
@@ -56,7 +71,8 @@ export function ConsultVideoStage({
             <p className="mt-2 max-w-md text-sm text-white/80">{overlay.detail}</p>
           </div>
         )}
-        {isDoctor && !overlay && audioOnly && (
+        {isDoctor && unmuteButton}
+        {isDoctor && !overlay && !needsUnmute && audioOnly && (
           <div className="absolute inset-0 flex items-center justify-center bg-black/55 px-6 text-center text-white">
             <p className="max-w-sm text-sm font-semibold">Áudio da consulta ativo. O vídeo volta quando a internet melhorar.</p>
           </div>
@@ -90,7 +106,8 @@ export function ConsultVideoStage({
             <p className="mt-2 text-xs text-white/80">{overlay.detail}</p>
           </div>
         )}
-        {!isDoctor && !overlay && audioOnly && (
+        {!isDoctor && unmuteButton}
+        {!isDoctor && !overlay && !needsUnmute && audioOnly && (
           <div className="absolute inset-0 flex items-center justify-center bg-black/55 px-4 text-center text-white">
             <p className="text-xs font-semibold">Consulta em áudio. O vídeo volta sozinho.</p>
           </div>

@@ -24,6 +24,12 @@ import {
   sanitizeConsultEvent,
   unwrapSignal,
   wrapSignal,
+  serializeIce,
+  serializeSdp,
+  shouldQueueRemoteIce,
+  keepPlaybackIce,
+  mergeRemoteTrack,
+  tryPlayMedia,
   NET_COPY,
   isGenericCallError,
   parsePeerNetHint,
@@ -66,6 +72,20 @@ async function main() {
     batch.map((m) => m.payload),
     ["{}", "new", "new-ice", "a"]
   );
+
+  const sessionIce = JSON.stringify({ __s: "s1", body: { candidate: "early", sdpMid: "0", sdpMLineIndex: 0 } });
+  const sessionOffer = JSON.stringify({ __s: "s1", body: { type: "offer", sdp: "v=0" } });
+  const raced = playbackSignals([
+    { from: "doctor", type: "ice", payload: sessionIce, createdAt: "1" },
+    { from: "doctor", type: "offer", payload: sessionOffer, createdAt: "2" },
+  ]);
+  assert.equal(raced.length, 2, "ICE da mesma sessão que chegou antes do offer não se perde");
+  const otherSess = JSON.stringify({ __s: "old", body: { candidate: "stale", sdpMid: "0", sdpMLineIndex: 0 } });
+  const dropped = playbackSignals([
+    { from: "doctor", type: "ice", payload: otherSess, createdAt: "1" },
+    { from: "doctor", type: "offer", payload: sessionOffer, createdAt: "2" },
+  ]);
+  assert.deepEqual(dropped.map((m) => m.type), ["offer"]);
 
   assert.equal(presenceIsFresh(new Date().toISOString(), Date.now(), 20_000), true);
   assert.equal(presenceIsFresh(new Date(Date.now() - 60_000).toISOString(), Date.now(), 20_000), false);
@@ -232,6 +252,65 @@ async function main() {
   );
   assert.equal(parsePeerNetHint({ quality: "fair" }), "fair");
   assert.equal(parsePeerNetHint({ quality: "nope" }), null);
+
+  assert.deepEqual(serializeSdp({ type: "offer", sdp: "v=0\r\no=- 1 1 IN IP4 0.0.0.0" }), {
+    type: "offer",
+    sdp: "v=0\r\no=- 1 1 IN IP4 0.0.0.0",
+  });
+  assert.equal(serializeSdp({ type: "offer" }), null);
+  assert.deepEqual(serializeIce({ candidate: "candidate:1 udp 1", sdpMid: "0", sdpMLineIndex: 0 }), {
+    candidate: "candidate:1 udp 1",
+    sdpMid: "0",
+    sdpMLineIndex: 0,
+    usernameFragment: undefined,
+  });
+  assert.equal(serializeIce({ candidate: "" }), null);
+  assert.equal(shouldQueueRemoteIce(false), true);
+  assert.equal(shouldQueueRemoteIce(true), false);
+  assert.equal(
+    keepPlaybackIce({ iceIndex: 0, lastOfferIndex: 1, iceSession: "s1", offerSession: "s1" }),
+    true
+  );
+  assert.equal(
+    keepPlaybackIce({ iceIndex: 0, lastOfferIndex: 1, iceSession: "old", offerSession: "s1" }),
+    false
+  );
+
+  const fakeStream = {
+    tracks: [] as { id: string; kind: string }[],
+    getTracks() {
+      return this.tracks;
+    },
+    addTrack(track: { id: string; kind: string }) {
+      this.tracks.push(track);
+    },
+    removeTrack(track: { id: string; kind: string }) {
+      this.tracks = this.tracks.filter((t) => t.id !== track.id);
+    },
+  };
+  mergeRemoteTrack(fakeStream, { id: "a1", kind: "audio" });
+  mergeRemoteTrack(fakeStream, { id: "v1", kind: "video" });
+  mergeRemoteTrack(fakeStream, { id: "v2", kind: "video" });
+  assert.deepEqual(
+    fakeStream.tracks.map((t) => t.id),
+    ["a1", "v2"],
+    "áudio e vídeo no mesmo stream; vídeo novo substitui o anterior"
+  );
+
+  let plays = 0;
+  const blockedEl = {
+    muted: false,
+    async play() {
+      plays += 1;
+      if (!this.muted) throw new Error("NotAllowedError");
+    },
+  };
+  assert.equal(await tryPlayMedia(blockedEl, true), "blocked");
+  assert.equal(blockedEl.muted, true);
+  assert.ok(plays >= 2, "tenta com áudio e depois mudo");
+  const okEl = { muted: true, async play() {} };
+  assert.equal(await tryPlayMedia(okEl, true), "playing");
+  assert.equal(okEl.muted, false);
 
   const roomEv = "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb";
   assert.equal(allowConsultEvent(roomEv, 1_000, 60_000, 2), true);
