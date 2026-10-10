@@ -22,8 +22,9 @@ const href = chartFixHref("a@b.com", [
 assert.match(href, /^\/medicos\/paciente\/a%40b\.com\?/);
 assert.match(href, /tab=perfil/);
 assert.match(href, /faltantes=has%2Clab_creatinina/);
+assert.equal(href.includes("editar=1"), false);
 
-const idade = chartFixHref("x", [{ key: "idade", fixTab: "cadastro" }], { key: "idade", fixTab: "cadastro" });
+const idade = chartFixHref("x", [{ key: "idade", fixTab: "cadastro" }, { key: "has", fixTab: "perfil" }]);
 assert.match(idade, /tab=perfil/);
 assert.match(idade, /editar=1/);
 assert.match(idade, /faltantes=idade/);

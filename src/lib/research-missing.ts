@@ -30,7 +30,8 @@ export function chartFixHref(patientId: string, missing: MissingField[], single?
   const params = new URLSearchParams();
   params.set("tab", tab);
   if (keys.length) params.set("faltantes", keys.join(","));
-  if ((single?.fixTab || preferredFixTab(missing)) === "cadastro") params.set("editar", "1");
+  const needsCadastro = (single ? [single] : missing).some((m) => m.fixTab === "cadastro");
+  if (needsCadastro) params.set("editar", "1");
   return `/medicos/paciente/${encodeURIComponent(patientId)}?${params.toString()}`;
 }
 
