@@ -16,7 +16,7 @@ import { encodePatientParam } from "@/lib/user-errors";
 type FieldMeta = { source: string; at: string };
 type HistoryEntry = { field: string; from: unknown; to: unknown; source: string; at: string };
 
-export function ClinicalProfileEditor({ emailParam }: { emailParam: string }) {
+export function ClinicalProfileEditor({ emailParam, highlightKeys = [] }: { emailParam: string; highlightKeys?: string[] }) {
   const [data, setData] = useState<ClinicalProfileData>({});
   const [meta, setMeta] = useState<Record<string, FieldMeta>>({});
   const [history, setHistory] = useState<HistoryEntry[]>([]);
@@ -40,6 +40,12 @@ export function ClinicalProfileEditor({ emailParam }: { emailParam: string }) {
     load().finally(() => setLoading(false));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [emailParam]);
+
+  useEffect(() => {
+    if (!highlightKeys.length) return;
+    const first = highlightKeys.find((k) => document.getElementById(`campo-${k}`));
+    if (first) document.getElementById(`campo-${first}`)?.scrollIntoView({ behavior: "smooth", block: "center" });
+  }, [highlightKeys, loading]);
 
   function set(key: string, value: unknown) {
     setMsg("");
@@ -94,9 +100,12 @@ export function ClinicalProfileEditor({ emailParam }: { emailParam: string }) {
           <p className="text-sm font-bold text-[var(--text)]">{group}</p>
           <div className="grid gap-3 sm:grid-cols-2">
             {CLINICAL_FIELDS.filter((f) => f.group === group).map((f) => {
+              const mark = highlightKeys.includes(f.key)
+                ? "rounded-xl ring-2 ring-[var(--gold)] ring-offset-2 bg-[var(--gold-soft)]/40 p-2"
+                : "";
               if (f.kind === "number") {
                 return (
-                  <label key={f.key} className="block">
+                  <label key={f.key} id={`campo-${f.key}`} className={`block ${mark}`}>
                     <span className="mb-1 block text-xs font-semibold text-[var(--text-muted)]">{f.label}{f.unit ? ` (${f.unit})` : ""}{srcOf(f.key)}</span>
                     <input inputMode="decimal" className="input-field" value={String(data[f.key] ?? "")} onChange={(e) => set(f.key, e.target.value)} />
                   </label>
@@ -105,7 +114,7 @@ export function ClinicalProfileEditor({ emailParam }: { emailParam: string }) {
               if (f.kind === "enumG" || f.kind === "enumA" || f.kind === "etiologia") {
                 const opts = f.kind === "enumG" ? ESTAGIOS_G.map((v) => ({ value: v, label: v })) : f.kind === "enumA" ? CATEGORIAS_A.map((v) => ({ value: v, label: v })) : ETIOLOGIAS;
                 return (
-                  <label key={f.key} className="block">
+                  <label key={f.key} id={`campo-${f.key}`} className={`block ${mark}`}>
                     <span className="mb-1 block text-xs font-semibold text-[var(--text-muted)]">{f.label}{srcOf(f.key)}</span>
                     <select className="input-field" value={String(data[f.key] ?? "")} onChange={(e) => set(f.key, e.target.value)}>
                       <option value="">Desconhecido</option>
@@ -118,7 +127,7 @@ export function ClinicalProfileEditor({ emailParam }: { emailParam: string }) {
               }
               if (f.kind === "select") {
                 return (
-                  <label key={f.key} className="block">
+                  <label key={f.key} id={`campo-${f.key}`} className={`block ${mark}`}>
                     <span className="mb-1 block text-xs font-semibold text-[var(--text-muted)]">{f.label}{srcOf(f.key)}</span>
                     <select className="input-field" value={String(data[f.key] ?? "")} onChange={(e) => set(f.key, e.target.value)}>
                       <option value="">Desconhecido</option>
@@ -132,7 +141,7 @@ export function ClinicalProfileEditor({ emailParam }: { emailParam: string }) {
               if (f.kind === "text") {
                 const isResumo = f.key === "resumo";
                 return (
-                  <div key={f.key} className={isResumo ? "sm:col-span-2" : "block"}>
+                  <div key={f.key} id={`campo-${f.key}`} className={`${isResumo ? "sm:col-span-2" : "block"} ${mark}`}>
                     <span className="mb-1 block text-xs font-semibold text-[var(--text-muted)]">{f.label}{srcOf(f.key)}</span>
                     {isResumo ? (
                       <textarea className="input-field min-h-[70px]" value={String(data[f.key] ?? "")} onChange={(e) => set(f.key, e.target.value)} placeholder="Resumo da situação clínica (texto livre)." />
@@ -145,7 +154,7 @@ export function ClinicalProfileEditor({ emailParam }: { emailParam: string }) {
               if (f.kind === "etiologiaMulti") {
                 const arr = Array.isArray(data[f.key]) ? (data[f.key] as string[]) : [];
                 return (
-                  <div key={f.key} className="sm:col-span-2">
+                  <div key={f.key} id={`campo-${f.key}`} className={`sm:col-span-2 ${mark}`}>
                     <span className="mb-1 block text-xs font-semibold text-[var(--text-muted)]">{f.label}{srcOf(f.key)}</span>
                     <div className="flex flex-wrap gap-1.5">
                       {ETIOLOGIAS.map((o) => (
@@ -165,7 +174,7 @@ export function ClinicalProfileEditor({ emailParam }: { emailParam: string }) {
               // tri
               const cur = data[f.key] as string | undefined;
               return (
-                <div key={f.key} className="block">
+                <div key={f.key} id={`campo-${f.key}`} className={`block ${mark}`}>
                   <span className="mb-1 block text-xs font-semibold text-[var(--text-muted)]">{f.label}{srcOf(f.key)}</span>
                   <div className="flex gap-1">
                     {TRI_OPTIONS.map((o) => {

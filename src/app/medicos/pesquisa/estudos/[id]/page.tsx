@@ -14,6 +14,7 @@ import { ResearchGovernancePanel } from "@/components/ResearchGovernancePanel";
 import { emptyProtocol, type ResearchConsent, type ResearchProtocol } from "@/lib/research-governance";
 import { guessSexFromName } from "@/lib/sex-guess";
 import { AgeBandChips } from "@/components/AgeBandChips";
+import { CHART_WINDOW_FEATURES, chartFixHref, chartWindowName } from "@/lib/research-missing";
 
 type Filter = { field: string; op: Operator; value: string; value2?: string };
 type NumStats = { n: number; mean: number; sd: number; median: number; q1: number; q3: number; min: number; max: number };
@@ -92,10 +93,20 @@ export default function EstudoDetailPage() {
       if (res.ok) setMissing(await res.json());
     } catch { /* ignore */ }
   }
-  function fixHref(patientId: string, fixTab: string) {
-    const tab = fixTab === "cadastro" ? "perfil" : fixTab;
-    return `/medicos/paciente/${encodeURIComponent(patientId)}?tab=${tab}`;
+  function openChart(href: string, patientId: string, ev?: { preventDefault: () => void }) {
+    ev?.preventDefault();
+    const opened = window.open(href, chartWindowName(patientId), CHART_WINDOW_FEATURES);
+    if (!opened) window.open(href, "_blank", "noopener,noreferrer");
+    else opened.focus();
   }
+
+  useEffect(() => {
+    function onFocus() {
+      void loadMissing();
+    }
+    window.addEventListener("focus", onFocus);
+    return () => window.removeEventListener("focus", onFocus);
+  }, [id]);
   async function setSex(patientId: string, sex: "masculino" | "feminino") {
     await fetch(`/api/doctor/patients/${encodeURIComponent(patientId)}/demographics`, {
       method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ sex }),
@@ -359,8 +370,11 @@ export default function EstudoDetailPage() {
                   ) : (
                     <>
                       <p className="mt-1 text-sm text-[var(--text-muted)]">
-                        {missing.patients.length} paciente(s) com informação faltando nas variáveis do estudo. Clique para completar (ou deixe como <b>desconhecido</b> se não se aplica).
+                        {missing.patients.length} paciente(s) com informação faltando. Clique no nome para abrir o prontuário em outra janela e completar o que falta (ou deixe como <b>desconhecido</b> se não se aplica).
                       </p>
+                      <button type="button" className="mt-2 text-sm font-semibold text-[var(--gold)]" onClick={() => void loadMissing()}>
+                        Atualizar lista
+                      </button>
                       {/* Resumo por variável */}
                       <div className="mt-2 flex flex-wrap gap-2">
                         {missing.variables.filter((v) => v.missing > 0).map((v) => (
@@ -371,10 +385,20 @@ export default function EstudoDetailPage() {
                       </div>
                       {/* Lista por paciente */}
                       <div className="mt-3 grid gap-2">
-                        {missing.patients.map((p) => (
+                        {missing.patients.map((p) => {
+                          const chartHref = chartFixHref(p.id, p.missing);
+                          return (
                           <div key={p.id} className="rounded-xl border border-[var(--border)] p-3">
                             <div className="flex flex-wrap items-center justify-between gap-2">
-                              <p className="font-semibold text-[var(--text)]">{p.name}</p>
+                              <a
+                                href={chartHref}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                onClick={(ev) => openChart(chartHref, p.id, ev)}
+                                className="font-semibold text-[var(--gold)] underline-offset-2 hover:underline"
+                              >
+                                {p.name}
+                              </a>
                               <span className="text-xs text-[var(--text-muted)]">{p.missing.length} campo(s) faltando</span>
                             </div>
                             <div className="mt-2 flex flex-wrap gap-1.5">
@@ -386,14 +410,22 @@ export default function EstudoDetailPage() {
                                     <button type="button" className={`rounded px-2 py-0.5 font-semibold ${guessSexFromName(p.name) === "masculino" ? "bg-[var(--gold)] text-white" : "bg-[var(--gold-soft)] text-[var(--gold)]"}`} onClick={() => setSex(p.id, "masculino")}>Masculino</button>
                                   </span>
                                 ) : (
-                                  <Link key={m.key} href={fixHref(p.id, m.fixTab)} className="rounded-lg border border-[var(--border)] bg-white px-2 py-1 text-xs font-semibold text-[var(--text-soft)] transition hover:border-[var(--gold)] hover:text-[var(--gold)]">
-                                    {m.key === "idade" ? "Idade · Dado ausente" : m.label} <span className="text-[var(--text-muted)]">· corrigir →</span>
-                                  </Link>
+                                  <a
+                                    key={m.key}
+                                    href={chartFixHref(p.id, p.missing, m)}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    onClick={(ev) => openChart(chartFixHref(p.id, p.missing, m), p.id, ev)}
+                                    className="rounded-lg border border-[var(--border)] bg-white px-2 py-1 text-xs font-semibold text-[var(--text-soft)] transition hover:border-[var(--gold)] hover:text-[var(--gold)]"
+                                  >
+                                    {m.key === "idade" ? "Idade · Dado ausente" : m.label} <span className="text-[var(--text-muted)]">· abrir →</span>
+                                  </a>
                                 )
                               ))}
                             </div>
                           </div>
-                        ))}
+                          );
+                        })}
                       </div>
                     </>
                   )}
