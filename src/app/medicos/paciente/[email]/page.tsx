@@ -37,6 +37,8 @@ import { SignDocumentPanel } from "@/components/SignDocumentFlow";
 import { digitalSignatureLabel } from "@/lib/digital-signature/status";
 import { PatientFinancePanel } from "@/components/PatientFinancePanel";
 import { PatientRisksPanel } from "@/components/calculators/PatientRisksPanel";
+import { firstLabTestKey, parseFaltantesQuery, wantsChartEdit } from "@/lib/research-missing";
+import { RESEARCH_VARS_BY_KEY } from "@/lib/research-fields";
 
 type Lab = { id: string; testKey: string; value: number; unit?: string | null; measuredAt: string };
 type Upload = { id: string; name: string; category?: string | null; examDate?: string | null; signedUrl?: string | null };
@@ -202,16 +204,15 @@ export default function ProntuarioPage() {
   }, [emailParam]);
   useEffect(() => {
     if (typeof window === "undefined") return;
-    const t = new URLSearchParams(window.location.search).get("tab");
+    const search = window.location.search;
+    const t = new URLSearchParams(search).get("tab");
     if (t && (TABS.some((x) => x.id === t) || t === "dp")) setTab(t as Tab);
+    const keys = parseFaltantesQuery(search);
+    setFaltantes(keys);
+    if (wantsChartEdit(search)) setEditingPatient(true);
+    const labKey = firstLabTestKey(keys);
+    if (labKey) setLabTest(labKey);
   }, []);
-
-  // Formulário de exame
-  const [labTest, setLabTest] = useState<string>("creatinina");
-  const [labValue, setLabValue] = useState("");
-  const [labDate, setLabDate] = useState("");
-  const [labSaving, setLabSaving] = useState(false);
-  const [labErr, setLabErr] = useState("");
 
   // Importar exames de texto colado (laudo/prontuário antigo com várias datas)
   const [importText, setImportText] = useState("");
@@ -235,6 +236,12 @@ export default function ProntuarioPage() {
   const [intelPrefs, setIntelPrefs] = useState<IntelligencePrefs>(DEFAULT_INTEL_PREFS);
   const [shared, setShared] = useState(true);
   const [editingPatient, setEditingPatient] = useState(false);
+  const [faltantes, setFaltantes] = useState<string[]>([]);
+  const [labTest, setLabTest] = useState<string>("creatinina");
+  const [labValue, setLabValue] = useState("");
+  const [labDate, setLabDate] = useState("");
+  const [labSaving, setLabSaving] = useState(false);
+  const [labErr, setLabErr] = useState("");
   const [toolsOpen, setToolsOpen] = useState(false);
   const [moreOpen, setMoreOpen] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -640,6 +647,16 @@ export default function ProntuarioPage() {
         </div>
       </div>
 
+      {faltantes.length > 0 && (
+        <div className="mt-3 rounded-2xl border border-[var(--border-gold)] bg-[var(--gold-soft)] px-4 py-3">
+          <p className="text-xs font-bold uppercase tracking-wider text-[var(--gold)]">Completar para o estudo</p>
+          <p className="mt-1 text-sm text-[var(--text)]">
+            Falta: {faltantes.map((k) => RESEARCH_VARS_BY_KEY.get(k)?.label || k).join(" · ")}.
+            Preencha abaixo e volte à lista do estudo — ela atualiza sozinha.
+          </p>
+        </div>
+      )}
+
       {editingPatient && patient && (
         <PatientEditForm
           emailParam={emailParam}
@@ -713,7 +730,7 @@ export default function ProntuarioPage() {
 
         {tab === "riscos" && <PatientRisksPanel emailParam={emailParam} />}
 
-        {tab === "perfil" && <ClinicalProfileEditor emailParam={emailParam} />}
+        {tab === "perfil" && <ClinicalProfileEditor emailParam={emailParam} highlightKeys={faltantes} />}
 
         {tab === "evolucao" && (
           <div className="grid items-start gap-4 lg:grid-cols-2">
