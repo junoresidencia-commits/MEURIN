@@ -20,6 +20,7 @@ export async function GET(
   // print=1: achata o formulário (já impresso) para o Chrome mostrar e imprimir os valores.
   const forSigning = url.searchParams.get("flatten") === "1";
   const forPrint = url.searchParams.get("print") === "1";
+  const forDownload = url.searchParams.get("download") === "1";
   const lme = await getLme(id);
   if (!lme) return NextResponse.json({ error: "LME não encontrada." }, { status: 404 });
 
@@ -177,7 +178,7 @@ export async function GET(
   }
 
   const out = await doc.save();
-  const disposition = forSigning
+  const disposition = forSigning || forDownload
     ? `attachment; filename="lme-para-assinar.pdf"`
     : `inline; filename="lme-oficial-preenchida.pdf"`;
   return new NextResponse(Buffer.from(out), {
