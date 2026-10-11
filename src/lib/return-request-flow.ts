@@ -5,7 +5,9 @@ import { getNutritionist } from "./nutritionists-store";
 import { listAppointmentsForNutritionist } from "./nutrition-appointments-store";
 import { getAlliedProfessional } from "./allied-store";
 import { findPatientByClinicalKey } from "./patients-store";
-import { generateAvailableSlots } from "./scheduling";
+import { generateAvailableSlots, slotsForVisit } from "./scheduling";
+import { patientKeyCandidates, patientKeysMatch } from "./patient-keys";
+import { hasProfessionalPatientAccessAny } from "./network-referrals-store";
 import { sendNotification, patientKey, fmtDateTime } from "./notify";
 import {
   DEADLINE_REFUSAL_MESSAGE,
@@ -84,16 +86,15 @@ export async function findLastVisit(opts: {
   patientKey: string;
 }): Promise<{ at: string; source: "registered" } | null> {
   const patient = await findPatientByClinicalKey(opts.patientEmail || opts.patientKey).catch(() => null);
-  const keys = new Set(
-    [opts.patientEmail, opts.patientKey, patient?.email, patient ? `pid:${patient.id}` : ""]
-      .filter(Boolean)
-      .map((v) => String(v).toLowerCase().trim())
-  );
+  const keys = patientKeyCandidates(opts.patientEmail || opts.patientKey, patient);
+  if (opts.patientKey && opts.patientEmail && opts.patientKey !== opts.patientEmail) {
+    keys.push(...patientKeyCandidates(opts.patientKey, patient));
+  }
   if (opts.kind === "doctor") {
     const mine = await listBookingsForDoctor(opts.professionalId);
     const done = mine
       .filter((b) => ["paid", "confirmed", "completed"].includes(b.status) || b.stage === "realizada" || b.stage === "confirmada")
-      .filter((b) => keys.has((b.patientEmail || "").toLowerCase().trim()))
+      .filter((b) => patientKeysMatch(keys, b.patientEmail))
       .sort((a, b) => new Date(b.slotStart).getTime() - new Date(a.slotStart).getTime());
     if (done[0]) return { at: new Date(done[0].slotStart).toISOString(), source: "registered" };
   }
@@ -101,12 +102,31 @@ export async function findLastVisit(opts: {
     const list = await listAppointmentsForNutritionist(opts.professionalId);
     const done = list
       .filter((a) => a.status === "confirmada" || a.status === "realizada")
-      .filter((a) => keys.has(a.patientKey.toLowerCase()))
+      .filter((a) => patientKeysMatch(keys, a.patientKey))
       .sort((a, b) => String(b.slotStart || b.createdAt).localeCompare(String(a.slotStart || a.createdAt)));
     const at = done[0] ? String(done[0].slotStart || done[0].createdAt) : "";
     if (at) return { at: new Date(at).toISOString(), source: "registered" };
   }
   return null;
+}
+
+export async function patientKnownToProfessional(opts: {
+  kind: ReturnProfessionalKind;
+  professionalId: string;
+  patientEmail?: string | null;
+  patientKey: string;
+}): Promise<boolean> {
+  const patient = await findPatientByClinicalKey(opts.patientEmail || opts.patientKey).catch(() => null);
+  if (opts.kind === "doctor" && patient && patient.doctorId === opts.professionalId) return true;
+  const keys = patientKeyCandidates(opts.patientEmail || opts.patientKey, patient);
+  if (opts.patientKey && opts.patientEmail && opts.patientKey !== opts.patientEmail) {
+    keys.push(...patientKeyCandidates(opts.patientKey, patient));
+  }
+  try {
+    return await hasProfessionalPatientAccessAny(opts.kind, opts.professionalId, keys);
+  } catch {
+    return false;
+  }
 }
 
 export async function listReturnSlots(kind: ReturnProfessionalKind, id: string) {
@@ -118,7 +138,7 @@ export async function listReturnSlots(kind: ReturnProfessionalKind, id: string) 
     .filter((b) => ["pending_payment", "paid", "confirmed"].includes(b.status))
     .map((b) => new Date(b.slotStart).toISOString());
   const slots = generateAvailableSlots(doctor, { excludeStarts: new Set(booked) });
-  return slots.filter((s) => !s.visitKind || s.visitKind === "retorno" || s.visitKind === "ambos");
+  return slotsForVisit(slots, "retorno");
 }
 
 export async function listConsultSlots(kind: ReturnProfessionalKind, id: string) {
@@ -130,7 +150,7 @@ export async function listConsultSlots(kind: ReturnProfessionalKind, id: string)
     .filter((b) => ["pending_payment", "paid", "confirmed"].includes(b.status))
     .map((b) => new Date(b.slotStart).toISOString());
   const slots = generateAvailableSlots(doctor, { excludeStarts: new Set(booked) });
-  return slots.filter((s) => !s.visitKind || s.visitKind === "consulta" || s.visitKind === "ambos");
+  return slotsForVisit(slots, "consulta");
 }
 
 export function decorateLastVisit(req: Pick<ReturnRequest, "lastVisitAt" | "daysSinceLast" | "requestedSlotStart" | "lastVisitSource">) {
