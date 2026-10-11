@@ -171,7 +171,7 @@ export interface PatientProfessionalLink {
   patientName: string | null;
   professionalKind: ProfessionalKind;
   professionalId: string;
-  origin: "registered" | "referral" | "followup";
+  origin: "registered" | "referral" | "followup" | "booking" | "return_request";
   referralId: string | null;
   createdAt: string;
 }
