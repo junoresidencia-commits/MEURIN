@@ -53,7 +53,7 @@ async function recognizeBuffer(buf: Buffer, langs: string): Promise<string> {
   });
   try {
     await worker.setParameters({
-      tessedit_pageseg_mode: "6",
+      tessedit_pageseg_mode: "6" as import("tesseract.js").PSM,
       user_defined_dpi: "150",
     });
     const { data } = await worker.recognize(buf);
