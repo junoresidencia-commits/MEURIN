@@ -155,7 +155,7 @@ export function ReturnRequestDetail({
             </>
           ) : (
             <>
-              <p className="mt-1">Consulta anterior informada pelo paciente, ainda não registrada no Meu Rim.</p>
+              <p className="mt-1">Consulta anterior não localizada no Meu Rim{row.lastVisitAt ? ", conforme informado pelo paciente" : ". O paciente ainda pode solicitar o retorno"}.</p>
               {row.lastVisitAt && <p>Quando (informado): {fmtDate(row.lastVisitAt)}</p>}
               {row.lastVisitLocation && <p>Onde: {row.lastVisitLocation}</p>}
             </>

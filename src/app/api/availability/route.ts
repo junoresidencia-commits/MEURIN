@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { getDoctorSessionId } from "@/lib/auth";
-import { generateSlotsForDoctor, generateAvailableSlots } from "@/lib/scheduling";
+import { generateSlotsForDoctor, generateAvailableSlots, slotsForVisit } from "@/lib/scheduling";
 import { getDoctorById, listBookingsForDoctor, logFinancialEvent, readDb, updateDb } from "@/lib/store";
 import { activeHoldStarts } from "@/lib/holds-store";
 import type { AvailabilityPeriod, Modality, WeeklySlot } from "@/lib/types";
@@ -27,12 +27,10 @@ export async function GET(req: Request) {
 
   const visit = searchParams.get("visit");
   const allSlots = generateAvailableSlots(doctor, { modality, locationId, excludeStarts });
-  const slots =
-    visit === "retorno"
-      ? allSlots.filter((s) => !s.visitKind || s.visitKind === "retorno" || s.visitKind === "ambos")
-      : visit === "all"
-        ? allSlots
-        : allSlots.filter((s) => !s.visitKind || s.visitKind === "consulta" || s.visitKind === "ambos");
+  const slots = slotsForVisit(
+    allSlots,
+    visit === "retorno" ? "retorno" : visit === "all" ? "all" : "consulta"
+  );
   const locations = (doctor.locations || []).filter((l) => l.active);
 
   // Primeira disponibilidade (mais próxima) por modalidade/local.
