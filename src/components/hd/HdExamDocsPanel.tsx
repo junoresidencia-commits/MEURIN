@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { useHd } from "@/components/hd/HdShell";
 import { printHref } from "@/lib/print-pdf";
 import { HdPatientIdsForm } from "@/components/hd/HdPatientIdsForm";
+import { CfmPdfActions } from "@/components/CfmPdfActions";
 
 type Pack = {
   protocolId: string;
@@ -46,8 +47,11 @@ type Generated = {
   lmeId: string;
   protocolName: string;
   href: string;
+  receitaId?: string | null;
   receitaUrl: string | null;
+  relatorioId?: string | null;
   relatorioUrl: string | null;
+  terId?: string | null;
   terUrl: string | null;
 };
 
@@ -218,33 +222,76 @@ export function HdExamDocsPanel({
           )}
 
           {(done[p.hdPatientId] || []).map((g) => (
-            <div key={g.lmeId} className="space-y-1 text-sm">
+            <div key={g.lmeId} className="space-y-3 text-sm">
               <p className="font-semibold">{g.protocolName}</p>
-              <p>
-                <b>LME</b> — <a className="text-[var(--gold)]" href={g.href} target="_blank" rel="noreferrer">conferir</a>
-                {" · "}
-                <a className="text-[var(--gold)]" href={printHref(`/api/lme/${g.lmeId}/oficial`)} target="_blank" rel="noreferrer">imprimir</a>
-              </p>
-              {g.receitaUrl ? (
+              <div>
                 <p>
-                  <b>Receita</b> — <a className="text-[var(--gold)]" href={g.receitaUrl} target="_blank" rel="noreferrer">conferir</a>
+                  <b>LME</b> — <a className="text-[var(--gold)]" href={g.href} target="_blank" rel="noreferrer">conferir</a>
                   {" · "}
-                  <a className="text-[var(--gold)]" href={printHref(g.receitaUrl)} target="_blank" rel="noreferrer">imprimir</a>
+                  <a className="text-[var(--gold)]" href={printHref(`/api/lme/${g.lmeId}/oficial`)} target="_blank" rel="noreferrer">imprimir</a>
                 </p>
+                <CfmPdfActions
+                  compact
+                  pdfHref={`/api/lme/${g.lmeId}/oficial?flatten=1`}
+                  filename="lme-oficial.pdf"
+                  title={`LME — ${p.hdPatientName}`}
+                  documentType="lme"
+                  patientKey={p.linked?.key}
+                />
+              </div>
+              {g.receitaUrl ? (
+                <div>
+                  <p>
+                    <b>Receita</b> — <a className="text-[var(--gold)]" href={g.receitaUrl} target="_blank" rel="noreferrer">conferir</a>
+                    {" · "}
+                    <a className="text-[var(--gold)]" href={printHref(g.receitaUrl)} target="_blank" rel="noreferrer">imprimir</a>
+                  </p>
+                  <CfmPdfActions
+                    compact
+                    pdfHref={g.receitaUrl}
+                    documentId={g.receitaId}
+                    filename="receita-meurim.pdf"
+                    title="Receita médica"
+                    documentType="receita"
+                    patientKey={p.linked?.key}
+                  />
+                </div>
               ) : null}
               {g.relatorioUrl ? (
-                <p>
-                  <b>Relatório</b> — <a className="text-[var(--gold)]" href={g.relatorioUrl} target="_blank" rel="noreferrer">conferir</a>
-                  {" · "}
-                  <a className="text-[var(--gold)]" href={printHref(g.relatorioUrl)} target="_blank" rel="noreferrer">imprimir</a>
-                </p>
+                <div>
+                  <p>
+                    <b>Relatório</b> — <a className="text-[var(--gold)]" href={g.relatorioUrl} target="_blank" rel="noreferrer">conferir</a>
+                    {" · "}
+                    <a className="text-[var(--gold)]" href={printHref(g.relatorioUrl)} target="_blank" rel="noreferrer">imprimir</a>
+                  </p>
+                  <CfmPdfActions
+                    compact
+                    pdfHref={g.relatorioUrl}
+                    documentId={g.relatorioId}
+                    filename="relatorio-meurim.pdf"
+                    title="Relatório médico"
+                    documentType="relatorio"
+                    patientKey={p.linked?.key}
+                  />
+                </div>
               ) : null}
               {g.terUrl ? (
-                <p>
-                  <b>TER</b> — <a className="text-[var(--gold)]" href={g.terUrl} target="_blank" rel="noreferrer">conferir</a>
-                  {" · "}
-                  <a className="text-[var(--gold)]" href={printHref(g.terUrl)} target="_blank" rel="noreferrer">imprimir</a>
-                </p>
+                <div>
+                  <p>
+                    <b>TER</b> — <a className="text-[var(--gold)]" href={g.terUrl} target="_blank" rel="noreferrer">conferir</a>
+                    {" · "}
+                    <a className="text-[var(--gold)]" href={printHref(g.terUrl)} target="_blank" rel="noreferrer">imprimir</a>
+                  </p>
+                  <CfmPdfActions
+                    compact
+                    pdfHref={g.terUrl}
+                    documentId={g.terId}
+                    filename="ter-oficial.pdf"
+                    title="TER oficial"
+                    documentType="ter"
+                    patientKey={p.linked?.key}
+                  />
+                </div>
               ) : null}
             </div>
           ))}

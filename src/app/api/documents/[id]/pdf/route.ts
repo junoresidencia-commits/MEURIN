@@ -7,7 +7,7 @@ import { DOCPDF_BUCKET, readFile } from "@/lib/doc-storage";
 import { jsonUtf8 } from "@/lib/json-utf8";
 
 /** Serve o PDF final com verificação de permissão (nunca URL pública permanente). */
-export async function GET(_req: Request, ctx: { params: Promise<{ id: string }> }) {
+export async function GET(req: Request, ctx: { params: Promise<{ id: string }> }) {
   const { id } = await ctx.params;
   const doc = await getDocumentById(id);
   if (!doc || !doc.pdfPath) return jsonUtf8({ error: "Documento não encontrado." }, 404);
@@ -28,11 +28,13 @@ export async function GET(_req: Request, ctx: { params: Promise<{ id: string }> 
 
   if (isPatientAllowed) markPatientViewed(id).catch(() => {});
 
+  const download = new URL(req.url).searchParams.get("download") === "1";
+  const fname = `${String(doc.type || "documento").replace(/[^a-zA-Z0-9_-]+/g, "-")}-meurim.pdf`;
   return new NextResponse(new Uint8Array(file.buffer), {
     headers: {
       "Content-Type": "application/pdf",
       "Cache-Control": "private, no-store",
-      "Content-Disposition": `inline; filename="${(doc.type || "documento")}-meurim.pdf"`,
+      "Content-Disposition": `${download ? "attachment" : "inline"}; filename="${fname}"`,
     },
   });
 }
