@@ -5,6 +5,7 @@ import { useEffect, useMemo, useState } from "react";
 import { ShareButton } from "@/components/ShareButton";
 import { KidneyMark, KidneyPlexus } from "@/components/BrandKidney";
 import { trackEvent } from "@/lib/analytics-client";
+import { InstallAppButton } from "@/components/InstallAppButton";
 
 const CONSULTA_INFOS = [
   { t: "Consulta nefrológica", d: "Avaliação médica, análise dos exames disponíveis e documentos quando indicados." },
@@ -155,6 +156,7 @@ export default function HomePage() {
               <Link href="/paciente/entrar" className="btn-ghost px-8 text-base sm:w-auto">
                 Entrar
               </Link>
+              <InstallAppButton className="btn-ghost px-8 text-base sm:w-auto" />
             </div>
 
             {/* Prova social / confiança */}

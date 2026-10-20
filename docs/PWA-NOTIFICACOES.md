@@ -52,6 +52,13 @@ Rode a migration `supabase/migrations/20260810010000_notifications_pwa.sql` no S
 4. iOS 16.4+ é necessário para Web Push em PWA. As notificações só chegam com o app instalado na Tela de Início.
 5. Agende/So confirme uma consulta para ver a notificação e o badge no ícone.
 
+## Como instalar no Mac (Safari)
+
+1. Abra https://meurim.vercel.app no Safari (macOS 14 Sonoma ou mais novo).
+2. Menu **Arquivo → Adicionar ao Dock…**
+3. Confirme o nome Meu Rim. O ícone fica no Dock e em Aplicativos da Web.
+4. Alternativa: página `/instalar` (botão na home) com atalho `Meu-Rim-Mac.zip` para baixar.
+
 ## Como testar no Android (Chrome)
 
 1. Abra no Chrome. Aparecerá "Instalar aplicativo" (ou menu ⋮ → Instalar).

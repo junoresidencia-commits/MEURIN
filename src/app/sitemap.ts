@@ -12,6 +12,7 @@ export default function sitemap(): MetadataRoute.Sitemap {
     "/minhas-consultas",
     "/termos",
     "/privacidade",
+    "/instalar",
   ];
   const now = new Date();
   return paths.map((path) => ({
