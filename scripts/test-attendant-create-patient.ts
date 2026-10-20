@@ -16,10 +16,11 @@ async function main() {
 
   const { createAttendant, upsertLink, listLinksForAttendant, DEFAULT_PERMISSIONS } = await import("../src/lib/attendants-store");
   const { hasPerm } = await import("../src/lib/attendant-context");
-  const { createPatient, listPatientsByDoctor, clinicalKey } = await import("../src/lib/patients-store");
+  const { createPatient, listPatientsByDoctor, clinicalKey, UNASSIGNED_DOCTOR_ID } = await import("../src/lib/patients-store");
   const { upsertProfessionalLink, listLinksForProfessional } = await import("../src/lib/network-referrals-store");
   const { createClinic, addMembership } = await import("../src/lib/platform-store");
   const { syncAttendantClinicDoctors } = await import("../src/lib/clinic-ops-store");
+  const { resolveOrCreatePatientForDoctor } = await import("../src/lib/attendant-create-patient");
 
   const att = await createAttendant({ name: "Ana Balcão", email: "ana.balcao@example.invalid", cpf: "529.982.247-25" });
   const link = await upsertLink(att.id, doctorId);
@@ -50,6 +51,61 @@ async function main() {
   assert.ok(mine.some((p) => p.id === patient.id), "paciente criado pela atendente aparece na lista do médico");
   const prof = await listLinksForProfessional("doctor", doctorId);
   assert.ok(prof.some((l) => l.patientKey === clinicalKey(patient)));
+
+  const first = await resolveOrCreatePatientForDoctor({
+    doctorId,
+    attendantId: att.id,
+    attendantName: att.name,
+    draft: { name: "João Novo", cpf: "390.533.447-05", phone: "73988001122", email: "joao.novo.at@example.invalid" },
+  });
+  assert.equal(first.created, true);
+  assert.equal(first.linkedExisting, false);
+
+  const sameDoctor = await resolveOrCreatePatientForDoctor({
+    doctorId,
+    attendantId: att.id,
+    attendantName: att.name,
+    draft: { name: "João Novo Cadastro", cpf: "390.533.447-05", phone: "73988001122" },
+  });
+  assert.equal(sameDoctor.created, false, "CPF já do médico não cria outro");
+  assert.equal(sameDoctor.linkedExisting, true);
+  assert.equal(sameDoctor.alreadyOnDoctor, true);
+  assert.equal(sameDoctor.patient.id, first.patient.id);
+
+  const selfRegistered = await createPatient({
+    doctorId: UNASSIGNED_DOCTOR_ID,
+    name: "Clara Sem Médico",
+    cpf: "153.509.460-56",
+    email: "clara.sem.medico@example.invalid",
+  });
+  const claimed = await resolveOrCreatePatientForDoctor({
+    doctorId,
+    attendantId: att.id,
+    attendantName: att.name,
+    draft: { name: "Clara Sem Médico", cpf: "153.509.460-56", email: "clara.sem.medico@example.invalid" },
+  });
+  assert.equal(claimed.created, false, "cadastro próprio é reusado");
+  assert.equal(claimed.linkedExisting, true);
+  assert.equal(claimed.patient.id, selfRegistered.id);
+  assert.equal(claimed.patient.doctorId, doctorId, "paciente sem médico fica do médico da atendente");
+
+  const otherDoctor = await createPatient({
+    doctorId: "doc-outro-medico",
+    name: "Pedro Outro",
+    cpf: "529.982.247-25",
+    email: "pedro.outro@example.invalid",
+  });
+  const linkedOther = await resolveOrCreatePatientForDoctor({
+    doctorId,
+    attendantId: att.id,
+    attendantName: att.name,
+    draft: { name: "Pedro Outro", cpf: "529.982.247-25" },
+  });
+  assert.equal(linkedOther.created, false, "CPF de outro médico não falha");
+  assert.equal(linkedOther.linkedExisting, true);
+  assert.equal(linkedOther.patient.id, otherDoctor.id);
+  const afterOther = await listLinksForProfessional("doctor", doctorId);
+  assert.ok(afterOther.some((l) => l.patientKey === clinicalKey(otherDoctor)), "vínculo profissional com o médico da atendente");
 
   const att2 = await createAttendant({ name: "Bia Clínica", email: "bia.clinica@example.invalid" });
   const clinic = await createClinic({ name: "Clínica Teste Atendente", city: "Irecê" });

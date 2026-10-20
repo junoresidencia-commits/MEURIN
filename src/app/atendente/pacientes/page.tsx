@@ -15,7 +15,7 @@ function CriarPacienteInner() {
   const [form, setForm] = useState({ name: "", cpf: "", cns: "", motherName: "", birthdate: "", sex: "", phone: "", email: "", address: "" });
   const [msg, setMsg] = useState("");
   const [saving, setSaving] = useState(false);
-  const [done, setDone] = useState<{ id: string; name: string } | null>(null);
+  const [done, setDone] = useState<{ id: string; name: string; reused?: boolean } | null>(null);
 
   useEffect(() => {
     (async () => {
@@ -43,8 +43,11 @@ function CriarPacienteInner() {
         body: JSON.stringify({ doctorId, ...form }),
       });
       const d = await res.json().catch(() => ({}));
-      if (!res.ok) { setMsg(d.error || "Não foi possível criar o paciente."); return; }
-      setDone({ id: d.id, name: d.name || form.name });
+      if (res.ok || (res.status === 409 && d.existingId)) {
+        setDone({ id: d.id || d.existingId, name: d.name || form.name, reused: Boolean(d.linkedExisting || d.existingId) });
+        return;
+      }
+      setMsg(d.error || "Não foi possível criar o paciente.");
     } finally {
       setSaving(false);
     }
@@ -54,8 +57,12 @@ function CriarPacienteInner() {
     return (
       <div className="mx-auto max-w-md px-5 py-16 text-center">
         <div className="mx-auto mb-3 grid h-14 w-14 place-items-center rounded-2xl bg-emerald-100 text-2xl">✓</div>
-        <h1 className="font-display text-2xl font-extrabold text-[var(--text)]">Paciente criado</h1>
-        <p className="mt-2 text-[var(--text-muted)]">{done.name} já está na lista do médico{doctor ? ` ${doctor.doctorName}` : ""}.</p>
+        <h1 className="font-display text-2xl font-extrabold text-[var(--text)]">{done.reused ? "Paciente disponível" : "Paciente criado"}</h1>
+        <p className="mt-2 text-[var(--text-muted)]">
+          {done.reused
+            ? `${done.name} já existia e ficou disponível para o médico${doctor ? ` ${doctor.doctorName}` : ""}.`
+            : `${done.name} já está na lista do médico${doctor ? ` ${doctor.doctorName}` : ""}.`}
+        </p>
         <div className="mt-5 flex flex-wrap justify-center gap-2">
           <Link href={`/atendente/agendar?doctorId=${doctorId}`} className="btn-gold">Agendar consulta</Link>
           <button type="button" className="btn-ghost" onClick={() => { setDone(null); setForm({ name: "", cpf: "", cns: "", motherName: "", birthdate: "", sex: "", phone: "", email: "", address: "" }); }}>Criar outro</button>

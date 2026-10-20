@@ -2,10 +2,10 @@ import { NextResponse } from "next/server";
 import { requireAttendantForDoctor, hasPerm } from "@/lib/attendant-context";
 import { getAttendantId } from "@/lib/attendant-session";
 import { listBookingsForDoctor } from "@/lib/store";
-import { createPatient, findByCpf, listPatientsByDoctor, normalizeCpf, updatePatient, isUnassignedDoctorId, findByCpfAny, clinicalKey } from "@/lib/patients-store";
-import { logAttendantAudit, listLinksForAttendant } from "@/lib/attendants-store";
+import { listPatientsByDoctor, normalizeCpf } from "@/lib/patients-store";
+import { listLinksForAttendant } from "@/lib/attendants-store";
 import { syncAttendantClinicDoctors } from "@/lib/clinic-ops-store";
-import { upsertProfessionalLink } from "@/lib/network-referrals-store";
+import { resolveOrCreatePatientForDoctor } from "@/lib/attendant-create-patient";
 import { parseAgeYears } from "@/lib/patient-age";
 
 async function resolveDoctorId(raw: string): Promise<string> {
@@ -72,57 +72,38 @@ export async function POST(req: Request) {
     : null;
 
   try {
-    if (b.cpf && normalizeCpf(b.cpf).length >= 11) {
-      const mine = await findByCpf(doctorId, String(b.cpf));
-      if (mine) return NextResponse.json({ error: "Já existe um paciente com este CPF.", existingId: mine.id }, { status: 409 });
-      const any = await findByCpfAny(String(b.cpf));
-      if (any && isUnassignedDoctorId(any.doctorId)) {
-        const linked = await updatePatient(any.id, {
-          doctorId,
-          name: name || any.name,
-          phone: b.phone ? String(b.phone) : any.phone,
-          email: b.email ? String(b.email) : any.email,
-          birthdate: birthdate || any.birthdate,
-          sex: b.sex ? String(b.sex) : any.sex,
-          address: b.address ? String(b.address) : any.address,
-        });
-        const patient = linked || any;
-        await upsertProfessionalLink({
-          patientKey: clinicalKey(patient),
-          patientName: patient.name,
-          professionalKind: "doctor",
-          professionalId: doctorId,
-          origin: "registered",
-          referralId: null,
-        });
-        await logAttendantAudit({ attendantId: ctx.attendant.id, attendantName: ctx.attendant.name, doctorId, action: "criar_paciente", patientKey: patient.id, detail: `Vinculou paciente ${patient.name} ao médico.` });
-        return NextResponse.json({ ok: true, id: patient.id, name: patient.name, email: patient.email, phone: patient.phone, linkedExisting: true }, { status: 200 });
-      }
-    }
-
-    const patient = await createPatient({
-      doctorId, name,
-      cpf: b.cpf ? String(b.cpf) : null,
-      cns: b.cns ? String(b.cns).replace(/\s+/g, "") : null,
-      motherName: b.motherName ? String(b.motherName) : null,
-      birthdate,
-      ageYears,
-      ageReportedAt,
-      sex: b.sex ? String(b.sex) : null,
-      phone: b.phone ? String(b.phone) : null,
-      email: b.email ? String(b.email) : null,
-      address: b.address ? String(b.address) : null,
+    const result = await resolveOrCreatePatientForDoctor({
+      doctorId,
+      attendantId: ctx.attendant.id,
+      attendantName: ctx.attendant.name,
+      draft: {
+        name,
+        cpf: b.cpf ? String(b.cpf) : null,
+        cns: b.cns ? String(b.cns).replace(/\s+/g, "") : null,
+        motherName: b.motherName ? String(b.motherName) : null,
+        birthdate,
+        ageYears,
+        ageReportedAt,
+        sex: b.sex ? String(b.sex) : null,
+        phone: b.phone ? String(b.phone) : null,
+        email: b.email ? String(b.email) : null,
+        address: b.address ? String(b.address) : null,
+      },
     });
-    await upsertProfessionalLink({
-      patientKey: clinicalKey(patient),
-      patientName: patient.name,
-      professionalKind: "doctor",
-      professionalId: doctorId,
-      origin: "registered",
-      referralId: null,
-    });
-    await logAttendantAudit({ attendantId: ctx.attendant.id, attendantName: ctx.attendant.name, doctorId, action: "criar_paciente", patientKey: patient.id, detail: `Criou paciente ${name}.` });
-    return NextResponse.json({ ok: true, id: patient.id, name: patient.name, email: patient.email, phone: patient.phone }, { status: 201 });
+    const { patient } = result;
+    return NextResponse.json(
+      {
+        ok: true,
+        id: patient.id,
+        name: patient.name,
+        email: patient.email,
+        phone: patient.phone,
+        linkedExisting: result.linkedExisting,
+        alreadyOnDoctor: result.alreadyOnDoctor,
+        matchedBy: result.matchedBy,
+      },
+      { status: result.created ? 201 : 200 }
+    );
   } catch (err) {
     console.error("[atendente] criar paciente", err);
     const raw = err instanceof Error ? err.message : "";

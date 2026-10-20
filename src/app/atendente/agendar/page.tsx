@@ -59,7 +59,10 @@ function AtendenteAgendarInner() {
     if (!newP.name.trim()) { setMsg("Informe o nome."); return; }
     const res = await fetch("/api/atendente/patients", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ doctorId, ...newP }) });
     const d = await res.json().catch(() => ({}));
-    if (!res.ok) { setMsg(d.error || "Falha ao criar paciente."); return; }
+    if (!res.ok && !(res.status === 409 && (d.id || d.existingId))) {
+      setMsg(d.error || "Falha ao criar paciente.");
+      return;
+    }
     setPatient({ name: d.name || newP.name, email: d.email || newP.email, phone: d.phone || newP.phone });
     setCreating(false);
   }
