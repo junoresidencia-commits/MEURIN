@@ -12,7 +12,8 @@ function CriarPacienteInner() {
   const search = useSearchParams();
   const [doctors, setDoctors] = useState<DoctorLink[]>([]);
   const [doctorId, setDoctorId] = useState("");
-  const [form, setForm] = useState({ name: "", cpf: "", cns: "", motherName: "", birthdate: "", sex: "", phone: "", email: "", address: "" });
+  const emptyForm = { name: "", cpf: "", cns: "", motherName: "", birthdate: "", sex: "", phone: "", email: "", zip: "", street: "", number: "", complement: "", neighborhood: "", city: "", state: "" };
+  const [form, setForm] = useState(emptyForm);
   const [msg, setMsg] = useState("");
   const [saving, setSaving] = useState(false);
   const [done, setDone] = useState<{ id: string; name: string; reused?: boolean } | null>(null);
@@ -65,7 +66,7 @@ function CriarPacienteInner() {
         </p>
         <div className="mt-5 flex flex-wrap justify-center gap-2">
           <Link href={`/atendente/agendar?doctorId=${doctorId}`} className="btn-gold">Agendar consulta</Link>
-          <button type="button" className="btn-ghost" onClick={() => { setDone(null); setForm({ name: "", cpf: "", cns: "", motherName: "", birthdate: "", sex: "", phone: "", email: "", address: "" }); }}>Criar outro</button>
+          <button type="button" className="btn-ghost" onClick={() => { setDone(null); setForm(emptyForm); }}>Criar outro</button>
           <Link href="/atendente/painel" className="btn-ghost">Painel</Link>
         </div>
       </div>
@@ -76,7 +77,7 @@ function CriarPacienteInner() {
     <div className="mx-auto max-w-2xl px-5 pb-16 pt-8">
       <Link href="/atendente/painel" className="text-sm font-semibold text-[var(--gold)]">← Painel</Link>
       <h1 className="font-display text-2xl font-extrabold text-[var(--text)]">Criar paciente</h1>
-      <p className="mt-1 text-sm text-[var(--text-muted)]">O cadastro fica no prontuário do médico. Depois você pode agendar.</p>
+      <p className="mt-1 text-sm text-[var(--text-muted)]">O cadastro fica no prontuário do médico. Preencha também os dados da nota fiscal — a clínica usa isso para emitir a NFS-e.</p>
 
       {doctors.length === 0 && (
         <p className="panel mt-4 text-sm font-semibold text-[var(--danger)]">Nenhum médico vinculado. Peça ao médico para te adicionar em Minha equipe — Atendentes.</p>
@@ -92,19 +93,29 @@ function CriarPacienteInner() {
       )}
 
       <div className="panel mt-4 grid gap-2 sm:grid-cols-2">
+        <p className="sm:col-span-2 text-xs font-bold uppercase tracking-wider text-[var(--gold)]">Dados do paciente</p>
         <input className="input-field sm:col-span-2" placeholder="Nome completo *" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />
-        <input className="input-field" placeholder="CPF" value={form.cpf} onChange={(e) => setForm({ ...form, cpf: e.target.value })} inputMode="numeric" />
+        <input className="input-field" placeholder="CPF *" value={form.cpf} onChange={(e) => setForm({ ...form, cpf: e.target.value })} inputMode="numeric" />
         <input className="input-field" placeholder="Telefone / WhatsApp" value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} inputMode="tel" />
-        <input className="input-field" placeholder="E-mail (opcional)" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} />
+        <input className="input-field sm:col-span-2" placeholder="E-mail (para enviar a nota)" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} />
         <input className="input-field" type="date" value={form.birthdate} onChange={(e) => setForm({ ...form, birthdate: e.target.value })} />
         <select className="input-field" value={form.sex} onChange={(e) => setForm({ ...form, sex: e.target.value })}>
           <option value="">Sexo (opcional)</option>
           <option value="feminino">Feminino</option>
           <option value="masculino">Masculino</option>
         </select>
-        <input className="input-field" placeholder="Cidade / região" value={form.address} onChange={(e) => setForm({ ...form, address: e.target.value })} />
         <input className="input-field" placeholder="CNS (Cartão SUS)" value={form.cns} onChange={(e) => setForm({ ...form, cns: e.target.value })} />
-        <input className="input-field sm:col-span-2" placeholder="Nome da mãe" value={form.motherName} onChange={(e) => setForm({ ...form, motherName: e.target.value })} />
+        <input className="input-field" placeholder="Nome da mãe" value={form.motherName} onChange={(e) => setForm({ ...form, motherName: e.target.value })} />
+
+        <p className="sm:col-span-2 mt-2 text-xs font-bold uppercase tracking-wider text-[var(--gold)]">Endereço para nota fiscal</p>
+        <p className="sm:col-span-2 text-xs text-[var(--text-muted)]">A NFS-e precisa de CPF, e-mail e endereço completo do tomador.</p>
+        <input className="input-field" placeholder="CEP" value={form.zip} onChange={(e) => setForm({ ...form, zip: e.target.value })} inputMode="numeric" />
+        <input className="input-field" placeholder="UF (BA, SP…)" value={form.state} onChange={(e) => setForm({ ...form, state: e.target.value.toUpperCase().slice(0, 2) })} maxLength={2} />
+        <input className="input-field sm:col-span-2" placeholder="Logradouro (rua, avenida)" value={form.street} onChange={(e) => setForm({ ...form, street: e.target.value })} />
+        <input className="input-field" placeholder="Número" value={form.number} onChange={(e) => setForm({ ...form, number: e.target.value })} />
+        <input className="input-field" placeholder="Complemento" value={form.complement} onChange={(e) => setForm({ ...form, complement: e.target.value })} />
+        <input className="input-field" placeholder="Bairro" value={form.neighborhood} onChange={(e) => setForm({ ...form, neighborhood: e.target.value })} />
+        <input className="input-field" placeholder="Cidade" value={form.city} onChange={(e) => setForm({ ...form, city: e.target.value })} />
         <div className="sm:col-span-2">
           <button type="button" className="btn-gold" onClick={submit} disabled={saving || !canCreate || !doctorId}>
             {saving ? "Criando…" : "Criar paciente para o médico"}

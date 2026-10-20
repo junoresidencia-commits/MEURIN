@@ -68,8 +68,11 @@ export default function AtendentePainelPage() {
     loadAgenda(doctorId);
   }
 
-  const today = new Date().toISOString().slice(0, 10);
-  const todays = bookings.filter((b) => b.slotStart.slice(0, 10) === today && b.status !== "cancelled");
+  const todayKey = new Date().toLocaleDateString("en-CA");
+  const todays = bookings.filter((b) => {
+    if (b.status === "cancelled") return false;
+    return new Date(b.slotStart).toLocaleDateString("en-CA") === todayKey;
+  });
   const upcoming = bookings.filter((b) => b.slotStart > new Date().toISOString() && b.status !== "cancelled");
 
   if (loading) return <div className="mx-auto max-w-3xl px-5 py-20 text-[var(--text-muted)]">Carregando…</div>;
@@ -115,7 +118,9 @@ export default function AtendentePainelPage() {
       )}
 
       <div className="mt-4 flex flex-wrap gap-2">
-        <Link href={`/atendente/pacientes?doctorId=${doctorId}`} className="btn-gold">+ Criar paciente</Link>
+        <Link href={`/atendente/agenda?doctorId=${doctorId}`} className="btn-gold">Agenda do médico</Link>
+        <Link href={`/atendente/agenda/configurar?doctorId=${doctorId}`} className="btn-ghost">Montar horários</Link>
+        <Link href={`/atendente/pacientes?doctorId=${doctorId}`} className="btn-ghost">+ Criar paciente</Link>
         <Link href={`/atendente/agendar?doctorId=${doctorId}`} className="btn-ghost">+ Novo agendamento</Link>
         <Link href="/atendente/solicitacoes" className="btn-ghost">Solicitações encaminhadas</Link>
         {clinics.map((c) => (
@@ -124,12 +129,17 @@ export default function AtendentePainelPage() {
       </div>
 
       <Section title={`Agenda de hoje (${todays.length})`}>
-        {todays.length === 0 && <p className="text-sm text-[var(--text-muted)]">Sem consultas para hoje.</p>}
+        {todays.length === 0 && (
+          <p className="text-sm text-[var(--text-muted)]">
+            Sem consultas para hoje.{" "}
+            <Link href={`/atendente/agenda?doctorId=${doctorId}`} className="font-semibold text-[var(--gold)]">Ver a semana do médico</Link>
+          </p>
+        )}
         {todays.map((b) => <Row key={b.id} b={b} perms={perms} onAct={act} />)}
       </Section>
 
       <Section title={`Próximas consultas (${upcoming.length})`}>
-        {upcoming.length === 0 && <p className="text-sm text-[var(--text-muted)]">Nenhuma consulta futura.</p>}
+        {upcoming.length === 0 && <p className="text-sm text-[var(--text-muted)]">Nenhuma consulta futura. Use a agenda para ver os horários livres e marcar.</p>}
         {upcoming.slice(0, 20).map((b) => <Row key={b.id} b={b} perms={perms} onAct={act} />)}
       </Section>
     </div>

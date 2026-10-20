@@ -19,9 +19,10 @@ function AtendenteAgendarInner() {
   const [patient, setPatient] = useState<{ name: string; email: string; phone: string } | null>(null);
   const [creating, setCreating] = useState(false);
   const [newP, setNewP] = useState({ name: "", cpf: "", cns: "", motherName: "", birthdate: "", phone: "", email: "" });
-  const [modality, setModality] = useState<"presencial" | "teleconsulta">("teleconsulta");
+  const [modality, setModality] = useState<"presencial" | "teleconsulta">((searchParams.get("modality") as "presencial" | "teleconsulta") || "teleconsulta");
   const [locations, setLocations] = useState<Loc[]>([]);
-  const [locationId, setLocationId] = useState("");
+  const [locationId, setLocationId] = useState(searchParams.get("locationId") || "");
+  const prefSlot = searchParams.get("slotStart") || "";
   const [slots, setSlots] = useState<Slot[]>([]);
   const [msg, setMsg] = useState("");
   const [done, setDone] = useState(false);
@@ -88,7 +89,8 @@ function AtendenteAgendarInner() {
         <h1 className="font-display text-2xl font-extrabold text-[var(--text)]">Consulta agendada!</h1>
         <p className="mt-2 text-[var(--text-muted)]">Já aparece na agenda do médico e no aplicativo do paciente.</p>
         <div className="mt-5 flex justify-center gap-2">
-          <Link href="/atendente/painel" className="btn-gold">Ir para o painel</Link>
+          <Link href={`/atendente/agenda?doctorId=${doctorId}`} className="btn-gold">Ver agenda</Link>
+          <Link href="/atendente/painel" className="btn-ghost">Painel</Link>
           <button className="btn-ghost" onClick={() => { setDone(false); setPatient(null); setResults([]); setQ(""); }}>Agendar outra</button>
         </div>
       </div>
@@ -169,9 +171,16 @@ function AtendenteAgendarInner() {
           </div>
           <p className="mt-3 text-xs font-bold uppercase tracking-wider text-[var(--gold)]">Horários disponíveis</p>
           <div className="mt-2 flex max-h-72 flex-wrap gap-2 overflow-y-auto">
-            {slots.length === 0 && <p className="text-sm text-[var(--text-muted)]">Nenhum horário para os filtros atuais.</p>}
+            {slots.length === 0 && <p className="text-sm text-[var(--text-muted)]">Nenhum horário para os filtros atuais. Monte a agenda do médico se estiver vazia.</p>}
             {slots.slice(0, 60).map((s) => (
-              <button key={s.start} type="button" className="rounded-full border border-[var(--border)] px-3 py-1.5 text-sm hover:bg-[var(--gold-soft)]" onClick={() => confirmar(s)}>{s.label}</button>
+              <button
+                key={s.start}
+                type="button"
+                className={`rounded-full border px-3 py-1.5 text-sm hover:bg-[var(--gold-soft)] ${prefSlot === s.start ? "border-[var(--gold)] bg-[var(--gold-soft)] font-semibold" : "border-[var(--border)]"}`}
+                onClick={() => confirmar(s)}
+              >
+                {s.label}
+              </button>
             ))}
           </div>
         </div>

@@ -9,6 +9,20 @@ import {
 } from "./patients-store";
 import { upsertProfessionalLink } from "./network-referrals-store";
 import { logAttendantAudit } from "./attendants-store";
+import { composeFiscalAddress } from "./availability-periods";
+
+function draftAddress(draft: AttendantPatientDraft): string | null {
+  return composeFiscalAddress({
+    street: draft.street,
+    number: draft.number,
+    complement: draft.complement,
+    neighborhood: draft.neighborhood,
+    city: draft.city,
+    state: draft.state,
+    zip: draft.zip,
+    address: draft.address,
+  });
+}
 
 export type AttendantPatientDraft = {
   name: string;
@@ -22,6 +36,13 @@ export type AttendantPatientDraft = {
   phone?: string | null;
   email?: string | null;
   address?: string | null;
+  zip?: string | null;
+  street?: string | null;
+  number?: string | null;
+  complement?: string | null;
+  neighborhood?: string | null;
+  city?: string | null;
+  state?: string | null;
 };
 
 export type AttendantCreatePatientResult = {
@@ -82,7 +103,7 @@ async function claimIfUnassigned(patient: Patient, doctorId: string, draft: Atte
     email: draft.email ? String(draft.email) : patient.email,
     birthdate: draft.birthdate || patient.birthdate,
     sex: draft.sex ? String(draft.sex) : patient.sex,
-    address: draft.address ? String(draft.address) : patient.address,
+    address: draftAddress(draft) || (draft.address ? String(draft.address) : patient.address),
     cns: draft.cns ? String(draft.cns) : patient.cns,
     motherName: draft.motherName ? String(draft.motherName) : patient.motherName,
   });
@@ -141,7 +162,7 @@ export async function resolveOrCreatePatientForDoctor(input: {
       sex: draft.sex || null,
       phone: draft.phone || null,
       email: draft.email || null,
-      address: draft.address || null,
+      address: draftAddress(draft),
     });
     await attachQuietly({
       patient,

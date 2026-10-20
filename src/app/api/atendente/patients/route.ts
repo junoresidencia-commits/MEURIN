@@ -88,6 +88,13 @@ export async function POST(req: Request) {
         phone: b.phone ? String(b.phone) : null,
         email: b.email ? String(b.email) : null,
         address: b.address ? String(b.address) : null,
+        zip: b.zip ? String(b.zip) : null,
+        street: b.street ? String(b.street) : null,
+        number: b.number ? String(b.number) : null,
+        complement: b.complement ? String(b.complement) : null,
+        neighborhood: b.neighborhood ? String(b.neighborhood) : null,
+        city: b.city ? String(b.city) : null,
+        state: b.state ? String(b.state) : null,
       },
     });
     const { patient } = result;
