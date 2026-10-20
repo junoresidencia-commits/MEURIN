@@ -110,8 +110,13 @@ export default function AtendentePainelPage() {
         </label>
       )}
 
+      {doctors.length === 0 && (
+        <p className="panel mt-4 text-sm text-[var(--text-muted)]">Nenhum médico vinculado ainda. Peça ao médico para te adicionar em <b>Minha equipe — Atendentes</b>.</p>
+      )}
+
       <div className="mt-4 flex flex-wrap gap-2">
-        <Link href={`/atendente/agendar?doctorId=${doctorId}`} className="btn-gold">+ Novo agendamento</Link>
+        <Link href={`/atendente/pacientes?doctorId=${doctorId}`} className="btn-gold">+ Criar paciente</Link>
+        <Link href={`/atendente/agendar?doctorId=${doctorId}`} className="btn-ghost">+ Novo agendamento</Link>
         <Link href="/atendente/solicitacoes" className="btn-ghost">Solicitações encaminhadas</Link>
         {clinics.map((c) => (
           <Link key={c.clinicId} href={`/clinica/${c.clinicId}/caixa`} className="btn-ghost">Check-in · {c.clinicName}</Link>
