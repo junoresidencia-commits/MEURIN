@@ -8,8 +8,8 @@ import { getSupabaseAdmin } from "./supabase-admin";
 import { listDoctors, updateDb } from "./store";
 import { emailsMatch } from "./login-email";
 import { defaultAvailability } from "./scheduling";
-import { createAttendant, findAttendantByCpfOrEmail, upsertLink } from "./attendants-store";
-import { addMembership, listMemberships, writeAudit } from "./platform-store";
+import { createAttendant, findAttendantByCpfOrEmail, listLinksForAttendant, upsertLink } from "./attendants-store";
+import { addMembership, listMemberships, listMembershipsForActor, writeAudit } from "./platform-store";
 import { listFinanceEvents, upsertFeeRule, writeFinanceEvent } from "./clinic-finance-store";
 import type { ClinicInvite, InviteKind, InviteStatus } from "./platform-types";
 import type { Doctor } from "./types";
@@ -343,6 +343,20 @@ export async function linkAttendantToClinic(clinicId: string, attendantId: strin
     seen.add(m.actorId);
     await upsertLink(attendantId, m.actorId);
   }
+}
+
+/** Se a atendente está na clínica e o médico entrou depois, cria o vínculo que faltava. */
+export async function syncAttendantClinicDoctors(attendantId: string): Promise<number> {
+  const memberships = await listMembershipsForActor("attendant", attendantId);
+  let linked = 0;
+  for (const m of memberships) {
+    if (m.role !== "ATENDENTE" || m.status !== "active") continue;
+    const before = new Set((await listLinksForAttendant(attendantId)).map((l) => l.doctorId));
+    await linkAttendantToClinic(m.clinicId, attendantId);
+    const after = await listLinksForAttendant(attendantId);
+    linked += after.filter((l) => !before.has(l.doctorId)).length;
+  }
+  return linked;
 }
 
 export async function acceptInvite(token: string, password: string): Promise<{ actorKind: InviteKind; actorId: string }> {

@@ -1,6 +1,6 @@
 import "server-only";
 import { getAttendantId } from "./attendant-session";
-import { getAttendant, getLink, type Attendant, type AttendantLink, type AttendantPermissions } from "./attendants-store";
+import { DEFAULT_PERMISSIONS, getAttendant, getLink, type Attendant, type AttendantLink, type AttendantPermissions } from "./attendants-store";
 
 export interface AttendantContext {
   attendant: Attendant;
@@ -20,5 +20,8 @@ export async function requireAttendantForDoctor(doctorId: string): Promise<Atten
 }
 
 export function hasPerm(link: AttendantLink, perm: keyof AttendantPermissions): boolean {
-  return Boolean(link.permissions?.[perm]);
+  if (link.permissions && Object.prototype.hasOwnProperty.call(link.permissions, perm)) {
+    return Boolean(link.permissions[perm]);
+  }
+  return DEFAULT_PERMISSIONS[perm] !== false;
 }

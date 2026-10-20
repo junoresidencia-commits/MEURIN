@@ -3,12 +3,18 @@ import { getAttendantId } from "@/lib/attendant-session";
 import { getAttendant, listLinksForAttendant } from "@/lib/attendants-store";
 import { getDoctorById } from "@/lib/store";
 import { getClinic, listMembershipsForActor } from "@/lib/platform-store";
+import { syncAttendantClinicDoctors } from "@/lib/clinic-ops-store";
 
 export async function GET() {
   const id = await getAttendantId();
   if (!id) return NextResponse.json({ attendant: null }, { status: 200 });
   const att = await getAttendant(id);
   if (!att || att.status !== "active") return NextResponse.json({ attendant: null });
+  try {
+    await syncAttendantClinicDoctors(id);
+  } catch {
+    /* sem clínica, segue com os vínculos já gravados */
+  }
   const links = await listLinksForAttendant(id);
   const doctors = await Promise.all(links.map(async (l) => {
     const d = await getDoctorById(l.doctorId);

@@ -1,16 +1,17 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { Suspense, useCallback, useEffect, useState } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 
 type DoctorLink = { doctorId: string; doctorName: string; permissions: Record<string, boolean> };
 type PatientRow = { key: string; name: string; cpf: string; phone: string; email: string; isCreated: boolean };
 type Slot = { start: string; end: string; label: string; modality: string; locationId?: string; locationName?: string; priceCents: number };
 type Loc = { id: string; name: string; city: string };
 
-export default function AtendenteAgendarPage() {
+function AtendenteAgendarInner() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const [doctors, setDoctors] = useState<DoctorLink[]>([]);
   const [doctorId, setDoctorId] = useState("");
   const [q, setQ] = useState("");
@@ -29,10 +30,12 @@ export default function AtendenteAgendarPage() {
     (async () => {
       const me = await fetch("/api/atendente/me").then((r) => r.json());
       if (!me.attendant) { router.replace("/atendente/login"); return; }
-      setDoctors(me.doctors || []);
-      setDoctorId(me.doctors?.[0]?.doctorId || "");
+      const list: DoctorLink[] = me.doctors || [];
+      setDoctors(list);
+      const fromUrl = searchParams.get("doctorId") || "";
+      setDoctorId(list.some((d) => d.doctorId === fromUrl) ? fromUrl : (list[0]?.doctorId || ""));
     })();
-  }, [router]);
+  }, [router, searchParams]);
 
   const search = useCallback(async () => {
     if (!doctorId) return;
@@ -57,9 +60,11 @@ export default function AtendenteAgendarPage() {
     const res = await fetch("/api/atendente/patients", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ doctorId, ...newP }) });
     const d = await res.json().catch(() => ({}));
     if (!res.ok) { setMsg(d.error || "Falha ao criar paciente."); return; }
-    setPatient({ name: newP.name, email: newP.email, phone: newP.phone });
+    setPatient({ name: d.name || newP.name, email: d.email || newP.email, phone: d.phone || newP.phone });
     setCreating(false);
   }
+
+  const canCreate = !doctors.find((d) => d.doctorId === doctorId) || doctors.find((d) => d.doctorId === doctorId)?.permissions?.criarPaciente !== false;
 
   async function confirmar(slot: Slot) {
     if (!patient) return;
@@ -116,7 +121,14 @@ export default function AtendenteAgendarPage() {
               </button>
             ))}
           </div>
-          <button type="button" className="btn-ghost mt-3 text-sm" onClick={() => setCreating((v) => !v)}>+ Criar paciente</button>
+          {canCreate ? (
+            <div className="mt-3 flex flex-wrap gap-2">
+              <button type="button" className="btn-ghost text-sm" onClick={() => setCreating((v) => !v)}>+ Criar paciente</button>
+              <Link href={`/atendente/pacientes?doctorId=${doctorId}`} className="btn-ghost text-sm">Abrir cadastro completo</Link>
+            </div>
+          ) : (
+            <p className="mt-3 text-sm text-[var(--text-muted)]">Sem permissão para criar paciente neste médico.</p>
+          )}
           {creating && (
             <div className="mt-2 grid gap-2 rounded-xl border border-[var(--border)] p-3 sm:grid-cols-2">
               <input className="input-field" placeholder="Nome completo" value={newP.name} onChange={(e) => setNewP({ ...newP, name: e.target.value })} />
@@ -163,5 +175,13 @@ export default function AtendenteAgendarPage() {
       )}
       {msg && <p className="mt-3 text-sm font-semibold text-[var(--danger)]">{msg}</p>}
     </div>
+  );
+}
+
+export default function AtendenteAgendarPage() {
+  return (
+    <Suspense fallback={<div className="mx-auto max-w-2xl px-5 py-16 text-[var(--text-muted)]">Carregando…</div>}>
+      <AtendenteAgendarInner />
+    </Suspense>
   );
 }
