@@ -18,7 +18,7 @@ async function resolveDoctorId(raw: string): Promise<string> {
 }
 
 async function ctxForDoctor(doctorId: string) {
-  let ctx = await requireAttendantForDoctor(doctorId);
+  const ctx = await requireAttendantForDoctor(doctorId);
   if (ctx) return ctx;
   const attendantId = await getAttendantId();
   if (!attendantId) return null;
