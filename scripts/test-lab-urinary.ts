@@ -85,6 +85,11 @@ const racA = extractClinicalFields("RAC 806,6 mg/g");
 assert.equal(racA.find((x) => x.key === "categoria_a")?.value, "A3");
 const aerA = extractClinicalFields("Albuminúria 24h 6379 mg/24h");
 assert.equal(aerA.find((x) => x.key === "categoria_a")?.value, "A3");
+const histA = extractClinicalFields("", [{ testKey: "rac", value: 806.6, measuredAt: "2026-08-13" }]);
+assert.equal(histA.find((x) => x.key === "categoria_a")?.value, "A3");
+const histG = extractClinicalFields("", [{ testKey: "tfge", value: 19, measuredAt: "2026-08-13" }]);
+assert.equal(histG.find((x) => x.key === "estagio_g")?.value, "G4");
+assert.equal(histG.find((x) => x.key === "drc")?.value, "sim");
 
 const stillWorks = byKey("CR: 3,51\nU: 94\nK: 5,8\nTFGE: 19\nPlaqueta: 375 mil");
 assert.equal(stillWorks.creatinina?.value, 3.51);

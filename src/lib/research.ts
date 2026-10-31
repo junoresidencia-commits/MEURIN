@@ -6,6 +6,8 @@ import { computeImc } from "./clinical-fields";
 import { RESEARCH_VARS_BY_KEY, type Operator } from "./research-fields";
 import { resolvePatientAge } from "./patient-age";
 import { listHdLinkedPatientIds } from "./hd-research";
+import { classifyFromLabs } from "./kdigo";
+import { estimateEgfr } from "./egfr";
 
 export type CohortRecord = Record<string, string | number | null> & {
   __id: string;
@@ -59,7 +61,7 @@ export async function buildCohortRecords(doctorId: string, opts: BuildCohortOpts
 
     // Campos do perfil clínico (tri ausente = "desconhecido")
     for (const [, v] of RESEARCH_VARS_BY_KEY) {
-      if (v.key.startsWith("lab_") || ["idade", "sexo", "cidade", "imc"].includes(v.key)) continue;
+      if (v.key.startsWith("lab_") || ["idade", "sexo", "cidade", "imc", "kdigo"].includes(v.key)) continue;
       const raw = data[v.key];
       if (v.type === "num") rec[v.key] = raw === undefined || raw === "" ? null : Number(String(raw).replace(",", "."));
       else rec[v.key] = raw === undefined || raw === null || raw === "" ? "desconhecido" : String(raw);
@@ -70,6 +72,23 @@ export async function buildCohortRecords(doctorId: string, opts: BuildCohortOpts
     const latest = new Map<string, number>();
     for (const l of labs) latest.set(l.testKey, l.value); // labs vêm ordenados por data asc → último vence
     for (const [testKey, value] of latest) rec[`lab_${testKey}`] = value;
+
+    const cls = classifyFromLabs({
+      labs,
+      birthdate: p.birthdate,
+      sex: p.sex,
+      ageYears: p.ageYears,
+      ageReportedAt: p.ageReportedAt,
+      computeTfge: (cr, at) => estimateEgfr(cr, p.birthdate, p.sex, at, { ageYears: p.ageYears, ageReportedAt: p.ageReportedAt }),
+    });
+    const blank = (v: unknown) => v === undefined || v === null || v === "" || v === "desconhecido";
+    if (blank(rec.lab_tfge) && cls.tfge != null) rec.lab_tfge = cls.tfge;
+    if (blank(rec.estagio_g) && cls.estagio_g) rec.estagio_g = cls.estagio_g;
+    if (blank(rec.categoria_a) && cls.categoria_a) rec.categoria_a = cls.categoria_a;
+    if (blank(rec.drc) && cls.drc) rec.drc = cls.drc;
+    const g = String(rec.estagio_g || "");
+    const a = String(rec.categoria_a || "");
+    rec.kdigo = cls.kdigo || (g && a && g !== "desconhecido" && a !== "desconhecido" ? `${g}${a}` : "desconhecido");
 
     records.push(rec);
   }
@@ -158,6 +177,7 @@ export function describe(records: CohortRecord[]) {
     drc: dist(records, "drc"),
     estagio_g: dist(records, "estagio_g"),
     categoria_a: dist(records, "categoria_a"),
+    kdigo: dist(records, "kdigo"),
     etiologia_principal: dist(records, "etiologia_principal"),
     has: dist(records, "has"),
     dm: dist(records, "dm"),

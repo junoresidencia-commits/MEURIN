@@ -2,12 +2,7 @@ import { NextResponse } from "next/server";
 import { getDoctorSessionId } from "@/lib/auth";
 import { getStudy } from "@/lib/research-studies-store";
 import { applyFilters, buildCohortRecords, cohortOptsFromStudy, type CohortRecord } from "@/lib/research";
-import { RESEARCH_VARS_BY_KEY } from "@/lib/research-fields";
-
-const DEFAULT_VARS = [
-  "idade", "sexo", "drc", "estagio_g", "categoria_a", "has", "dm",
-  "lab_creatinina", "lab_tfge", "lab_rac",
-];
+import { RESEARCH_DEFAULT_VARS, RESEARCH_VARS_BY_KEY } from "@/lib/research-fields";
 
 /** Onde corrigir cada variável no prontuário do paciente. */
 function fixTab(key: string): "exames" | "perfil" | "cadastro" {
@@ -34,7 +29,7 @@ export async function GET(_req: Request, ctx: { params: Promise<{ id: string }> 
 
   const all = await buildCohortRecords(doctorId, cohortOptsFromStudy(study));
   const matched = applyFilters(all, study.filters);
-  const variables = study.variables.length ? study.variables : DEFAULT_VARS;
+  const variables = study.variables.length ? study.variables : RESEARCH_DEFAULT_VARS;
 
   // Faltantes por variável (contagem) + lista de pacientes por variável.
   const byVariable = variables.map((key) => {

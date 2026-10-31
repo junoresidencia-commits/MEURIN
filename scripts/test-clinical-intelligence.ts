@@ -68,4 +68,19 @@ assert.ok(String(suspMap.medicamentos_suspensos).includes("losartana"));
 assert.ok(!String(suspMap.medicamentos_em_uso).includes("losartana"));
 assert.ok(String(suspMap.medicamentos_em_uso).includes("dapagliflozina"));
 
+const onlyLabs = extractClinicalFields("", [
+  { testKey: "tfge", value: 38, measuredAt: "2026-01-01" },
+  { testKey: "rac", value: 720, measuredAt: "2026-01-01" },
+]);
+const onlyLabsMap = Object.fromEntries(onlyLabs.map((x) => [x.key, x.value]));
+assert.equal(onlyLabsMap.estagio_g, "G3b", "exame estruturado classifica G");
+assert.equal(onlyLabsMap.categoria_a, "A3", "RAC estruturado classifica A");
+assert.equal(onlyLabsMap.drc, "sim", "G3b A3 confirma DRC");
+
+const empty = extractClinicalFields("");
+assert.equal(empty.length, 0, "texto vazio sem exame não inventa");
+
+const concHist = extractClinicalFields("", [{ testKey: "microalbuminuria", value: 25, measuredAt: "2026-01-01" }]);
+assert.ok(!concHist.some((x) => x.key === "categoria_a"), "mg/L estruturado não vira A");
+
 console.log("clinical-intelligence fixtures ok", Object.keys(s).length, "fields on sample");

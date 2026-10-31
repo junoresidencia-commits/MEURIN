@@ -396,8 +396,12 @@ function applyLabsToProfile(
   out: Map<string, DetectedField>,
   labHistory?: { testKey: string; value: number; measuredAt: string }[]
 ) {
-  const groups = parseLabGroups(t);
   const latest = new Map<string, number>();
+  const hist = [...(labHistory || [])].sort((a, b) => a.measuredAt.localeCompare(b.measuredAt));
+  for (const l of hist) {
+    if (Number.isFinite(l.value)) latest.set(l.testKey, l.value);
+  }
+  const groups = parseLabGroups(t);
   for (const g of groups) {
     for (const lab of g.labs) latest.set(lab.testKey, lab.value);
   }
@@ -457,35 +461,38 @@ export function extractClinicalFields(
   current?: Record<string, unknown>
 ): DetectedField[] {
   const t = norm(text || "");
-  if (!t.trim()) return [];
+  const hasLabs = Boolean(labHistory && labHistory.length);
+  if (!t.trim() && !hasLabs) return [];
   const out = new Map<string, DetectedField>();
 
-  parseTerms(t, out);
-  parseSmoking(t, out);
-  parseAllergies(t, out);
-  parseMeds(t, out, typeof current?.medicamentos_em_uso === "string" ? current.medicamentos_em_uso : undefined);
-  parseEas(t, out);
+  if (t.trim()) {
+    parseTerms(t, out);
+    parseSmoking(t, out);
+    parseAllergies(t, out);
+    parseMeds(t, out, typeof current?.medicamentos_em_uso === "string" ? current.medicamentos_em_uso : undefined);
+    parseEas(t, out);
 
-  const occ = parseOccupation(t);
-  if (occ) {
-    push(out, { key: "profissao", value: occ, status: "confirmado", confidence: "alta", autoApply: true });
-  }
+    const occ = parseOccupation(t);
+    if (occ) {
+      push(out, { key: "profissao", value: occ, status: "confirmado", confidence: "alta", autoApply: true });
+    }
 
-  const dmYears =
-    /(?:dm2?|diabet\w*)[^.\n;]{0,25}?(\d{1,2})\s*anos/.exec(t) ||
-    /(\d{1,2})\s*anos[^.\n;]{0,20}?(?:de\s+)?(?:dm2?|diabet)/.exec(t);
-  if (dmYears) {
-    push(out, { key: "tempo_dm_anos", value: dmYears[1], status: "confirmado", confidence: "alta", autoApply: true });
-  }
+    const dmYears =
+      /(?:dm2?|diabet\w*)[^.\n;]{0,25}?(\d{1,2})\s*anos/.exec(t) ||
+      /(\d{1,2})\s*anos[^.\n;]{0,20}?(?:de\s+)?(?:dm2?|diabet)/.exec(t);
+    if (dmYears) {
+      push(out, { key: "tempo_dm_anos", value: dmYears[1], status: "confirmado", confidence: "alta", autoApply: true });
+    }
 
-  const ckmStage =
-    /(?:sindrome\s*)?ckm[^.\n;]{0,40}estagio\s*(4\s*[ab]|[1-4])/.exec(t) ||
-    /estagio\s*(4\s*[ab]|[1-4])[^.\n;]{0,40}(?:sindrome\s*)?ckm/.exec(t);
-  if (ckmStage) {
-    const raw = ckmStage[1].replace(/\s+/g, "").toLowerCase();
-    if (["1", "2", "3", "4", "4a", "4b"].includes(raw)) {
-      push(out, { key: "ckm_estadio", value: raw, status: "confirmado", confidence: "alta", autoApply: true });
-      push(out, { key: "ckm", value: "sim", status: "confirmado", confidence: "alta", autoApply: true });
+    const ckmStage =
+      /(?:sindrome\s*)?ckm[^.\n;]{0,40}estagio\s*(4\s*[ab]|[1-4])/.exec(t) ||
+      /estagio\s*(4\s*[ab]|[1-4])[^.\n;]{0,40}(?:sindrome\s*)?ckm/.exec(t);
+    if (ckmStage) {
+      const raw = ckmStage[1].replace(/\s+/g, "").toLowerCase();
+      if (["1", "2", "3", "4", "4a", "4b"].includes(raw)) {
+        push(out, { key: "ckm_estadio", value: raw, status: "confirmado", confidence: "alta", autoApply: true });
+        push(out, { key: "ckm", value: "sim", status: "confirmado", confidence: "alta", autoApply: true });
+      }
     }
   }
 

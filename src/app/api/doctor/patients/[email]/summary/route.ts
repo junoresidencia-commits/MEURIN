@@ -4,6 +4,8 @@ import { getProfile } from "@/lib/clinical-profile-store";
 import { resolvePatientAccess } from "@/lib/doctor-access";
 import { resolvePatientAge } from "@/lib/patient-age";
 import { NEPHRO_LABS } from "@/lib/labs";
+import { classifyFromLabs } from "@/lib/kdigo";
+import { estimateEgfr } from "@/lib/egfr";
 
 type LatestLab = { value: number; unit: string | null; date: string; trend: "up" | "down" | "flat" | null };
 
@@ -73,8 +75,17 @@ export async function GET(
   const hb = latest["hemoglobina"];
   if (hb && hb.value < 8) alerts.push({ level: "importante", text: `Hemoglobina ${hb.value} g/dL (anemia importante)`, date: hb.date });
 
-  const drcG = (profile?.data?.["estagio_g"] as string) || null;
-  const drcA = (profile?.data?.["categoria_a"] as string) || null;
+  const cls = classifyFromLabs({
+    labs,
+    birthdate: access.birthdate,
+    sex: access.sex,
+    ageYears: access.ageYears,
+    ageReportedAt: access.ageReportedAt,
+    computeTfge: (cr, at) =>
+      estimateEgfr(cr, access.birthdate, access.sex, at, { ageYears: access.ageYears, ageReportedAt: access.ageReportedAt }),
+  });
+  const drcG = (profile?.data?.["estagio_g"] as string) || cls.estagio_g || null;
+  const drcA = (profile?.data?.["categoria_a"] as string) || cls.categoria_a || null;
 
   return NextResponse.json({
     patient: {

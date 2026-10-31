@@ -6,6 +6,8 @@ import { getProfile, getProfilesByDoctor } from "@/lib/clinical-profile-store";
 import { listSharesForDoctor } from "@/lib/patient-shares-store";
 import { getLatestLabsByEmails } from "@/lib/patient-store";
 import { resolvePatientAge } from "@/lib/patient-age";
+import { aFromRac, canConfirmDrc, classifyFromLabs, gFromEgfr } from "@/lib/kdigo";
+import { estimateEgfr } from "@/lib/egfr";
 
 type LabVal = { value: number; unit: string | null; date: string } | null;
 type Row = {
@@ -125,6 +127,7 @@ export async function GET() {
     const tfge = pick("tfge") || pick("tfge_cistatina");
     const creatinina = pick("creatinina");
     const rac = pick("rac");
+    const albuminuria24h = pick("albuminuria_24h");
     const potassio = pick("potassio");
     const hb = pick("hemoglobina");
 
@@ -148,6 +151,24 @@ export async function GET() {
     const active = Boolean(nextConsultation) || (lastConsultation ? now - new Date(lastConsultation).getTime() <= 180 * DAY : false) || bks.length === 0;
 
     const age = resolvePatientAge({ birthdate: b.birthdate, ageYears: b.ageYears, ageReportedAt: b.ageReportedAt });
+    const labPoints = [
+      tfge ? { testKey: "tfge", value: tfge.value, measuredAt: tfge.date } : null,
+      creatinina ? { testKey: "creatinina", value: creatinina.value, measuredAt: creatinina.date } : null,
+      rac ? { testKey: "rac", value: rac.value, measuredAt: rac.date } : null,
+      albuminuria24h ? { testKey: "albuminuria_24h", value: albuminuria24h.value, measuredAt: albuminuria24h.date } : null,
+    ].filter((x): x is { testKey: string; value: number; measuredAt: string } => Boolean(x));
+    const cls = classifyFromLabs({
+      labs: labPoints,
+      birthdate: b.birthdate,
+      sex: b.sex,
+      ageYears: b.ageYears,
+      ageReportedAt: b.ageReportedAt,
+      computeTfge: (cr, at) => estimateEgfr(cr, b.birthdate, b.sex, at, { ageYears: b.ageYears, ageReportedAt: b.ageReportedAt }),
+    });
+    const g = (data["estagio_g"] as string) || cls.estagio_g || (tfge ? gFromEgfr(tfge.value) : null);
+    const a = (data["categoria_a"] as string) || cls.categoria_a || (rac ? aFromRac(rac.value) : null);
+    const drcUnknown = !data["drc"] || data["drc"] === "desconhecido";
+    const drcFlag = isYes(data["drc"]) || (drcUnknown && (cls.drc === "sim" || canConfirmDrc({ mentionedDrc: false, g, a, chronicReducedEgfr: false })));
     return {
       key: b.key,
       name: b.name,
@@ -155,7 +176,7 @@ export async function GET() {
       city: b.city,
       age,
       sex: b.sex,
-      drc: { flag: isYes(data["drc"]) || Boolean(data["estagio_g"]), g: (data["estagio_g"] as string) || null, a: (data["categoria_a"] as string) || null },
+      drc: { flag: drcFlag, g, a },
       comorbidities: { has: isYes(data["has"]), dm: isYes(data["dm"]) },
       flags: {
         dialise: isYes(data["hemodialise"]) || isYes(data["dialise_peritoneal"]),
