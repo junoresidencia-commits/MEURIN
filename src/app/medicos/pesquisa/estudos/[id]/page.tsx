@@ -49,6 +49,8 @@ export default function EstudoDetailPage() {
   const [exportGate, setExportGate] = useState({ ok: false, reason: "Registre a governança antes de exportar." });
   const [hdSource, setHdSource] = useState(false);
   const [ageRef, setAgeRef] = useState("");
+  const [classifying, setClassifying] = useState(false);
+  const [classifyMsg, setClassifyMsg] = useState("");
 
   useEffect(() => {
     fetch("/api/auth").then((r) => r.json()).then((d) => {
@@ -75,7 +77,23 @@ export default function EstudoDetailPage() {
     } else {
       setProtocol(emptyProtocol(id, ""));
     }
-    loadAnalysis();
+    await classifyThenAnalyze();
+  }
+  async function classifyThenAnalyze() {
+    setClassifying(true);
+    setClassifyMsg("");
+    try {
+      const res = await fetch("/api/pesquisa/classify", { method: "POST" });
+      const d = await res.json().catch(() => ({}));
+      if (res.ok) {
+        setClassifyMsg(
+          `Classificados ${d.classified || 0} de ${d.total || 0} · DRC ${d.drc || 0} · G ${d.g || 0} · albuminúria ${d.a || 0}` +
+            (d.tfgeComputed ? ` · TFGe calculada ${d.tfgeComputed}` : "")
+        );
+      }
+    } catch { /* segue para a análise mesmo se a classificação falhar */ }
+    finally { setClassifying(false); }
+    await loadAnalysis();
   }
   async function loadAnalysis() {
     setLoading(true);
@@ -300,7 +318,11 @@ export default function EstudoDetailPage() {
             <div className="flex flex-wrap items-center gap-3">
               <button type="button" className="text-sm font-semibold text-[var(--gold)]" onClick={() => setFilters((fs) => [...fs, { field: "drc", op: "=", value: "sim" }])}>+ Adicionar critério</button>
               <button type="button" className="btn-gold" onClick={() => save({ filters, variables, sources: hdSource ? ["hemodialise"] : [], ageReferenceDate: ageRef || null }, true)} disabled={saving || loading}>Salvar e recalcular</button>
+              <button type="button" className="btn-ghost" onClick={() => void classifyThenAnalyze()} disabled={classifying || loading}>
+                {classifying ? "Classificando…" : "Classificar DRC, G e albuminúria"}
+              </button>
             </div>
+            {classifyMsg && <p className="text-xs text-[var(--text-muted)]">{classifyMsg}</p>}
           </div>
 
           {/* Variáveis do estudo */}

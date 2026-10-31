@@ -80,6 +80,7 @@ export function ClinicalProfileEditor({ emailParam, highlightKeys = [] }: { emai
   if (loading) return <p className="text-[var(--text-muted)]">Carregando perfil…</p>;
 
   const imc = computeImc(data);
+  const kdigo = data.estagio_g && data.categoria_a ? `${data.estagio_g}${data.categoria_a}` : null;
   const srcOf = (key: string) => {
     const s = meta[key]?.source;
     return s ? <span className="ml-1 rounded-full bg-[var(--gold-soft)] px-1.5 py-0.5 text-[10px] font-semibold text-[var(--gold)]">{s}</span> : null;
@@ -198,6 +199,12 @@ export function ClinicalProfileEditor({ emailParam, highlightKeys = [] }: { emai
           {group === "Síndrome CKM" && (
             <p className="text-xs text-[var(--text-muted)]">
               Classificação AHA: a síndrome CKM reúne, numa só condição, doença cardiovascular, DRC e alterações metabólicas (obesidade, diabetes e outros fatores de risco). O estágio descreve a gravidade (1 a 4b).
+            </p>
+          )}
+          {group === "Doença renal" && kdigo && (
+            <p className="text-sm text-[var(--text-soft)]">
+              KDIGO calculado: <b className="text-[var(--text)]">{String(data.estagio_g)} {String(data.categoria_a)}</b>
+              {data.drc === "sim" ? " · DRC" : data.drc === "nao" ? " · sem DRC" : ""}
             </p>
           )}
           {group === "Dados gerais" && imc != null && (

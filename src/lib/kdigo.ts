@@ -64,6 +64,103 @@ export function canConfirmDrc(opts: {
   return false;
 }
 
+export type LabPoint = { testKey: string; value: number; measuredAt: string };
+
+export type PatientKdigoClass = {
+  tfge: number | null;
+  tfgeSource: "lab" | "calculado" | null;
+  estagio_g: string | null;
+  categoria_a: string | null;
+  drc: "sim" | "nao" | null;
+  kdigo: string | null;
+  evidence: string[];
+};
+
+function latestLab(labs: LabPoint[], key: string): LabPoint | null {
+  let hit: LabPoint | null = null;
+  for (const l of labs) {
+    if (l.testKey !== key || !Number.isFinite(l.value)) continue;
+    if (!hit || l.measuredAt > hit.measuredAt) hit = l;
+  }
+  return hit;
+}
+
+/**
+ * Classifica o paciente pelos exames (KDIGO G + A + DRC).
+ * Não inventa albuminúria: só RAC (mg/g) ou albuminúria 24h (mg/24h).
+ * TFGe vem do laboratório ou da CKD-EPI 2021 se houver creatinina + idade + sexo.
+ */
+export function classifyFromLabs(input: {
+  labs: LabPoint[];
+  birthdate?: string | null;
+  sex?: string | null;
+  ageYears?: number | null;
+  ageReportedAt?: string | null;
+  computeTfge?: (creatinine: number, measuredAt: string) => number | null;
+}): PatientKdigoClass {
+  const labs = input.labs || [];
+  const evidence: string[] = [];
+  const tfgeLab = latestLab(labs, "tfge") || latestLab(labs, "tfge_cistatina");
+  let tfge = tfgeLab?.value ?? null;
+  let tfgeSource: PatientKdigoClass["tfgeSource"] = tfgeLab ? "lab" : null;
+  if (tfge == null) {
+    const cr = latestLab(labs, "creatinina");
+    if (cr && input.computeTfge) {
+      const computed = input.computeTfge(cr.value, cr.measuredAt);
+      if (computed != null) {
+        tfge = computed;
+        tfgeSource = "calculado";
+        evidence.push(`TFGe ${computed} (CKD-EPI 2021 a partir da creatinina ${cr.value})`);
+      }
+    }
+  } else {
+    evidence.push(`TFGe ${tfge}`);
+  }
+
+  const rac = latestLab(labs, "rac");
+  const aer = latestLab(labs, "albuminuria_24h");
+  let categoria_a: string | null = null;
+  if (rac) {
+    categoria_a = aFromRac(rac.value);
+    if (categoria_a) evidence.push(`RAC ${rac.value} → ${categoria_a}`);
+  } else if (aer) {
+    categoria_a = aFromRac(aer.value);
+    if (categoria_a) evidence.push(`Albuminúria 24h ${aer.value} → ${categoria_a}`);
+  }
+
+  const estagio_g = tfge != null ? gFromEgfr(tfge) : null;
+  if (estagio_g) evidence.push(`Estágio ${estagio_g}`);
+
+  const series = labs
+    .filter((l) => l.testKey === "tfge" || l.testKey === "tfge_cistatina")
+    .map((l) => ({ value: l.value, at: l.measuredAt }));
+  if (tfge != null && tfgeSource === "calculado") {
+    const cr = latestLab(labs, "creatinina");
+    series.push({ value: tfge, at: cr?.measuredAt || new Date().toISOString() });
+  }
+  const chronic = hasChronicReducedEgfr(series);
+  if (chronic) evidence.push("TFGe <60 em ≥90 dias");
+
+  let drc: "sim" | "nao" | null = null;
+  if (canConfirmDrc({ mentionedDrc: false, g: estagio_g, a: categoria_a, chronicReducedEgfr: chronic })) {
+    drc = "sim";
+    evidence.push("DRC confirmada (KDIGO)");
+  } else if (estagio_g === "G1" && categoria_a === "A1") {
+    drc = "nao";
+    evidence.push("G1 A1 — sem critério de DRC");
+  }
+
+  return {
+    tfge,
+    tfgeSource,
+    estagio_g,
+    categoria_a,
+    drc,
+    kdigo: estagio_g && categoria_a ? `${estagio_g}${categoria_a}` : null,
+    evidence,
+  };
+}
+
 /** Dois TFGe <60 com ≥90 dias de intervalo → cronicidade. */
 export function hasChronicReducedEgfr(
   series: { value: number; at: string }[]

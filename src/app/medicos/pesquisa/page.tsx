@@ -14,6 +14,8 @@ export default function PesquisaHubPage() {
   const [ready, setReady] = useState(false);
   const [studies, setStudies] = useState<StudyLite[]>([]);
   const [cases, setCases] = useState<CaseLite[]>([]);
+  const [classifying, setClassifying] = useState(false);
+  const [classifyMsg, setClassifyMsg] = useState("");
 
   useEffect(() => {
     fetch("/api/auth").then((r) => r.json()).then((d) => {
@@ -48,6 +50,37 @@ export default function PesquisaHubPage() {
               <Link href="/medicos/pesquisa/estudos" className="btn-ghost">Meus estudos</Link>
               <Link href="/medicos/pesquisa/estudos" className="btn-gold">+ Novo estudo</Link>
             </div>
+          </div>
+
+          <div className="mt-6 rounded-2xl border border-[var(--border)] bg-white px-4 py-3">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <div>
+                <p className="text-sm font-semibold text-[var(--text)]">Classificar todos os pacientes</p>
+                <p className="text-xs text-[var(--text-muted)]">DRC, estágio G (TFGe) e albuminúria A a partir dos exames — para os estudos deixarem de mostrar “desconhecido”.</p>
+              </div>
+              <button
+                type="button"
+                className="btn-gold"
+                disabled={classifying}
+                onClick={async () => {
+                  setClassifying(true);
+                  setClassifyMsg("");
+                  try {
+                    const res = await fetch("/api/pesquisa/classify", { method: "POST" });
+                    const d = await res.json().catch(() => ({}));
+                    if (!res.ok) throw new Error(d.error || "Falha ao classificar.");
+                    setClassifyMsg(`Revisados ${d.total || 0} · classificados ${d.classified || 0} · DRC ${d.drc || 0} · G ${d.g || 0} · albuminúria ${d.a || 0}${d.tfgeComputed ? ` · TFGe ${d.tfgeComputed}` : ""}`);
+                  } catch (e) {
+                    setClassifyMsg(e instanceof Error ? e.message : "Falha ao classificar.");
+                  } finally {
+                    setClassifying(false);
+                  }
+                }}
+              >
+                {classifying ? "Classificando…" : "Classificar DRC, G e albuminúria"}
+              </button>
+            </div>
+            {classifyMsg && <p className="mt-2 text-xs text-[var(--text-muted)]">{classifyMsg}</p>}
           </div>
 
           <div className="mt-6 grid grid-cols-2 gap-3 sm:grid-cols-4">

@@ -55,6 +55,20 @@ const DERIVED: ResearchVar[] = [
   ] },
   { key: "cidade", label: "Cidade", type: "text", group: "Demografia", source: "informado" },
   { key: "imc", label: "IMC", type: "num", group: "Dados gerais", source: "calculado", unit: "kg/m²", description: "Peso / altura²." },
+  {
+    key: "kdigo",
+    label: "KDIGO (G+A)",
+    type: "cat",
+    group: "Doença renal",
+    source: "calculado",
+    description: "Combinação automática do estágio G (TFGe) com a categoria A (albuminúria). Ex.: G3aA2.",
+    options: ESTAGIOS_G.flatMap((g) => CATEGORIAS_A.map((a) => ({ value: `${g}${a}`, label: `${g} ${a}` }))),
+  },
+];
+
+export const RESEARCH_DEFAULT_VARS = [
+  "idade", "sexo", "drc", "estagio_g", "categoria_a", "kdigo", "has", "dm",
+  "lab_creatinina", "lab_tfge", "lab_rac",
 ];
 
 const LAB_VARS: ResearchVar[] = NEPHRO_LABS.map((l) => ({
