@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { DoctorSidebar } from "@/components/DoctorSidebar";
 import { DoctorMobileNav } from "@/components/DoctorMobileNav";
+import { PesquisaSectionNav } from "@/components/PesquisaSectionNav";
 import { STUDY_TYPE_LABEL, STUDY_TYPES, STUDY_STATUS_LABEL, type StudyLite } from "../studyMeta";
 
 function EstudosInner() {
@@ -59,6 +60,7 @@ function EstudosInner() {
         <div className="mx-auto max-w-4xl px-5 pb-28 pt-8 lg:pb-8">
           <p className="text-sm font-semibold text-[var(--gold)]"><Link href="/medicos/pesquisa" className="hover:underline">Pesquisa Científica</Link> › Estudos</p>
           <h1 className="font-display mt-1 text-3xl font-extrabold text-[var(--text)]">Meus estudos</h1>
+          <PesquisaSectionNav />
 
           {/* Novo estudo */}
           <div className="panel mt-6 space-y-3">
