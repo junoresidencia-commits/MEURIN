@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { DoctorSidebar } from "@/components/DoctorSidebar";
 import { DoctorMobileNav } from "@/components/DoctorMobileNav";
+import { PesquisaSectionNav } from "@/components/PesquisaSectionNav";
 import { STUDY_TYPE_LABEL, STUDY_STATUS_LABEL, studyNextAction, studyBucket, type StudyLite } from "./studyMeta";
 
 type CaseLite = { id: string; patientName: string; categories: string[]; updatedAt: string };
@@ -49,6 +50,16 @@ export default function PesquisaHubPage() {
               <Link href="/medicos/pesquisa/estudos" className="btn-gold">+ Novo estudo</Link>
             </div>
           </div>
+
+          <PesquisaSectionNav />
+
+          <Link href="/medicos/pesquisa/primeira-consulta" className="panel mb-6 block border-[var(--border-gold)] transition hover:shadow-[var(--shadow-gold)]">
+            <p className="text-xs font-bold uppercase tracking-wider text-[var(--gold)]">Estudos</p>
+            <p className="font-display text-lg font-bold text-[var(--text)]">Primeira Consulta</p>
+            <p className="mt-1 text-sm text-[var(--text-muted)]">
+              Coorte automática da primeira consulta de cada paciente: exames que trouxe, investigação incompleta e doença avançada.
+            </p>
+          </Link>
 
           <div className="mt-6 grid grid-cols-2 gap-3 sm:grid-cols-4">
             <Metric n={cases.length} label="Casos interessantes" />

@@ -11,13 +11,17 @@ export function ResearchGovernancePanel({
   consents,
   gate,
   onRefresh,
+  apiBase,
 }: {
   studyId: string;
   protocol: ResearchProtocol;
   consents: ResearchConsent[];
   gate: Gate;
   onRefresh: () => void | Promise<void>;
+  /** Padrão: governança do estudo. A aba Primeira Consulta usa o endpoint próprio. */
+  apiBase?: string;
 }) {
+  const base = apiBase || `/api/pesquisa/studies/${studyId}`;
   const [ethicsStatus, setEthicsStatus] = useState<EthicsStatus>(protocol.ethicsStatus || "none");
   const [protocolCode, setProtocolCode] = useState(protocol.protocolCode || "");
   const [ethicsBody, setEthicsBody] = useState(protocol.ethicsBody || "");
@@ -30,7 +34,7 @@ export function ResearchGovernancePanel({
     setSaving(true);
     setMsg("");
     try {
-      const res = await fetch(`/api/pesquisa/studies/${studyId}/governance`, {
+      const res = await fetch(`${base}/governance`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ ethicsStatus, protocolCode, ethicsBody, waiverReason }),
@@ -51,7 +55,7 @@ export function ResearchGovernancePanel({
     setSaving(true);
     setMsg("");
     try {
-      const res = await fetch(`/api/pesquisa/studies/${studyId}/consents`, {
+      const res = await fetch(`${base}/consents`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ patientKey, status }),
