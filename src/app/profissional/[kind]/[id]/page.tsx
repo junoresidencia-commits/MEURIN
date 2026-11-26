@@ -3,6 +3,8 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
+import { PatientAgendaSlots } from "@/components/PatientAgendaSlots";
+import { groupSlotsByDayAndPlace, type PatientSlot } from "@/lib/scheduling-client";
 
 type Pro = {
   kind: string;
@@ -17,6 +19,7 @@ type Pro = {
 export default function ProfessionalProfilePage() {
   const params = useParams<{ kind: string; id: string }>();
   const [pro, setPro] = useState<Pro | null>(null);
+  const [slots, setSlots] = useState<PatientSlot[]>([]);
   const [error, setError] = useState("");
 
   useEffect(() => {
@@ -24,13 +27,18 @@ export default function ProfessionalProfilePage() {
       .then((r) => r.json())
       .then((d) => {
         if (d.error) setError(d.error);
-        else setPro(d.professional);
+        else {
+          setPro(d.professional);
+          setSlots(d.slots || []);
+        }
       })
       .catch(() => setError("Não foi possível carregar o profissional."));
   }, [params.kind, params.id]);
 
   if (error) return <div className="mx-auto max-w-lg px-5 py-16 text-sm text-[var(--danger)]">{error}</div>;
   if (!pro) return <div className="mx-auto max-w-lg px-5 py-16 text-[var(--text-muted)]">Carregando…</div>;
+
+  const preview = groupSlotsByDayAndPlace(slots).slice(0, 5).flatMap((d) => d.places.flatMap((p) => p.slots));
 
   return (
     <div className="mx-auto max-w-lg px-5 py-10">
@@ -49,6 +57,18 @@ export default function ProfessionalProfilePage() {
           <p className="text-sm text-[var(--gold)]">{pro.specialty}</p>
           {pro.bio && <p className="mt-2 text-sm text-[var(--text-muted)]">{pro.bio}</p>}
         </div>
+      </div>
+      <div className="panel mt-4">
+        <p className="font-semibold text-[var(--text)]">Agenda</p>
+        <p className="mt-1 text-sm text-[var(--text-muted)]">Datas de teleconsulta e presencial, com o local.</p>
+        <PatientAgendaSlots
+          slots={preview}
+          readOnly
+          emptyText="O profissional ainda não publicou horários."
+        />
+        {preview.length > 0 && (
+          <p className="mt-2 text-xs text-[var(--text-muted)]">Toque em Agendar atendimento para escolher um horário.</p>
+        )}
       </div>
       <Link href={`/paciente/agendar/${pro.kind}/${pro.id}`} className="btn-gold mt-6 inline-flex w-full justify-center">
         Agendar atendimento

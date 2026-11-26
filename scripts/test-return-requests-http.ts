@@ -50,10 +50,16 @@ async function main() {
   assert.ok(profilePage.ok, `perfil ${profilePage.status}`);
   const wizard = await fetch(`${BASE}/paciente/agendar/doctor/${carlos.id}`);
   assert.ok(wizard.ok, `wizard ${wizard.status}`);
+  const wizardHtml = await wizard.text();
+  assert.equal(/Consulta anterior informada por você/.test(wizardHtml), false, "wizard não deve mostrar o aviso de consulta não registrada");
 
   const proApi = await fetch(`${BASE}/api/professionals/doctor/${carlos.id}?visit=retorno`).then((r) => r.json());
   assert.equal(proApi.professional.id, carlos.id);
   assert.ok(Array.isArray(proApi.slots));
+  assert.equal("knownPatient" in proApi, true);
+
+  const consultApi = await fetch(`${BASE}/api/professionals/doctor/${carlos.id}?visit=consulta`).then((r) => r.json());
+  assert.ok(Array.isArray(consultApi.slots));
 
   const patient = cookieJar();
   const email = `joao.retorno.${stamp}@meurim.com`;

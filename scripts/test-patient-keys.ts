@@ -10,6 +10,7 @@ assert.ok(patientKeysMatch(fromPid, "iolanda.damacena@example.com"));
 assert.ok(patientKeysMatch(fromEmail, "pid:abc-123"));
 assert.ok(patientKeysMatch(fromEmail, patient.email));
 assert.ok(patientKeysMatch(fromPid, "ABC-123"));
+assert.ok(patientKeysMatch(patientKeyCandidates("abc-123"), "pid:abc-123"));
 assert.equal(patientKeysMatch(fromPid, "outra@example.com"), false);
 
 console.log("patient-keys ok", { fromPid, fromEmail });
