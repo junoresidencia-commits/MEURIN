@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState, type ReactNode } from "react";
 import Link from "next/link";
 import { composerHref, type ComplementarySlot } from "@/lib/complementary-docs";
 import { printHref } from "@/lib/print-pdf";
+import { CfmPdfActions } from "@/components/CfmPdfActions";
 
 type Info = {
   protocolId: string | null;
@@ -80,15 +81,28 @@ export function LmeComplementaryDocs({
         <DocRow
           slot={receita}
           action={
-            <div className="flex flex-wrap gap-2">
-              <Link href={composerHref(patientEmail, { type: "receita", title: "Receita médica" }, lmeId)} className="btn-gold text-sm">
-                {receita?.status === "nao_gerado" ? "Gerar receita" : "Revisar"}
-              </Link>
+            <div className="space-y-2">
+              <div className="flex flex-wrap gap-2">
+                <Link href={composerHref(patientEmail, { type: "receita", title: "Receita médica" }, lmeId)} className="btn-gold text-sm">
+                  {receita?.status === "nao_gerado" ? "Gerar receita" : "Revisar"}
+                </Link>
+                {receita?.pdfUrl && (
+                  <>
+                    <a href={receita.pdfUrl} target="_blank" rel="noopener noreferrer" className="btn-ghost text-sm">Abrir</a>
+                    <a href={printHref(receita.pdfUrl)} target="_blank" rel="noopener noreferrer" className="btn-ghost text-sm">Imprimir</a>
+                  </>
+                )}
+              </div>
               {receita?.pdfUrl && (
-                <>
-                  <a href={receita.pdfUrl} target="_blank" rel="noopener noreferrer" className="btn-ghost text-sm">Abrir</a>
-                  <a href={printHref(receita.pdfUrl)} target="_blank" rel="noopener noreferrer" className="btn-ghost text-sm">Imprimir</a>
-                </>
+                <CfmPdfActions
+                  compact
+                  pdfHref={receita.pdfUrl}
+                  documentId={receita.docId}
+                  patientKey={patientEmail}
+                  documentType="receita"
+                  title="Receita médica"
+                  filename="receita-meurim.pdf"
+                />
               )}
             </div>
           }
@@ -96,15 +110,28 @@ export function LmeComplementaryDocs({
         <DocRow
           slot={relatorio}
           action={
-            <div className="flex flex-wrap gap-2">
-              <Link href={composerHref(patientEmail, { type: "relatorio", title: "Relatório médico" }, lmeId)} className="btn-ghost text-sm">
-                {relatorio?.status === "nao_gerado" ? "Gerar relatório" : "Revisar"}
-              </Link>
+            <div className="space-y-2">
+              <div className="flex flex-wrap gap-2">
+                <Link href={composerHref(patientEmail, { type: "relatorio", title: "Relatório médico" }, lmeId)} className="btn-ghost text-sm">
+                  {relatorio?.status === "nao_gerado" ? "Gerar relatório" : "Revisar"}
+                </Link>
+                {relatorio?.pdfUrl && (
+                  <>
+                    <a href={relatorio.pdfUrl} target="_blank" rel="noopener noreferrer" className="btn-ghost text-sm">Abrir</a>
+                    <a href={printHref(relatorio.pdfUrl)} target="_blank" rel="noopener noreferrer" className="btn-ghost text-sm">Imprimir</a>
+                  </>
+                )}
+              </div>
               {relatorio?.pdfUrl && (
-                <>
-                  <a href={relatorio.pdfUrl} target="_blank" rel="noopener noreferrer" className="btn-ghost text-sm">Abrir</a>
-                  <a href={printHref(relatorio.pdfUrl)} target="_blank" rel="noopener noreferrer" className="btn-ghost text-sm">Imprimir</a>
-                </>
+                <CfmPdfActions
+                  compact
+                  pdfHref={relatorio.pdfUrl}
+                  documentId={relatorio.docId}
+                  patientKey={patientEmail}
+                  documentType="relatorio"
+                  title="Relatório médico"
+                  filename="relatorio-meurim.pdf"
+                />
               )}
             </div>
           }
@@ -113,15 +140,28 @@ export function LmeComplementaryDocs({
           slot={ter}
           action={
             ter?.status === "indisponivel" ? null : (
-              <div className="flex flex-wrap gap-2">
-                <button type="button" className="btn-ghost text-sm" onClick={() => void gerarTer()} disabled={busy === "ter"}>
-                  {busy === "ter" ? "Preparando…" : ter?.status === "gerado" ? "Gerar TER novamente" : "Gerar TER"}
-                </button>
+              <div className="space-y-2">
+                <div className="flex flex-wrap gap-2">
+                  <button type="button" className="btn-ghost text-sm" onClick={() => void gerarTer()} disabled={busy === "ter"}>
+                    {busy === "ter" ? "Preparando…" : ter?.status === "gerado" ? "Gerar TER novamente" : "Gerar TER"}
+                  </button>
+                  {ter?.pdfUrl && (
+                    <>
+                      <a href={ter.pdfUrl} target="_blank" rel="noopener noreferrer" className="btn-ghost text-sm">Abrir</a>
+                      <a href={printHref(ter.pdfUrl)} target="_blank" rel="noopener noreferrer" className="btn-ghost text-sm">Imprimir</a>
+                    </>
+                  )}
+                </div>
                 {ter?.pdfUrl && (
-                  <>
-                    <a href={ter.pdfUrl} target="_blank" rel="noopener noreferrer" className="btn-ghost text-sm">Abrir</a>
-                    <a href={printHref(ter.pdfUrl)} target="_blank" rel="noopener noreferrer" className="btn-ghost text-sm">Imprimir</a>
-                  </>
+                  <CfmPdfActions
+                    compact
+                    pdfHref={ter.pdfUrl}
+                    documentId={ter.docId}
+                    patientKey={patientEmail}
+                    documentType="ter"
+                    title="TER oficial"
+                    filename="ter-oficial.pdf"
+                  />
                 )}
               </div>
             )

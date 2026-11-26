@@ -145,7 +145,6 @@ export default function LmePage() {
         </div>
         <div className="flex flex-wrap gap-2">
           <a className="btn-gold" href={printHref(officialUrl)} target="_blank" rel="noopener noreferrer">Imprimir</a>
-          <a className="btn-ghost" href={officialUrl} target="_blank" rel="noopener noreferrer" download="lme-oficial.pdf">Baixar PDF</a>
           <button type="button" className="btn-ghost" onClick={shareWhatsapp}>WhatsApp</button>
           <button type="button" className="btn-ghost" onClick={copyLink}>{copied ? "Link copiado!" : "Copiar link"}</button>
         </div>
@@ -168,12 +167,8 @@ export default function LmePage() {
       <section className="mt-6 rounded-[16px] border border-[var(--border)] bg-white p-5 shadow-[var(--shadow)] print:hidden">
         <h2 className="font-display text-lg font-extrabold text-[var(--text)]">Assinatura digital</h2>
         <p className="mt-1 text-sm text-[var(--text-soft)]">
-          O campo <b>17 — Assinatura e carimbo do médico</b> fica em branco de propósito. Assine de um destes jeitos:
+          O campo <b>17 — Assinatura e carimbo do médico</b> fica em branco de propósito. Baixe o PDF, assine no CFM e anexe de volta.
         </p>
-        <ol className="mt-2 list-decimal space-y-1 pl-5 text-sm text-[var(--text-soft)]">
-          <li><b>VIDaaS ou gov.br (recomendado)</b>: baixe o PDF final e assine com o certificado ICP-Brasil. Vale juridicamente; confira em validar.iti.gov.br.</li>
-          <li><b>À mão</b>: imprima e assine/carimbe no campo 17.</li>
-        </ol>
         <SignDocumentPanel
           pdfHref={`${officialUrl}?flatten=1`}
           filename="lme-oficial.pdf"

@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { useParams } from "next/navigation";
 import { whatsappLink } from "@/lib/contact";
+import { CfmPdfActions } from "@/components/CfmPdfActions";
 
 type Doc = {
   id: string;
@@ -14,6 +15,7 @@ type Doc = {
   doctorLogoUrl?: string | null;
   patientEmail: string;
   createdAt: string;
+  pdfPath?: string | null;
 };
 
 function loadImage(src: string): Promise<HTMLImageElement> {
@@ -147,15 +149,27 @@ export default function DocumentoPage() {
         <a href="/medicos/painel" className="text-sm font-semibold text-[var(--gold)]">← Painel</a>
       </div>
       <div className="mb-4 flex flex-wrap justify-end gap-2 print:hidden">
-        <button type="button" className="btn-gold" onClick={downloadPdf}>
-          Baixar PDF
-        </button>
+        {!doc.pdfPath && (
+          <button type="button" className="btn-gold" onClick={downloadPdf}>
+            Baixar PDF
+          </button>
+        )}
         <button type="button" className="btn-ghost" onClick={shareWhatsApp}>
           Enviar no WhatsApp
         </button>
         <button type="button" className="btn-ghost" onClick={() => window.print()}>
           Imprimir
         </button>
+      </div>
+      <div className="mb-4 print:hidden">
+        <CfmPdfActions
+          pdfHref={doc.pdfPath ? `/api/documents/${doc.id}/pdf` : null}
+          filename={`${doc.type}-meu-rim.pdf`}
+          title={TYPE_LABEL[doc.type]}
+          documentId={doc.pdfPath ? doc.id : null}
+          patientKey={doc.patientEmail}
+          documentType={doc.type}
+        />
       </div>
 
       <div className="rounded-[16px] border border-[var(--border)] bg-white p-8 shadow-[var(--shadow)] print:border-0 print:shadow-none">
